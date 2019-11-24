@@ -1,0 +1,57 @@
+name:                lam
+version:             0.1.0.0
+github:              "hmac/lam"
+license:             BSD3
+author:              "Harry Maclean"
+maintainer:          "harryjmaclean@gmail.com"
+copyright:           "2019 Harry Maclean"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+synopsis:            A Haskell-like language for scripting and web apps
+category:            compiler
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description: |
+  Lam is a statically typed, strict, purely functional programming language with full type inference.
+  It's the core parts of Haskell with better ergonomics, an interpreter, native JS
+  support and much better tooling.
+
+  Lam targets the Ruby use case: web applications and scripts. For teams building big
+  Rails apps that are struggling with stability and productivity as their codebase
+  grows, Lam should provide a compelling alternative.
+
+dependencies:
+- base >= 4.7 && < 5
+- megaparsec
+
+library:
+  source-dirs: src
+
+executables:
+  lam-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - lam
+
+tests:
+  lam-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - lam
+    - hspec
+    - hspec-megaparsec
