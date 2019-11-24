@@ -25,18 +25,35 @@ newtype Name = Name String
 newtype ModuleName = ModuleName [String]
         deriving (Eq, Show)
 
--- Boo.fun1
-data GlobalName = LocalName String
-                | QualifiedName ModuleName String
-                deriving (Eq, Show)
-
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
-data Decl = Decl { declName :: Name
-                 , declType :: Ty
-                 , declDefs :: [Def]
+-- TODO: typeclass definition, typeclass instance, records
+data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass
+        deriving (Eq, Show)
+
+data Fun = Fun { funName :: Name
+               , funType :: Ty
+               , funDefs :: [Def]
+               }
+               deriving (Eq, Show)
+
+data Data = Data { dataName :: Name
+                 , dataTyVars :: [Name]
+                 , dataCons :: [DataCon]
                  }
                  deriving (Eq, Show)
+
+-- TODO: default definitions
+data Typeclass = Typeclass { typeclassName :: Name
+                           , typeclassTyVars :: [Name]
+                           , typeclassDefs :: [(Name, Ty)]
+                           }
+                           deriving (Eq, Show)
+
+data DataCon = DataCon { conName :: Name
+                       , conArgs :: [Ty]
+                       }
+                       deriving (Eq, Show)
 
 data Def = Def { defArgs :: [Pattern]
                , defExpr :: Syn
@@ -64,7 +81,8 @@ data Literal = LitInt Int
 -- a
 -- Int -> String
 -- a -> b
-data Ty = TyCon Name [Ty]
+-- f a
+data Ty = TyApp Name [Ty]
         | TyVar Name
         | TyArr Ty Ty
         | TyList Ty
@@ -79,4 +97,5 @@ data Syn = Var Name
          | TupleLit [Syn]
          | ListLit [Syn]
          | Lit Literal
+         -- TODO: constructors: Cons [Syn]
          deriving (Eq, Show)

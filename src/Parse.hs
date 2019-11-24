@@ -71,14 +71,50 @@ pImport = do
               , importItems     = fromMaybe [] items
               }
 
+pDecl :: Parser Decl
+pDecl =
+  TypeclassDecl <$> pTypeclass <|> DataDecl <$> pData <|> FunDecl <$> pFun
+
+pData :: Parser Data
+pData = do
+  void (symbol "data")
+  name   <- Name <$> uppercaseName
+  tyvars <- many (Name <$> lowercaseName)
+  void (symbolN "=")
+  constructors <- lexemeN pCon `sepBy` symbolN "|"
+  pure Data { dataName = name, dataTyVars = tyvars, dataCons = constructors }
+ where
+  pCon :: Parser DataCon
+  pCon = DataCon <$> (Name <$> uppercaseName) <*> many pConType
+
 -- TODO: we can make this more flexible by allowing annotations separate from
 -- definitions
-pDecl :: Parser Decl
-pDecl = do
+pFun :: Parser Fun
+pFun = do
   name       <- lowercaseName <?> "declaration type name"
   annotation <- symbol ":" >> lexemeN pType
   defs       <- many (lexemeN (pDef name))
-  pure Decl { declName = Name name, declType = annotation, declDefs = defs }
+  pure Fun { funName = Name name, funType = annotation, funDefs = defs }
+
+-- TODO: indentation
+pTypeclass :: Parser Typeclass
+pTypeclass = do
+  void (symbol "class")
+  name   <- Name <$> uppercaseName
+  tyvars <- many (Name <$> lowercaseName)
+  void (symbolN "where")
+  defs <- many pTypeclassDef
+  pure Typeclass { typeclassName   = name
+                 , typeclassTyVars = tyvars
+                 , typeclassDefs   = defs
+                 }
+ where
+  pTypeclassDef :: Parser (Name, Ty)
+  pTypeclassDef = do
+    name       <- Name <$> lowercaseName
+    annotation <- symbol ":" >> lexeme pType
+    void newline
+    pure (name, annotation)
 
 -- TODO: currently we can only parse definitions on a single line. Add support
 -- for indentation and the off-side rule.
@@ -98,11 +134,26 @@ pType :: Parser Ty
 pType = try arr <|> pType'
  where
   arr    = TyArr <$> pType' <*> (symbol "->" >> pType)
-  pType' = parens pType <|> cons <|> var <|> list <|> tuple
-  cons   = TyCon <$> (Name <$> uppercaseName) <*> many pType'
-  var    = TyVar . Name <$> lowercaseName
+  pType' = parens pType <|> try app <|> var <|> list <|> tuple
+  app = TyApp <$> (Name <$> (uppercaseName <|> lowercaseName)) <*> some pType'
+  var    = TyVar . Name <$> (uppercaseName <|> lowercaseName)
   list   = TyList <$> brackets pType'
   tuple  = TyTuple <$> parens (pType' `sepBy` comma)
+
+-- Parses the type args to a constructor
+-- The rules are slightly different from types in annotations, because type
+-- application must be inside parentheses
+-- i.e. MyCon f a   -> name = MyCon, args = [f, a]
+-- vs.  func : f a  -> name = func, type = TyApp f a
+pConType :: Parser Ty
+pConType = ty
+ where
+  ty    = var <|> list <|> parens (try arr <|> try tuple <|> app)
+  arr   = TyArr <$> ty <*> (symbol "->" >> ty)
+  app   = TyApp <$> (Name <$> (uppercaseName <|> lowercaseName)) <*> some ty
+  var   = TyVar . Name <$> (uppercaseName <|> lowercaseName)
+  list  = TyList <$> brackets ty
+  tuple = TyTuple <$> ty `sepBy2` comma
 
 pPattern :: Parser Pattern
 pPattern = lit <|> wild <|> list <|> try tuple <|> cons <|> var
@@ -189,13 +240,13 @@ uppercaseName = lexeme $ do
   pure t
 
 lowercaseName :: Parser String
-lowercaseName = lexeme $ do
+lowercaseName = lexeme . try $ do
   t <- (:) <$> lowerChar <*> many alphaNumChar
   guard (t `notElem` keywords)
   pure t
 
 keywords :: [String]
-keywords = ["case", "module", "import"]
+keywords = ["case", "module", "import", "where"]
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()
@@ -210,11 +261,15 @@ spaceConsumerN = L.space (void (some spaceChar)) (L.skipLineComment "--") empty
 symbol :: String -> Parser String
 symbol = L.symbol spaceConsumer
 
+-- Like symbol but also skips trailing newlines
+symbolN :: String -> Parser String
+symbolN = L.symbol spaceConsumerN
+
 -- Runs the given parser, skipping trailing spaces and tabs
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme spaceConsumer
 
--- Like lexeme but also skips newlines
+-- Like lexeme but also skips trailing newlines
 lexemeN :: Parser a -> Parser a
 lexemeN = L.lexeme spaceConsumerN
 
@@ -226,3 +281,14 @@ brackets = between (symbol "[") (symbol "]")
 
 comma :: Parser String
 comma = symbol ","
+
+-- Like sepBy1 but parses at least _two_ occurrences of p
+-- Useful for when you need to be sure you have a tuple type rather than just a
+-- variable in parentheses
+sepBy2 :: Parser a -> Parser sep -> Parser [a]
+sepBy2 p sep = do
+  first <- p
+  void sep
+  rest <- p `sepBy1` sep
+  pure (first : rest)
+{-# INLINE sepBy2 #-}
