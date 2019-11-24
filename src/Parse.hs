@@ -96,17 +96,20 @@ pFun = do
   defs       <- many (lexemeN (pDef name))
   pure Fun { funName = Name name, funType = annotation, funDefs = defs }
 
--- TODO: indentation
+-- TODO: currently we require at least one typeclass method
+-- and no newlines between the class line and the first method
 pTypeclass :: Parser Typeclass
 pTypeclass = do
   void (symbol "class")
   name   <- Name <$> uppercaseName
   tyvars <- many (Name <$> lowercaseName)
-  void (symbolN "where")
-  defs <- many pTypeclassDef
+  void (many newline)
+  indentation <- some (char ' ')
+  first       <- pTypeclassDef
+  rest        <- many (string indentation >> pTypeclassDef)
   pure Typeclass { typeclassName   = name
                  , typeclassTyVars = tyvars
-                 , typeclassDefs   = defs
+                 , typeclassDefs   = first : rest
                  }
  where
   pTypeclassDef :: Parser (Name, Ty)

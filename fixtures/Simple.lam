@@ -4,14 +4,18 @@ tag: fixture
 ---
 module Simple
 
+-- some comments
+
 data Maybe a = Nothing
              | Just a
 
 data Pair a b = MkPair a b
 
--- TODO: this should be indented but we can't parse that yet
-class Functor f where
-map : (a -> b) -> f a -> f b
+data Hand = Left | Right
+
+class Functor f
+  map : (a -> b) -> f a -> f b
+
 
 head : [a] -> a
 head [] = error "head: empty list"

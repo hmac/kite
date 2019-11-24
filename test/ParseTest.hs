@@ -104,7 +104,7 @@ test = do
                           ]
                         }
     it "parses a simple typeclass definition" $ do
-      parse pDecl "" "class Functor f where\nmap : (a -> b) -> f a -> f b\n"
+      parse pDecl "" "class Functor f\n  map : (a -> b) -> f a -> f b\n"
         `shouldParse` TypeclassDecl Typeclass
                         { typeclassName   = Name "Functor"
                         , typeclassTyVars = [Name "f"]
