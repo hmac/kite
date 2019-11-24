@@ -1,0 +1,15 @@
+---
+owner: hmac
+tag: fixture
+---
+module Simple
+
+head : [a] -> a
+head [] = error "head: empty list"
+head (Cons x xs) = x
+
+const : a -> b -> a
+const x y = x
+
+flip : (a -> b -> c) -> b -> a -> c
+flip f y x = f x y

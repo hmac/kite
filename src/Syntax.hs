@@ -6,6 +6,7 @@ data Module = Module { moduleName :: String
                      , moduleImports :: [Import]
                      , moduleExports :: [Name]
                      , moduleDecls :: [Decl]
+                     , moduleMetadata :: [(String, String)]
                      }
                      deriving (Eq, Show)
 

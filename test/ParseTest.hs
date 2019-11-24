@@ -25,6 +25,16 @@ test = do
                      ]
         }
 
+    it "parses a definition with multiple type arrows" $ do
+      parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` Decl
+        { declName = Name "const"
+        , declType = TyArr (TyVar (Name "a"))
+                           (TyArr (TyVar (Name "b")) (TyVar (Name "a")))
+        , declDefs = [ Def { defArgs = [VarPat (Name "x"), VarPat (Name "y")]
+                           , defExpr = Var (Name "x")
+                           }
+                     ]
+        }
     it "parses a multiline function definition" $ do
       parse
           pDecl
@@ -52,26 +62,32 @@ test = do
                           ]
                         }
   describe "modules" $ do
-    it "parses a basic module" $ do
-      parse pModule "" "module Foo ()\none : Int\none = 1" `shouldParse` Module
-        { moduleName    = "Foo"
-        , moduleImports = []
-        , moduleExports = []
-        , moduleDecls   =
-          [ Decl { declName = Name "one"
-                 , declType = TyCon (Name "Int") []
-                 , declDefs = [Def { defArgs = [], defExpr = Lit (LitInt 1) }]
-                 }
-          ]
-        }
+    it "parses a basic module with metadata" $ do
+      parse pModule "" "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"
+        `shouldParse` Module
+                        { moduleName     = "Foo"
+                        , moduleImports  = []
+                        , moduleExports  = []
+                        , moduleDecls    =
+                          [ Decl
+                              { declName = Name "one"
+                              , declType = TyCon (Name "Int") []
+                              , declDefs = [ Def { defArgs = []
+                                                 , defExpr = Lit (LitInt 1)
+                                                 }
+                                           ]
+                              }
+                          ]
+                        , moduleMetadata = [("key", "val")]
+                        }
     it "parses a module with imports and exports" $ do
       parse
           pModule
           ""
           "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4)"
         `shouldParse` Module
-                        { moduleName    = "Foo"
-                        , moduleImports =
+                        { moduleName     = "Foo"
+                        , moduleImports  =
                           [ Import { importQualified = False
                                    , importName      = ModuleName ["Bar"]
                                    , importAlias     = Nothing
@@ -83,6 +99,7 @@ test = do
                                    , importItems = [Name "fun3", Name "fun4"]
                                    }
                           ]
-                        , moduleExports = [Name "fun1", Name "fun2"]
-                        , moduleDecls   = []
+                        , moduleExports  = [Name "fun1", Name "fun2"]
+                        , moduleDecls    = []
+                        , moduleMetadata = []
                         }

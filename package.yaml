@@ -42,6 +42,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - lam
+    - pretty-simple
 
 tests:
   lam-test:

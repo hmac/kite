@@ -24,16 +24,37 @@ parseLamFile input = case parse (pModule <* eof) "" input of
 
 pModule :: Parser Module
 pModule = do
+  metadata <- optional pMetadata
   void $ symbol "module"
   name    <- lexemeN uppercaseName
-  exports <- lexemeN . parens $ pName `sepBy` comma
+  exports <- optional . lexemeN . parens $ pName `sepBy` comma
   imports <- many (lexemeN pImport)
   decls   <- many (lexemeN pDecl)
-  pure $ Module { moduleName    = name
-                , moduleImports = imports
-                , moduleExports = exports
-                , moduleDecls   = decls
+  pure $ Module { moduleName     = name
+                , moduleImports  = imports
+                , moduleExports  = fromMaybe [] exports
+                , moduleDecls    = decls
+                , moduleMetadata = fromMaybe [] metadata
                 }
+
+-- ---
+-- key1: val1
+-- key2: 2
+-- ---
+pMetadata :: Parser [(String, String)]
+pMetadata = do
+  void $ string "---" >> newline
+  items <- many pMetaItem
+  void $ string "---" >> newline
+  pure items
+ where
+  pMetaItem :: Parser (String, String)
+  pMetaItem = do
+    key <- lowercaseName
+    void (symbol ":")
+    val <- many alphaNumChar
+    void newline
+    pure (key, val)
 
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
@@ -76,7 +97,7 @@ pDef name = do
 pType :: Parser Ty
 pType = try arr <|> pType'
  where
-  arr    = TyArr <$> pType' <*> (symbol "->" >> pType')
+  arr    = TyArr <$> pType' <*> (symbol "->" >> pType)
   pType' = parens pType <|> cons <|> var <|> list <|> tuple
   cons   = TyCon <$> (Name <$> uppercaseName) <*> many pType'
   var    = TyVar . Name <$> lowercaseName
