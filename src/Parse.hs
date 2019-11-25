@@ -1,5 +1,6 @@
 module Parse where
 
+import           Data.List                      ( groupBy )
 import           Data.Maybe                     ( isJust
                                                 , fromMaybe
                                                 )
@@ -73,7 +74,14 @@ pImport = do
 
 pDecl :: Parser Decl
 pDecl =
-  TypeclassDecl <$> pTypeclass <|> DataDecl <$> pData <|> FunDecl <$> pFun
+  TypeclassDecl
+    <$> pTypeclass
+    <|> TypeclassInst
+    <$> pInstance
+    <|> DataDecl
+    <$> pData
+    <|> FunDecl
+    <$> pFun
 
 pData :: Parser Data
 pData = do
@@ -118,6 +126,32 @@ pTypeclass = do
     annotation <- symbol ":" >> lexeme pType
     void newline
     pure (name, annotation)
+
+pInstance :: Parser Instance
+pInstance = do
+  void (symbol "instance")
+  name  <- Name <$> uppercaseName
+  types <- many pType
+  void (many newline)
+  indentation <- some (char ' ')
+  first       <- pMethod <* newline
+  rest        <- many (string indentation >> pMethod)
+  -- Convert [(Name, Def)] into [(Name, [Def])] (grouped by name)
+  let defs = map (\ds -> (fst (head ds), map snd ds))
+        $ groupBy (\x y -> fst x == fst y) (first : rest)
+  pure Instance { instanceName  = name
+                , instanceTypes = types
+                , instanceDefs  = defs
+                }
+ where
+  -- Parses typeclass method definition
+  pMethod :: Parser (Name, Def)
+  pMethod = do
+    name     <- Name <$> lowercaseName
+    bindings <- many pPattern
+    void (symbol "=")
+    expr <- pExpr
+    pure (name, Def { defArgs = bindings, defExpr = expr })
 
 -- TODO: currently we can only parse definitions on a single line. Add support
 -- for indentation and the off-side rule.
@@ -203,6 +237,7 @@ pExpr' =
     <|> pLet
     <|> pTuple
     <|> pList
+    <|> pCons
 
 pApp :: Parser Syn
 pApp = App <$> pExpr' <*> pExpr
@@ -225,6 +260,9 @@ pTuple = fail "cannot parse tuple"
 
 pList :: Parser Syn
 pList = fail "cannot parse list"
+
+pCons :: Parser Syn
+pCons = Cons . Name <$> uppercaseName
 
 pName :: Parser Name
 pName = Name <$> (uppercaseName <|> lowercaseName)
@@ -249,7 +287,7 @@ lowercaseName = lexeme . try $ do
   pure t
 
 keywords :: [String]
-keywords = ["case", "module", "import", "where"]
+keywords = ["case", "module", "import", "instance"]
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()

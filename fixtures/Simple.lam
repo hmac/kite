@@ -16,6 +16,9 @@ data Hand = Left | Right
 class Functor f
   map : (a -> b) -> f a -> f b
 
+instance Functor Maybe
+  map _ Nothing = Nothing
+  map f (Just x) = Just (f x)
 
 head : [a] -> a
 head [] = error "head: empty list"

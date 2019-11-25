@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module ParseTest
   ( test
   )
@@ -17,43 +19,33 @@ test = do
   describe "declarations" $ do
     it "parses a basic function definition" $ do
       parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl Fun
-        { funName = Name "id"
-        , funType = TyArr (TyVar (Name "a")) (TyVar (Name "a"))
-        , funDefs = [ Def { defArgs = [VarPat (Name "x")]
-                          , defExpr = Var (Name "x")
-                          }
-                    ]
+        { funName = "id"
+        , funType = TyArr (TyVar "a") (TyVar "a")
+        , funDefs = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
         }
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
         Fun
-          { funName = Name "const"
-          , funType = TyArr (TyVar (Name "a"))
-                            (TyArr (TyVar (Name "b")) (TyVar (Name "a")))
-          , funDefs = [ Def { defArgs = [VarPat (Name "x"), VarPat (Name "y")]
-                            , defExpr = Var (Name "x")
+          { funName = "const"
+          , funType = TyArr (TyVar "a") (TyArr (TyVar "b") (TyVar "a"))
+          , funDefs = [ Def { defArgs = [VarPat "x", VarPat "y"]
+                            , defExpr = Var "x"
                             }
                       ]
           }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap f m = undefined"
         `shouldParse` FunDecl Fun
-                        { funName = Name "map"
+                        { funName = "map"
                         , funType = TyArr
-                                      (TyArr (TyVar (Name "a"))
-                                             (TyVar (Name "b"))
+                                      (TyArr (TyVar "a") (TyVar "b"))
+                                      (TyArr (TyApp "f" [TyVar "a"])
+                                             (TyApp "f" [TyVar "b"])
                                       )
-                                      (TyArr
-                                        (TyApp (Name "f") [TyVar (Name "a")])
-                                        (TyApp (Name "f") [TyVar (Name "b")])
-                                      )
-                        , funDefs = [ Def
-                                        { defArgs = [ VarPat (Name "f")
-                                                    , VarPat (Name "m")
-                                                    ]
-                                        , defExpr = Var (Name "undefined")
-                                        }
+                        , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
+                                          , defExpr = Var "undefined"
+                                          }
                                     ]
                         }
     it "parses a multiline function definition" $ do
@@ -62,67 +54,79 @@ test = do
           ""
           "head : [a] -> a\nhead [] = error \"head: empty list\"\nhead (Cons x xs) = x"
         `shouldParse` FunDecl Fun
-                        { funName = Name "head"
-                        , funType = TyArr (TyList (TyVar (Name "a")))
-                                          (TyVar (Name "a"))
+                        { funName = "head"
+                        , funType = TyArr (TyList (TyVar "a")) (TyVar "a")
                         , funDefs =
                           [ Def
                             { defArgs = [ListPat []]
                             , defExpr = App
-                                          (Var (Name "error"))
+                                          (Var "error")
                                           (Lit (LitString "head: empty list"))
                             }
                           , Def
-                            { defArgs =
-                              [ ConsPat
-                                  (Name "Cons")
-                                  [VarPat (Name "x"), VarPat (Name "xs")]
-                              ]
-                            , defExpr = Var (Name "x")
+                            { defArgs = [ ConsPat "Cons"
+                                                  [VarPat "x", VarPat "xs"]
+                                        ]
+                            , defExpr = Var "x"
                             }
                           ]
                         }
     it "parses a simple data definition" $ do
       parse pDecl "" "data Unit = Unit" `shouldParse` DataDecl Data
-        { dataName   = Name "Unit"
+        { dataName   = "Unit"
         , dataTyVars = []
-        , dataCons   = [DataCon { conName = Name "Unit", conArgs = [] }]
+        , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
     it "parses the definition of List" $ do
       parse pDecl "" "data List a = Nil | Cons a (List a)"
         `shouldParse` DataDecl Data
-                        { dataName   = Name "List"
-                        , dataTyVars = [Name "a"]
+                        { dataName   = "List"
+                        , dataTyVars = ["a"]
                         , dataCons   =
-                          [ DataCon { conName = Name "Nil", conArgs = [] }
+                          [ DataCon { conName = "Nil", conArgs = [] }
                           , DataCon
-                            { conName = Name "Cons"
-                            , conArgs = [ TyVar (Name "a")
-                                        , TyApp (Name "List") [TyVar (Name "a")]
-                                        ]
+                            { conName = "Cons"
+                            , conArgs = [TyVar "a", TyApp "List" [TyVar "a"]]
                             }
                           ]
                         }
     it "parses a simple typeclass definition" $ do
       parse pDecl "" "class Functor f\n  map : (a -> b) -> f a -> f b\n"
         `shouldParse` TypeclassDecl Typeclass
-                        { typeclassName   = Name "Functor"
-                        , typeclassTyVars = [Name "f"]
-                        , typeclassDefs   = [ ( Name "map"
+                        { typeclassName   = "Functor"
+                        , typeclassTyVars = ["f"]
+                        , typeclassDefs   = [ ( "map"
                                               , TyArr
-                                                (TyArr (TyVar (Name "a"))
-                                                       (TyVar (Name "b"))
-                                                )
-                                                (TyArr
-                                                  (TyApp (Name "f")
-                                                         [TyVar (Name "a")]
-                                                  )
-                                                  (TyApp (Name "f")
-                                                         [TyVar (Name "b")]
-                                                  )
+                                                (TyArr (TyVar "a") (TyVar "b"))
+                                                (TyArr (TyApp "f" [TyVar "a"])
+                                                       (TyApp "f" [TyVar "b"])
                                                 )
                                               )
                                             ]
+                        }
+    it "parses a typeclass instance" $ do
+      parse
+          pDecl
+          ""
+          "instance Functor Maybe\n  map _ Nothing = Nothing\n  map f (Just x) = Just (f x)\n"
+        `shouldParse` TypeclassInst Instance
+                        { instanceName  = "Functor"
+                        , instanceTypes = [TyVar "Maybe"]
+                        , instanceDefs  =
+                          [ ( "map"
+                            , [ Def { defArgs = [WildPat, ConsPat "Nothing" []]
+                                    , defExpr = Cons "Nothing"
+                                    }
+                              , Def
+                                { defArgs = [ VarPat "f"
+                                            , ConsPat "Just" [VarPat "x"]
+                                            ]
+                                , defExpr = App (Cons "Just")
+                                                (App (Var "f") (Var "x"))
+                                }
+                              ]
+                            )
+                          ]
                         }
   describe "modules" $ do
     it "parses a basic module with metadata" $ do
@@ -133,8 +137,8 @@ test = do
                         , moduleExports  = []
                         , moduleDecls    =
                           [ FunDecl Fun
-                              { funName = Name "one"
-                              , funType = TyVar (Name "Int")
+                              { funName = "one"
+                              , funType = TyVar "Int"
                               , funDefs = [ Def { defArgs = []
                                                 , defExpr = Lit (LitInt 1)
                                                 }
@@ -158,11 +162,11 @@ test = do
                                    }
                           , Import { importQualified = True
                                    , importName      = ModuleName ["Bar", "Baz"]
-                                   , importAlias     = Just (Name "B")
-                                   , importItems = [Name "fun3", Name "fun4"]
+                                   , importAlias     = Just "B"
+                                   , importItems     = ["fun3", "fun4"]
                                    }
                           ]
-                        , moduleExports  = [Name "fun1", Name "fun2"]
+                        , moduleExports  = ["fun1", "fun2"]
                         , moduleDecls    = []
                         , moduleMetadata = []
                         }

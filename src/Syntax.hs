@@ -1,5 +1,7 @@
 module Syntax where
 
+import           Data.String                    ( IsString(fromString) )
+
 -- module Foo
 -- TODO: moduleName should be global (e.g. Data.Foo.Bar)
 data Module = Module { moduleName :: String
@@ -22,13 +24,17 @@ data Import = Import { importQualified :: Bool
 -- foo
 newtype Name = Name String
         deriving (Eq, Show)
+
+instance IsString Name where
+  fromString = Name
+
 newtype ModuleName = ModuleName [String]
         deriving (Eq, Show)
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
--- TODO: typeclass definition, typeclass instance, records
-data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass
+-- TODO: records
+data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass | TypeclassInst Instance
         deriving (Eq, Show)
 
 data Fun = Fun { funName :: Name
@@ -49,6 +55,12 @@ data Typeclass = Typeclass { typeclassName :: Name
                            , typeclassDefs :: [(Name, Ty)]
                            }
                            deriving (Eq, Show)
+
+data Instance = Instance { instanceName :: Name
+                         , instanceTypes :: [Ty]
+                         , instanceDefs :: [(Name, [Def])]
+                         }
+                         deriving (Eq, Show)
 
 data DataCon = DataCon { conName :: Name
                        , conArgs :: [Ty]
@@ -89,7 +101,9 @@ data Ty = TyApp Name [Ty]
         | TyTuple [Ty]
         deriving (Eq, Show)
 
+-- TODO: case
 data Syn = Var Name
+         | Cons Name
          | Abs [Name] Syn
          | App Syn Syn
          | Let [(Name, Syn)] Syn
@@ -97,5 +111,4 @@ data Syn = Var Name
          | TupleLit [Syn]
          | ListLit [Syn]
          | Lit Literal
-         -- TODO: constructors: Cons [Syn]
          deriving (Eq, Show)
