@@ -193,19 +193,38 @@ pConType = ty
   tuple = TyTuple <$> ty `sepBy2` comma
 
 pPattern :: Parser Pattern
-pPattern = lit <|> wild <|> list <|> try tuple <|> cons <|> var
+pPattern = pPattern' <|> cons
  where
-  lit        = LitPat <$> pLiteral
-  wild       = symbol "_" >> pure WildPat
-  list       = ListPat <$> brackets (pPattern `sepBy` comma)
-  tuple      = TuplePat <$> parens (pPattern `sepBy` comma)
+  tyCon      = Name <$> uppercaseName
   cons       = try nullaryCon <|> con
   nullaryCon = ConsPat <$> tyCon <*> pure []
   con        = parens $ do
     c    <- tyCon
     args <- many pPattern
     pure $ ConsPat c args
+
+pPattern' :: Parser Pattern
+pPattern' = lit <|> wild <|> list <|> try tuple <|> var
+ where
+  lit   = LitPat <$> pLiteral
+  wild  = symbol "_" >> pure WildPat
+  list  = ListPat <$> brackets (pPattern `sepBy` comma)
+  tuple = TuplePat <$> parens (pPattern `sepBy` comma)
   var   = VarPat . Name <$> lowercaseName
+
+-- Case patterns differ from function patterns in that a constructor pattern
+-- doesn't have to be in parentheses (because we are only scrutinising a single
+-- expression).
+-- e.g. case foo of
+--        Just x -> ...
+-- is valid whereas
+-- foo Just x = ...
+-- is not the same as
+-- foo (Just x) = ...
+pCasePattern :: Parser Pattern
+pCasePattern = pPattern' <|> con
+ where
+  con   = ConsPat <$> tyCon <*> many pPattern
   tyCon = Name <$> uppercaseName
 
 pLiteral :: Parser Literal
@@ -227,6 +246,7 @@ pLiteral = try floatLit <|> intLit <|> stringLit
 pExpr :: Parser Syn
 pExpr = try pApp <|> pExpr'
 
+-- TODO: let
 pExpr' :: Parser Syn
 pExpr' =
   parens pExpr
@@ -238,6 +258,7 @@ pExpr' =
     <|> pTuple
     <|> pList
     <|> pCons
+    <|> pCase
 
 pApp :: Parser Syn
 pApp = App <$> pExpr' <*> pExpr
@@ -264,6 +285,24 @@ pList = fail "cannot parse list"
 pCons :: Parser Syn
 pCons = Cons . Name <$> uppercaseName
 
+pCase :: Parser Syn
+pCase = do
+  void (symbol "case")
+  scrutinee <- pExpr'
+  void (symbol "of")
+  void newline
+  indentation <- some (char ' ')
+  first       <- pAlt
+  rest        <- many $ try (newline >> string indentation >> pAlt)
+  pure $ Case scrutinee (first : rest)
+ where
+  pAlt :: Parser (Pattern, Syn)
+  pAlt = do
+    pat <- pCasePattern
+    void (symbol "->")
+    expr <- pExpr
+    pure (pat, expr)
+
 pName :: Parser Name
 pName = Name <$> (uppercaseName <|> lowercaseName)
 
@@ -287,7 +326,7 @@ lowercaseName = lexeme . try $ do
   pure t
 
 keywords :: [String]
-keywords = ["case", "module", "import", "instance"]
+keywords = ["case", "of", "class", "module", "import", "instance"]
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()

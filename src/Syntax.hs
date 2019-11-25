@@ -107,6 +107,7 @@ data Syn = Var Name
          | Abs [Name] Syn
          | App Syn Syn
          | Let [(Name, Syn)] Syn
+         | Case Syn [(Pattern, Syn)]
          -- more exotic syntactic structures
          | TupleLit [Syn]
          | ListLit [Syn]

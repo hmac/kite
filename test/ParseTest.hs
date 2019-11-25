@@ -10,6 +10,7 @@ import           Test.Hspec.Megaparsec
 import           Text.Megaparsec                ( parse )
 import           Parse                          ( pModule
                                                 , pDecl
+                                                , pExpr
                                                 )
 
 import           Syntax
@@ -170,3 +171,11 @@ test = do
                         , moduleDecls    = []
                         , moduleMetadata = []
                         }
+  describe "expressions" $ do
+    it "parses a case expression" $ do
+      parse pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
+        `shouldParse` Case
+                        (Var "x")
+                        [ (ConsPat "Just" [VarPat "y"], Var "y")
+                        , (ConsPat "Nothing" []       , Var "z")
+                        ]

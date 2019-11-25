@@ -29,3 +29,8 @@ const x y = x
 
 flip : (a -> b -> c) -> b -> a -> c
 flip f y x = f x y
+
+fromMaybe : a -> Maybe a -> a
+fromMaybe def m = case m of
+  Just x -> x
+  Nothing -> def
