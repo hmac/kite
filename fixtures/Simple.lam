@@ -2,7 +2,16 @@
 owner: hmac
 tag: fixture
 ---
-module Simple
+module Simple (fun1, fun2)
+
+
+import Data.Maybe (fromMaybe, f, g, h, i)
+import qualified Text.Megaparsec.Char.Lexer as L
+
+
+
+
+
 
 -- some comments
 

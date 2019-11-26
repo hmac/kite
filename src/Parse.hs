@@ -226,6 +226,7 @@ pCasePattern = pPattern' <|> con
   where con = ConsPat <$> uppercaseName <*> many pPattern
 
 -- TODO: string interpolation
+-- TOOD: heredocs
 pLiteral :: Parser Literal
 pLiteral = try floatLit <|> intLit <|> stringLit
  where

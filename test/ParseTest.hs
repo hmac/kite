@@ -11,6 +11,7 @@ import           Text.Megaparsec                ( parse )
 import           Parse                          ( pModule
                                                 , pDecl
                                                 , pExpr
+                                                , pType
                                                 )
 
 import           Syntax
@@ -189,3 +190,13 @@ test = do
     it "parses a binary operator" $ do
       parse pExpr "" "1 + 1"
         `shouldParse` App (App (Var "+") (Lit (LitInt 1))) (Lit (LitInt 1))
+  describe "types" $ do
+    it "parses basic function types" $ do
+      parse pType "" "a -> b" `shouldParse` TyArr (TyVar "a") (TyVar "b")
+    it "parses multi arg function types" $ do
+      parse pType "" "a -> b -> c"
+        `shouldParse` TyArr (TyVar "a") (TyArr (TyVar "b") (TyVar "c"))
+    it "parses higher order function types" $ do
+      parse pType "" "(a -> b) -> a -> b" `shouldParse` TyArr
+        (TyArr (TyVar "a") (TyVar "b"))
+        (TyArr (TyVar "a") (TyVar "b"))
