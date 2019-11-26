@@ -6,9 +6,7 @@ import           Data.Maybe                     ( isJust
                                                 )
 import           Data.Void                      ( Void )
 import           Data.Functor                   ( void )
-import           Control.Monad                  ( guard
-                                                , when
-                                                )
+import           Control.Monad                  ( guard )
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -248,13 +246,13 @@ pExpr = try pBinApp <|> try pApp <|> pExpr'
 
 pExpr' :: Parser Syn
 pExpr' =
-  parens pExpr
+  try pTuple
+    <|> parens pExpr
     <|> Lit
     <$> pLiteral
     <|> pVar
     <|> pAbs
     <|> pLet
-    <|> pTuple
     <|> pList
     <|> pCons
     <|> pCase
@@ -311,10 +309,10 @@ pLet = do
     pure (var, val)
 
 pTuple :: Parser Syn
-pTuple = fail "cannot parse tuple"
+pTuple = TupleLit <$> parens (pExpr `sepBy2` comma)
 
 pList :: Parser Syn
-pList = fail "cannot parse list"
+pList = ListLit <$> brackets (pExpr `sepBy` comma)
 
 pCons :: Parser Syn
 pCons = Cons <$> uppercaseName

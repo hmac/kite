@@ -9,6 +9,8 @@ import           Test.Hspec
 import Print
 import           Syntax
 
+import Prelude hiding (mod)
+
 test :: Spec
 test = do
   describe "printing module" $ do

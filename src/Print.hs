@@ -65,14 +65,14 @@ printFun Fun { funName = name, funDefs = defs, funType = ty } =
 -- rather than foo : ((a -> b) -> c)
 printType :: Ty -> Doc a
 printType t = case t of
-  TyArr n ts -> hsep $ intersperse "->" (map printType' (unfoldTyApp t))
-  ty         -> printType' ty
+  TyArr _ _ -> hsep $ intersperse "->" (map printType' (unfoldTyApp t))
+  ty        -> printType' ty
  where
   printType' (TyVar n    ) = printName n
   printType' (TyApp n tys) = printName n <+> hsep (map printType' tys)
-  printType' t@(TyArr a b) =
-    parens $ hsep $ intersperse "->" (map printType' (unfoldTyApp t))
-  printType' (TyList  t ) = brackets (printType' t)
+  printType' ty@(TyArr _ _) =
+    parens $ hsep $ intersperse "->" (map printType' (unfoldTyApp ty))
+  printType' (TyList  ty) = brackets (printType' ty)
   printType' (TyTuple ts) = tupled (map printType' ts)
 
 -- Unwrap a nested TyArr tree so we can print a -> b -> c
@@ -81,7 +81,7 @@ unfoldTyApp :: Ty -> [Ty]
 unfoldTyApp t = reverse (go t [])
  where
   go (TyArr a b) ts = go b (a : ts)
-  go t           ts = t : ts
+  go ty          ts = ty : ts
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
@@ -109,13 +109,23 @@ printExpr :: Syn -> Doc a
 printExpr (Var  n) = printName n
 printExpr (Cons n) = printName n
 printExpr (Abs args e) =
-  "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
-printExpr (App  a     b   ) = printExpr a <+> printExpr b
+  parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
+printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts
 printExpr (TupleLit es    ) = tupled (map printExpr es)
-printExpr (ListLit  es    ) = list (map printExpr es)
-printExpr (Lit      l     ) = printLiteral l
+printExpr (ListLit es) | any big es = printList es
+                       | otherwise  = list (map printExpr es)
+printExpr (Lit l) = printLiteral l
+
+printApp :: Syn -> Syn -> Doc a
+printApp a b = printExpr a <+> printExpr b
+
+-- Used if the list is 'big'
+printList :: [Syn] -> Doc a
+printList es = nest
+  2
+  (encloseSep (lbracket <> line) (line <> rbracket) comma (map printExpr es))
 
 -- let x = 1
 --     y = 2
@@ -134,7 +144,7 @@ printLet binds e = "let" <+> hang
 printCase :: Syn -> [(Pattern, Syn)] -> Doc a
 printCase e alts = "case"
   <+> hang (-3) (vsep ((printExpr e <+> "of") : map printAlt alts))
-  where printAlt (pat, e) = printPattern pat <+> "->" <+> printExpr e
+  where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
 printData :: Data -> Doc a
 printData d =
@@ -168,10 +178,11 @@ prettyModuleName :: ModuleName -> Doc a
 prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 
 big :: Syn -> Bool
-big (Case _ _) = True
-big (Let  _ _) = True
-big (App  a b) = size (App a b) > 5
-big _          = False
+big (Case _ _  ) = True
+big (Let  _ _  ) = True
+big (App  a b  ) = size (App a b) > 5
+big (ListLit xs) = any big xs
+big _            = False
 
 size :: Syn -> Int
 size (App a b) = size a + size b

@@ -30,6 +30,10 @@ dependencies:
 - text
 - megaparsec
 - prettyprinter
+# Testing - here so hoogle picks them up
+- QuickCheck
+- hspec
+- hspec-megaparsec
 
 library:
   source-dirs: src
@@ -59,5 +63,3 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - lam
-    - hspec
-    - hspec-megaparsec

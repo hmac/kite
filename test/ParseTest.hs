@@ -190,6 +190,9 @@ test = do
     it "parses a binary operator" $ do
       parse pExpr "" "1 + 1"
         `shouldParse` App (App (Var "+") (Lit (LitInt 1))) (Lit (LitInt 1))
+    it "parses a tuple" $ do
+      parse pExpr "" "(\"\", 0.0)"
+        `shouldParse` TupleLit [Lit (LitString ""), Lit (LitFloat 0.0)]
   describe "types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` TyArr (TyVar "a") (TyVar "b")
