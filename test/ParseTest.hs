@@ -186,3 +186,6 @@ test = do
       parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
         [("x", Lit (LitInt 1)), ("y", Lit (LitInt 2))]
         (App (App (Var "add") (Var "x")) (Var "y"))
+    it "parses a binary operator" $ do
+      parse pExpr "" "1 + 1"
+        `shouldParse` App (App (Var "+") (Lit (LitInt 1))) (Lit (LitInt 1))

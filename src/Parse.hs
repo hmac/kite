@@ -243,7 +243,7 @@ pLiteral = try floatLit <|> intLit <|> stringLit
     pure (LitString str)
 
 pExpr :: Parser Syn
-pExpr = try pApp <|> pExpr'
+pExpr = try pBinApp <|> try pApp <|> pExpr'
 
 pExpr' :: Parser Syn
 pExpr' =
@@ -257,6 +257,23 @@ pExpr' =
     <|> pList
     <|> pCons
     <|> pCase
+
+-- Application of a binary operator
+-- e.g. x + y
+-- TODO: fixity?
+-- Maybe handle this after parsing
+pBinApp :: Parser Syn
+pBinApp = do
+  left <- pExpr'
+  op   <- pOp
+  void $ some (char ' ')
+  right <- pExpr'
+  pure $ App (App op left) right
+ where
+  pOp :: Parser Syn
+  pOp       = Var . Name <$> (twoCharOp <|> oneCharOp)
+  twoCharOp = string "&&" <|> string "||" <|> string ">=" <|> string "<="
+  oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<', '.']
 
 pApp :: Parser Syn
 pApp = do
