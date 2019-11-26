@@ -3,8 +3,7 @@ module Syntax where
 import           Data.String                    ( IsString(fromString) )
 
 -- module Foo
--- TODO: moduleName should be global (e.g. Data.Foo.Bar)
-data Module = Module { moduleName :: String
+data Module = Module { moduleName :: ModuleName
                      , moduleImports :: [Import]
                      , moduleExports :: [Name]
                      , moduleDecls :: [Decl]
@@ -23,13 +22,16 @@ data Import = Import { importQualified :: Bool
 
 -- foo
 newtype Name = Name String
-        deriving (Eq, Show)
+  deriving (Eq, Show)
 
 instance IsString Name where
   fromString = Name
 
 newtype ModuleName = ModuleName [String]
-        deriving (Eq, Show)
+  deriving (Eq, Show)
+
+instance IsString ModuleName where
+  fromString s = ModuleName $ splitOn '.' s
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
@@ -101,7 +103,6 @@ data Ty = TyApp Name [Ty]
         | TyTuple [Ty]
         deriving (Eq, Show)
 
--- TODO: case
 data Syn = Var Name
          | Cons Name
          | Abs [Name] Syn
@@ -113,3 +114,12 @@ data Syn = Var Name
          | ListLit [Syn]
          | Lit Literal
          deriving (Eq, Show)
+
+-- Utils
+
+-- | Split a list into sublists delimited by the given element.
+splitOn :: Eq a => a -> [a] -> [[a]]
+splitOn x xs = go xs []
+ where
+  go []       acc = [reverse acc]
+  go (y : ys) acc = if x == y then reverse acc : go ys [] else go ys (y : acc)

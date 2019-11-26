@@ -34,3 +34,8 @@ fromMaybe : a -> Maybe a -> a
 fromMaybe def m = case m of
   Just x -> x
   Nothing -> def
+
+three : Int
+three = let one = 1
+            two = plus one one
+         in plus one two

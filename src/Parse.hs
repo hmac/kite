@@ -27,7 +27,7 @@ pModule :: Parser Module
 pModule = do
   metadata <- optional pMetadata
   void $ symbol "module"
-  name    <- lexemeN uppercaseName
+  name    <- lexemeN pModuleName
   exports <- optional . lexemeN . parens $ pName `sepBy` comma
   imports <- many (lexemeN pImport)
   decls   <- many (lexemeN pDecl)
@@ -51,7 +51,7 @@ pMetadata = do
  where
   pMetaItem :: Parser (String, String)
   pMetaItem = do
-    key <- lowercaseName
+    key <- lowercaseString
     void (symbol ":")
     val <- many alphaNumChar
     void newline
@@ -64,8 +64,8 @@ pImport = do
   void $ symbol "import"
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
-  alias     <- optional (symbol "as" >> Name <$> uppercaseName)
-  items     <- optional $ parens ((Name <$> lowercaseName) `sepBy` comma)
+  alias     <- optional (symbol "as" >> uppercaseName)
+  items     <- optional $ parens (lowercaseName `sepBy` comma)
   pure Import { importQualified = qualified
               , importName      = name
               , importAlias     = alias
@@ -86,14 +86,14 @@ pDecl =
 pData :: Parser Data
 pData = do
   void (symbol "data")
-  name   <- Name <$> uppercaseName
-  tyvars <- many (Name <$> lowercaseName)
+  name   <- uppercaseName
+  tyvars <- many lowercaseName
   void (symbolN "=")
   constructors <- lexemeN pCon `sepBy` symbolN "|"
   pure Data { dataName = name, dataTyVars = tyvars, dataCons = constructors }
  where
   pCon :: Parser DataCon
-  pCon = DataCon <$> (Name <$> uppercaseName) <*> many pConType
+  pCon = DataCon <$> uppercaseName <*> many pConType
 
 -- TODO: we can make this more flexible by allowing annotations separate from
 -- definitions
@@ -102,15 +102,15 @@ pFun = do
   name       <- lowercaseName <?> "declaration type name"
   annotation <- symbol ":" >> lexemeN pType
   defs       <- many (lexemeN (pDef name))
-  pure Fun { funName = Name name, funType = annotation, funDefs = defs }
+  pure Fun { funName = name, funType = annotation, funDefs = defs }
 
 -- TODO: currently we require at least one typeclass method
 -- and no newlines between the class line and the first method
 pTypeclass :: Parser Typeclass
 pTypeclass = do
   void (symbol "class")
-  name   <- Name <$> uppercaseName
-  tyvars <- many (Name <$> lowercaseName)
+  name   <- uppercaseName
+  tyvars <- many lowercaseName
   void (many newline)
   indentation <- some (char ' ')
   first       <- pTypeclassDef
@@ -122,7 +122,7 @@ pTypeclass = do
  where
   pTypeclassDef :: Parser (Name, Ty)
   pTypeclassDef = do
-    name       <- Name <$> lowercaseName
+    name       <- lowercaseName
     annotation <- symbol ":" >> lexeme pType
     void newline
     pure (name, annotation)
@@ -130,7 +130,7 @@ pTypeclass = do
 pInstance :: Parser Instance
 pInstance = do
   void (symbol "instance")
-  name  <- Name <$> uppercaseName
+  name  <- uppercaseName
   types <- many pType
   void (many newline)
   indentation <- some (char ' ')
@@ -147,7 +147,7 @@ pInstance = do
   -- Parses typeclass method definition
   pMethod :: Parser (Name, Def)
   pMethod = do
-    name     <- Name <$> lowercaseName
+    name     <- lowercaseName
     bindings <- many pPattern
     void (symbol "=")
     expr <- pExpr
@@ -155,8 +155,8 @@ pInstance = do
 
 -- TODO: currently we can only parse definitions on a single line. Add support
 -- for indentation and the off-side rule.
-pDef :: String -> Parser Def
-pDef name = do
+pDef :: Name -> Parser Def
+pDef (Name name) = do
   void (symbol name)
   bindings <- many pPattern <?> "pattern"
   void (symbol "=")
@@ -172,8 +172,8 @@ pType = try arr <|> pType'
  where
   arr    = TyArr <$> pType' <*> (symbol "->" >> pType)
   pType' = parens pType <|> try app <|> var <|> list <|> tuple
-  app = TyApp <$> (Name <$> (uppercaseName <|> lowercaseName)) <*> some pType'
-  var    = TyVar . Name <$> (uppercaseName <|> lowercaseName)
+  app    = TyApp <$> pName <*> some pType'
+  var    = TyVar <$> pName
   list   = TyList <$> brackets pType'
   tuple  = TyTuple <$> parens (pType' `sepBy` comma)
 
@@ -187,15 +187,15 @@ pConType = ty
  where
   ty    = var <|> list <|> parens (try arr <|> try tuple <|> app)
   arr   = TyArr <$> ty <*> (symbol "->" >> ty)
-  app   = TyApp <$> (Name <$> (uppercaseName <|> lowercaseName)) <*> some ty
-  var   = TyVar . Name <$> (uppercaseName <|> lowercaseName)
+  app   = TyApp <$> pName <*> some ty
+  var   = TyVar <$> pName
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma
 
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
  where
-  tyCon      = Name <$> uppercaseName
+  tyCon      = uppercaseName
   cons       = try nullaryCon <|> con
   nullaryCon = ConsPat <$> tyCon <*> pure []
   con        = parens $ do
@@ -210,7 +210,7 @@ pPattern' = lit <|> wild <|> list <|> try tuple <|> var
   wild  = symbol "_" >> pure WildPat
   list  = ListPat <$> brackets (pPattern `sepBy` comma)
   tuple = TuplePat <$> parens (pPattern `sepBy` comma)
-  var   = VarPat . Name <$> lowercaseName
+  var   = VarPat <$> lowercaseName
 
 -- Case patterns differ from function patterns in that a constructor pattern
 -- doesn't have to be in parentheses (because we are only scrutinising a single
@@ -223,10 +223,9 @@ pPattern' = lit <|> wild <|> list <|> try tuple <|> var
 -- foo (Just x) = ...
 pCasePattern :: Parser Pattern
 pCasePattern = pPattern' <|> con
- where
-  con   = ConsPat <$> tyCon <*> many pPattern
-  tyCon = Name <$> uppercaseName
+  where con = ConsPat <$> uppercaseName <*> many pPattern
 
+-- TODO: string interpolation
 pLiteral :: Parser Literal
 pLiteral = try floatLit <|> intLit <|> stringLit
  where
@@ -246,7 +245,6 @@ pLiteral = try floatLit <|> intLit <|> stringLit
 pExpr :: Parser Syn
 pExpr = try pApp <|> pExpr'
 
--- TODO: let
 pExpr' :: Parser Syn
 pExpr' =
   parens pExpr
@@ -261,20 +259,38 @@ pExpr' =
     <|> pCase
 
 pApp :: Parser Syn
-pApp = App <$> pExpr' <*> pExpr
+pApp = do
+  first <- pExpr'
+  rest  <- some pExpr'
+  pure $ foldl1 App (first : rest)
 
 pVar :: Parser Syn
-pVar = Var . Name <$> lowercaseName
+pVar = Var <$> lowercaseName
 
 pAbs :: Parser Syn
 pAbs = do
   void (string "\\")
-  args <- map Name <$> many lowercaseName
+  args <- many lowercaseName
   void (symbol "->")
   Abs <$> pure args <*> pExpr
 
+-- let foo = 1
+--     bar = 2
+--  in x
 pLet :: Parser Syn
-pLet = fail "cannot parse let"
+pLet = do
+  void (symbolN "let")
+  binds <- many (lexemeN pBind)
+  void (symbolN "in")
+  Let binds <$> pExpr
+ where
+  pBind :: Parser (Name, Syn)
+  pBind = do
+    var <- lowercaseName
+    void (symbol "=")
+    val <- pExpr
+    lexemeN (void newline)
+    pure (var, val)
 
 pTuple :: Parser Syn
 pTuple = fail "cannot parse tuple"
@@ -283,7 +299,7 @@ pList :: Parser Syn
 pList = fail "cannot parse list"
 
 pCons :: Parser Syn
-pCons = Cons . Name <$> uppercaseName
+pCons = Cons <$> uppercaseName
 
 pCase :: Parser Syn
 pCase = do
@@ -304,29 +320,32 @@ pCase = do
     pure (pat, expr)
 
 pName :: Parser Name
-pName = Name <$> (uppercaseName <|> lowercaseName)
+pName = uppercaseName <|> lowercaseName
 
 pModuleName :: Parser ModuleName
-pModuleName = ModuleName <$> lexeme (uppercaseName' `sepBy` string ".")
+pModuleName = ModuleName <$> lexeme (uppercaseString' `sepBy` string ".")
  where
-  -- like uppercaseName but doesn't consume trailing space
-  uppercaseName' :: Parser String
-  uppercaseName' = (:) <$> upperChar <*> many letterChar
+  -- like uppercaseString but doesn't consume trailing space
+  uppercaseString' :: Parser String
+  uppercaseString' = (:) <$> upperChar <*> many letterChar
 
-uppercaseName :: Parser String
-uppercaseName = lexeme $ do
+uppercaseName :: Parser Name
+uppercaseName = lexeme $ Name <$> do
   t <- (:) <$> upperChar <*> many alphaNumChar
   guard (t `notElem` keywords)
   pure t
 
-lowercaseName :: Parser String
-lowercaseName = lexeme . try $ do
+lowercaseName :: Parser Name
+lowercaseName = Name <$> lowercaseString
+
+lowercaseString :: Parser String
+lowercaseString = lexeme . try $ do
   t <- (:) <$> lowerChar <*> many alphaNumChar
   guard (t `notElem` keywords)
   pure t
 
 keywords :: [String]
-keywords = ["case", "of", "class", "module", "import", "instance"]
+keywords = ["let", "in", "case", "of", "class", "instance", "module", "import"]
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()

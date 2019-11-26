@@ -172,6 +172,9 @@ test = do
                         , moduleMetadata = []
                         }
   describe "expressions" $ do
+    it "parses an application" $ do
+      parse pExpr "" "foo x y z"
+        `shouldParse` App (App (App (Var "foo") (Var "x")) (Var "y")) (Var "z")
     it "parses a case expression" $ do
       parse pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
         `shouldParse` Case
@@ -179,3 +182,7 @@ test = do
                         [ (ConsPat "Just" [VarPat "y"], Var "y")
                         , (ConsPat "Nothing" []       , Var "z")
                         ]
+    it "parses a let expression" $ do
+      parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
+        [("x", Lit (LitInt 1)), ("y", Lit (LitInt 2))]
+        (App (App (Var "add") (Var "x")) (Var "y"))
