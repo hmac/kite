@@ -119,7 +119,12 @@ printExpr (ListLit es) | any big es = printList es
 printExpr (Lit l) = printLiteral l
 
 printApp :: Syn -> Syn -> Doc a
-printApp a b = printExpr a <+> printExpr b
+printApp a (App b c) = if big a
+  then parens (printExpr a) <+> nest 2 (parens (printExpr (App b c)))
+  else printExpr a <+> parens (printExpr (App b c))
+printApp a b | big a = parens (printExpr a) <+> nest 2 (printExpr b)
+printApp a b | big b = printExpr a <+> parens (printExpr b)
+printApp a b         = printExpr a <+> printExpr b
 
 -- Used if the list is 'big'
 printList :: [Syn] -> Doc a

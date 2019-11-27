@@ -226,14 +226,18 @@ pCasePattern = pPattern' <|> con
 -- TODO: string interpolation
 -- TOOD: heredocs
 pLiteral :: Parser Literal
-pLiteral = try floatLit <|> intLit <|> stringLit
+pLiteral = try floatLit <|> try intLit <|> stringLit
  where
-  intLit   = LitInt . read <$> lexeme (some digitChar)
+  intLit = do
+    sign   <- optional (string "-")
+    digits <- lexeme (some digitChar)
+    pure . LitInt . read $ fromMaybe "" sign <> digits
   floatLit = do
+    sign    <- optional (string "-")
     numeral <- many digitChar
     void (string ".")
     decimal <- lexeme (some digitChar)
-    pure . LitFloat . read $ numeral <> "." <> decimal
+    pure . LitFloat . read $ fromMaybe "" sign <> numeral <> "." <> decimal
   -- TODO: escape quote chars in string literals
   stringLit = do
     void (string "\"")
@@ -312,7 +316,8 @@ pTuple :: Parser Syn
 pTuple = TupleLit <$> parens (pExpr `sepBy2` comma)
 
 pList :: Parser Syn
-pList = ListLit <$> brackets (pExpr `sepBy` comma)
+pList = ListLit
+  <$> between (symbolN "[") (symbol "]") (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
 pCons = Cons <$> uppercaseName
@@ -320,7 +325,7 @@ pCons = Cons <$> uppercaseName
 pCase :: Parser Syn
 pCase = do
   void (symbol "case")
-  scrutinee <- pExpr'
+  scrutinee <- pExpr
   void (symbol "of")
   void newline
   indentation <- some (char ' ')

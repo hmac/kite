@@ -34,6 +34,8 @@ dependencies:
 - QuickCheck
 - hspec
 - hspec-megaparsec
+- hedgehog
+- hw-hspec-hedgehog
 
 library:
   source-dirs: src
