@@ -16,7 +16,6 @@ import           Syntax
 
 type Parser = Parsec Void String
 
--- TODO: comments
 -- TODO: markdown in comments & doctests
 -- TODO: string interpolation
 -- TOOD: heredocs

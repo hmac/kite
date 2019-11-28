@@ -236,6 +236,14 @@ length (x : xs) = 1 + length xs
 -- _ for wildcard patterns
 snd : (a, b) -> b
 snd (_, x) = x
+
+-- use """ to delimit multiline strings
+help = """
+  Welcome to the Lam REPL.
+  For general help, type :?
+  To see documentation on a function or type, use :info
+  Type :quit to exit.
+  """
 ```
 
 In the future there may also be some sugar for list ranges, like `[1..100]`.
