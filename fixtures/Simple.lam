@@ -53,3 +53,8 @@ three = let one = 1
 
 holey : ?1 -> Bar
 holey x = ?2
+
+-- Anonymous functions and infix operators
+-- Pretty-printing of infix operators is currently a bit conservative
+incList : [Int] -> [Int]
+incList xs = map (\x -> x + 1) (filter (\x -> x < 10) xs)

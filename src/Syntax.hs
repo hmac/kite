@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Syntax where
 
 import           Data.String                    ( IsString(fromString) )
@@ -122,6 +123,10 @@ data Syn = Var Name
          | ListLit [Syn]
          | Lit Literal
          deriving (Eq, Show, Generic)
+
+-- Supported binary operators
+binOps :: [Name]
+binOps = ["+", "-", "*", "/", ">", "<", ".", "&&", "||", ">=", "<="]
 
 -- Utils
 

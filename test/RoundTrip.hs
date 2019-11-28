@@ -161,12 +161,18 @@ genExpr = Gen.recursive
     genExpr
     (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
   , Gen.subterm2 genExpr genExpr App
+  , Gen.subtermM2 genExpr
+                  genExpr
+                  (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
   , Gen.subtermM2 genExpr genExpr (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
   , Gen.subtermM3 genExpr
                   genExpr
                   genExpr
                   (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
   ]
+
+genBinOp :: H.Gen Syn
+genBinOp = Gen.element $ Var <$> binOps
 
 genLetBinds :: Syn -> H.Gen [(Name, Syn)]
 genLetBinds e = do

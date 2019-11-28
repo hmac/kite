@@ -135,7 +135,18 @@ printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (Lit l) = printLiteral l
 
+-- Can we simplify this by introducting printExpr' which behaves like printExpr
+-- but always parenthesises applications?
 printApp :: Syn -> Syn -> Doc a
+printApp (App (Var op) a) b | op `elem` binOps =
+  parens $ case (singleton a, singleton b) of
+    (True, True) -> printExpr a <+> printExpr (Var op) <+> printExpr b
+    (False, False) ->
+      parens (printExpr a) <+> printExpr (Var op) <+> parens (printExpr b)
+    (True, False) ->
+      printExpr a <+> printExpr (Var op) <+> parens (printExpr b)
+    (False, True) ->
+      parens (printExpr a) <+> printExpr (Var op) <+> printExpr b
 printApp a (App b c) = if big a
   then parens (printExpr a) <+> nest 2 (parens (printExpr (App b c)))
   else printExpr a <+> parens (printExpr (App b c))
@@ -204,6 +215,16 @@ printName (Name n) = pretty n
 
 prettyModuleName :: ModuleName -> Doc a
 prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
+
+-- True if we would never need to parenthesise it
+singleton :: Syn -> Bool
+singleton (Var      _) = True
+singleton (Hole     _) = True
+singleton (Cons     _) = True
+singleton (Lit      _) = True
+singleton (TupleLit _) = True
+singleton (ListLit  _) = True
+singleton _            = False
 
 big :: Syn -> Bool
 big (Case _ _  ) = True
