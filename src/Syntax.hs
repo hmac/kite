@@ -54,6 +54,8 @@ data Data = Data { dataName :: Name
                  deriving (Eq, Show, Generic)
 
 -- TODO: default definitions
+-- TODO: we probably want to error if you put type holes in typeclass/instance
+-- defs
 data Typeclass = Typeclass { typeclassName :: Name
                            , typeclassTyVars :: [Name]
                            , typeclassDefs :: [(Name, Ty)]
@@ -104,10 +106,12 @@ data Ty = TyApp Name [Ty]
         | TyArr Ty Ty
         | TyList Ty
         | TyTuple [Ty]
+        | TyHole Name
         deriving (Eq, Show, Generic)
 
 data Syn = Var Name
          | Cons Name
+         | Hole Name
          | Abs [Name] Syn
          | App Syn Syn
          | Let [(Name, Syn)] Syn

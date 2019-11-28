@@ -138,7 +138,7 @@ genFun =
 genType :: H.Gen Ty
 genType = Gen.recursive
   Gen.choice
-  [TyVar <$> genLowerName]
+  [TyVar <$> genLowerName, TyHole <$> genHoleName]
   [ Gen.subtermM genType (\ty -> TyApp <$> genUpperName <*> pure [ty])
   , Gen.subterm2 genType genType TyArr
   , Gen.subterm genType TyList
@@ -151,7 +151,7 @@ genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 genExpr :: H.Gen Syn
 genExpr = Gen.recursive
   Gen.choice
-  [Var <$> genLowerName, Cons <$> genUpperName]
+  [Var <$> genLowerName, Cons <$> genUpperName, Hole <$> genHoleName]
   [ Gen.subtermM
     genExpr
     (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
@@ -192,6 +192,13 @@ genUpperName :: H.Gen Name
 genUpperName =
   let gen = Name <$> genUpperString
   in  Gen.filter (\(Name n) -> n `notElem` keywords) gen
+
+-- A hole name can be any combo or numbers or letters, in any case
+-- ?1
+-- ?hi
+-- ?HI
+genHoleName :: H.Gen Name
+genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
 
 genLowerString :: H.Gen String
 genLowerString = do

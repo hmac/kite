@@ -79,7 +79,8 @@ printType t = case t of
   TyArr _ _ -> sep $ intersperse "->" (map printType' (unfoldTyApp t))
   ty        -> printType' ty
  where
-  printType' (TyVar n    ) = printName n
+  printType' (TyHole n   ) = "?" <> printName n
+  printType' (TyVar  n   ) = printName n
   printType' (TyApp n tys) = printName n <+> hsep (map printType' tys)
   printType' ty@(TyArr _ _) =
     parens $ hsep $ intersperse "->" (map printType' (unfoldTyApp ty))
@@ -115,10 +116,11 @@ printLiteral (LitInt    i) = pretty i
 printLiteral (LitFloat  f) = pretty f
 printLiteral (LitString s) = dquotes (pretty s)
 
--- TODO: correct parentheses for applications etc.
+-- TODO: binary operators
 printExpr :: Syn -> Doc a
 printExpr (Var  n) = printName n
 printExpr (Cons n) = printName n
+printExpr (Hole n) = "?" <> printName n
 printExpr (Abs args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
 printExpr (App  a     b   ) = printApp a b

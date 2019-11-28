@@ -16,6 +16,8 @@ import           Syntax
 
 type Parser = Parsec Void String
 
+-- TODO: comments
+-- TODO: markdown in comments & doctests
 -- TODO: string interpolation
 -- TOOD: heredocs
 -- TODO: do notation
@@ -174,7 +176,8 @@ pType :: Parser Ty
 pType = try arr <|> pType'
  where
   arr    = TyArr <$> lexemeN pType' <*> (symbolN "->" >> pType)
-  pType' = try tuple <|> parens pType <|> try app <|> var <|> list
+  pType' = hole <|> try tuple <|> parens pType <|> try app <|> var <|> list
+  hole   = TyHole <$> (string "?" >> pHoleName)
   app    = TyApp <$> pName <*> some pType'
   var    = TyVar <$> pName
   list   = TyList <$> brackets pType'
@@ -255,6 +258,7 @@ pExpr' :: Parser Syn
 pExpr' =
   try pTuple
     <|> parens pExpr
+    <|> pHole
     <|> Lit
     <$> pLiteral
     <|> pVar
@@ -286,6 +290,11 @@ pApp = do
   first <- pExpr'
   rest  <- some pExpr'
   pure $ foldl1 App (first : rest)
+
+pHole :: Parser Syn
+pHole = do
+  void (string "?")
+  Hole <$> pHoleName
 
 pVar :: Parser Syn
 pVar = Var <$> lowercaseName
@@ -352,6 +361,12 @@ pModuleName = ModuleName <$> lexeme (uppercaseString' `sepBy` string ".")
   -- like uppercaseString but doesn't consume trailing space
   uppercaseString' :: Parser String
   uppercaseString' = (:) <$> upperChar <*> many alphaNumChar
+
+pHoleName :: Parser Name
+pHoleName = lexeme $ Name <$> do
+  s <- some alphaNumChar
+  guard (s `notElem` keywords)
+  pure s
 
 uppercaseName :: Parser Name
 uppercaseName = lexeme $ Name <$> do

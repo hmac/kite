@@ -49,3 +49,6 @@ three : Int
 three = let one = 1
             two = plus one one
          in plus one two
+
+holey : ?1 -> Bar
+holey x = ?2
