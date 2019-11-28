@@ -76,8 +76,7 @@ genMetadata :: H.Gen [(String, String)]
 genMetadata = Gen.list (Range.linear 0 5) genKV
  where
   genKV :: H.Gen (String, String)
-  genKV =
-    (,) <$> genLowerString <*> Gen.string (Range.linear 1 100) Gen.unicode
+  genKV = (,) <$> genLowerString <*> Gen.string (Range.linear 1 100) Gen.ascii
 
 genImport :: H.Gen Import
 genImport =
@@ -221,7 +220,7 @@ genHoleName :: H.Gen Name
 genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
 
 genComment :: H.Gen String
-genComment = Gen.string (Range.linear 0 80) Gen.unicode
+genComment = Gen.string (Range.linear 0 80) Gen.ascii
 
 genLowerString :: H.Gen String
 genLowerString = do

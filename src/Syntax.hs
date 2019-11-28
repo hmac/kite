@@ -120,7 +120,7 @@ data Syn = Var Name
 
 -- Supported binary operators
 binOps :: [Name]
-binOps = ["+", "-", "*", "/", ">", "<", ".", "&&", "||", ">=", "<="]
+binOps = ["+", "-", "*", "/", ">", "<", "&&", "||", ">=", "<="]
 
 -- Utils
 
