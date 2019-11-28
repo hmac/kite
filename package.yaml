@@ -30,6 +30,7 @@ dependencies:
 - text
 - megaparsec
 - prettyprinter
+- prettyprinter-ansi-terminal
 # Testing - here so hoogle picks them up
 - QuickCheck
 - hspec

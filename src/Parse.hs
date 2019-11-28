@@ -426,7 +426,19 @@ lowercaseString = lexeme . try $ do
   pure t
 
 keywords :: [String]
-keywords = ["let", "in", "case", "of", "class", "instance", "module", "import"]
+keywords =
+  [ "data"
+  , "qualified"
+  , "as"
+  , "let"
+  , "in"
+  , "case"
+  , "of"
+  , "class"
+  , "instance"
+  , "module"
+  , "import"
+  ]
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()
