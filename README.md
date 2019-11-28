@@ -292,32 +292,35 @@ and run them - you don't need to set up a test harness.
 
 ## Interpretation and Compilation
 
-Lam will be interpreted like Ruby, but also support compilation to a static C
-binary and a JS file.  C and JS compilation will be a bit like program
-extraction, as the main function for each will be different and will exist in a
-different monad, to express the fact that different effects are available. As a
-result you'll be able to write your frontend and backend app in the same
-project, sharing lots of code, and just compile each by specifying a different
-flag to `lam build`.
+Lam will be interpreted like Ruby, but also support compilation to a static
+binary (via Go) and a Javascript file.  Go and JS compilation will be a bit like
+program extraction, as the main function for each will be different and will
+exist in a different monad, to express the fact that different effects are
+available. As a result you'll be able to write your frontend and backend app in
+the same project, sharing lots of code, and just compile each by specifying a
+different flag to `lam build`.
 
 Example:
 ```haskell
--- alert : String -> JS ()
--- putLine : String -> IO ()
+-- alert : String -> IO JS ()
+-- putLine : String -> IO Haskell ()
+-- println : String -> IO Go ()
 
-frontendMain : JS ()
-frontendMain = do
-  let n = fib 5
-  putLine "this is a message written to stdout. The 5th fibonacci number is #{n}"
-  ...
+frontendMain : IO JS ()
+frontendMain =
+  alert "this is a browser alert message. The 5th fibonacci number is #{fib 5}"
   
-backendMain : IO ()
-backendMain = do
-  let n = fib 5
-  alert "this is a browser alert message. The 5th fibonacci number is #{n}"
-  ...
+backendMain : IO Haskell ()
+backendMain =
+  putLine "this is a message written to stdout. The 5th fibonacci number is #{fib 5}"
 
--- any code outside the IO or JS monads can be shared between backends
+-- In practice this is tedious - Lam will have standard library modules that
+-- abstract over the backend.
+compiledMain : IO Go ()
+compiledMain =
+  println "this is a message written to stdout. The 5th fibonacci number is #{fib 5}"
+
+-- any code outside the IO monad can be shared between backends
 fib : Int -> Int
 fib 0 = 0
 fib 1 = 1
@@ -374,27 +377,18 @@ Lam's runtime performance under interpretation will aim to be on par with
 Ruby's. Performance isn't a priority, and Lam is willing to sacrifice some to
 gain ergonomics or implementation simplicity.
 
-Compiled performance should be stronger, but is unlikely to compete with GHC,
-Java or C. Lam will make use of common functional programming language
-optimisations such as inlining and beta reduction, but won't have anywhere near
-GHC's level of advanced optimisation.
+Compiled performance should be stronger, but is unlikely to compete with Haskell
+or Go. Lam will make use of common functional programming language optimisations
+such as inlining and beta reduction, but won't have anywhere near GHC's level of
+advanced optimisation.
 
 # Runtime
 
-I'm not sure what Lam's runtime will look like. It is garbage collected, so we
-need a runtime of some description, but it's not something I have experience
-building. Multithreading would be a nice feature to have, especially as purity
-makes it a lot easier to use, but we can live without it initially while still
-remaining competitive with Ruby.
-
-I would be very interested in ideas for a simple but performant multithreaded
-runtime system.
-
-# Mutable references
-
-Haskell has `IORef`s and `MVar`s to safely model mutable state. Lam probably
-needs something like this as well to be generally useful, but I haven't given
-this much thought.
+Being a garbage collected language, Lam needs a runtime of some description.
+The interpreter will piggyback off Haskell's runtime, and offer bindings to
+GHC's concurrency primitives (green threads, IORefs, MVars, STM etc). When
+compiled to Go, Lam will leverage the Go runtime and can use the concurrency
+primitives available there (goroutings, channels etc).
 
 # Exceptions
 
@@ -408,7 +402,8 @@ Lam has no exceptions. There are four ways that a Lam program can halt:
 - The program receives a signal to halt, such as SIGQUIT. Unless a custom signal
   handler is installed, it panics.
 - The program encounters an unrecoverable error such as a memory allocation
-  failure, and panics.
+  failure, and panics. If running in the interpreter this may be originally
+  triggered by an async Haskell exception but Lam will panic just the same.
 
 When a Lam program panics, the following happens:
 - The stack is immediately unwound, incrementally printing a stack trace to stderr.
