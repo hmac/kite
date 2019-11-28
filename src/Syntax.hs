@@ -38,7 +38,6 @@ instance IsString ModuleName where
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
--- TODO: records
 data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass | TypeclassInst Instance
         deriving (Eq, Show, Generic)
 

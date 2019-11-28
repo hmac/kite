@@ -47,17 +47,68 @@ it more powerful than Elm.
 
 ### Typed Holes
 
-Lam supports typed holes in both terms and types, like this:
+Lam supports typed holes in both terms and types. With this code:
 ```haskell
-foo : ?1 -> String
-foo x = ?2 x
+foo : a -> Maybe a -> a
+foo x m = ?1
 ```
 
-All holes begin with a question mark. The compiler will attempt to infer the type of `?1` and `?2`. Holes in types must be filled for typechecking to succeed, but holes in terms may be left (and will generate a warning). If the program encounters a term hole at runtime it will throw an error. This is quite useful if you have half a program written and just want to try it out quickly.
+You'll get an error like this:
+```
+Hole:
+       ?1 : a
+In:    foo x m = ?1
+Scope: x : a
+       m : Maybe a
+Fits:  x
+```
+
+You can also put holes in types:
+```haskell
+foo : a -> Maybe ?1 -> a
+foo x Nothing = x
+foo x (Just y) = y
+```
+
+yielding the error
+```
+Hole:
+       ?1 : a
+In:    foo : a -> Maybe ?1 -> a
+```
+
+All holes begin with a question mark. The compiler will attempt to infer the
+type of `?1` and `?2`. Holes in types must be filled for typechecking to
+succeed, but holes in terms may be left (and will generate a warning). If the
+program encounters a term hole at runtime it will throw an error. This is quite
+useful if you have half a program written and just want to try it out quickly.
+
+#### In the future: Case splitting
+
+Holes give a useful marker from which we can perform other interactive steps. If
+Lam gains LSP support then I aim to add case splitting on variables near holes,
+much like Agda and Idris.
+
+```haskell
+foo : a -> Maybe a -> a
+foo x m = ?1
+
+-- case-split ?1 m
+
+foo : a -> Maybe a -> a
+foo x (Just m1) = ?1
+foo x Nothing   = ?2
+```
+
+Case split works by looking at they type of the variable and the constructors of
+that type. For each constructor it generates a new definition, creating fresh
+variables for constructor arguments. The RHS must be a single hole for case
+split to be used (otherwise we would clobber whatever definition was there).
 
 ### Totality
 
-Lam has a totality checker that will mark functions as total if it can be sure that they are. A function is considered total if it:
+Lam has a totality checker that will mark functions as total if it can be sure
+that they are. A function is considered total if it:
 - isn't recursive
 - doesn't use IO or FFI
 - doesn't call error
@@ -96,6 +147,16 @@ Lam will be able to automatically generate typeclass instances for some common t
 
 I want to leave the door open to support deriving of user-defined typeclass
 instances via Generics, but there won't initially be any support for that.
+
+### Warnings
+
+Lam will have a small set of sensible warnings, all of which are enabled by
+default. These include:
+* Incomplete pattern matches
+* Unused variables
+* Unused imports 
+* Duplicate exports 
+* Unused, unexported functions
 
 ## Language
 

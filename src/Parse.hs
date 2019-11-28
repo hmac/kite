@@ -20,6 +20,8 @@ type Parser = Parsec Void String
 -- TOOD: heredocs
 -- TODO: do notation
 -- TODO: where clause
+-- TODO: records
+-- TODO: record field syntax
 
 parseLamFile :: String -> Either String Module
 parseLamFile input = case parse (pModule <* eof) "" input of
