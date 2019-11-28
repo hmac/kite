@@ -38,10 +38,11 @@ instance IsString ModuleName where
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
-data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass | TypeclassInst Instance
+data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass | TypeclassInst Instance | Comment String
         deriving (Eq, Show, Generic)
 
-data Fun = Fun { funName :: Name
+data Fun = Fun { funComments :: [String]
+               , funName :: Name
                , funType :: Ty
                , funDefs :: [Def]
                }

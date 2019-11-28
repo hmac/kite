@@ -79,6 +79,8 @@ pImport = do
               , importItems     = fromMaybe [] items
               }
 
+-- We ensure that comments are parsed last so that they get attached to a
+-- function if directly above one.
 pDecl :: Parser Decl
 pDecl =
   TypeclassDecl
@@ -87,8 +89,9 @@ pDecl =
     <$> pInstance
     <|> DataDecl
     <$> pData
-    <|> FunDecl
-    <$> pFun
+    <|> try (FunDecl <$> pFun)
+    <|> Comment
+    <$> pComment
 
 pData :: Parser Data
 pData = do
@@ -106,10 +109,15 @@ pData = do
 -- definitions
 pFun :: Parser Fun
 pFun = do
+  comments   <- many pComment
   name       <- lowercaseName <?> "declaration type name"
   annotation <- symbol ":" >> lexemeN pType
   defs       <- many (lexemeN (pDef name))
-  pure Fun { funName = name, funType = annotation, funDefs = defs }
+  pure Fun { funComments = comments
+           , funName     = name
+           , funType     = annotation
+           , funDefs     = defs
+           }
 
 -- TODO: currently we require at least one typeclass method
 -- and no newlines between the class line and the first method
@@ -352,6 +360,13 @@ pCase = do
     expr <- pExpr
     pure (pat, expr)
 
+pComment :: Parser String
+pComment = do
+  void (symbol "--")
+  s <- takeWhileP (Just "comment") (/= '\n')
+  spaceConsumerN
+  pure s
+
 pName :: Parser Name
 pName = uppercaseName <|> lowercaseName
 
@@ -388,12 +403,11 @@ keywords = ["let", "in", "case", "of", "class", "instance", "module", "import"]
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()
-spaceConsumer =
-  L.space (void $ some (char ' ' <|> char '\t')) (L.skipLineComment "--") empty
+spaceConsumer = L.space (void $ some (char ' ' <|> char '\t')) empty empty
 
 -- Consumes spaces, tabs and newlines
 spaceConsumerN :: Parser ()
-spaceConsumerN = L.space (void (some spaceChar)) (L.skipLineComment "--") empty
+spaceConsumerN = L.space (void (some spaceChar)) empty empty
 
 -- Parses a specific string, skipping trailing spaces and tabs
 symbol :: String -> Parser String

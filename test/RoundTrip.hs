@@ -96,6 +96,7 @@ genDecl = Gen.choice
   , DataDecl <$> genData
   , TypeclassDecl <$> genTypeclass
   , TypeclassInst <$> genInstance
+  , Comment <$> genComment
   ]
 
 genModuleName :: H.Gen ModuleName
@@ -133,7 +134,11 @@ genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
 genFun :: H.Gen Fun
 genFun =
-  Fun <$> genLowerName <*> genType <*> Gen.list (Range.linear 1 5) genDef
+  Fun
+    <$> Gen.list (Range.linear 0 5) genComment
+    <*> genLowerName
+    <*> genType
+    <*> Gen.list (Range.linear 1 5) genDef
 
 genType :: H.Gen Ty
 genType = Gen.recursive
@@ -199,6 +204,9 @@ genUpperName =
 -- ?HI
 genHoleName :: H.Gen Name
 genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
+
+genComment :: H.Gen String
+genComment = Gen.string (Range.linear 0 80) Gen.unicode
 
 genLowerString :: H.Gen String
 genLowerString = do

@@ -30,6 +30,7 @@ instance Functor Maybe
   map _ Nothing = Nothing
   map f (Just x) = Just (f x)
 
+-- A function comment
 head : [a] -> a
 head [] = error "head: empty list"
 head (Cons x xs) = x

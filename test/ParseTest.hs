@@ -20,31 +20,34 @@ test :: Spec
 test = do
   describe "declarations" $ do
     it "parses a basic function definition" $ do
-      parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl Fun
-        { funName = "id"
-        , funType = TyArr (TyVar "a") (TyVar "a")
-        , funDefs = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
-        }
+      parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl
+        Fun { funComments = ["a comment"]
+            , funName     = "id"
+            , funType     = TyArr (TyVar "a") (TyVar "a")
+            , funDefs     = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
+            }
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
         Fun
-          { funName = "const"
-          , funType = TyArr (TyVar "a") (TyArr (TyVar "b") (TyVar "a"))
-          , funDefs = [ Def { defArgs = [VarPat "x", VarPat "y"]
-                            , defExpr = Var "x"
-                            }
-                      ]
+          { funComments = []
+          , funName     = "const"
+          , funType     = TyArr (TyVar "a") (TyArr (TyVar "b") (TyVar "a"))
+          , funDefs     = [ Def { defArgs = [VarPat "x", VarPat "y"]
+                                , defExpr = Var "x"
+                                }
+                          ]
           }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap f m = undefined"
         `shouldParse` FunDecl Fun
-                        { funName = "map"
-                        , funType = TyArr
-                                      (TyArr (TyVar "a") (TyVar "b"))
-                                      (TyArr (TyApp "f" [TyVar "a"])
-                                             (TyApp "f" [TyVar "b"])
-                                      )
+                        { funComments = []
+                        , funName     = "map"
+                        , funType     = TyArr
+                                          (TyArr (TyVar "a") (TyVar "b"))
+                                          (TyArr (TyApp "f" [TyVar "a"])
+                                                 (TyApp "f" [TyVar "b"])
+                                          )
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
@@ -56,9 +59,10 @@ test = do
           ""
           "head : [a] -> a\nhead [] = error \"head: empty list\"\nhead (Cons x xs) = x"
         `shouldParse` FunDecl Fun
-                        { funName = "head"
-                        , funType = TyArr (TyList (TyVar "a")) (TyVar "a")
-                        , funDefs =
+                        { funComments = []
+                        , funName     = "head"
+                        , funType     = TyArr (TyList (TyVar "a")) (TyVar "a")
+                        , funDefs     =
                           [ Def
                             { defArgs = [ListPat []]
                             , defExpr = App
@@ -140,6 +144,7 @@ test = do
                         , moduleDecls    =
                           [ FunDecl Fun
                               { funName = "one"
+                              , funComments = []
                               , funType = TyVar "Int"
                               , funDefs = [ Def { defArgs = []
                                                 , defExpr = Lit (LitInt 1)

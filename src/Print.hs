@@ -61,15 +61,19 @@ printModDecls []    = Nothing
 printModDecls decls = Just $ vsep (intersperse mempty (map printDecl decls))
 
 printDecl :: Decl -> Doc a
+printDecl (Comment       c) = printComment c
 printDecl (FunDecl       f) = printFun f
 printDecl (DataDecl      d) = printData d
 printDecl (TypeclassDecl t) = printTypeclass t
 printDecl (TypeclassInst i) = printInstance i
 
 printFun :: Fun -> Doc a
-printFun Fun { funName = name, funDefs = defs, funType = ty } =
-  vsep $ sig : map (printDef name) defs
-  where sig = printName name <> align (space <> colon <+> printType ty)
+printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty }
+  = vsep $ printComments comments ++ [sig] ++ map (printDef name) defs
+ where
+  sig = printName name <> align (space <> colon <+> printType ty)
+  printComments [] = []
+  printComments cs = map printComment cs
 
 -- we special case a top level TyArr by not wrapping it in parens
 -- because we want foo : (a -> b) -> c
@@ -191,6 +195,9 @@ printInstance i = vsep (header : map printInstanceDef (instanceDefs i))
   header = "instance" <+> printName (instanceName i) <+> hsep
     (map printType (instanceTypes i))
   printInstanceDef (name, defs) = indent 2 $ vsep (map (printDef name) defs)
+
+printComment :: String -> Doc a
+printComment c = "--" <+> pretty c
 
 printName :: Name -> Doc a
 printName (Name n) = pretty n
