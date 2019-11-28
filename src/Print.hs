@@ -109,16 +109,11 @@ printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
 printPattern :: Pattern -> Doc a
 printPattern (VarPat n)      = printName n
 printPattern WildPat         = "_"
-printPattern (LitPat   l   ) = printLiteral l
+printPattern (IntPat   i   ) = pretty i
 printPattern (TuplePat pats) = tupled (map printPattern pats)
 printPattern (ListPat  pats) = list (map printPattern pats)
 printPattern (ConsPat n pats) =
   parens $ printName n <+> hsep (map printPattern pats)
-
-printLiteral :: Literal -> Doc a
-printLiteral (LitInt    i) = pretty i
-printLiteral (LitFloat  f) = pretty f
-printLiteral (LitString s) = dquotes (pretty s)
 
 -- TODO: binary operators
 printExpr :: Syn -> Doc a
@@ -133,7 +128,16 @@ printExpr (Case e     alts) = printCase e alts
 printExpr (TupleLit es    ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
-printExpr (Lit l) = printLiteral l
+printExpr (IntLit   i              ) = pretty i
+printExpr (FloatLit f              ) = pretty f
+printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
+
+printInterpolatedString :: String -> [(Syn, String)] -> Doc a
+printInterpolatedString prefix interps = dquotes str
+ where
+  str =
+    pretty prefix <> hcat (map (\(e, s) -> printInterp e <> pretty s) interps)
+  printInterp e = "#{" <> printExpr e <> "}"
 
 -- Can we simplify this by introducting printExpr' which behaves like printExpr
 -- but always parenthesises applications?
@@ -221,7 +225,8 @@ singleton :: Syn -> Bool
 singleton (Var      _) = True
 singleton (Hole     _) = True
 singleton (Cons     _) = True
-singleton (Lit      _) = True
+singleton (IntLit   _) = True
+singleton (FloatLit _) = True
 singleton (TupleLit _) = True
 singleton (ListLit  _) = True
 singleton _            = False

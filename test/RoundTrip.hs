@@ -156,7 +156,12 @@ genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 genExpr :: H.Gen Syn
 genExpr = Gen.recursive
   Gen.choice
-  [Var <$> genLowerName, Cons <$> genUpperName, Hole <$> genHoleName]
+  [ Var <$> genLowerName
+  , Cons <$> genUpperName
+  , Hole <$> genHoleName
+  , IntLit <$> genInt
+  , FloatLit <$> Gen.realFloat (Range.linearFrac (-5) 5)
+  ]
   [ Gen.subtermM
     genExpr
     (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
@@ -169,7 +174,11 @@ genExpr = Gen.recursive
                   genExpr
                   genExpr
                   (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
+  , StringLit <$> genComment <*> Gen.list (Range.linear 0 2) genStringInterpPair
   ]
+
+genStringInterpPair :: H.Gen (Syn, String)
+genStringInterpPair = (,) <$> genExpr <*> genComment
 
 genBinOp :: H.Gen Syn
 genBinOp = Gen.element $ Var <$> binOps
@@ -188,11 +197,11 @@ genCaseAlts e1 e2 = do
 genPattern :: H.Gen Pattern
 genPattern = Gen.recursive
   Gen.choice
-  [VarPat <$> genLowerName, pure WildPat, LitPat <$> genLiteral]
-  []
+  [VarPat <$> genLowerName, pure WildPat, IntPat <$> genInt]
+  [TuplePat <$> Gen.list (Range.linear 2 5) genPattern]
 
-genLiteral :: H.Gen Literal
-genLiteral = Gen.choice [LitInt <$> Gen.int (Range.linear (-100) 100)]
+genInt :: H.Gen Int
+genInt = Gen.int (Range.linear (-5) 5)
 
 genLowerName :: H.Gen Name
 genLowerName =

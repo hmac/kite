@@ -65,9 +65,8 @@ test = do
                         , funDefs     =
                           [ Def
                             { defArgs = [ListPat []]
-                            , defExpr = App
-                                          (Var "error")
-                                          (Lit (LitString "head: empty list"))
+                            , defExpr = App (Var "error")
+                                            (StringLit "head: empty list" [])
                             }
                           , Def
                             { defArgs = [ ConsPat "Cons"
@@ -143,13 +142,13 @@ test = do
                         , moduleExports  = []
                         , moduleDecls    =
                           [ FunDecl Fun
-                              { funName = "one"
+                              { funName     = "one"
                               , funComments = []
-                              , funType = TyVar "Int"
-                              , funDefs = [ Def { defArgs = []
-                                                , defExpr = Lit (LitInt 1)
-                                                }
-                                          ]
+                              , funType     = TyVar "Int"
+                              , funDefs     = [ Def { defArgs = []
+                                                    , defExpr = IntLit 1
+                                                    }
+                                              ]
                               }
                           ]
                         , moduleMetadata = [("key", "val")]
@@ -190,14 +189,14 @@ test = do
                         ]
     it "parses a let expression" $ do
       parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
-        [("x", Lit (LitInt 1)), ("y", Lit (LitInt 2))]
+        [("x", IntLit 1), ("y", IntLit 2)]
         (App (App (Var "add") (Var "x")) (Var "y"))
     it "parses a binary operator" $ do
       parse pExpr "" "1 + 1"
-        `shouldParse` App (App (Var "+") (Lit (LitInt 1))) (Lit (LitInt 1))
+        `shouldParse` App (App (Var "+") (IntLit 1)) (IntLit 1)
     it "parses a tuple" $ do
       parse pExpr "" "(\"\", 0.0)"
-        `shouldParse` TupleLit [Lit (LitString ""), Lit (LitFloat 0.0)]
+        `shouldParse` TupleLit [StringLit "" [], FloatLit 0.0]
   describe "types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` TyArr (TyVar "a") (TyVar "b")

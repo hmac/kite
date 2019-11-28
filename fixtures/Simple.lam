@@ -58,3 +58,7 @@ holey x = ?2
 -- Pretty-printing of infix operators is currently a bit conservative
 incList : [Int] -> [Int]
 incList xs = map (\x -> x + 1) (filter (\x -> x < 10) xs)
+
+-- String interpolation
+greet : String -> String
+greet name = "hi, #{name}!"

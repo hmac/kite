@@ -17,7 +17,7 @@ import           Syntax
 type Parser = Parsec Void String
 
 -- TODO: markdown in comments & doctests
--- TODO: string interpolation
+-- TODO: escape quote chars in string literals
 -- TOOD: heredocs
 -- TODO: do notation
 -- TODO: where clause
@@ -217,9 +217,9 @@ pPattern = pPattern' <|> cons
     pure $ ConsPat c args
 
 pPattern' :: Parser Pattern
-pPattern' = lit <|> wild <|> list <|> try tuple <|> var
+pPattern' = try int <|> wild <|> list <|> try tuple <|> var
  where
-  lit   = LitPat <$> pLiteral
+  int   = IntPat <$> pInt
   wild  = symbol "_" >> pure WildPat
   list  = ListPat <$> brackets (pPattern `sepBy` comma)
   tuple = TuplePat <$> parens (pPattern `sepBy` comma)
@@ -238,25 +238,19 @@ pCasePattern :: Parser Pattern
 pCasePattern = pPattern' <|> con
   where con = ConsPat <$> uppercaseName <*> many pPattern
 
-pLiteral :: Parser Literal
-pLiteral = try floatLit <|> try intLit <|> stringLit
- where
-  intLit = do
-    sign   <- optional (string "-")
-    digits <- lexeme (some digitChar)
-    pure . LitInt . read $ fromMaybe "" sign <> digits
-  floatLit = do
-    sign    <- optional (string "-")
-    numeral <- many digitChar
-    void (string ".")
-    decimal <- lexeme (some digitChar)
-    pure . LitFloat . read $ fromMaybe "" sign <> numeral <> "." <> decimal
-  -- TODO: escape quote chars in string literals
-  stringLit = do
-    void (string "\"")
-    str <- takeWhileP Nothing (/= '"')
-    void (symbol "\"")
-    pure (LitString str)
+pInt :: Parser Int
+pInt = do
+  sign   <- optional (string "-")
+  digits <- lexeme (some digitChar)
+  pure . read $ fromMaybe "" sign <> digits
+
+pFloat :: Parser Float
+pFloat = do
+  sign    <- optional (string "-")
+  numeral <- many digitChar
+  void (string ".")
+  decimal <- lexeme (some digitChar)
+  pure . read $ fromMaybe "" sign <> numeral <> "." <> decimal
 
 pExpr :: Parser Syn
 pExpr = try pBinApp <|> try pApp <|> pExpr'
@@ -266,8 +260,9 @@ pExpr' =
   try pTuple
     <|> parens pExpr
     <|> pHole
-    <|> Lit
-    <$> pLiteral
+    <|> try pStringLit
+    <|> try (FloatLit <$> pFloat)
+    <|> try (IntLit <$> pInt)
     <|> pVar
     <|> pAbs
     <|> pLet
@@ -290,7 +285,7 @@ pBinApp = do
   pOp :: Parser Syn
   pOp       = Var . Name <$> (twoCharOp <|> oneCharOp)
   twoCharOp = string "&&" <|> string "||" <|> string ">=" <|> string "<="
-  oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<', '.']
+  oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
 
 pApp :: Parser Syn
 pApp = do
@@ -302,6 +297,39 @@ pHole :: Parser Syn
 pHole = do
   void (string "?")
   Hole <$> pHoleName
+
+-- "hello"
+-- "hello #{name}"
+-- "hello #{name + "!"}"
+pStringLit :: Parser Syn
+pStringLit = do
+  void (string "\"")
+  (prefix, interps) <- pInner
+  void (symbol "\"")
+  pure $ StringLit prefix interps
+ where
+  pRawString :: Parser String
+  pRawString = takeWhileP Nothing (\c -> c /= '"' && c /= '#')
+  pInterp :: Parser Syn
+  pInterp = do
+    void (string "#{")
+    e <- pExpr
+    void (string "}")
+    return e
+  pInner :: Parser (String, [(Syn, String)])
+  pInner = do
+    prefix <- pRawString
+    -- after the #, we either have a string interpolation or just more raw string
+    next   <- Left <$> pInterp <|> Right <$> pRawString
+    case next of
+      Left e -> do
+        (str, interps) <- pInner
+        pure (prefix, (e, str) : interps)
+      Right s
+        | null s -> pure (prefix, [])
+        | otherwise -> do
+          (str, interps) <- pInner
+          pure (prefix <> s <> str, interps)
 
 pVar :: Parser Syn
 pVar = Var <$> lowercaseName

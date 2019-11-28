@@ -83,18 +83,10 @@ data Def = Def { defArgs :: [Pattern]
 
 data Pattern = VarPat Name            -- x
              | WildPat                -- _
-             | LitPat Literal         -- 1, "hi", 3.14
+             | IntPat Int             -- 1
              | TuplePat [Pattern]     -- (x, y)
              | ListPat [Pattern]      -- [x, y]
              | ConsPat Name [Pattern] -- Just x, x : xs, Nothing, True
-             deriving (Eq, Show, Generic)
-
--- 1
--- 3.14
--- "hi"
-data Literal = LitInt Int
-             | LitFloat Float
-             | LitString String
              deriving (Eq, Show, Generic)
 
 -- Int
@@ -121,7 +113,9 @@ data Syn = Var Name
          -- more exotic syntactic structures
          | TupleLit [Syn]
          | ListLit [Syn]
-         | Lit Literal
+         | StringLit String [(Syn, String)]
+         | IntLit Int
+         | FloatLit Float
          deriving (Eq, Show, Generic)
 
 -- Supported binary operators
