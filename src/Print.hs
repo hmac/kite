@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Print where
 
+import           Data.Maybe                     ( catMaybes )
 import           Data.List                      ( intersperse )
 import           Data.Text.Prettyprint.Doc
 import           Prelude                 hiding ( mod )
@@ -9,22 +10,25 @@ import           Syntax
 
 -- TODO: we need to parse and then print comments, too
 printModule :: Module -> Doc a
-printModule mod = vsep
+printModule mod = vsep $ catMaybes
   [ printMetadata (moduleMetadata mod)
-  , printModName (moduleName mod)
-  , indent 2 (printModExports (moduleExports mod))
-  , line
-  , vsep (map printModImports (moduleImports mod))
-  , line
-  , vsep (intersperse mempty (map printDecl (moduleDecls mod)))
+  , Just $ printModName (moduleName mod)
+  , indent 2 <$> printModExports (moduleExports mod)
+  , Just mempty
+  , printImports (moduleImports mod)
+  , Just mempty
+  , printModDecls (moduleDecls mod)
   ]
 
 -- ---
 -- key1: val1
 -- key2: val2
 -- ---
-printMetadata :: [(String, String)] -> Doc a
-printMetadata kvs = vsep ["---", printKvs, "---"]
+-- The return type is a Maybe so we can render the empty string when there's no
+-- metadata. (https://stackoverflow.com/a/52843774)
+printMetadata :: [(String, String)] -> Maybe (Doc a)
+printMetadata []  = Nothing
+printMetadata kvs = Just $ vsep ["---", printKvs, "---"]
   where printKvs = vsep $ map (\(k, v) -> hcat [pretty k, ": ", pretty v]) kvs
 
 -- module Foo
@@ -33,14 +37,18 @@ printModName (ModuleName names) =
   "module" <+> hcat (map pretty (intersperse "." names))
 
 --   (fun1, fun2)
-printModExports :: [Name] -> Doc a
-printModExports []      = mempty
-printModExports exports = tupled (map printName exports)
+printModExports :: [Name] -> Maybe (Doc a)
+printModExports []      = Nothing
+printModExports exports = Just $ tupled (map printName exports)
 
 -- import Data.Text
 -- import qualified Data.Text.Encoding as E (encodeUtf8)
-printModImports :: Import -> Doc a
-printModImports i = hsep
+printImports :: [Import] -> Maybe (Doc a)
+printImports []      = Nothing
+printImports imports = Just $ vsep (map printImport imports)
+
+printImport :: Import -> Doc a
+printImport i = hsep
   [ "import"
   , if importQualified i then "qualified" else "         "
   , prettyModuleName (importName i)
@@ -48,7 +56,10 @@ printModImports i = hsep
   , tupled (map printName (importItems i))
   ]
 
--- TODO
+printModDecls :: [Decl] -> Maybe (Doc a)
+printModDecls []    = Nothing
+printModDecls decls = Just $ vsep (intersperse mempty (map printDecl decls))
+
 printDecl :: Decl -> Doc a
 printDecl (FunDecl       f) = printFun f
 printDecl (DataDecl      d) = printData d
@@ -58,14 +69,14 @@ printDecl (TypeclassInst i) = printInstance i
 printFun :: Fun -> Doc a
 printFun Fun { funName = name, funDefs = defs, funType = ty } =
   vsep $ sig : map (printDef name) defs
-  where sig = printName name <+> colon <+> printType ty
+  where sig = printName name <> align (space <> colon <+> printType ty)
 
 -- we special case a top level TyArr by not wrapping it in parens
 -- because we want foo : (a -> b) -> c
 -- rather than foo : ((a -> b) -> c)
 printType :: Ty -> Doc a
 printType t = case t of
-  TyArr _ _ -> hsep $ intersperse "->" (map printType' (unfoldTyApp t))
+  TyArr _ _ -> sep $ intersperse "->" (map printType' (unfoldTyApp t))
   ty        -> printType' ty
  where
   printType' (TyVar n    ) = printName n
@@ -122,6 +133,8 @@ printApp :: Syn -> Syn -> Doc a
 printApp a (App b c) = if big a
   then parens (printExpr a) <+> nest 2 (parens (printExpr (App b c)))
   else printExpr a <+> parens (printExpr (App b c))
+printApp a b | big a && big b =
+  parens (printExpr a) <+> nest 2 (parens (printExpr b))
 printApp a b | big a = parens (printExpr a) <+> nest 2 (printExpr b)
 printApp a b | big b = printExpr a <+> parens (printExpr b)
 printApp a b         = printExpr a <+> printExpr b
@@ -153,7 +166,8 @@ printCase e alts = "case"
 
 printData :: Data -> Doc a
 printData d =
-  printName (dataName d)
+  "data"
+    <+> printName (dataName d)
     <+> hsep (map printName (dataTyVars d))
     <+> equals
     <+> hsep (punctuate pipe (map printCon (dataCons d)))
@@ -167,7 +181,7 @@ printTypeclass t = vsep (header : map printTypeclassDef (typeclassDefs t))
   header = "class" <+> printName (typeclassName t) <+> hsep
     (map printName (typeclassTyVars t))
   printTypeclassDef (name, ty) =
-    indent 2 $ printName name <+> equals <+> printType ty
+    indent 2 $ printName name <+> colon <+> printType ty
 
 printInstance :: Instance -> Doc a
 printInstance i = vsep (header : map printInstanceDef (instanceDefs i))

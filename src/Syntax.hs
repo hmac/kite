@@ -72,6 +72,7 @@ data DataCon = DataCon { conName :: Name
                        }
                        deriving (Eq, Show, Generic)
 
+-- Consider adding defName here - I think it might simplify things elsewhere
 data Def = Def { defArgs :: [Pattern]
                , defExpr :: Syn
                }

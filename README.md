@@ -218,7 +218,7 @@ simple stuff.
 ### Test functions
 
 Test functions are like normal tests, but they have a specific type (probably
-`Test` or `Test ()` or something) and the compiler can automatically find them
+`Test` or `Test ()` or something) and the compiler can automatically discover them
 and run them - you don't need to set up a test harness.
 
 ## Interpretation and Compilation

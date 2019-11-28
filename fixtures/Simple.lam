@@ -12,6 +12,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 
 
+someTuple : (AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType)
 
 -- some comments
 

@@ -16,6 +16,11 @@ import           Syntax
 
 type Parser = Parsec Void String
 
+-- TODO: string interpolation
+-- TOOD: heredocs
+-- TODO: do notation
+-- TODO: where clause
+
 parseLamFile :: String -> Either String Module
 parseLamFile input = case parse (pModule <* eof) "" input of
   Left  e -> Left (errorBundlePretty e)
@@ -122,7 +127,7 @@ pTypeclass = do
   pTypeclassDef = do
     name       <- lowercaseName
     annotation <- symbol ":" >> lexeme pType
-    void newline
+    void (optional newline)
     pure (name, annotation)
 
 pInstance :: Parser Instance
@@ -132,8 +137,8 @@ pInstance = do
   types <- many pType
   void (many newline)
   indentation <- some (char ' ')
-  first       <- pMethod <* newline
-  rest        <- many (string indentation >> pMethod)
+  first       <- pDef'
+  rest        <- many (try (newline >> string indentation) >> pDef')
   -- Convert [(Name, Def)] into [(Name, [Def])] (grouped by name)
   let defs = map (\ds -> (fst (head ds), map snd ds))
         $ groupBy (\x y -> fst x == fst y) (first : rest)
@@ -141,25 +146,23 @@ pInstance = do
                 , instanceTypes = types
                 , instanceDefs  = defs
                 }
- where
-  -- Parses typeclass method definition
-  pMethod :: Parser (Name, Def)
-  pMethod = do
-    name     <- lowercaseName
-    bindings <- many pPattern
-    void (symbol "=")
-    expr <- pExpr
-    pure (name, Def { defArgs = bindings, defExpr = expr })
 
--- TODO: currently we can only parse definitions on a single line. Add support
--- for indentation and the off-side rule.
 pDef :: Name -> Parser Def
 pDef (Name name) = do
   void (symbol name)
   bindings <- many pPattern <?> "pattern"
-  void (symbol "=")
+  void (symbolN "=")
   expr <- pExpr
   pure Def { defArgs = bindings, defExpr = expr }
+
+-- Like pDef but will parse a definition with any name
+pDef' :: Parser (Name, Def)
+pDef' = do
+  name     <- lexeme lowercaseName
+  bindings <- many pPattern <?> "pattern"
+  void (symbolN "=")
+  expr <- pExpr
+  pure (name, Def { defArgs = bindings, defExpr = expr })
 
 -- Int
 -- Maybe Int
@@ -168,12 +171,12 @@ pDef (Name name) = do
 pType :: Parser Ty
 pType = try arr <|> pType'
  where
-  arr    = TyArr <$> pType' <*> (symbol "->" >> pType)
-  pType' = parens pType <|> try app <|> var <|> list <|> tuple
+  arr    = TyArr <$> lexemeN pType' <*> (symbolN "->" >> pType)
+  pType' = try tuple <|> parens pType <|> try app <|> var <|> list
   app    = TyApp <$> pName <*> some pType'
   var    = TyVar <$> pName
   list   = TyList <$> brackets pType'
-  tuple  = TyTuple <$> parens (pType' `sepBy` comma)
+  tuple  = TyTuple <$> parens (lexemeN pType' `sepBy` comma)
 
 -- Parses the type args to a constructor
 -- The rules are slightly different from types in annotations, because type
@@ -223,8 +226,6 @@ pCasePattern :: Parser Pattern
 pCasePattern = pPattern' <|> con
   where con = ConsPat <$> uppercaseName <*> many pPattern
 
--- TODO: string interpolation
--- TOOD: heredocs
 pLiteral :: Parser Literal
 pLiteral = try floatLit <|> try intLit <|> stringLit
  where
@@ -348,7 +349,7 @@ pModuleName = ModuleName <$> lexeme (uppercaseString' `sepBy` string ".")
  where
   -- like uppercaseString but doesn't consume trailing space
   uppercaseString' :: Parser String
-  uppercaseString' = (:) <$> upperChar <*> many letterChar
+  uppercaseString' = (:) <$> upperChar <*> many alphaNumChar
 
 uppercaseName :: Parser Name
 uppercaseName = lexeme $ Name <$> do
