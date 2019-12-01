@@ -362,25 +362,73 @@ Lam's packaging system will be similar to Ruby and Bundler but integrated
 tightly into the language. You'll be able to create packages locally and push
 them up to a Lam package server, which will index them and generate
 documentation (and possibly run tests). Versioning is SemVer and uses lockfiles
-for consistency.
+for consistency. You'll also be able to run the server locally with no extra
+setup.
 
-The `lam` tool will be able to serve docs locally over HTTP, and will come with
-a type directed search tool a la Hoogle.
+There are a number of additional features that make life easier for maintainers
+and users of Lam packages.
+
+### Breaking change detection
+
+Like Elm, Lam will detect when your your package contains a breaking change from
+a previous version and prevent you from releasing that change as a patch or
+minor version.
+
+### Breakage prediction
+
+For a widely used package it can often be difficult to know the impact of a
+breaking change until you release it and receive feedback from users. Lam will
+allow you to automatically build every package in the ecosystem that depends on
+yours and thereby predict the amount of churn before you release the new
+version.
+
+### Global search
+
+The Lam package server will support type-directed (i.e. Hoogle style) search
+across the entire package ecosystem. If a package somewhere has a function to
+convert a type from package A into a type from package B, you'll be able to find
+it.
+
+### Upper bound management
+
+In some parts of the Haskell world, a lot of time is spent setting and updating
+upper bounds on package dependencies. Unmaintained (but useful) packages cause
+issues if their upper bounds don't get updated as new versions of their
+dependencies are released. Lam will attempt to automate the setting and updating
+of upper bounds by determining the highest version at which the package builds
+successfully. This should remove a lot of work on the part of package
+maintainers.
+
+### Safe builds
+
+Lam intends to have no support for running arbitrary code at build time. As a
+result, it should always be safe to build any Lam package in any environment.
+
+### Editor tools
+
+Lam will have native Language Server Protocol support, and this will be used to
+implement interactive editing features such as case split. Lam will also ship
+with a simple `ghcid` style command (`lam watch` or something) that gives near
+instant feedback on type errors.
+
+### Fast typechecking
+
+Typechecking in Lam will be heavily optimised, as much of the tooling
+infrastructure depends on 
 
 # Performance
 
-Lam's parsing and typechecking will be as fast as possible to support a
-productive feedback loop. `lam` will support file watching and reloading a la
-ghcid.
+Much of the tooling described above depends heavily on typechecking being fast.
+One of the reasons this tooling is less common in other languages is the time it
+takes to build packages and find type errors. Lam's typechecker will be
+optimised to complete as quickly as possible, and Lam is willing to trade off
+more advanced features in exchange for performance in this area.
 
-Lam's runtime performance under interpretation will aim to be on par with
-Ruby's. Performance isn't a priority, and Lam is willing to sacrifice some to
-gain ergonomics or implementation simplicity.
-
-Compiled performance should be stronger, but is unlikely to compete with Haskell
-or Go. Lam will make use of common functional programming language optimisations
-such as inlining and beta reduction, but won't have anywhere near GHC's level of
-advanced optimisation.
+Full build performance and runtime performance is a lower priority. Lam's
+interpreter will aim to be as fast as Ruby's. Compiled performance should be
+stronger, but is unlikely to compete with Haskell or Go. Lam will make use of
+common functional programming language optimisations such as inlining and beta
+reduction, but won't have anywhere near GHC's level of advanced optimisation.
 
 # Runtime
 
