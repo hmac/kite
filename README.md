@@ -411,11 +411,6 @@ implement interactive editing features such as case split. Lam will also ship
 with a simple `ghcid` style command (`lam watch` or something) that gives near
 instant feedback on type errors.
 
-### Fast typechecking
-
-Typechecking in Lam will be heavily optimised, as much of the tooling
-infrastructure depends on 
-
 # Performance
 
 Much of the tooling described above depends heavily on typechecking being fast.
