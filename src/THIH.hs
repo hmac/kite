@@ -1,5 +1,9 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 module THIH where
 
+import           Data.String                    ( IsString(..) )
+import           Control.Monad.Except           ( MonadError(..) )
+import           Control.Applicative            ( liftA2 )
 import           Control.Monad                  ( (>=>)
                                                 , zipWithM
                                                 )
@@ -152,10 +156,10 @@ s1 @@ s2 = [ (u, apply s1 t) | (u, t) <- s2 ] <> s1
 -- The two substitutions must agree on the mapping of every variable in the
 -- domain of both.
 -- Postcondition: apply (s1 <> s2) == apply (s2 <> s1)
-merge :: Monad m => Subst -> Subst -> m Subst
+merge :: (MonadError e m, IsString e) => Subst -> Subst -> m Subst
 merge s1 s2 = if agree
   then pure (s1 <> s2)
-  else fail "merge: substitutions do not agree"
+  else throw "merge: substitutions do not agree"
  where
   agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v))
               (map fst s1 `intersect` map fst s2)
@@ -170,7 +174,7 @@ merge s1 s2 = if agree
 -- unifier s can be written as s' @@ u for some substitution s'.
 
 -- Calculate the most general unifier of two types
-mgu :: Monad m => Type -> Type -> m Subst
+mgu :: (MonadError e m, IsString e) => Type -> Type -> m Subst
 mgu (TAp l r) (TAp l' r') = do
   s1 <- mgu l l'
   s2 <- mgu (apply s1 r) (apply s1 r')
@@ -178,19 +182,19 @@ mgu (TAp l r) (TAp l' r') = do
 mgu (TVar u) t                         = varBind u t
 mgu t        (TVar u)                  = varBind u t
 mgu (TCon tc1) (TCon tc2) | tc1 == tc2 = pure nullSubst
-mgu t1 t2 = fail $ "mgu: cannot unify " <> show t1 <> " with " <> show t2
+mgu t1 t2 = throw $ "mgu: cannot unify " <> show t1 <> " with " <> show t2
 
 -- Unify a variable u with a type t.
 -- We must check that t doesn't not mention u
 -- and that t and u have the same kinds.
-varBind :: Monad m => Tyvar -> Type -> m Subst
+varBind :: (MonadError e m, IsString e) => Tyvar -> Type -> m Subst
 varBind u t
   | t == TVar u
   = pure nullSubst
   | u `elem` tv t
-  = fail $ "occurs check failed for " <> show u <> " and " <> show t
+  = throw $ "occurs check failed for " <> show u <> " and " <> show t
   | kind u /= kind t
-  = fail $ "kinds don't match: " <> show u <> " and " <> show t
+  = throw $ "kinds don't match: " <> show u <> " and " <> show t
   | otherwise
   = pure (u +-> t)
 
@@ -198,14 +202,14 @@ varBind u t
 -- Similar to unification but is one-way.
 -- Follows the same pattern as unification but uses merge instead of @@ to
 -- combine substitutions, and does not allow binding of variables in t2.
-match :: Monad m => Type -> Type -> m Subst
+match :: (MonadError e m, IsString e) => Type -> Type -> m Subst
 match (TAp l r) (TAp l' r') = do
   sl <- match l l'
   sr <- match r r'
   merge sl sr
 match (TVar u) t | kind u == kind t = pure (u +-> t)
 match (TCon tc1) (TCon tc2) | tc1 == tc2 = pure nullSubst
-match t1 t2 = fail $ "types do not match: " <> show t1 <> " and " <> show t2
+match t1 t2 = throw $ "types do not match: " <> show t1 <> " and " <> show t2
 
 ----------------
 -- Type Classes
@@ -234,10 +238,15 @@ mguPred = lift mgu
 matchPred :: Pred -> Pred -> Maybe Subst
 matchPred = lift match
 
-lift :: Monad m => (Type -> Type -> m a) -> Pred -> Pred -> m a
+lift
+  :: (MonadError e m, IsString e)
+  => (Type -> Type -> m a)
+  -> Pred
+  -> Pred
+  -> m a
 lift m (IsIn i t) (IsIn i' t')
   | i == i'   = m t t'
-  | otherwise = fail $ "classes differ: " <> show i <> " vs " <> show i'
+  | otherwise = throw $ "classes differ: " <> show i <> " vs " <> show i'
 
 -- Classes and Instances
 
@@ -280,7 +289,7 @@ modify :: ClassEnv -> Id -> Class -> ClassEnv
 modify ce i c = ce { classes = \j -> if i == j then Just c else classes ce j }
 
 initialEnv :: ClassEnv
-initialEnv = ClassEnv { classes  = const (fail "class not defined")
+initialEnv = ClassEnv { classes  = const (throw "class not defined")
                       , defaults = [tInteger, tDouble]
                       }
 
@@ -299,8 +308,8 @@ type EnvTransformer = ClassEnv -> Maybe ClassEnv
 -- - all the named superclasses are already defined
 addClass :: Id -> [Id] -> EnvTransformer
 addClass i is ce
-  | isJust (classes ce i)           = fail "class already defined"
-  | any (isNothing . classes ce) is = fail "superclass not defined"
+  | isJust (classes ce i)           = error "class already defined"
+  | any (isNothing . classes ce) is = error "superclass not defined"
   | otherwise                       = pure (modify ce i (is, []))
 
 addPreludeClasses :: EnvTransformer
@@ -332,8 +341,8 @@ addNumClasses =
 -- - the instance doesn't overlap with any previously defined instance
 addInst :: [Pred] -> Pred -> EnvTransformer
 addInst ps p@(IsIn i _) ce
-  | isNothing (classes ce i) = fail "no class for instance"
-  | any (overlap p) qs       = fail "overlapping instance"
+  | isNothing (classes ce i) = throw "no class for instance"
+  | any (overlap p) qs       = throw "overlapping instance"
   | otherwise                = pure (modify ce i c)
  where
   its = insts ce i
@@ -438,16 +447,16 @@ inHnf (IsIn _ t) = hnf t
 
 -- Predicates not in HNF are broken down using byInst. If this fails, then the
 -- predicate is unsatisfiable.
-toHnfs :: Monad m => ClassEnv -> [Pred] -> m [Pred]
+toHnfs :: (MonadError e m, IsString e) => ClassEnv -> [Pred] -> m [Pred]
 toHnfs ce ps = do
   pss <- mapM (toHnf ce) ps
   pure (concat pss)
 
-toHnf :: Monad m => ClassEnv -> Pred -> m [Pred]
+toHnf :: (MonadError e m, IsString e) => ClassEnv -> Pred -> m [Pred]
 toHnf ce p
   | inHnf p = pure [p]
   | otherwise = case byInst ce p of
-    Nothing -> fail "context reduction failed"
+    Nothing -> throw "context reduction failed"
     Just ps -> toHnfs ce ps
 
 -- A predicate p in a list of predicates (p : ps) can be eliminated if ps
@@ -461,7 +470,7 @@ simplify ce = loop []
 
 -- Context reduction is then a combination of toHnfs and simplify.
 -- Note: there is some redundancy in this definition: see p.19 of THIH.
-reduce :: Monad m => ClassEnv -> [Pred] -> m [Pred]
+reduce :: (MonadError e m, IsString e) => ClassEnv -> [Pred] -> m [Pred]
 reduce ce ps = do
   qs <- toHnfs ce ps
   pure (simplify ce qs)
@@ -511,8 +520,8 @@ instance Types Assump where
   tv (_ :>: sc) = tv sc
 
 -- Find the type of a variable in a set of assumptions
-find :: Monad m => Id -> [Assump] -> m Scheme
-find i [] = fail $ "unbound identifier: " <> i
+find :: (MonadError e m, IsString e) => Id -> [Assump] -> m Scheme
+find i [] = throw $ "unbound identifier: " <> i
 find i ((i' :>: sc) : as) | i == i'   = pure sc
                           | otherwise = find i as
 
@@ -524,38 +533,63 @@ find i ((i' :>: sc) : as) | i == i'   = pure sc
 -- - to keep track of the current substitution
 -- - to generate fresh type variables
 
--- This should be extended with proper error support - here we just rely on
--- fail.
+-- Errors are represented as Left String, and signalled by throw
 
-newtype TI a = TI (Subst -> Int -> (Subst, Int, a))
+newtype TI a = TI (Subst -> Int -> Either Error (Subst, Int, a))
+newtype Error = Error String deriving (Eq, Show)
+
+instance IsString Error where
+  fromString = Error
+
+-- This is here because some functions in this module are polymorphic in their
+-- monad and get instantiated to Maybe, which has a MonadError () Maybe
+-- instance. For our error reporting to work we need IsString e for
+-- MonadError e m, so we need IsString ().
+instance IsString () where
+  fromString _ = ()
 
 instance Functor TI where
-  fmap f (TI g) = TI $ \s n -> let (s', n', x) = g s n in (s', n', f x)
+  fmap f (TI g) = TI $ \s n -> fmap (\(s', n', x) -> (s', n', f x)) (g s n)
 
 instance Applicative TI where
-  pure x = TI (\s n -> (s, n, x))
-  TI mf <*> TI mx = TI $ \s n ->
-    let (s' , n' , x) = mx s n
-        (s'', n'', f) = mf s' n'
-    in  (s'', n'', f x)
+  pure x = TI (\s n -> pure (s, n, x))
+  liftA2 f (TI x) (TI y) = TI $ \s n -> case x s n of
+    Left  err          -> Left err
+    Right (s', n', x') -> case y s' n' of
+      Left  err            -> Left err
+      Right (s'', n'', y') -> Right (s'', n'', f x' y')
 
 instance Monad TI where
   return = pure
-  TI f >>= g = TI $ \s n ->
-    let (s', m, x) = f s n
-        TI gx      = g x
-    in  gx s' m
+  TI f >>= g = TI $ \s n -> do
+    (s', n', x) <- f s n
+    let TI g' = g x
+    g' s' n'
 
-runTI :: TI a -> a
-runTI (TI f) = let (_, _, x) = f nullSubst 0 in x
+instance MonadError Error TI where
+  throwError err = TI $ \_s _n -> Left err
+  catchError (TI mx) h = TI $ \s n -> case mx s n of
+    Left  err -> let (TI h') = h err in h' s n
+    Right x   -> Right x
+
+throw :: (MonadError e m, IsString e) => String -> m a
+throw = throwError . fromString
+
+runTI :: TI a -> Either Error a
+runTI (TI f) = case f nullSubst 0 of
+  Left  err       -> Left err
+  Right (_, _, x) -> Right x
+
+debugTI :: TI a -> Either Error (Subst, Int, a)
+debugTI (TI f) = f nullSubst 0
 
 -- Get the current substitution
 getSubst :: TI Subst
-getSubst = TI $ \s n -> (s, n, s)
+getSubst = TI $ \s n -> pure (s, n, s)
 
 -- Extend the current substitution with another
 extSubst :: Subst -> TI ()
-extSubst s' = TI $ \s n -> (s' @@ s, n, ())
+extSubst s' = TI $ \s n -> pure (s' @@ s, n, ())
 
 -- Extend the current substitution with the most general unifier of two types
 unify :: Type -> Type -> TI ()
@@ -566,7 +600,7 @@ unify t1 t2 = do
 
 -- Generic a new type variable
 newTVar :: Kind -> TI Type
-newTVar k = TI $ \s n -> let v = Tyvar (enumId n) k in (s, n + 1, TVar v)
+newTVar k = TI $ \s n -> let v = Tyvar (enumId n) k in pure (s, n + 1, TVar v)
 
 freshInst :: Scheme -> TI (Qual Type)
 freshInst (Forall ks qt) = do
@@ -721,7 +755,12 @@ tiAlts ce as alts t = do
 -- predicates.
 -- TODO: explain this a bit more
 split
-  :: Monad m => ClassEnv -> [Tyvar] -> [Tyvar] -> [Pred] -> m ([Pred], [Pred])
+  :: (MonadError e m, IsString e)
+  => ClassEnv
+  -> [Tyvar]
+  -> [Tyvar]
+  -> [Pred]
+  -> m ([Pred], [Pred])
 split ce fs gs ps = do
   ps' <- reduce ce ps
   let (ds, rs) = partition (all (`elem` fs) . tv) ps'
@@ -770,22 +809,24 @@ candidates ce (v, qs) =
   ]
 
 withDefaults
-  :: Monad m
+  :: (MonadError e m, IsString e)
   => ([Ambiguity] -> [Type] -> a)
   -> ClassEnv
   -> [Tyvar]
   -> [Pred]
   -> m a
-withDefaults f ce vs ps | any null tss = fail "cannot resolve ambiguity"
+withDefaults f ce vs ps | any null tss = throw "cannot resolve ambiguity"
                         | otherwise    = pure (f vps (map head tss))
  where
   vps = ambiguities ce vs ps
   tss = map (candidates ce) vps
 
-defaultedPreds :: Monad m => ClassEnv -> [Tyvar] -> [Pred] -> m [Pred]
+defaultedPreds
+  :: (MonadError e m, IsString e) => ClassEnv -> [Tyvar] -> [Pred] -> m [Pred]
 defaultedPreds = withDefaults (\vps ts -> concatMap snd vps)
 
-defaultSubst :: Monad m => ClassEnv -> [Tyvar] -> [Pred] -> m Subst
+defaultSubst
+  :: (MonadError e m, IsString e) => ClassEnv -> [Tyvar] -> [Pred] -> m Subst
 defaultSubst = withDefaults (\vps ts -> zip (map fst vps) ts)
 
 ------------------
@@ -819,8 +860,8 @@ tiExpl ce as (i, sc, alts) = do
       ps' = filter (not . entail ce qs') (apply s ps)
   (ds, rs) <- split ce fs gs ps'
   if sc /= sc'
-    then fail "signature too general"
-    else if not (null rs) then fail "context too weak" else pure ds
+    then throw "signature too general"
+    else if not (null rs) then throw "context too weak" else pure ds
 
 -- Implicitly typed bindings
 -- There are two complications:
@@ -896,7 +937,7 @@ tiSeq ti  ce  as  (bs : bss) = do
 
 type Program = [BindGroup]
 
-tiProgram :: ClassEnv -> [Assump] -> Program -> [Assump]
+tiProgram :: ClassEnv -> [Assump] -> Program -> Either Error [Assump]
 tiProgram ce as bgs = runTI $ do
   (ps, as') <- tiSeq tiBindGroup ce as bgs
   s         <- getSubst
