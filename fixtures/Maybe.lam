@@ -1,0 +1,31 @@
+module Maybe
+
+data Maybe a = Just a | Nothing
+data Bool = True | False
+
+fromMaybe : a -> Maybe a -> a
+fromMaybe def (Just x) = x
+fromMaybe def Nothing = def
+
+isJust : Maybe a -> Bool
+isJust Nothing = False
+isJust _ = True
+
+isNothing : Maybe a -> Bool
+isNothing Nothing = True
+isNothing _ = False
+
+mapMaybe : (a -> b) -> Maybe a -> Maybe b
+mapMaybe f Nothing = Nothing
+mapMaybe f (Just x) = Just (f x)
+
+-- Monad methods
+-- When we have typeclasses these will go inside the Monad instance for Maybe
+
+joinMaybe : Maybe (Maybe a) -> Maybe a
+joinMaybe Nothing = Nothing
+joinMaybe (Just m) = m
+
+bindMaybe : Maybe a -> (a -> Maybe b) -> Maybe b
+bindMaybe Nothing _ = Nothing
+bindMaybe (Just x) f = f x

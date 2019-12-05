@@ -1,0 +1,4 @@
+module Tiny
+
+five : Int
+five = 5

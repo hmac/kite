@@ -1,0 +1,30 @@
+module Small
+
+data Maybe a = Nothing | Just a
+
+data Bool = True | False
+
+true : Bool
+true = True
+
+isJust : Maybe a -> Bool
+isJust Nothing = False
+isJust (Just x) = True
+
+flip : (a -> b -> c) -> b -> a -> c
+flip f x y = f y x
+
+currythree : ((a, b, c) -> d) -> a -> b -> c -> d
+currythree f x y z = f (x, y, z)
+
+uncurry3 : (a -> b -> c -> d) -> (a, b, c) -> d
+uncurry3 f (x, y, z) = f x y z
+
+uncurry4 : (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
+uncurry4 f (w, x, y, z) = f w x y z
+
+curry : ((a, b) -> c) -> a -> b -> c
+curry f x y = f (x, y)
+
+uncurry : (a -> b -> c) -> (a, b) -> c
+uncurry f (x, y) = f x y

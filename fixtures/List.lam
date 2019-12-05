@@ -1,0 +1,10 @@
+module List
+
+-- builtin:
+-- data List a = [] | a :: List a
+
+data Maybe a = Nothing | Just a
+
+head : [a] -> Maybe a
+head [] = Nothing
+head (Cons x xs) = Just x
