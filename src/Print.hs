@@ -114,6 +114,9 @@ printType t = type_ $ case t of
     parens $ hsep $ intersperse "->" (map printType' (unfoldTyApp ty))
   printType' (TyList  ty) = brackets (printType' ty)
   printType' (TyTuple ts) = tupled (map printType' ts)
+  printType' TyInt        = "Int"
+  printType' TyFloat      = "Float"
+  printType' TyString     = "String"
 
 -- Unwrap a nested TyArr tree so we can print a -> b -> c
 -- rather than a -> (b -> c)

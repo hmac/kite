@@ -31,6 +31,10 @@ dependencies:
 - megaparsec
 - prettyprinter
 - prettyprinter-ansi-terminal
+- unordered-containers
+- transformers
+- hashable
+- mtl
 # Testing - here so hoogle picks them up
 - QuickCheck
 - hspec

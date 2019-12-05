@@ -23,6 +23,8 @@ type Parser = Parsec Void String
 -- TODO: where clause
 -- TODO: records
 -- TODO: record field syntax
+-- TODO: typeclass constraints
+-- TODO: infix constructors (like List ::)
 
 parseLamFile :: String -> Either String Module
 parseLamFile input = case parse (pModule <* eof) "" input of
@@ -185,10 +187,10 @@ pType = try arr <|> pType'
   arr    = TyArr <$> lexemeN pType' <*> (symbolN "->" >> pType)
   pType' = hole <|> try tuple <|> parens pType <|> try app <|> var <|> list
   hole   = TyHole <$> (string "?" >> pHoleName)
-  app    = TyApp <$> pName <*> some pType'
-  var    = TyVar <$> pName
+  app    = TyApp <$> uppercaseName <*> many pType'
+  var    = TyVar <$> lowercaseName
   list   = TyList <$> brackets pType'
-  tuple  = TyTuple <$> parens (lexemeN pType' `sepBy` comma)
+  tuple  = TyTuple <$> parens (lexemeN pType' `sepBy2` comma)
 
 -- Parses the type args to a constructor
 -- The rules are slightly different from types in annotations, because type
@@ -205,6 +207,7 @@ pConType = ty
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma
 
+-- TODO: infix list constructor (x :: xs)
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
  where

@@ -1,9 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DerivingVia #-}
 module Syntax where
 
 import           Data.String                    ( IsString(fromString) )
 import           GHC.Generics                   ( Generic )
+import           Data.Hashable                  ( Hashable )
 
 -- module Foo
 data Module = Module { moduleName :: ModuleName
@@ -27,6 +29,7 @@ data Import = Import { importQualified :: Bool
 -- foo
 newtype Name = Name String
   deriving (Eq, Show, Generic)
+  deriving Hashable via String
 
 instance IsString Name where
   fromString = Name
@@ -39,7 +42,11 @@ instance IsString ModuleName where
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
-data Decl = FunDecl Fun | DataDecl Data | TypeclassDecl Typeclass | TypeclassInst Instance | Comment String
+data Decl = FunDecl Fun
+          | DataDecl Data
+          | TypeclassDecl Typeclass
+          | TypeclassInst Instance
+          | Comment String
         deriving (Eq, Show, Generic)
 
 data Fun = Fun { funComments :: [String]
@@ -95,12 +102,20 @@ data Pattern = VarPat Name            -- x
 -- Int -> String
 -- a -> b
 -- f a
+-- TODO: rename to Type?
+-- TODO: simplify:
+--      - TyApp Ty Ty
+--      - TyArr
+--      - TyCon Name
 data Ty = TyApp Name [Ty]
         | TyVar Name
         | TyArr Ty Ty
         | TyList Ty
         | TyTuple [Ty]
         | TyHole Name
+        | TyInt
+        | TyFloat
+        | TyString
         deriving (Eq, Show, Generic)
 
 data Syn = Var Name
@@ -108,6 +123,10 @@ data Syn = Var Name
          | Hole Name
          | Abs [Name] Syn
          | App Syn Syn
+         -- TODO: patterns in let bindings
+         -- TODO: type sigs in let bindinds
+         -- TODO: multi-definition functions in let bindings
+         --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
          | Let [(Name, Syn)] Syn
          | Case Syn [(Pattern, Syn)]
          -- more exotic syntactic structures
