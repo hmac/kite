@@ -33,7 +33,7 @@ hole = annotate HoleStyle
 type Document = Doc Style
 
 -- TODO: we need to parse and then print comments, too
-printModule :: Module -> Document
+printModule :: Module Syn -> Document
 printModule mod = vsep $ catMaybes
   [ printMetadata (moduleMetadata mod)
   , Just $ printModName (moduleName mod)
@@ -80,18 +80,18 @@ printImport i = hsep
   , tupled (map printName (importItems i))
   ]
 
-printModDecls :: [Decl] -> Maybe (Document)
+printModDecls :: [Decl Syn] -> Maybe Document
 printModDecls []    = Nothing
 printModDecls decls = Just $ vsep (intersperse mempty (map printDecl decls))
 
-printDecl :: Decl -> Document
+printDecl :: Decl Syn -> Document
 printDecl (Comment       c) = printComment c
 printDecl (FunDecl       f) = printFun f
 printDecl (DataDecl      d) = printData d
 printDecl (TypeclassDecl t) = printTypeclass t
 printDecl (TypeclassInst i) = printInstance i
 
-printFun :: Fun -> Document
+printFun :: Fun Syn -> Document
 printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty }
   = vsep $ printComments comments ++ [sig] ++ map (printDef name) defs
  where
@@ -128,7 +128,7 @@ unfoldTyApp t = reverse (go t [])
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
-printDef :: Name -> Def -> Document
+printDef :: Name -> Def Syn -> Document
 printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
                 | otherwise       = lhs <+> printExpr (defExpr d)
   where lhs = printName name <+> hsep (map printPattern (defArgs d)) <+> equals
@@ -231,7 +231,7 @@ printTypeclass t = vsep (header : map printTypeclassDef (typeclassDefs t))
   printTypeclassDef (name, ty) =
     indent 2 $ printName name <+> colon <+> printType ty
 
-printInstance :: Instance -> Document
+printInstance :: Instance Syn -> Document
 printInstance i = vsep (header : map printInstanceDef (instanceDefs i))
  where
   header = keyword "instance" <+> printName (instanceName i) <+> hsep

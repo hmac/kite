@@ -8,10 +8,10 @@ import           GHC.Generics                   ( Generic )
 import           Data.Hashable                  ( Hashable )
 
 -- module Foo
-data Module = Module { moduleName :: ModuleName
+data Module a = Module { moduleName :: ModuleName
                      , moduleImports :: [Import]
                      , moduleExports :: [Name]
-                     , moduleDecls :: [Decl]
+                     , moduleDecls :: [Decl a]
                      , moduleMetadata :: [(String, String)]
                      }
                      deriving (Eq, Show, Generic)
@@ -42,17 +42,17 @@ instance IsString ModuleName where
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
-data Decl = FunDecl Fun
+data Decl a = FunDecl (Fun a)
           | DataDecl Data
           | TypeclassDecl Typeclass
-          | TypeclassInst Instance
+          | TypeclassInst (Instance a)
           | Comment String
         deriving (Eq, Show, Generic)
 
-data Fun = Fun { funComments :: [String]
+data Fun a = Fun { funComments :: [String]
                , funName :: Name
                , funType :: Ty
-               , funDefs :: [Def]
+               , funDefs :: [Def a]
                }
                deriving (Eq, Show, Generic)
 
@@ -71,9 +71,9 @@ data Typeclass = Typeclass { typeclassName :: Name
                            }
                            deriving (Eq, Show, Generic)
 
-data Instance = Instance { instanceName :: Name
+data Instance a = Instance { instanceName :: Name
                          , instanceTypes :: [Ty]
-                         , instanceDefs :: [(Name, [Def])]
+                         , instanceDefs :: [(Name, [Def a])]
                          }
                          deriving (Eq, Show, Generic)
 
@@ -83,8 +83,8 @@ data DataCon = DataCon { conName :: Name
                        deriving (Eq, Show, Generic)
 
 -- Consider adding defName here - I think it might simplify things elsewhere
-data Def = Def { defArgs :: [Pattern]
-               , defExpr :: Syn
+data Def a = Def { defArgs :: [Pattern]
+               , defExpr :: a
                }
                deriving (Eq, Show, Generic)
 

@@ -8,8 +8,10 @@ import qualified Data.List                     as List
 import           Data.Maybe                     ( mapMaybe )
 import qualified Syntax                        as S
 import           THIH
+import           Desugar                        ( Core )
+import qualified Desugar                       as D
 
-tiModule :: S.Module -> Either Error [Assump]
+tiModule :: S.Module Core -> Either Error [Assump]
 tiModule m = let (assumps, p) = toProgram m in tiProgram initialEnv assumps p
 
 --          type cons     data cons
@@ -21,7 +23,7 @@ lookupTyCon n (tycons, _) = lookup n tycons
 lookupDataCon :: Id -> Env -> Maybe Scheme
 lookupDataCon n (_, datacons) = lookup n datacons
 
-toProgram :: S.Module -> ([Assump], Program)
+toProgram :: S.Module Core -> ([Assump], Program)
 toProgram m =
   let tycons   = typeConstructors m
       datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
@@ -32,7 +34,7 @@ toProgram m =
 primitiveConstructors :: [(Id, Scheme)]
 primitiveConstructors = [let (cons :>: sch) = listCons in (cons, sch)]
 
-typeConstructors :: S.Module -> [(Id, Type)]
+typeConstructors :: S.Module Core -> [(Id, Type)]
 typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
  where
   getData (S.DataDecl d) = Just d
@@ -43,7 +45,7 @@ typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
     name    = toId (S.dataName d)
 
 -- These are the data constructors in the module
-dataConstructors :: Env -> S.Module -> [(Id, Scheme)]
+dataConstructors :: Env -> S.Module Core -> [(Id, Scheme)]
 dataConstructors env m = concatMap toAssumps
   $ mapMaybe getData (S.moduleDecls m)
  where
@@ -70,12 +72,12 @@ dataConstructors env m = concatMap toAssumps
       Just t  -> t
       Nothing -> error $ "unknown type constructor " <> tyName
 
-toBindGroup :: Env -> S.Decl -> Maybe BindGroup
+toBindGroup :: Env -> S.Decl Core -> Maybe BindGroup
 toBindGroup env  (S.FunDecl  f) = Just ([funToExpl env f], [])
 toBindGroup _env (S.DataDecl _) = Nothing
 toBindGroup _env (S.Comment  _) = Nothing
 
-funToExpl :: Env -> S.Fun -> Expl
+funToExpl :: Env -> S.Fun Core -> Expl
 funToExpl env f =
   ( toId (S.funName f)
   , tyToScheme env (S.funType f)
@@ -111,7 +113,7 @@ lookupTycon name as = case List.find (\(n :>: _) -> n == toId name) as of
   Just (_ :>: Forall _ks (_preds :=> t)) -> t
   Nothing -> error $ "unbound tycon: " <> toId name <> "\n" <> show as
 
-defToAlt :: Env -> S.Def -> Alt
+defToAlt :: Env -> S.Def Core -> Alt
 defToAlt env d = (map (toPat env) (S.defArgs d), toExpr env (S.defExpr d))
 
 -- TODO: pass in a context of constructors in scope, with their declared types
@@ -137,25 +139,27 @@ toPat env (S.ConsPat name pats) = PCon (lookupCon (toId name))
 
 -- At this point, Cons should hold the type information for each constructor so
 -- we can pass it on to Assump
-toExpr :: Env -> S.Syn -> Expr
-toExpr _env (S.Var  n         ) = Var (toId n)
-toExpr env  (S.Cons (S.Name c)) = case lookupDataCon c env of
+toExpr :: Env -> Core -> Expr
+toExpr _env (D.Var  n         ) = Var (toId n)
+toExpr env  (D.Cons (S.Name c)) = case lookupDataCon c env of
   Just a  -> Const (c :>: a)
   Nothing -> error $ "unknown data constructor: " <> c
-toExpr _env (S.Hole _   ) = error "cannot translate holes yet"
-toExpr env  (S.Abs [v] e) = absToLet env [v] e
-toExpr _env (S.Abs _vs _e) =
-  error "cannot translate multi-variable lambdas yet"
-toExpr env  (S.App a     b) = Ap (toExpr env a) (toExpr env b)
-toExpr env  (S.Let binds e) = Let (bindsToBindGroup env binds) (toExpr env e)
-toExpr _env (S.IntLit i   ) = Lit (LitInt (toInteger i))
-toExpr env (S.TupleLit es) =
-  let const = case length es of
+toExpr _env (D.Hole _     ) = error "cannot translate holes yet"
+toExpr env  (D.Abs v     e) = error "cannot typecheck lambda abstractions yet"
+toExpr env  (D.App a     b) = Ap (toExpr env a) (toExpr env b)
+toExpr env  (D.Let binds e) = Let (bindsToBindGroup env binds) (toExpr env e)
+toExpr _env (D.IntLit i   ) = Lit (LitInt (toInteger i))
+toExpr env (D.Tuple es) =
+  let c = case length es of
         2 -> tuple2
         3 -> tuple3
         4 -> tuple4
         n -> error $ "cannot translate tuples of length " <> show n
-  in  foldl Ap (Const const) (map (toExpr env) es)
+  in  foldl Ap (Const c) (map (toExpr env) es)
+toExpr env (D.List es) = foldr
+  (\e acc -> Ap (Ap (Const listCons) (toExpr env e)) acc)
+  (Const listNil)
+  es
 
 -- Primitive tuple constructor types
 tuple2 :: Assump
@@ -190,20 +194,10 @@ listCons = "Cons" :>: Forall
   [Star]
   ([] :=> (TGen 0 `fn` TAp tList (TGen 0) `fn` TAp tList (TGen 0)))
 
-
--- Convert (\x -> e)
--- to      (let f x = e in f)
--- TODO: do we need to worry about f clashing with an existing variable?
--- probably.
-absToLet :: Env -> [S.Name] -> S.Syn -> Expr
-absToLet env [v] e =
-  Let ([], [[("$f", [([PVar (toId v)], toExpr env e)])]]) (Var "$f")
-absToLet _ _ _ = error "cannot translate multi-variable lambdas yet"
-
-bindsToBindGroup :: Env -> [(S.Name, S.Syn)] -> BindGroup
+bindsToBindGroup :: Env -> [(S.Name, Core)] -> BindGroup
 bindsToBindGroup env binds = ([], map ((: []) . toBind) binds)
  where
-  toBind :: (S.Name, S.Syn) -> Impl
+  toBind :: (S.Name, Core) -> Impl
   toBind (name, expr) = (toId name, [([], toExpr env expr)])
 
 toId :: S.Name -> Id

@@ -63,7 +63,7 @@ roundtrip gen printer parser = H.withTests 20 $ H.property $ do
 
 -- Hedgehog generators
 
-genModule :: H.Gen Module
+genModule :: H.Gen (Module Syn)
 genModule =
   Module
     <$> genModuleName
@@ -89,7 +89,7 @@ genImport =
 genModuleItem :: H.Gen Name
 genModuleItem = Gen.choice [genLowerName, genUpperName]
 
-genDecl :: H.Gen Decl
+genDecl :: H.Gen (Decl Syn)
 genDecl = Gen.choice
   [ FunDecl <$> genFun
   , DataDecl <$> genData
@@ -101,14 +101,14 @@ genDecl = Gen.choice
 genModuleName :: H.Gen ModuleName
 genModuleName = ModuleName <$> Gen.list (Range.linear 1 3) genUpperString
 
-genInstance :: H.Gen Instance
+genInstance :: H.Gen (Instance Syn)
 genInstance =
   Instance
     <$> genUpperName
     <*> Gen.list (Range.singleton 1) genType
     <*> Gen.list (Range.linear 1 5) genInstanceDef
  where
-  genInstanceDef :: H.Gen (Name, [Def])
+  genInstanceDef :: H.Gen (Name, [Def Syn])
   genInstanceDef = (,) <$> genLowerName <*> Gen.list (Range.linear 1 3) genDef
 
 genTypeclass :: H.Gen Typeclass
@@ -131,7 +131,7 @@ genData =
 genDataCon :: H.Gen DataCon
 genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
-genFun :: H.Gen Fun
+genFun :: H.Gen (Fun Syn)
 genFun =
   Fun
     <$> Gen.list (Range.linear 0 5) genComment
@@ -149,7 +149,7 @@ genType = Gen.recursive
   , Gen.subterm2 genType genType (\ty1 ty2 -> TyTuple [ty1, ty2])
   ]
 
-genDef :: H.Gen Def
+genDef :: H.Gen (Def Syn)
 genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 
 genExpr :: H.Gen Syn

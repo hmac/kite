@@ -26,12 +26,12 @@ type Parser = Parsec Void String
 -- TODO: typeclass constraints
 -- TODO: infix constructors (like List ::)
 
-parseLamFile :: String -> Either String Module
+parseLamFile :: String -> Either String (Module Syn)
 parseLamFile input = case parse (pModule <* eof) "" input of
   Left  e -> Left (errorBundlePretty e)
   Right e -> Right e
 
-pModule :: Parser Module
+pModule :: Parser (Module Syn)
 pModule = do
   metadata <- optional pMetadata
   void $ symbol "module"
@@ -82,7 +82,7 @@ pImport = do
 
 -- We ensure that comments are parsed last so that they get attached to a
 -- function if directly above one.
-pDecl :: Parser Decl
+pDecl :: Parser (Decl Syn)
 pDecl =
   TypeclassDecl
     <$> pTypeclass
@@ -108,7 +108,7 @@ pData = do
 
 -- TODO: we can make this more flexible by allowing annotations separate from
 -- definitions
-pFun :: Parser Fun
+pFun :: Parser (Fun Syn)
 pFun = do
   comments   <- many pComment
   name       <- lowercaseName <?> "declaration type name"
@@ -143,7 +143,7 @@ pTypeclass = do
     void (optional newline)
     pure (name, annotation)
 
-pInstance :: Parser Instance
+pInstance :: Parser (Instance Syn)
 pInstance = do
   void (symbol "instance")
   name  <- uppercaseName
@@ -160,7 +160,7 @@ pInstance = do
                 , instanceDefs  = defs
                 }
 
-pDef :: Name -> Parser Def
+pDef :: Name -> Parser (Def Syn)
 pDef (Name name) = do
   void (symbol name)
   bindings <- many pPattern <?> "pattern"
@@ -169,7 +169,7 @@ pDef (Name name) = do
   pure Def { defArgs = bindings, defExpr = expr }
 
 -- Like pDef but will parse a definition with any name
-pDef' :: Parser (Name, Def)
+pDef' :: Parser (Name, Def Syn)
 pDef' = do
   name     <- lexeme lowercaseName
   bindings <- many pPattern <?> "pattern"

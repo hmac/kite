@@ -7,13 +7,21 @@ import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 
+import           Desugar                        ( desugarModule )
+import           Translate                      ( tiModule )
+import           THIH                           ( Error(..) )
+
 -- Parse stdin as a Lam module and pretty print the result
 main :: IO ()
 main = do
   input <- getContents
   case parseLamFile input of
     Left  e -> putStrLn e
-    Right r -> renderIO stdout (layout (printModule r)) >> putStrLn ""
+    Right m -> do
+      let core = desugarModule m
+      case tiModule core of
+        Left (Error err) -> putStrLn err
+        Right _ -> renderIO stdout (layout (printModule m)) >> putStrLn ""
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutPretty defaultLayoutOptions doc)
