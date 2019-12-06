@@ -63,7 +63,7 @@ tInteger = TCon (Tycon "Integer" Star)
 tFloat = TCon (Tycon "Float" Star)
 tDouble = TCon (Tycon "Double" Star)
 
-tList, tArrow, tTuple2, tTuple3, tTuple4, tTuple5, tTuple6 :: Type
+tList, tArrow, tTuple2, tTuple3, tTuple4, tTuple5, tTuple6, tTuple7 :: Type
 tList = TCon (Tycon "[]" (Kfun Star Star))
 tArrow = TCon (Tycon "(->)" (Kfun Star (Kfun Star Star)))
 tTuple2 = TCon (Tycon "(,)" (Kfun Star (Kfun Star Star)))
@@ -76,6 +76,16 @@ tTuple6 = TCon
   (Tycon
     "(,)"
     (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star))))))
+  )
+tTuple7 = TCon
+  (Tycon
+    "(,)"
+    (Kfun
+      Star
+      (Kfun Star
+            (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star)))))
+      )
+    )
   )
 
 -------------------------------------------

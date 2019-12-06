@@ -34,7 +34,9 @@ toProgram m =
   in  (assumps, mapMaybe (toBindGroup env) (S.moduleDecls m))
 
 primitiveConstructors :: [(Id, Scheme)]
-primitiveConstructors = [let (cons :>: sch) = listCons in (cons, sch)]
+primitiveConstructors =
+  let tuple (f :>: s) = (f, s)
+  in  map tuple [listCons, primError, primStringConcat]
 
 typeConstructors :: S.Module Core -> [(Id, Type)]
 typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
@@ -75,9 +77,11 @@ dataConstructors env m = concatMap toAssumps
       Nothing -> error $ "unknown type constructor " <> tyName
 
 toBindGroup :: Env -> S.Decl Core -> Maybe BindGroup
-toBindGroup env  (S.FunDecl  f) = Just ([funToExpl env f], [])
-toBindGroup _env (S.DataDecl _) = Nothing
-toBindGroup _env (S.Comment  _) = Nothing
+toBindGroup env  (S.FunDecl       f) = Just ([funToExpl env f], [])
+toBindGroup _env (S.DataDecl      _) = Nothing
+toBindGroup _env (S.Comment       _) = Nothing
+toBindGroup _env (S.TypeclassDecl _) = Nothing
+toBindGroup _env (S.TypeclassInst _) = Nothing
 
 funToExpl :: Env -> S.Fun Core -> Expl
 funToExpl env f =
@@ -108,6 +112,9 @@ tyToType env (S.TyTuple ts) =
         2 -> tTuple2
         3 -> tTuple3
         4 -> tTuple4
+        5 -> tTuple5
+        6 -> tTuple6
+        7 -> tTuple7
         n -> error $ "cannot translate tuple of length " ++ show n
   in  foldl TAp ty (map (tyToType env) ts)
 
@@ -147,22 +154,31 @@ toExpr _env (D.Var  n         ) = Var (toId n)
 toExpr env  (D.Cons (S.Name c)) = case lookupDataCon c env of
   Just a  -> Const (c :>: a)
   Nothing -> error $ "unknown data constructor: " <> c
-toExpr _env (D.Hole _     ) = error "cannot translate holes yet"
-toExpr env  (D.Abs v     e) = error "cannot typecheck lambda abstractions yet"
-toExpr env  (D.App a     b) = Ap (toExpr env a) (toExpr env b)
-toExpr env  (D.Let binds e) = Let (bindsToBindGroup env binds) (toExpr env e)
-toExpr _env (D.IntLit i   ) = Lit (LitInt (toInteger i))
+toExpr _env (D.Hole _      ) = error "cannot translate holes yet"
+toExpr _env (D.Abs _v    _e) = error "cannot typecheck lambda abstractions yet"
+toExpr env  (D.App a     b ) = Ap (toExpr env a) (toExpr env b)
+toExpr env  (D.Let binds e ) = Let (bindsToBindGroup env binds) (toExpr env e)
+toExpr _env (D.IntLit    i ) = Lit (LitInt (toInteger i))
+toExpr _env (D.StringLit s ) = Lit (LitStr s)
+toExpr env  (D.List      es) = foldr
+  (\x acc -> Ap (Ap (Const listCons) (toExpr env x)) acc)
+  (Const listNil)
+  es
 toExpr env (D.Tuple es) =
   let c = case length es of
         2 -> tuple2
         3 -> tuple3
         4 -> tuple4
+        5 -> tuple5
+        6 -> tuple6
+        7 -> tuple7
         n -> error $ "cannot translate tuples of length " <> show n
   in  foldl Ap (Const c) (map (toExpr env) es)
 toExpr env (D.List es) = foldr
   (\e acc -> Ap (Ap (Const listCons) (toExpr env e)) acc)
   (Const listNil)
   es
+toExpr env (D.Case scrut alts) = error "cannot translate case expressions yet"
 
 -- Primitive tuple constructor types
 tuple2 :: Assump
@@ -188,6 +204,43 @@ tuple4 = "$prim_tuple4" :>: Forall
         (map TGen [0 .. 3])
       )
   )
+tuple5 :: Assump
+tuple5 = "$prim_tuple5" :>: Forall
+  [Star, Star, Star, Star, Star]
+  (   []
+  :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` TGen 3 `fn` TGen 4 `fn` foldl
+        TAp
+        tTuple5
+        (map TGen [0 .. 4])
+      )
+  )
+tuple6 :: Assump
+tuple6 = "$prim_tuple6" :>: Forall
+  [Star, Star, Star, Star, Star, Star]
+  (   []
+  :=> (    TGen 0
+      `fn` TGen 1
+      `fn` TGen 2
+      `fn` TGen 3
+      `fn` TGen 4
+      `fn` TGen 5
+      `fn` foldl TAp tTuple6 (map TGen [0 .. 5])
+      )
+  )
+tuple7 :: Assump
+tuple7 = "$prim_tuple7" :>: Forall
+  [Star, Star, Star, Star, Star, Star, Star]
+  (   []
+  :=> (    TGen 0
+      `fn` TGen 1
+      `fn` TGen 2
+      `fn` TGen 3
+      `fn` TGen 4
+      `fn` TGen 5
+      `fn` TGen 6
+      `fn` foldl TAp tTuple7 (map TGen [0 .. 6])
+      )
+  )
 
 -- primitive list constructors
 listNil :: Assump
@@ -196,6 +249,13 @@ listCons :: Assump
 listCons = "Cons" :>: Forall
   [Star]
   ([] :=> (TGen 0 `fn` TAp tList (TGen 0) `fn` TAp tList (TGen 0)))
+
+-- other primitive functions
+primError :: Assump
+primError = "error" :>: Forall [Star] ([] :=> (tString `fn` TGen 0))
+primStringConcat :: Assump
+primStringConcat =
+  "$prim_stringconcat" :>: Forall [] ([] :=> (list tString `fn` tString))
 
 bindsToBindGroup :: Env -> [(S.Name, Core)] -> BindGroup
 bindsToBindGroup env binds = ([], map ((: []) . toBind) binds)

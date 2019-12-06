@@ -25,6 +25,7 @@ type Parser = Parsec Void String
 -- TODO: record field syntax
 -- TODO: typeclass constraints
 -- TODO: infix constructors (like List ::)
+-- TODO: empty data types (e.g. Void)
 
 parseLamFile :: String -> Either String (Module Syn)
 parseLamFile input = case parse (pModule <* eof) "" input of

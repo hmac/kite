@@ -2,6 +2,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Desugar where
 
+-- This module translates the surface syntax (Syn) to a smaller core syntax.
+-- This is mainly to make it easier to infer and check types.
+--
+-- We perform the following translations:
+-- - convert interpolated string to applications of `show` and `concat`
+-- - convert case expressions to inline function definitions (TODO)
+-- - convert lambda abstractions to let bindings (TODO)
+
 import           Data.Bifunctor                 ( second
                                                 , first
                                                 )
@@ -9,6 +17,7 @@ import           GHC.Generics                   ( Generic )
 import qualified Syntax                        as S
 import           Syntax                         ( Name(..)
                                                 , Syn
+                                                , Pattern
                                                 )
 
 -- TODO: desugar Abs to Let
@@ -78,6 +87,20 @@ desugarString prefix interps = App (Var "$prim_stringconcat")
  where
   go []            = []
   go ((e, s) : is) = App (Var "$prim_show") e : StringLit s : go is
+
+-- case scrut of
+--   pat1 -> e1
+--   pat2 -> e2
+--
+-- becomes:
+--
+-- let $fresh_name pat1 = e1
+--     $fresh_name pat2 = e2
+--  in $fresh_name scrut
+--
+-- NOTE: this doesn't work yet because lets don't support patterns
+desugarCase :: Syn -> [(Pattern, Syn)] -> Core
+desugarCase scrut alts = Let undefined undefined
 
 mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
 mapSnd = map . second

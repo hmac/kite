@@ -9,6 +9,7 @@ import Data.Maybe (fromMaybe, f, g, h, i)
 import qualified Text.Megaparsec.Char.Lexer as L
 
 
+data AVeryLongType = AVeryLongType
 
 
 
@@ -23,12 +24,12 @@ data Pair a b = MkPair a b
 
 data Hand = Left | Right
 
-class Functor f where
-  map : (a -> b) -> f a -> f b
-
-instance Functor Maybe where
-  map _ Nothing = Nothing
-  map f (Just x) = Just (f x)
+-- class Functor f where
+--   map : (a -> b) -> f a -> f b
+-- 
+-- instance Functor Maybe where
+--   map _ Nothing = Nothing
+--   map f (Just x) = Just (f x)
 
 -- A function comment
 head : [a] -> a
