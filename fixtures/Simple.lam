@@ -34,7 +34,7 @@ data Hand = Left | Right
 -- A function comment
 head : [a] -> a
 head [] = error "head: empty list"
-head (Cons x xs) = x
+head (x :: xs) = x
 
 const : a -> b -> a
 const x y = x
@@ -54,12 +54,12 @@ three = let one = 1
 
 map : (a -> b) -> [a] -> [b]
 map _ [] = []
-map f (Cons x xs) = Cons (f x) (map f xs)
+map f (x :: xs) = (f x) :: (map f xs)
 
 filter : (a -> Bool) -> [a] -> [a]
 filter _ [] = []
-filter p (Cons x xs) = case p x of
-                        True -> Cons x (filter p xs)
+filter p (x :: xs) = case p x of
+                        True -> x :: (filter p xs)
                         False -> filter p xs
 
 -- Anonymous functions and infix operators

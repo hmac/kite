@@ -264,7 +264,7 @@ tuple7 = "$prim_tuple7" :>: Forall
 listNil :: Assump
 listNil = "[]" :>: Forall [Star] ([] :=> TAp tList (TGen 0))
 listCons :: Assump
-listCons = "Cons" :>: Forall
+listCons = "::" :>: Forall
   [Star]
   ([] :=> (TGen 0 `fn` TAp tList (TGen 0) `fn` TAp tList (TGen 0)))
 

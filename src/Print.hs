@@ -156,6 +156,9 @@ printPattern WildPat         = "_"
 printPattern (IntPat   i   ) = pretty i
 printPattern (TuplePat pats) = tupled (map printPattern pats)
 printPattern (ListPat  pats) = list (map printPattern pats)
+-- special case for the only infix constructor: (::)
+printPattern (ConsPat "::" [x, y]) =
+  parens $ printPattern x <+> "::" <+> printPattern y
 printPattern (ConsPat n pats) =
   parens $ printName n <+> hsep (map printPattern pats)
 
@@ -200,6 +203,14 @@ printApp (App (Var op) a) b | op `elem` binOps =
       printExpr a <+> printExpr (Var op) <+> parens (printExpr b)
     (False, True) ->
       parens (printExpr a) <+> printExpr (Var op) <+> printExpr b
+
+-- special case for the only infix constructor: (::)
+printApp (App (Cons "::") a) b = parens $ case (singleton a, singleton b) of
+  (True , True ) -> printExpr a <+> "::" <+> printExpr b
+  (False, False) -> parens (printExpr a) <+> "::" <+> parens (printExpr b)
+  (True , False) -> printExpr a <+> "::" <+> parens (printExpr b)
+  (False, True ) -> parens (printExpr a) <+> "::" <+> printExpr b
+
 printApp a (App b c) = if big a
   then parens (printExpr a) <+> nest 2 (parens (printExpr (App b c)))
   else printExpr a <+> parens (printExpr (App b c))

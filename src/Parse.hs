@@ -219,14 +219,20 @@ pConType = ty
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma
 
--- TODO: infix list constructor (x :: xs)
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
  where
-  tyCon      = uppercaseName
-  cons       = try nullaryCon <|> con
-  nullaryCon = ConsPat <$> tyCon <*> pure []
-  con        = parens $ do
+  tyCon          = uppercaseName
+  cons           = try nullaryCon <|> try infixBinaryCon <|> con
+  nullaryCon     = ConsPat <$> tyCon <*> pure []
+  infixBinaryCon = parens $ do
+    left  <- pPattern
+    tycon <- binTyCon
+    right <- pPattern
+    pure $ ConsPat tycon [left, right]
+  -- For now, the only infix constructor is (::)
+  binTyCon = Name <$> symbol "::"
+  con      = parens $ do
     c    <- tyCon
     args <- many pPattern
     pure $ ConsPat c args
@@ -298,7 +304,8 @@ pBinApp = do
   pure $ App (App op left) right
  where
   pOp :: Parser Syn
-  pOp       = Var . Name <$> (twoCharOp <|> oneCharOp)
+  pOp =
+    (Cons . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
   twoCharOp = string "&&" <|> string "||" <|> string ">=" <|> string "<="
   oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
 
