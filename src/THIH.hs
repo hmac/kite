@@ -1,6 +1,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module THIH where
 
+-- This module is taken from Typing Haskell in Haskell by Mark P Jones (Haskell
+-- Workshop Vol 7, 1999).
+-- https://archive.alvb.in/msc/03_infoafp/papers/2012-12-13_HoorCollege_TypingHaskellInHaskell_dk.pdf
+
+-- It's got a lot of edge cases specific to Haskell that I'm hoping to smooth
+-- off in time.
+
 import           Data.String                    ( IsString(..) )
 import           Control.Monad.Except           ( MonadError(..) )
 import           Control.Applicative            ( liftA2 )

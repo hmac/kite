@@ -84,9 +84,9 @@ data DataCon = DataCon { conName :: Name
 
 -- Consider adding defName here - I think it might simplify things elsewhere
 data Def a = Def { defArgs :: [Pattern]
-               , defExpr :: a
-               }
-               deriving (Eq, Show, Generic)
+                 , defExpr :: a
+                 }
+                 deriving (Eq, Show, Generic)
 
 data Pattern = VarPat Name            -- x
              | WildPat                -- _
