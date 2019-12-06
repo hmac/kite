@@ -155,7 +155,6 @@ toExpr env  (D.Cons (S.Name c)) = case lookupDataCon c env of
   Just a  -> Const (c :>: a)
   Nothing -> error $ "unknown data constructor: " <> c
 toExpr _env (D.Hole _      ) = error "cannot translate holes yet"
-toExpr _env (D.Abs _v    _e) = error "cannot typecheck lambda abstractions yet"
 toExpr env  (D.App a     b ) = Ap (toExpr env a) (toExpr env b)
 toExpr env  (D.Let binds e ) = Let (bindsToBindGroup env binds) (toExpr env e)
 toExpr _env (D.IntLit    i ) = Lit (LitInt (toInteger i))
@@ -178,7 +177,6 @@ toExpr env (D.List es) = foldr
   (\e acc -> Ap (Ap (Const listCons) (toExpr env e)) acc)
   (Const listNil)
   es
-toExpr env (D.Case scrut alts) = error "cannot translate case expressions yet"
 
 -- Primitive tuple constructor types
 tuple2 :: Assump

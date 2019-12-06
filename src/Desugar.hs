@@ -7,8 +7,8 @@ module Desugar where
 --
 -- We perform the following translations:
 -- - convert interpolated string to applications of `show` and `concat`
--- - convert case expressions to inline function definitions (TODO)
--- - convert lambda abstractions to let bindings (TODO)
+-- - convert case expressions to inline function definitions
+-- - convert lambda abstractions to let bindings
 
 import           Data.Bifunctor                 ( second
                                                 , first
@@ -20,16 +20,11 @@ import           Syntax                         ( Name(..)
                                                 , Pattern
                                                 )
 
--- TODO: desugar Abs to Let
--- e.g. \x -> e ====> let f x = e in f
--- (requires patterns in Let bindings)
 data Core = Var Name
           | Cons Name
           | Hole Name
-          | Abs Name Core
           | App Core Core
-          | Let [(Name, Core)] Core
-          | Case Core [(S.Pattern, Core)]
+          | Let [(Name, [([S.Pattern], Core)])] Core
           | Tuple [Core]
           | List [Core]
           | IntLit Int
@@ -58,24 +53,31 @@ desugarDef :: S.Def S.Syn -> S.Def Core
 desugarDef d = d { S.defExpr = desugarExpr (S.defExpr d) }
 
 desugarExpr :: Syn -> Core
-desugarExpr (S.Var  n         ) = Var n
-desugarExpr (S.Cons n         ) = Cons n
-desugarExpr (S.Hole n         ) = Hole n
-desugarExpr (S.Abs  vars  e   ) = expandAbs vars (desugarExpr e)
-desugarExpr (S.App  a     b   ) = App (desugarExpr a) (desugarExpr b)
-desugarExpr (S.Let  binds e   ) = Let (mapSnd desugarExpr binds) (desugarExpr e)
-desugarExpr (S.Case e     pats) = Case (desugarExpr e) (mapSnd desugarExpr pats)
-desugarExpr (S.TupleLit es    ) = Tuple (map desugarExpr es)
-desugarExpr (S.ListLit  es    ) = List (map desugarExpr es)
+desugarExpr (S.Var  n     ) = Var n
+desugarExpr (S.Cons n     ) = Cons n
+desugarExpr (S.Hole n     ) = Hole n
+desugarExpr (S.Abs vars  e) = desugarAbs vars (desugarExpr e)
+desugarExpr (S.App a     b) = App (desugarExpr a) (desugarExpr b)
+desugarExpr (S.Let binds e) = Let (map desugarLetBind binds) (desugarExpr e)
+  where desugarLetBind (n, a) = (n, [([], desugarExpr a)])
+desugarExpr (S.Case e pats) = desugarCase e pats
+desugarExpr (S.TupleLit es) = Tuple (map desugarExpr es)
+desugarExpr (S.ListLit  es) = List (map desugarExpr es)
 desugarExpr (S.StringLit prefix interps) =
   desugarString prefix (mapFst desugarExpr interps)
 desugarExpr (S.IntLit   i) = IntLit i
 desugarExpr (S.FloatLit f) = FloatLit f
 
--- Convert a multi-var lambda to nested single-var lambdas
--- \a b c -> e ==> \a -> \b -> \c -> e
-expandAbs :: [Name] -> Core -> Core
-expandAbs vs e = foldr Abs e vs
+-- Convert lambda abstractions to inline let bindings
+-- \x -> e
+--
+-- becomes
+--
+-- let f x = e in f
+desugarAbs :: [Name] -> Core -> Core
+desugarAbs vars e =
+  let freshName = "$f"
+  in  Let [(freshName, [(map S.VarPat vars, e)])] (Var freshName)
 
 -- Convert a string interpolation into applications of concat and show
 -- "x: #{a}, y: #{b}" ==> concat ["x: ", show a, ", y :", show b, ""]
@@ -97,10 +99,12 @@ desugarString prefix interps = App (Var "$prim_stringconcat")
 -- let $fresh_name pat1 = e1
 --     $fresh_name pat2 = e2
 --  in $fresh_name scrut
---
--- NOTE: this doesn't work yet because lets don't support patterns
 desugarCase :: Syn -> [(Pattern, Syn)] -> Core
-desugarCase scrut alts = Let undefined undefined
+desugarCase scrut alts =
+  -- TODO: generate an actual fresh, unique name
+  let freshName = "$f"
+      pats      = map (\(pat, a) -> ([pat], desugarExpr a)) alts
+  in  Let [(freshName, pats)] (App (Var freshName) (desugarExpr scrut))
 
 mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
 mapSnd = map . second
