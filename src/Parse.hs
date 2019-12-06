@@ -126,7 +126,8 @@ pTypeclass :: Parser Typeclass
 pTypeclass = do
   void (symbol "class")
   name   <- uppercaseName
-  tyvars <- many lowercaseName
+  tyvars <- some lowercaseName
+  void (symbol "where")
   void (many newline)
   indentation <- some (char ' ')
   first       <- pTypeclassDef
@@ -148,6 +149,7 @@ pInstance = do
   void (symbol "instance")
   name  <- uppercaseName
   types <- many pType
+  void (symbol "where")
   void (many newline)
   indentation <- some (char ' ')
   first       <- pDef'
@@ -182,28 +184,37 @@ pDef' = do
 -- a
 -- a -> b
 pType :: Parser Ty
-pType = try arr <|> pType'
+pType = try arr <|> try app <|> pType'
  where
-  arr    = TyArr <$> lexemeN pType' <*> (symbolN "->" >> pType)
-  pType' = hole <|> try tuple <|> parens pType <|> try app <|> var <|> list
-  hole   = TyHole <$> (string "?" >> pHoleName)
-  app    = TyApp <$> uppercaseName <*> many pType'
+  arr = do
+    left <- lexemeN (try app <|> pType')
+    void $ symbolN "->"
+    right <- lexeme pType
+    pure $ left `fn` right
+  app = do
+    first <- lexeme pType'
+    rest  <- some (lexeme pType')
+    pure $ foldl1 (:@:) (first : rest)
+  pType' = hole <|> try tuple <|> parens pType <|> var <|> con <|> list
+  con    = TyCon <$> uppercaseName
   var    = TyVar <$> lowercaseName
-  list   = TyList <$> brackets pType'
-  tuple  = TyTuple <$> parens (lexemeN pType' `sepBy2` comma)
+  hole   = TyHole <$> (string "?" >> pHoleName)
+  list   = TyList <$> brackets pType
+  tuple  = TyTuple <$> parens (lexemeN pType `sepBy2` comma)
 
 -- Parses the type args to a constructor
 -- The rules are slightly different from types in annotations, because type
 -- application must be inside parentheses
 -- i.e. MyCon f a   -> name = MyCon, args = [f, a]
--- vs.  func : f a  -> name = func, type = TyApp f a
+-- vs.  func : f a  -> name = func, type = f :@: a
 pConType :: Parser Ty
 pConType = ty
  where
-  ty    = var <|> list <|> parens (try arr <|> try tuple <|> app)
-  arr   = TyArr <$> ty <*> (symbol "->" >> ty)
-  app   = TyApp <$> pName <*> some ty
-  var   = TyVar <$> pName
+  ty    = var <|> con <|> list <|> parens (try arr <|> try tuple <|> app)
+  app   = (:@:) <$> ty <*> ty
+  arr   = TyArr <$ symbol "->"
+  con   = TyCon <$> uppercaseName
+  var   = TyVar <$> lowercaseName
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma
 
@@ -438,6 +449,7 @@ keywords =
   , "case"
   , "of"
   , "class"
+  , "where"
   , "instance"
   , "module"
   , "import"

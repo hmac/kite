@@ -52,14 +52,14 @@ roundtripModule :: H.Property
 roundtripModule = roundtrip genModule printModule pModule
 
 roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
-roundtrip gen printer parser = H.withTests 20 $ H.property $ do
+roundtrip gen printer parser = H.withTests 25 $ H.property $ do
   e <- H.forAll gen
   let printed  = show (printer e)
       reparsed = parse parser "" printed
   H.annotate printed
   r <- H.evalEither reparsed
   H.annotateShow (printer r)
-  r H.=== e
+  e H.=== r
 
 -- Hedgehog generators
 
@@ -76,7 +76,8 @@ genMetadata :: H.Gen [(String, String)]
 genMetadata = Gen.list (Range.linear 0 5) genKV
  where
   genKV :: H.Gen (String, String)
-  genKV = (,) <$> genLowerString <*> Gen.string (Range.linear 1 100) Gen.ascii
+  genKV =
+    (,) <$> genLowerString <*> Gen.string (Range.linear 1 100) Gen.alphaNum
 
 genImport :: H.Gen Import
 genImport =
@@ -142,9 +143,9 @@ genFun =
 genType :: H.Gen Ty
 genType = Gen.recursive
   Gen.choice
-  [TyVar <$> genLowerName, TyHole <$> genHoleName]
-  [ Gen.subtermM genType (\ty -> TyApp <$> genUpperName <*> pure [ty])
-  , Gen.subterm2 genType genType TyArr
+  [TyCon <$> genUpperName, TyVar <$> genLowerName, TyHole <$> genHoleName]
+  [ Gen.subterm2 genType genType (:@:)
+  , Gen.subterm2 genType genType fn
   , Gen.subterm genType TyList
   , Gen.subterm2 genType genType (\ty1 ty2 -> TyTuple [ty1, ty2])
   ]

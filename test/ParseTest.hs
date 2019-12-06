@@ -16,6 +16,7 @@ import           Parse                          ( pModule
 
 import           Syntax
 
+
 test :: Spec
 test = do
   describe "declarations" $ do
@@ -23,7 +24,7 @@ test = do
       parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl
         Fun { funComments = ["a comment"]
             , funName     = "id"
-            , funType     = TyArr (TyVar "a") (TyVar "a")
+            , funType     = TyVar "a" `fn` TyVar "a"
             , funDefs     = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
             }
 
@@ -32,7 +33,7 @@ test = do
         Fun
           { funComments = []
           , funName     = "const"
-          , funType     = TyArr (TyVar "a") (TyArr (TyVar "b") (TyVar "a"))
+          , funType     = TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
           , funDefs     = [ Def { defArgs = [VarPat "x", VarPat "y"]
                                 , defExpr = Var "x"
                                 }
@@ -43,11 +44,9 @@ test = do
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "map"
-                        , funType     = TyArr
-                                          (TyArr (TyVar "a") (TyVar "b"))
-                                          (TyArr (TyApp "f" [TyVar "a"])
-                                                 (TyApp "f" [TyVar "b"])
-                                          )
+                        , funType     = (TyVar "a" `fn` TyVar "b")
+                                        `fn` ((TyVar "f") :@: (TyVar "a"))
+                                        `fn` ((TyVar "f") :@: (TyVar "b"))
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
@@ -61,7 +60,7 @@ test = do
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "head"
-                        , funType     = TyArr (TyList (TyVar "a")) (TyVar "a")
+                        , funType     = TyList (TyVar "a") `fn` TyVar "a"
                         , funDefs     =
                           [ Def
                             { defArgs = [ListPat []]
@@ -85,27 +84,27 @@ test = do
     it "parses the definition of List" $ do
       parse pDecl "" "data List a = Nil | Cons a (List a)"
         `shouldParse` DataDecl Data
-                        { dataName   = "List"
+                        { dataName = "List"
                         , dataTyVars = ["a"]
-                        , dataCons   =
-                          [ DataCon { conName = "Nil", conArgs = [] }
-                          , DataCon
-                            { conName = "Cons"
-                            , conArgs = [TyVar "a", TyApp "List" [TyVar "a"]]
-                            }
-                          ]
+                        , dataCons = [ DataCon { conName = "Nil", conArgs = [] }
+                                     , DataCon
+                                       { conName = "Cons"
+                                       , conArgs = [ TyVar "a"
+                                                   , (TyCon "List")
+                                                     :@: (TyVar "a")
+                                                   ]
+                                       }
+                                     ]
                         }
     it "parses a simple typeclass definition" $ do
-      parse pDecl "" "class Functor f\n  map : (a -> b) -> f a -> f b\n"
+      parse pDecl "" "class Functor f where\n  map : (a -> b) -> f a -> f b\n"
         `shouldParse` TypeclassDecl Typeclass
                         { typeclassName   = "Functor"
                         , typeclassTyVars = ["f"]
                         , typeclassDefs   = [ ( "map"
-                                              , TyArr
-                                                (TyArr (TyVar "a") (TyVar "b"))
-                                                (TyArr (TyApp "f" [TyVar "a"])
-                                                       (TyApp "f" [TyVar "b"])
-                                                )
+                                              , (TyVar "a" `fn` TyVar "b")
+                                              `fn` ((TyVar "f") :@: (TyVar "a"))
+                                              `fn` ((TyVar "f") :@: (TyVar "b"))
                                               )
                                             ]
                         }
@@ -113,10 +112,10 @@ test = do
       parse
           pDecl
           ""
-          "instance Functor Maybe\n  map _ Nothing = Nothing\n  map f (Just x) = Just (f x)\n"
+          "instance Functor Maybe where\n  map _ Nothing = Nothing\n  map f (Just x) = Just (f x)\n"
         `shouldParse` TypeclassInst Instance
                         { instanceName  = "Functor"
-                        , instanceTypes = [TyVar "Maybe"]
+                        , instanceTypes = [TyCon "Maybe"]
                         , instanceDefs  =
                           [ ( "map"
                             , [ Def { defArgs = [WildPat, ConsPat "Nothing" []]
@@ -144,7 +143,7 @@ test = do
                           [ FunDecl Fun
                               { funName     = "one"
                               , funComments = []
-                              , funType     = TyVar "Int"
+                              , funType     = TyCon "Int"
                               , funDefs     = [ Def { defArgs = []
                                                     , defExpr = IntLit 1
                                                     }
@@ -199,11 +198,10 @@ test = do
         `shouldParse` TupleLit [StringLit "" [], FloatLit 0.0]
   describe "types" $ do
     it "parses basic function types" $ do
-      parse pType "" "a -> b" `shouldParse` TyArr (TyVar "a") (TyVar "b")
+      parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")
     it "parses multi arg function types" $ do
       parse pType "" "a -> b -> c"
-        `shouldParse` TyArr (TyVar "a") (TyArr (TyVar "b") (TyVar "c"))
+        `shouldParse` (TyVar "a" `fn` TyVar "b" `fn` TyVar "c")
     it "parses higher order function types" $ do
-      parse pType "" "(a -> b) -> a -> b" `shouldParse` TyArr
-        (TyArr (TyVar "a") (TyVar "b"))
-        (TyArr (TyVar "a") (TyVar "b"))
+      parse pType "" "(a -> b) -> a -> b"
+        `shouldParse` ((TyVar "a" `fn` TyVar "b") `fn` TyVar "a" `fn` TyVar "b")

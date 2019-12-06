@@ -23,10 +23,10 @@ data Pair a b = MkPair a b
 
 data Hand = Left | Right
 
-class Functor f
+class Functor f where
   map : (a -> b) -> f a -> f b
 
-instance Functor Maybe
+instance Functor Maybe where
   map _ Nothing = Nothing
   map f (Just x) = Just (f x)
 

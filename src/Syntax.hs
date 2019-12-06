@@ -103,13 +103,10 @@ data Pattern = VarPat Name            -- x
 -- a -> b
 -- f a
 -- TODO: rename to Type?
--- TODO: simplify:
---      - TyApp Ty Ty
---      - TyArr
---      - TyCon Name
-data Ty = TyApp Name [Ty]
+data Ty = Ty :@: Ty
+        | TyArr
+        | TyCon Name
         | TyVar Name
-        | TyArr Ty Ty
         | TyList Ty
         | TyTuple [Ty]
         | TyHole Name
@@ -117,6 +114,10 @@ data Ty = TyApp Name [Ty]
         | TyFloat
         | TyString
         deriving (Eq, Show, Generic)
+
+infixr 4 `fn`
+fn :: Ty -> Ty -> Ty
+a `fn` b = (TyArr :@: a) :@: b
 
 data Syn = Var Name
          | Cons Name

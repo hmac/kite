@@ -5,7 +5,9 @@ module Translate where
 
 import qualified Data.List                     as List
                                                 ( find )
-import           Data.Maybe                     ( mapMaybe )
+import           Data.Maybe                     ( mapMaybe
+                                                , fromMaybe
+                                                )
 import qualified Syntax                        as S
 import           THIH
 import           Desugar                        ( Core )
@@ -90,15 +92,16 @@ tyToScheme env (S.TyList t) = quantify (tv t') ([] :=> list t')
 tyToScheme env t = quantify (tv (tyToType env t)) ([] :=> tyToType env t)
 
 tyToType :: Env -> S.Ty -> Type
-tyToType _env (S.TyVar n)    = TVar (Tyvar (toId n) Star)
-tyToType _env S.TyInt        = tInt
-tyToType _env S.TyFloat      = tFloat
-tyToType _env S.TyString     = tString
-tyToType env  (S.TyList t  ) = list (tyToType env t)
-tyToType env (S.TyArr a b) = TAp (TAp tArrow (tyToType env a)) (tyToType env b)
-tyToType env  (S.TyApp n ts) = case lookupTyCon (toId n) env of
-  Just t  -> foldl TAp t (map (tyToType env) ts)
-  Nothing -> error $ "unknown type constructor " <> toId n
+tyToType _env (S.TyVar n)  = TVar (Tyvar (toId n) Star)
+tyToType _env S.TyInt      = tInt
+tyToType _env S.TyFloat    = tFloat
+tyToType _env S.TyString   = tString
+tyToType env  (S.TyList t) = list (tyToType env t)
+tyToType env  (a S.:@: b ) = TAp (tyToType env a) (tyToType env b)
+tyToType _env S.TyArr      = tArrow
+tyToType env  (S.TyCon n)  = fromMaybe
+  (error ("unknown type constructor " <> toId n))
+  (lookupTyCon (toId n) env)
 tyToType _env (S.TyHole _) = error "cannot translate holes yet"
 tyToType env (S.TyTuple ts) =
   let ty = case length ts of

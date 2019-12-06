@@ -50,7 +50,7 @@ printModule mod = vsep $ catMaybes
 -- ---
 -- The return type is a Maybe so we can render the empty string when there's no
 -- metadata. (https://stackoverflow.com/a/52843774)
-printMetadata :: [(String, String)] -> Maybe (Document)
+printMetadata :: [(String, String)] -> Maybe Document
 printMetadata []  = Nothing
 printMetadata kvs = Just $ vsep ["---", printKvs, "---"]
   where printKvs = vsep $ map (\(k, v) -> hcat [pretty k, ": ", pretty v]) kvs
@@ -61,13 +61,13 @@ printModName (ModuleName names) =
   keyword "module" <+> hcat (map pretty (intersperse "." names))
 
 --   (fun1, fun2)
-printModExports :: [Name] -> Maybe (Document)
+printModExports :: [Name] -> Maybe Document
 printModExports []      = Nothing
 printModExports exports = Just $ tupled (map printName exports)
 
 -- import Data.Text
 -- import qualified Data.Text.Encoding as E (encodeUtf8)
-printImports :: [Import] -> Maybe (Document)
+printImports :: [Import] -> Maybe Document
 printImports []      = Nothing
 printImports imports = Just $ vsep (map printImport imports)
 
@@ -99,32 +99,49 @@ printFun Fun { funComments = comments, funName = name, funDefs = defs, funType =
   printComments [] = []
   printComments cs = map printComment cs
 
--- we special case a top level TyArr by not wrapping it in parens
--- because we want foo : (a -> b) -> c
--- rather than foo : ((a -> b) -> c)
+-- a -> b
+-- f a -> f b
+-- a -> b -> c
+-- (a -> b) -> c
 printType :: Ty -> Document
-printType t = type_ $ case t of
-  TyArr _ _ -> sep $ intersperse "->" (map printType' (unfoldTyApp t))
-  ty        -> printType' ty
- where
-  printType' (TyHole n   ) = hole ("?" <> printName n)
-  printType' (TyVar  n   ) = printName n
-  printType' (TyApp n tys) = printName n <+> hsep (map printType' tys)
-  printType' ty@(TyArr _ _) =
-    parens $ hsep $ intersperse "->" (map printType' (unfoldTyApp ty))
-  printType' (TyList  ty) = brackets (printType' ty)
-  printType' (TyTuple ts) = tupled (map printType' ts)
-  printType' TyInt        = "Int"
-  printType' TyFloat      = "Float"
-  printType' TyString     = "String"
+printType = printType' Root
 
--- Unwrap a nested TyArr tree so we can print a -> b -> c
--- rather than a -> (b -> c)
-unfoldTyApp :: Ty -> [Ty]
-unfoldTyApp t = reverse (go t [])
- where
-  go (TyArr a b) ts = go b (a : ts)
-  go ty          ts = ty : ts
+data Context = Root | AppL | AppR  | ArrL | ArrR
+
+printType' :: Context -> Ty -> Document
+printType' ctx ty = case (ctx, ty) of
+  -- top level arrows don't get parenthesised
+  (Root, (TyArr :@: a) :@: b) ->
+    printType' ArrL a <+> "->" <+> printType' ArrR b
+  -- top level applications don't get parenthesised either
+  (Root, a :@: b            ) -> printType' AppL a <+> printType' AppR b
+
+  -- arrows on the left of arrows get parenthesised
+  (ArrL, (TyArr :@: a) :@: b) -> parens $ printType' Root (a `fn` b)
+  -- arrows on the right of arrows don't
+  (ArrR, (TyArr :@: a) :@: b) -> printType' Root (a `fn` b)
+  -- arrows on either side of applications get parenthesised
+  (AppR, (TyArr :@: a) :@: b) -> parens $ printType' Root (a `fn` b)
+  (AppL, (TyArr :@: a) :@: b) -> parens $ printType' Root (a `fn` b)
+
+  -- applications on the left of applications don't get parenthesised
+  (AppL, a :@: b            ) -> printType' Root (a :@: b)
+  -- applications on the right of applications get parenthesised
+  (AppR, a :@: b            ) -> parens $ printType' Root (a :@: b)
+  -- applications on either side of arrows don't
+  (ArrL, a :@: b            ) -> printType' Root (a :@: b)
+  (ArrR, a :@: b            ) -> printType' Root (a :@: b)
+
+  -- Basic cases
+  (_   , TyHole n           ) -> hole ("?" <> printName n)
+  (_   , TyCon n            ) -> printName n
+  (_   , TyVar n            ) -> printName n
+  (_   , TyList ts          ) -> brackets (printType' Root ts)
+  (_   , TyTuple ts         ) -> tupled (map (printType' Root) ts)
+  (_   , TyInt              ) -> "Int"
+  (_   , TyFloat            ) -> "Float"
+  (_   , TyString           ) -> "String"
+  (_   , _                  ) -> "nope"
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
@@ -162,9 +179,14 @@ printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
 printInterpolatedString :: String -> [(Syn, String)] -> Document
 printInterpolatedString prefix interps = dquotes str
  where
-  str =
-    pretty prefix <> hcat (map (\(e, s) -> printInterp e <> pretty s) interps)
+  str = pretty (escape prefix)
+    <> hcat (map (\(e, s) -> printInterp e <> pretty (escape s)) interps)
   printInterp e = "#{" <> printExpr e <> "}"
+
+escape :: String -> String
+escape ('"' : s) = '\\' : '"' : escape s
+escape (x   : s) = x : escape s
+escape []        = []
 
 -- Can we simplify this by introducting printExpr' which behaves like printExpr
 -- but always parenthesises applications?
@@ -226,16 +248,22 @@ printCon c = printName (conName c) <+> hsep (map printType (conArgs c))
 printTypeclass :: Typeclass -> Document
 printTypeclass t = vsep (header : map printTypeclassDef (typeclassDefs t))
  where
-  header = keyword "class" <+> printName (typeclassName t) <+> hsep
-    (map printName (typeclassTyVars t))
+  header =
+    keyword "class"
+      <+> printName (typeclassName t)
+      <+> hsep (map printName (typeclassTyVars t))
+      <+> "where"
   printTypeclassDef (name, ty) =
     indent 2 $ printName name <+> colon <+> printType ty
 
 printInstance :: Instance Syn -> Document
 printInstance i = vsep (header : map printInstanceDef (instanceDefs i))
  where
-  header = keyword "instance" <+> printName (instanceName i) <+> hsep
-    (map printType (instanceTypes i))
+  header =
+    keyword "instance"
+      <+> printName (instanceName i)
+      <+> hsep (map printType (instanceTypes i))
+      <+> "where"
   printInstanceDef (name, defs) = indent 2 $ vsep (map (printDef name) defs)
 
 printComment :: String -> Document
