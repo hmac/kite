@@ -3,6 +3,7 @@ module Translate where
 
 -- Convert types in Syntax to types in THIH
 
+import           Control.Monad                  ( (>=>) )
 import qualified Data.List                     as List
                                                 ( find )
 import           Data.Maybe                     ( mapMaybe
@@ -14,7 +15,11 @@ import           Desugar                        ( Core )
 import qualified Desugar                       as D
 
 tiModule :: S.Module Core -> Either Error [Assump]
-tiModule m = let (assumps, p) = toProgram m in tiProgram initialEnv assumps p
+tiModule m =
+  let (assumps, p) = toProgram m
+      classEnv     = fromMaybe (error "failed to construct prelude typeclasses")
+                               (primitiveInsts initialEnv)
+  in  tiProgram classEnv assumps p
 
 --          type cons     data cons
 type Env = ([(Id, Type)], [(Id, Scheme)])
@@ -27,16 +32,31 @@ lookupDataCon n (_, datacons) = lookup n datacons
 
 toProgram :: S.Module Core -> ([Assump], Program)
 toProgram m =
-  let tycons   = typeConstructors m
+  let tycons   = primitiveTypeConstructors ++ typeConstructors m
       datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
       assumps  = map (uncurry (:>:)) datacons
       env      = (tycons, datacons)
   in  (assumps, mapMaybe (toBindGroup env) (S.moduleDecls m))
 
+primitiveTypeConstructors :: [(Id, Type)]
+primitiveTypeConstructors =
+  [("Int", tInt), ("String", tString), ("Bool", tBool)]
+
 primitiveConstructors :: [(Id, Scheme)]
 primitiveConstructors =
   let tuple (f :>: s) = (f, s)
-  in  map tuple [listCons, primError, primStringConcat]
+  in  map
+        tuple
+        [ listCons
+        , listNil
+        , true
+        , false
+        , primError
+        , primShow
+        , primStringConcat
+        , primNumPlus
+        , primOrdLt
+        ]
 
 typeConstructors :: S.Module Core -> [(Id, Type)]
 typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
@@ -240,7 +260,7 @@ tuple7 = "$prim_tuple7" :>: Forall
       )
   )
 
--- primitive list constructors
+-- primitive List constructors
 listNil :: Assump
 listNil = "[]" :>: Forall [Star] ([] :=> TAp tList (TGen 0))
 listCons :: Assump
@@ -248,18 +268,50 @@ listCons = "Cons" :>: Forall
   [Star]
   ([] :=> (TGen 0 `fn` TAp tList (TGen 0) `fn` TAp tList (TGen 0)))
 
+-- primitive Bool constructors
+true :: Assump
+true = "True" :>: Forall [] ([] :=> tBool)
+false :: Assump
+false = "False" :>: Forall [] ([] :=> tBool)
+
 -- other primitive functions
 primError :: Assump
 primError = "error" :>: Forall [Star] ([] :=> (tString `fn` TGen 0))
 primStringConcat :: Assump
 primStringConcat =
   "$prim_stringconcat" :>: Forall [] ([] :=> (list tString `fn` tString))
+-- TODO: add Show constraint
+primShow :: Assump
+primShow = "$prim_show" :>: Forall [Star] ([] :=> (TGen 0 `fn` tString))
+primNumPlus :: Assump
+primNumPlus = "+" :>: Forall
+  [Star]
+  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
+primOrdLt :: Assump
+primOrdLt = "<" :>: Forall
+  [Star]
+  ([IsIn "Ord" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` tBool))
 
-bindsToBindGroup :: Env -> [(S.Name, Core)] -> BindGroup
+bindsToBindGroup :: Env -> [(S.Name, [([S.Pattern], Core)])] -> BindGroup
 bindsToBindGroup env binds = ([], map ((: []) . toBind) binds)
  where
-  toBind :: (S.Name, Core) -> Impl
-  toBind (name, expr) = (toId name, [([], toExpr env expr)])
+  toBind :: (S.Name, [([S.Pattern], Core)]) -> Impl
+  toBind (name, alts) = (toId name, map toAlt alts)
+  toAlt :: ([S.Pattern], Core) -> Alt
+  toAlt (pats, e) = (map (toPat env) pats, toExpr env e)
 
 toId :: S.Name -> Id
 toId (S.Name n) = n
+
+primitiveInsts :: EnvTransformer
+primitiveInsts =
+  addPreludeClasses
+    >=> addInst [] (IsIn "Ord" tUnit)
+    >=> addInst [] (IsIn "Ord" tChar)
+    >=> addInst [] (IsIn "Ord" tInt)
+    >=> addInst
+          [ IsIn "Ord" (TVar (Tyvar "a" Star))
+          , IsIn "Ord" (TVar (Tyvar "b" Star))
+          ]
+          (IsIn "Ord" (pair (TVar (Tyvar "a" Star)) (TVar (Tyvar "b" Star))))
+    >=> addInst [] (IsIn "Num" tInt)

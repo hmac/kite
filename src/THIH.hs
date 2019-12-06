@@ -55,13 +55,15 @@ data Tycon = Tycon Id Kind
 -- Examples of types
 ---------------------
 
-tUnit, tChar, tInt, tInteger, tFloat, tDouble :: Type
+tUnit, tChar, tInt, tInteger, tFloat, tDouble, tBool :: Type
 tUnit = TCon (Tycon "()" Star)
 tChar = TCon (Tycon "Char" Star)
+tString = TCon (Tycon "String" Star)
 tInt = TCon (Tycon "Int" Star)
 tInteger = TCon (Tycon "Integer" Star)
 tFloat = TCon (Tycon "Float" Star)
 tDouble = TCon (Tycon "Double" Star)
+tBool = TCon (Tycon "Bool" Star)
 
 tList, tArrow, tTuple2, tTuple3, tTuple4, tTuple5, tTuple6, tTuple7 :: Type
 tList = TCon (Tycon "[]" (Kfun Star Star))
@@ -101,9 +103,6 @@ list t = TAp tList t
 
 pair :: Type -> Type -> Type
 pair a b = TAp (TAp tTuple2 a) b
-
-tString :: Type
-tString = list tChar
 
 ----------------------------------
 -- Determining the kind of a term
@@ -377,18 +376,6 @@ addInst ps p@(IsIn i _) ce
 -- Eq (a, Bool) and Eq (Int, b)
 overlap :: Pred -> Pred -> Bool
 overlap p q = isJust (mguPred p q)
-
-exampleInsts :: EnvTransformer
-exampleInsts =
-  addPreludeClasses
-    >=> addInst [] (IsIn "Ord" tUnit)
-    >=> addInst [] (IsIn "Ord" tChar)
-    >=> addInst [] (IsIn "Ord" tInt)
-    >=> addInst
-          [ IsIn "Ord" (TVar (Tyvar "a" Star))
-          , IsIn "Ord" (TVar (Tyvar "b" Star))
-          ]
-          (IsIn "Ord" (pair (TVar (Tyvar "a" Star)) (TVar (Tyvar "b" Star))))
 
 -- The Haskell report imposes furthe restrictions on class and instance
 -- declarations that are not checked here:

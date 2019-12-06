@@ -49,11 +49,18 @@ fromMaybe def m = case m of
 
 three : Int
 three = let one = 1
-            two = plus one one
-         in plus one two
+            two = one + one
+         in one + two
 
-holey : ?1 -> Bar
-holey x = ?2
+map : (a -> b) -> [a] -> [b]
+map _ [] = []
+map f (Cons x xs) = Cons (f x) (map f xs)
+
+filter : (a -> Bool) -> [a] -> [a]
+filter _ [] = []
+filter p (Cons x xs) = case p x of
+                        True -> Cons x (filter p xs)
+                        False -> filter p xs
 
 -- Anonymous functions and infix operators
 -- Pretty-printing of infix operators is currently a bit conservative
