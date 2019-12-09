@@ -119,6 +119,15 @@ infixr 4 `fn`
 fn :: Ty -> Ty -> Ty
 a `fn` b = (TyArr :@: a) :@: b
 
+-- Syn: the surface syntax
+-- Syn represents the code that users write. It goes through several
+-- translations before being executed.
+
+-- For typechecking we convert Syn to Core and typechecking the Core.
+-- For evaluation we convert Syn to ELC.
+-- We currently evaluate ELC directly but in future ELC will be converted to LC
+-- before evaluation.
+
 data Syn = Var Name
          | Cons Name
          | Hole Name

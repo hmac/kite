@@ -10,10 +10,13 @@ import           System.IO                      ( stdout )
 import           Desugar                        ( desugarModule )
 import           Translate                      ( tiModule )
 import           THIH                           ( Error(..) )
+import           Repl                           ( run )
 
 -- Parse stdin as a Lam module and pretty print the result
 main :: IO ()
-main = do
+main = run
+
+main' = do
   input <- getContents
   case parseLamFile input of
     Left  e -> putStrLn e

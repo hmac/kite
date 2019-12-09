@@ -16,9 +16,9 @@ import qualified Desugar                       as D
 
 tiModule :: S.Module Core -> Either Error [Assump]
 tiModule m =
-  let (assumps, p) = toProgram m
-      classEnv     = fromMaybe (error "failed to construct prelude typeclasses")
-                               (primitiveInsts initialEnv)
+  let (_, assumps, p) = toProgram m
+      classEnv = fromMaybe (error "failed to construct prelude typeclasses")
+                           (primitiveInsts initialEnv)
   in  tiProgram classEnv assumps p
 
 --          type cons     data cons
@@ -30,13 +30,13 @@ lookupTyCon n (tycons, _) = lookup n tycons
 lookupDataCon :: Id -> Env -> Maybe Scheme
 lookupDataCon n (_, datacons) = lookup n datacons
 
-toProgram :: S.Module Core -> ([Assump], Program)
+toProgram :: S.Module Core -> (Env, [Assump], Program)
 toProgram m =
   let tycons   = primitiveTypeConstructors ++ typeConstructors m
       datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
       assumps  = map (uncurry (:>:)) datacons
       env      = (tycons, datacons)
-  in  (assumps, mapMaybe (toBindGroup env) (S.moduleDecls m))
+  in  (env, assumps, mapMaybe (toBindGroup env) (S.moduleDecls m))
 
 primitiveTypeConstructors :: [(Id, Type)]
 primitiveTypeConstructors =
@@ -109,6 +109,10 @@ funToExpl env f =
   , tyToScheme env (S.funType f)
   , map (defToAlt env) (S.funDefs f)
   )
+
+-- Only used to typecheck expressions entered in the REPL
+funToImpl :: Env -> S.Fun Core -> Impl
+funToImpl env f = (toId (S.funName f), map (defToAlt env) (S.funDefs f))
 
 tyToScheme :: Env -> S.Ty -> Scheme
 tyToScheme env (S.TyList t) = quantify (tv t') ([] :=> list t')
