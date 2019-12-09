@@ -52,7 +52,7 @@ roundtripModule :: H.Property
 roundtripModule = roundtrip genModule printModule pModule
 
 roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
-roundtrip gen printer parser = H.withTests 25 $ H.property $ do
+roundtrip gen printer parser = H.withTests 20 $ H.property $ do
   e <- H.forAll gen
   let printed  = show (printer e)
       reparsed = parse parser "" printed

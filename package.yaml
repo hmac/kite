@@ -27,10 +27,12 @@ description: |
 
 dependencies:
 - base >= 4.7 && < 5
+- extra
 - text
 - megaparsec
 - prettyprinter
 - prettyprinter-ansi-terminal
+- pretty-simple
 - unordered-containers
 - transformers
 - hashable
