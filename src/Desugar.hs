@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedStrings #-}
 module Desugar where
 
 -- This module translates the surface syntax (Syn) to a smaller core syntax.

@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Translate where
 
 -- Convert types in Syntax to types in THIH

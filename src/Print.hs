@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Print where
 
 import           Data.Maybe                     ( catMaybes )

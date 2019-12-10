@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Repl where
 
 import           Text.Pretty.Simple             ( pPrint )
@@ -62,7 +61,10 @@ processDecl decls =
       core = desugarModule m
   in  case tiModule core of
         Left  (Error err) -> putStrLn err >> pure False
-        Right _           -> pure True
+        Right _           -> do
+          let evalEnv = translateModule 0 primConstructors m
+          pPrint evalEnv
+          pure True
 
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =

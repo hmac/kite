@@ -25,6 +25,9 @@ description: |
   Rails apps that are struggling with stability and productivity as their codebase
   grows, Lam should provide a compelling alternative.
 
+default-extensions:
+- OverloadedStrings
+
 dependencies:
 - base >= 4.7 && < 5
 - extra
