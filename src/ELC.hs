@@ -204,7 +204,7 @@ translateExpr _   (S.FloatLit i       ) = pure (Const (Float i))
 translateExpr env (S.StringLit s parts) = translateStringLit env s parts
 translateExpr env (S.ListLit elems    ) = do
   elems' <- mapM (translateExpr env) elems
-  pure (buildList elems')
+  buildList elems'
 translateExpr env (S.TupleLit elems) = do
   elems' <- mapM (translateExpr env) elems
   pure (buildTuple elems')
@@ -267,10 +267,21 @@ translateStringLit env prefix parts = do
     rest <- go is
     pure $ App (Const (Prim PrimShow)) e' : Const (String s) : rest
 
-buildList :: [Exp] -> Exp
-buildList =
-  foldr (\e acc -> App (App (Cons listCons []) e) acc) (Cons listNil [])
+-- here we follow the same scheme as with normal constructors
+buildList :: [Exp] -> NameGen Exp
+buildList = flip foldrM (Cons listNil []) $ \e acc -> do
+  lvar <- fresh
+  rvar <- fresh
+  pure $ App
+    (App
+      (Abs (VarPat lvar)
+           (Abs (VarPat rvar) (Cons listCons [Var lvar, Var rvar]))
+      )
+      e
+    )
+    acc
 
+-- TODO: fix as above
 buildTuple :: [Exp] -> Exp
 buildTuple elems = case length elems of
   2 -> Cons tuple2 elems

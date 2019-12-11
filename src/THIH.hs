@@ -653,11 +653,10 @@ data Literal = LitInt Integer
 
 tiLit :: Literal -> TI ([Pred], Type)
 tiLit (LitChar _) = pure ([], tChar)
-tiLit (LitInt  _) = do
-  v <- newTVar Star
-  pure ([IsIn "Num" v], v)
-tiLit (LitStr _) = pure ([], tString)
-tiLit (LitRat _) = do
+-- Integers are not overloaded (yet)
+tiLit (LitInt  _) = pure ([], tInt)
+tiLit (LitStr  _) = pure ([], tString)
+tiLit (LitRat  _) = do
   v <- newTVar Star
   pure ([IsIn "Fractional" v], v)
 

@@ -1,5 +1,6 @@
 module Repl where
 
+import           Text.Pretty.Simple             ( pPrint )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout
@@ -108,8 +109,10 @@ parseInput = go []
     let prompt = if null inputSoFar then "λ " else "> "
     putStr prompt
     input <- getLine
-    if null input
-      then do
+    -- If the input ends in a backslash, assume there's more to come
+    if last input == '\\'
+      then go (init input : inputSoFar)
+      else do
         let allInput = unlines (reverse (input : inputSoFar))
         case
             parse (Definition <$> pDecl <|> Expression <$> pExpr) "" allInput
@@ -118,4 +121,3 @@ parseInput = go []
               putStrLn (errorBundlePretty e)
               go []
             Right e -> pure e
-      else go (input : inputSoFar)

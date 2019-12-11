@@ -25,4 +25,8 @@ print = \case
   _ -> "<invalid expression>"
 
 printConstant :: Constant -> Doc a
-printConstant = undefined
+printConstant = \case
+  Int i -> pretty i
+  String s -> "\"" <> pretty s <> "\""
+  Float f -> pretty f
+  Prim _ -> "<builtin>"
