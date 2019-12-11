@@ -7,4 +7,7 @@ data Maybe a = Nothing | Just a
 
 head : [a] -> Maybe a
 head [] = Nothing
-head (Cons x xs) = Just x
+head (x :: xs) = Just x
+
+main : [Int]
+main = [1, 2]

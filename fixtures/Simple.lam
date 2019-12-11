@@ -70,3 +70,6 @@ incList xs = map (\x -> x + 1) (filter (\x -> x < 10) xs)
 -- String interpolation
 greet : String -> String
 greet name = "hi, #{name}!"
+
+main : String
+main = greet "Harry"

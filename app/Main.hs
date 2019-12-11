@@ -1,8 +1,10 @@
+{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import           Parse
 import           Print
 
+import           Text.Pretty.Simple             ( pPrint )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
@@ -19,31 +21,68 @@ import           LC                             ( runConvert
                                                 )
 import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
-import           System.Environment             ( getArgs )
+import           Syntax                         ( Module
+                                                , Syn
+                                                )
+import           Options.Generic
+
+data Config =
+      Repl
+    | Run FilePath
+    | Typecheck FilePath
+    | DumpParse FilePath
+    | DumpElc FilePath
+    | DumpLc FilePath
+    deriving (Generic, Show)
+
+instance ParseRecord Config
 
 -- Parse stdin as a Lam module and pretty print the result
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    ["repl"]      -> Repl.run
-    ["run", file] -> run file
-    _             -> error "Bad arguments"
+  cfg <- getRecord "lam"
+  case cfg of
+    Repl        -> Repl.run
+    Run       f -> run f
+    DumpParse f -> dumpParse f
+    DumpElc   f -> dumpELC f
+    DumpLc    f -> dumpLC f
+    Typecheck f -> typecheck f
 
-run :: FilePath -> IO ()
-run path = do
+dumpParse :: FilePath -> IO ()
+dumpParse path = do
   input <- readFile path
   case parseLamFile input of
     Left  e -> putStrLn e
-    Right m -> do
-      let core = desugarModule m
-      case tiModule core of
-        Left  (Error err) -> putStrLn err
-        Right _           -> do
-          let env =
-                runConvert (translateModule primConstructors m >>= convertEnv)
-          let answer = evalMain env
-          renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
+    Right m -> pPrint m
+
+dumpELC :: FilePath -> IO ()
+dumpELC = withParsedFile
+  $ \m -> pPrint $ runConvert (translateModule primConstructors m)
+
+dumpLC :: FilePath -> IO ()
+dumpLC = withParsedFile $ \m ->
+  pPrint $ runConvert (translateModule primConstructors m >>= convertEnv)
+
+typecheck :: FilePath -> IO ()
+typecheck = withParsedFile $ \m -> case tiModule (desugarModule m) of
+  Left  (Error err) -> putStrLn err
+  Right _           -> putStrLn "Success."
+
+run :: FilePath -> IO ()
+run = withParsedFile $ \m -> case tiModule (desugarModule m) of
+  Left  (Error err) -> putStrLn err
+  Right _           -> do
+    let env = runConvert (translateModule primConstructors m >>= convertEnv)
+    let answer = evalMain env
+    renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
+
+withParsedFile :: (Module Syn -> IO ()) -> FilePath -> IO ()
+withParsedFile cb path = do
+  input <- readFile path
+  case parseLamFile input of
+    Left  e -> putStrLn e
+    Right m -> cb m
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutPretty defaultLayoutOptions doc)

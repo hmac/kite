@@ -29,3 +29,6 @@ joinMaybe (Just m) = m
 bindMaybe : Maybe a -> (a -> Maybe b) -> Maybe b
 bindMaybe Nothing _ = Nothing
 bindMaybe (Just x) f = f x
+
+main : Maybe Bool
+main = joinMaybe (Just Nothing)

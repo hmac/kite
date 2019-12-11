@@ -41,6 +41,7 @@ dependencies:
 - transformers
 - hashable
 - mtl
+- optparse-generic
 # Testing - here so hoogle picks them up
 - QuickCheck
 - hspec

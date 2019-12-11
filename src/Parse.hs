@@ -465,7 +465,7 @@ keywords =
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()
-spaceConsumer = L.space (void $ some (char ' ' <|> char '\t')) empty empty
+spaceConsumer = L.space (void $ some (char ' ')) empty empty
 
 -- Consumes spaces, tabs and newlines
 spaceConsumerN :: Parser ()
