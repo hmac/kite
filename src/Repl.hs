@@ -1,7 +1,12 @@
 module Repl where
 
-import           Text.Pretty.Simple             ( pPrint )
-import           System.IO                      ( stdout )
+import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Data.Text.Prettyprint.Doc
+import           System.IO                      ( stdout
+                                                , hSetBuffering
+                                                , BufferMode(..)
+                                                )
+import           Data.Maybe                     ( fromMaybe )
 import           Parse                          ( pExpr
                                                 , pDecl
                                                 )
@@ -22,19 +27,14 @@ import           Desugar                        ( desugarModule
                                                 , desugarFun
                                                 )
 
-import           ELC                            ( translateExpr
-                                                , translateModule
+import           ELC                            ( translateModule
                                                 , primConstructors
                                                 )
 import           LC                             ( runConvert
                                                 , convertEnv
-                                                , convert
                                                 )
-import qualified EvalLC                         ( eval )
-import           Data.Maybe                     ( fromMaybe )
-import           System.IO                      ( hSetBuffering
-                                                , BufferMode(..)
-                                                )
+import qualified LC.Eval                        ( evalVar )
+import qualified LC.Print                       ( print )
 import           Syntax
 
 run :: IO ()
@@ -56,52 +56,48 @@ repl env = do
 
 processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
-  let m = Module { moduleName     = ModuleName ["Repl"]
-                 , moduleImports  = []
-                 , moduleExports  = []
-                 , moduleDecls    = decls
-                 , moduleMetadata = []
-                 }
-      core = desugarModule m
+  let core = desugarModule (buildModule decls)
   in  case tiModule core of
-        Left  (Error err) -> putStrLn err >> pure False
-        Right _           -> do
-          let env =
-                runConvert (translateModule primConstructors m >>= convertEnv)
-          pPrint env
+        Left (Error err) -> do
+          putStrLn err
+          pure False
+        Right _ -> do
+          putStrLn "OK."
           pure True
 
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
-  let main = Fun { funComments = []
-                 , funName     = "main"
-                 , funType     = TyHole "replExpression"
-                 , funDefs     = [Def { defArgs = [], defExpr = e }]
-                 }
-      m = Module { moduleName     = ModuleName ["Repl"]
-                 , moduleImports  = []
-                 , moduleExports  = []
-                 , moduleDecls    = decls
-                 , moduleMetadata = []
-                 }
-      modCore              = desugarModule m
-      (env, assumps, prog) = toProgram modCore
-      mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
-      classEnv = fromMaybe (error "failed to construct prelude typeclasses")
-                           (primitiveInsts initialEnv)
-      prog' = prog ++ [mainBindGroup]
-  in  case tiProgram classEnv assumps prog' of
-        Left (Error err) -> putStrLn err
-        Right _ ->
-          -- TODO: the better way to do this is to bind e as a declaration with
-          -- name $main and then just eval (Var "$main")
-          let answer = runConvert $ do
-                elcEnv <- translateModule primConstructors m
-                elce   <- translateExpr elcEnv e
-                lcEnv  <- convertEnv elcEnv
-                lce    <- convert elce
-                pure $ EvalLC.eval lcEnv lce
-          in  pPrint answer
+  let
+    main = Fun { funComments = []
+               , funName     = "$main"
+               , funType     = TyHole "replExpression"
+               , funDefs     = [Def { defArgs = [], defExpr = e }]
+               }
+    m                    = buildModule decls
+    modCore              = desugarModule m
+    (env, assumps, prog) = toProgram modCore
+    mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
+    classEnv = fromMaybe (error "failed to construct prelude typeclasses")
+                         (primitiveInsts initialEnv)
+    prog' = prog ++ [mainBindGroup]
+  in
+    case tiProgram classEnv assumps prog' of
+      Left  (Error err) -> putStrLn err
+      Right _           -> do
+        let m' = m { moduleDecls = FunDecl main : moduleDecls m }
+        let answer = LC.Eval.evalVar "$main" $ runConvert
+              (translateModule primConstructors m' >>= convertEnv)
+        renderIO stdout
+                 (layoutPretty defaultLayoutOptions (LC.Print.print answer))
+        putStrLn ""
+
+buildModule :: [Decl Syn] -> Module Syn
+buildModule decls = Module { moduleName     = ModuleName ["Repl"]
+                           , moduleImports  = []
+                           , moduleExports  = []
+                           , moduleDecls    = decls
+                           , moduleMetadata = []
+                           }
 
 data Input = Expression Syn | Definition (Decl Syn)
 
@@ -109,7 +105,7 @@ parseInput :: IO Input
 parseInput = go []
  where
   go inputSoFar = do
-    let prompt = if null inputSoFar then ">" else "|"
+    let prompt = if null inputSoFar then "λ " else "> "
     putStr prompt
     input <- getLine
     if null input

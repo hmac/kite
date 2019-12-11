@@ -3,7 +3,6 @@ module Main where
 import           Parse
 import           Print
 
-import           Text.Pretty.Simple             ( pPrint )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
@@ -18,7 +17,8 @@ import           ELC                            ( translateModule
 import           LC                             ( runConvert
                                                 , convertEnv
                                                 )
-import           EvalLC                         ( evalMain )
+import qualified LC.Print                       ( print )
+import           LC.Eval                        ( evalMain )
 import           System.Environment             ( getArgs )
 
 -- Parse stdin as a Lam module and pretty print the result
@@ -28,6 +28,7 @@ main = do
   case args of
     ["repl"]      -> Repl.run
     ["run", file] -> run file
+    _             -> error "Bad arguments"
 
 run :: FilePath -> IO ()
 run path = do
@@ -42,7 +43,7 @@ run path = do
           let env =
                 runConvert (translateModule primConstructors m >>= convertEnv)
           let answer = evalMain env
-          pPrint answer
+          renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutPretty defaultLayoutOptions doc)

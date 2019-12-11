@@ -1,4 +1,4 @@
-module EvalLC where
+module LC.Eval where
 
 import ELC (Con(..))
 import           LC
@@ -7,7 +7,10 @@ import           Syntax                         ( Name(..) )
 type Env = [(Name, Exp)]
 
 evalMain :: Env -> Exp
-evalMain env = eval env (Var "main")
+evalMain = evalVar "main"
+
+evalVar :: Name -> Env -> Exp
+evalVar n env = eval env (Var n)
 
 eval :: Env -> Exp -> Exp
 eval env = \case
