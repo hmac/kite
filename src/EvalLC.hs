@@ -6,6 +6,9 @@ import           Syntax                         ( Name(..) )
 
 type Env = [(Name, Exp)]
 
+evalMain :: Env -> Exp
+evalMain env = eval env (Var "main")
+
 eval :: Env -> Exp -> Exp
 eval env = \case
   Const c -> Const c
@@ -13,7 +16,9 @@ eval env = \case
              Just e -> eval env e
              Nothing -> error $ "unknown variable: " <> show n
   Cons c es -> Cons c es
-  App (Abs n e) b -> eval env $ subst e n b
+  -- note that we evaluate the argument before substituting it - i.e. strict
+  -- evaluation.
+  App (Abs n e) b -> eval env $ subst (eval env b) n e
   App a b -> eval env $ App (eval env a) b
   Abs n e -> Abs n e
   Let n v e -> eval ((n,v) : env) e
@@ -38,9 +43,12 @@ eval env = \case
   UnpackProduct i f e -> UnpackProduct i f (eval env e)
   UnpackSum t i f (Cons c@Sum { tag = t', arity = i' } args) | t == t' && i == i' -> eval env (buildApp f args)
                                                              | otherwise -> error $ "expected " <> show c <> " to have arity " <> show i <> " and tag " <> show t
+  UnpackSum t i f e -> eval env $ UnpackSum t i f (eval env e)
   Project _a i (Cons _ args) -> eval env (args !! i)
+  Project a i e -> eval env $ Project a i (eval env e)
   Y e -> eval env $ App e (Y e)
   CaseN _ (Cons Sum { tag = t } _) branches -> eval env (branches !! t)
+  CaseN n e branches -> eval env $ CaseN n (eval env e) branches
 
 subst :: Exp -> Name -> Exp -> Exp
 subst _ _ (Const c) = Const c
@@ -53,9 +61,6 @@ subst a n (Abs p e) | p == n = Abs p e
 subst a n (Let p b e) | p == n = Let p b e
                       | otherwise   = Let p (subst a n b) (subst a n e)
 subst a n (Fatbar x y) = Fatbar (subst a n x) (subst a n y)
--- TODO: what do we do if the case is scrutinising this variable?
--- if the case is scrutinising this variable, rebind it with a let and
--- substitute inside the case.
 subst _a _n Fail             = Fail
 subst _a _n (Bottom s      ) = Bottom s
 subst a  n  (Project ar i e) = Project ar i (subst a n e)

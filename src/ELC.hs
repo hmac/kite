@@ -3,11 +3,13 @@ module ELC where
 -- The Enriched Lambda Calculus
 -- Taken from The Implementation of Functional Programming Languages, Chapter 3
 
+import           Control.Monad.State.Strict
+import           Control.Monad                  ( replicateM )
 import           Data.List.Extra                ( groupOn )
-import           Data.Bifunctor                 ( second )
-import           Data.List                      ( partition
-                                                , mapAccumL
+import           Data.Foldable                  ( foldlM
+                                                , foldrM
                                                 )
+import           Data.List                      ( partition )
 import           Syntax                         ( Syn
                                                 , Name(..)
                                                 , Decl
@@ -98,43 +100,45 @@ data Primitive = PrimStringConcat
 
 type Env = [(Name, Exp)]
 
--- TODO: convert all this to use a State monad over Int, like LC.
-fresh :: Int -> Name
-fresh k = Name $ "$elc" ++ show k
+type NameGen = State Int
 
-translateModule :: Int -> Env -> Module Syn -> Env
-translateModule k env S.Module { S.moduleDecls = decls } =
+fresh :: NameGen Name
+fresh = do
+  k <- get
+  put (k + 1)
+  pure $ Name $ "$elc" ++ show k
+
+translateModule :: Env -> Module Syn -> NameGen Env
+translateModule env S.Module { S.moduleDecls = decls } =
   -- to ensure that all data types are in scope, we process data decls first
   let isDataDecl (S.DataDecl _) = True
       isDataDecl _              = False
       orderedDecls =
           let (dataDecls, otherDecls) = partition isDataDecl decls
           in  dataDecls ++ otherDecls
-  in  foldl (\env' d -> env' ++ translateDecl k env' d) env orderedDecls
+  in  foldlM (\env' d -> (env' ++) <$> translateDecl env' d) env orderedDecls
 
-translateDecl :: Int -> Env -> Decl Syn -> [(Name, Exp)]
-translateDecl k env (S.FunDecl S.Fun { S.funName = n, S.funDefs = defs }) =
-  let numVars          = length (S.defArgs (head defs))
-      varNames         = map (\i -> fresh (k + i)) [1 .. numVars]
-      vars             = map VarPat varNames
-      equations        = map (translateDef' (k + numVars) env) defs
-      -- TODO: fix k usage here
-      asCaseExpression = buildAbs
-        (match (k + 100) varNames equations (Bottom "pattern match failed"))
-        vars
-  in  [(n, asCaseExpression)]
+translateDecl :: Env -> Decl Syn -> NameGen [(Name, Exp)]
+translateDecl env (S.FunDecl S.Fun { S.funName = n, S.funDefs = defs }) = do
+  let numVars = length (S.defArgs (head defs))
+  varNames <- replicateM numVars fresh
+  let vars = map VarPat varNames
+  equations <- mapM (translateDef env) defs
+  caseExpr  <- match varNames equations (Bottom "pattern match failed")
+  pure [(n, buildAbs caseExpr vars)]
 
-translateDecl _k _env (S.DataDecl d) =
-  let cons = S.dataCons d
-  in  if length cons > 1
-        then
-          let cs = zipWith (translateSumCon cs) [0 ..] cons
-          in  map (\c -> (name c, Cons c [])) cs
-        else map translateProdCon cons
-translateDecl _ _ (S.TypeclassDecl _) = error "cannot translate typeclasses"
-translateDecl _ _ (S.TypeclassInst _) =
+translateDecl _env (S.DataDecl d) =
+  pure
+    $ let cons = S.dataCons d
+      in  if length cons > 1
+            then
+              let cs = zipWith (translateSumCon cs) [0 ..] cons
+              in  map (\c -> (name c, Cons c [])) cs
+            else map translateProdCon cons
+translateDecl _ (S.TypeclassDecl _) = error "cannot translate typeclasses"
+translateDecl _ (S.TypeclassInst _) =
   error "cannot translate typeclass instances"
-translateDecl _ _ (S.Comment _) = []
+translateDecl _ (S.Comment _) = pure []
 
 -- Note: we do a weird trick here where each constructor has a reference to a
 -- list of constructors that includes itself.
@@ -148,20 +152,13 @@ translateProdCon :: S.DataCon -> (Name, Exp)
 translateProdCon S.DataCon { S.conName = n, S.conArgs = args } =
   (n, Cons Prod { name = n, arity = length args } [])
 
-translateDef :: Int -> Env -> [Name] -> Def Syn -> Exp
-translateDef k env vars def =
-  let (k'  , args) = mapAccumL (translatePattern env) k (S.defArgs def)
-      (_k'', expr) = translateExpr env k' (S.defExpr def)
-  in  buildApp (buildAbs expr args) (map Var vars)
-
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.
-translateDef' :: Int -> Env -> Def Syn -> Equation
-translateDef' k env def =
-  let (k'  , args) = mapAccumL (translatePattern env) k (S.defArgs def)
-      (_k'', expr) = translateExpr env k' (S.defExpr def)
-  in  (args, expr)
-
+translateDef :: Env -> Def Syn -> NameGen Equation
+translateDef env def = do
+  args <- mapM (translatePattern env) (S.defArgs def)
+  expr <- translateExpr env (S.defExpr def)
+  pure (args, expr)
 
 buildAbs :: Exp -> [Pattern] -> Exp
 buildAbs = foldr Abs
@@ -169,19 +166,19 @@ buildAbs = foldr Abs
 buildApp :: Exp -> [Exp] -> Exp
 buildApp = foldl App
 
-translatePattern :: Env -> Int -> S.Pattern -> (Int, Pattern)
-translatePattern _ k (S.VarPat n) = (k, VarPat n)
-translatePattern _ k (S.IntPat i) = (k, ConstPat (Int i))
-translatePattern env k (S.ListPat es) =
-  let (k', pats) = mapAccumL (translatePattern env) k es
-  in  (k', buildListPat pats)
-translatePattern env k (S.TuplePat es) =
-  let (k', pats) = mapAccumL (translatePattern env) k es
-  in  (k', buildTuplePat pats)
-translatePattern env k (S.ConsPat n pats) =
-  let (k', pats') = mapAccumL (translatePattern env) k pats
-  in  (k', ConPat (lookupCon n env) pats')
-translatePattern _ k S.WildPat = (k + 1, VarPat (fresh k))
+translatePattern :: Env -> S.Pattern -> NameGen Pattern
+translatePattern _   (S.VarPat  n ) = pure (VarPat n)
+translatePattern _   (S.IntPat  i ) = pure (ConstPat (Int i))
+translatePattern env (S.ListPat es) = do
+  pats <- mapM (translatePattern env) es
+  pure (buildListPat pats)
+translatePattern env (S.TuplePat es) = do
+  pats <- mapM (translatePattern env) es
+  pure (buildTuplePat pats)
+translatePattern env (S.ConsPat n pats) = do
+  pats' <- mapM (translatePattern env) pats
+  pure $ ConPat (lookupCon n env) pats'
+translatePattern _ S.WildPat = VarPat <$> fresh
 
 lookupCon :: Name -> Env -> Con
 lookupCon n env = case lookup n env of
@@ -201,41 +198,42 @@ buildTuplePat elems = case length elems of
   6 -> ConPat tuple6 elems
   n -> error $ "cannot handle tuples of length " <> show n
 
-translateExpr :: Env -> Int -> Syn -> (Int, Exp)
-translateExpr _   k (S.IntLit   i       ) = (k, Const (Int i))
-translateExpr _   k (S.FloatLit i       ) = (k, Const (Float i))
-translateExpr env k (S.StringLit s parts) = translateStringLit env k s parts
-translateExpr env k (S.ListLit elems) =
-  second buildList (mapAccumL (translateExpr env) k elems)
-translateExpr env k (S.TupleLit elems) =
-  second buildTuple (mapAccumL (translateExpr env) k elems)
-translateExpr _ k (S.Var n) = (k, Var n)
-translateExpr env k (S.App a b) =
-  let (k' , a') = translateExpr env k a
-      (k'', b') = translateExpr env k' b
-  in  (k'', App a' b')
+translateExpr :: Env -> Syn -> NameGen Exp
+translateExpr _   (S.IntLit   i       ) = pure (Const (Int i))
+translateExpr _   (S.FloatLit i       ) = pure (Const (Float i))
+translateExpr env (S.StringLit s parts) = translateStringLit env s parts
+translateExpr env (S.ListLit elems    ) = do
+  elems' <- mapM (translateExpr env) elems
+  pure (buildList elems')
+translateExpr env (S.TupleLit elems) = do
+  elems' <- mapM (translateExpr env) elems
+  pure (buildTuple elems')
+translateExpr _   (S.Var n  ) = pure (Var n)
+translateExpr env (S.App a b) = do
+  a' <- translateExpr env a
+  b' <- translateExpr env b
+  pure $ App a' b'
 -- We translate a constructor into a series of nested lambda abstractions, one
 -- for each argument to the constructor. When applied, the result is a fully
 -- saturated constructor.
-translateExpr env k (S.Cons n) =
-  let con     = lookupCon n env
-      a       = arity con
-      newVars = map fresh (take a [k ..])
-  in  (k + a, buildAbs (Cons con (map Var newVars)) (map VarPat newVars))
-translateExpr _ k (S.Hole (Name n)) = (k, Bottom $ "Hole encountered: " <> n)
-translateExpr env k (S.Abs vars e) =
-  let (k', body) = translateExpr env k e
-  in  (k', buildAbs body (map VarPat vars))
-translateExpr env k (S.Let alts expr) =
-  -- TODO: refactor
-  let (k', alts') = mapAccumL
-        (\j (n, e) ->
-          let (j', e') = translateExpr env j e in (j', (VarPat n, e'))
-        )
-        k
-        alts
-      (k'', expr') = translateExpr env k' expr
-  in  (k'', LetRec alts' expr')
+translateExpr env (S.Cons n) = do
+  let con = lookupCon n env
+      a   = arity con
+  newVars <- replicateM a fresh
+  pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
+translateExpr _   (S.Hole (Name n)) = pure $ Bottom ("Hole encountered: " <> n)
+translateExpr env (S.Abs vars e   ) = do
+  body <- translateExpr env e
+  pure $ buildAbs body (map VarPat vars)
+translateExpr env (S.Let alts expr) = do
+  alts' <- mapM
+    (\(n, e) -> do
+      e' <- translateExpr env e
+      pure (VarPat n, e')
+    )
+    alts
+  expr' <- translateExpr env expr
+  pure $ LetRec alts' expr'
 -- case (foo bar) of
 --   p1 -> e1
 --   p2 -> e2
@@ -243,35 +241,31 @@ translateExpr env k (S.Let alts expr) =
 -- let $v = foo bar
 --  in ((\p1 -> e1) $v) [] ((\p2 -> e2) $v) [] BOTTOM
 -- ((\p1 -> e1) [] (\p2 -> e2)) (foo bar)
-translateExpr env k (S.Case scrut alts) =
-  let var            = fresh k
-      k'             = k + 1
-      (k'' , scrut') = translateExpr env k' scrut
-      (k''', alts' ) = mapAccumL
-        (\j (p, e) ->
-          let (j' , p') = translatePattern env j p
-              (j'', e') = translateExpr env j' e
-          in  (j'', App (Abs p' e') (Var var))
-        )
-        k''
-        alts
-      lams = foldl Fatbar (Bottom "pattern match failure") alts'
-  in  (k''', Let (VarPat var) scrut' lams)
+translateExpr env (S.Case scrut alts) = do
+  var    <- fresh
+  scrut' <- translateExpr env scrut
+  alts'  <- mapM
+    (\(p, e) -> do
+      p' <- translatePattern env p
+      e' <- translateExpr env e
+      pure $ App (Abs p' e') (Var var)
+    )
+    alts
+  let lams = foldl Fatbar (Bottom "pattern match failure") alts'
+  pure $ Let (VarPat var) scrut' lams
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
-translateStringLit :: Env -> Int -> String -> [(S.Syn, String)] -> (Int, Exp)
-translateStringLit env k prefix parts =
-  let (k', rest) = go k parts
-  in  ( k'
-      , foldr1 (\x acc -> App (App (Const (Prim PrimStringAppend)) x) acc)
-               (Const (String prefix) : rest)
-      )
+translateStringLit :: Env -> String -> [(S.Syn, String)] -> NameGen Exp
+translateStringLit env prefix parts = do
+  rest <- go parts
+  pure $ foldr1 (\x acc -> App (App (Const (Prim PrimStringAppend)) x) acc)
+                (Const (String prefix) : rest)
  where
-  go j [] = (j, [])
-  go j ((e, s) : is) =
-    let (j' , e'  ) = translateExpr env j e
-        (j'', rest) = go j' is
-    in  (j'', App (Const (Prim PrimShow)) e' : Const (String s) : rest)
+  go []            = pure []
+  go ((e, s) : is) = do
+    e'   <- translateExpr env e
+    rest <- go is
+    pure $ App (Const (Prim PrimShow)) e' : Const (String s) : rest
 
 buildList :: [Exp] -> Exp
 buildList =
@@ -356,9 +350,10 @@ type Equation = ([Pattern], Exp)
 -- [] ((\pm1...pmn -> em) u1...un)
 -- [] e
 -- to a nested series of case expressions
-match :: Int -> [Name] -> [Equation] -> Exp -> Exp
-match _k []       qs def = foldr Fatbar def [ e | ([], e) <- qs ]
-match k  (u : us) qs def = foldr (matchVarCon k (u : us)) def (groupOn isVar qs)
+match :: [Name] -> [Equation] -> Exp -> NameGen Exp
+match []       qs def = pure $ foldr Fatbar def [ e | ([], e) <- qs ]
+match (u : us) qs def = do
+  foldrM (matchVarCon (u : us)) def (groupOn isVar qs)
 
 -- Given a constructor, return all constructors for that type
 constructors :: Con -> [Con]
@@ -376,30 +371,27 @@ getCon :: Equation -> Con
 getCon (ConPat c _ : _, _) = c
 getCon c                   = error $ "not a con: " <> show c
 
-matchVarCon :: Int -> [Name] -> [Equation] -> Exp -> Exp
-matchVarCon k us qs def =
-  let f = if isVar (head qs) then matchVar else matchCon in f k us qs def
+matchVarCon :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchVarCon us qs def =
+  let f = if isVar (head qs) then matchVar else matchCon in f us qs def
 
-matchVar :: Int -> [Name] -> [Equation] -> Exp -> Exp
-matchVar k (u : us) qs def =
-  match k us [ (ps, rename e u v) | (VarPat v : ps, e) <- qs ] def
+matchVar :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchVar (u : us) qs def =
+  match us [ (ps, rename e u v) | (VarPat v : ps, e) <- qs ] def
 
-matchCon :: Int -> [Name] -> [Equation] -> Exp -> Exp
-matchCon k (u : us) qs def = Case
-  u
-  [ matchClause c k (u : us) (choose c qs) def | c <- cs ]
+matchCon :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchCon (u : us) qs def = do
+  clauses <- mapM (\c -> matchClause c (u : us) (choose c qs) def) cs
+  pure $ Case u clauses
   where cs = constructors (getCon (head qs))
 
-matchClause :: Con -> Int -> [Name] -> [Equation] -> Exp -> Clause
-matchClause c k (u : us) qs def =
-  let exp = match (k' + k)
-                  (us' ++ us)
-                  [ (ps' ++ ps, e) | (ConPat c ps' : ps, e) <- qs ]
-                  def
-  in  Clause c us' exp
- where
-  k'  = arity c
-  us' = [ fresh (i + k) | i <- [1 .. k'] ]
+matchClause :: Con -> [Name] -> [Equation] -> Exp -> NameGen Clause
+matchClause c (u : us) qs def = do
+  us'  <- replicateM (arity c) fresh
+  expr <- match (us' ++ us)
+                [ (ps' ++ ps, e) | (ConPat c ps' : ps, e) <- qs ]
+                def
+  pure $ Clause c us' expr
 
 choose :: Con -> [Equation] -> [Equation]
 choose c qs = filter ((== c) . getCon) qs
