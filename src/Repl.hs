@@ -24,7 +24,6 @@ import           Desugar                        ( desugarModule
 
 import           ELC                            ( translateExpr
                                                 , translateModule
-                                                , eval
                                                 , primConstructors
                                                 )
 import           LC                             ( runConvert

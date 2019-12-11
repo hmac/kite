@@ -257,27 +257,6 @@ translateExpr env k (S.Case scrut alts) =
         alts
       lams = foldl Fatbar (Bottom "pattern match failure") alts'
   in  (k''', Let (VarPat var) scrut' lams)
--- TODO: remove the below when we know the above is OK
--- case (foo bar) of
---   p1 -> e1
---   p2 -> e2
--- ==>
--- (\v1 -> case v1 of
---          p1 -> e1
---          p2 -> e2) (foo bar)
--- translateExpr env k (S.Case scrut alts) =
---   let var         = fresh k
---       (k', alts') = mapAccumL
---         (\j (p, e) ->
---           let (j' , p') = translatePattern env j p
---               (j'', e') = translateExpr env j' e
---           in  (j'', (p', e'))
---         )
---         (k + 1)
---         alts
---       lam           = Abs (VarPat var) (Case var alts')
---       (k'', scrut') = translateExpr env k' scrut
---   in  (k'', App lam scrut')
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
 translateStringLit :: Env -> Int -> String -> [(S.Syn, String)] -> (Int, Exp)
@@ -307,51 +286,6 @@ buildTuple elems = case length elems of
   6 -> Cons tuple6 elems
   n -> error $ "cannot handle tuples of length " <> show n
 
-eval :: Env -> Exp -> Exp
-eval env (App (Abs (ConstPat k) e) a) | eval env a == Const k    = eval env e
-                                      | (Bottom s) <- eval env a = Bottom s
-                                      | otherwise                = Fail
-
-eval env (App (Abs (ConPat c pats) e) (Cons c' args)) = if c == c'
-  then let f = eval env (buildAbs e pats) in eval env (buildApp f args)
-  else Fail
-eval _env (App (Abs (ConPat _ _) _) (Bottom s)) = Bottom s
-eval env (App (Abs (ConPat c pats) e) a) =
-  eval env $ App (Abs (ConPat c pats) e) (eval env a)
-eval env (App (Abs  (VarPat v) e    ) a) = eval env (subst a v e)
-eval env (App (Cons c          args ) e) = Cons c (args ++ [eval env e])
-eval env (App (Const (Prim PrimShow)) a) = primShow (eval env a)
-eval env (App (App (Const (Prim PrimStringAppend)) a) b) =
-  primStringAppend (eval env a) (eval env b)
-eval env (App    a b) = eval env $ App (eval env a) b
-
-eval env (Fatbar a b) = case eval env a of
-  Fail       -> eval env b
-  (Bottom s) -> Bottom s
-  e          -> e
-eval _env (Abs p e) = Abs p e
-eval env  (Var v  ) = case lookup v env of
-  Just e  -> eval env e
-  Nothing -> Bottom $ "unknown variable: " ++ show v
-eval _    (Cons c args    )           = Cons c args
-eval _    (Const c        )           = Const c
--- let v1..vn = e in b ==> (\v1..vn -> b) e
-eval env (Let v bind body) = let lam = Abs v body in eval env (App lam bind)
-eval _env Fail                        = Fail
-eval _env (Bottom s                 ) = Bottom s
-eval env  (Case   n     alts        ) = evalCase env alts (eval env (Var n))
-eval _env (LetRec _alts _body       ) = error "cannot evaluate letrecs"
-eval env  (Project _ i (Cons _ args)) = eval env (args !! i)
-eval env  (Project a i e            ) = eval env (Project a i (eval env e))
-eval env  (Y e                      ) = eval env (App e (Y e))
-
-evalCase :: Env -> [Clause] -> Exp -> Exp
-evalCase _env [] _ = Bottom "case match failure"
-evalCase env (Clause c vars e : alts) (Cons c' args)
-  | c == c'   = let boundVars = zip vars args in eval (boundVars ++ env) e
-  | otherwise = evalCase env alts (Cons c' args)
-evalCase _ _ e = error $ "evalCase: expected constructor but found " <> show e
-
 primShow :: Exp -> Exp
 primShow Fail       = Fail
 primShow (Bottom s) = Bottom s
@@ -364,23 +298,6 @@ primShow e          = Const $ String $ go e
   go (Abs  _ _        ) = "<function>"
   go (Cons c args) = let Name n = name c in n <> " " <> unwords (map go args)
   go _                  = "<unevaluated>"
-
-primStringConcat :: Env -> Exp -> Exp
-primStringConcat env expr = Const (String (go expr))
- where
-  go (Const _) = ""
-  go (App (App _cons (Const (String x))) xs) = x ++ go (eval env xs)
-  go e = error $ "unexpected argument to primStringConcat: " <> show e
-
-primStringAppend :: Exp -> Exp -> Exp
-primStringAppend (Const (String a)) (Const (String b)) =
-  Const (String (a <> b))
-primStringAppend a b =
-  error
-    $  "unexpected arguments to primStringConcat: "
-    <> show a
-    <> "\n\n"
-    <> show b
 
 subst :: Exp -> Name -> Exp -> Exp
 subst _ _ (Const c) = Const c
@@ -399,7 +316,6 @@ subst a n (LetRec alts e)
   | otherwise = LetRec (mapSnd (subst a n) alts) (subst a n e)
 
 subst a n (Fatbar x y) = Fatbar (subst a n x) (subst a n y)
--- TODO: what do we do if the case is scrutinising this variable?
 -- if the case is scrutinising this variable, rebind it with a let and
 -- substitute inside the case.
 subst a n (Case v alts)
