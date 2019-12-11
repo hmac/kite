@@ -214,9 +214,15 @@ translateExpr env k (S.App a b) =
   let (k' , a') = translateExpr env k a
       (k'', b') = translateExpr env k' b
   in  (k'', App a' b')
--- TODO: check/rethink
-translateExpr env k (S.Cons n       ) = (k, Cons (lookupCon n env) [])
-translateExpr _   k (S.Hole (Name n)) = (k, Bottom $ "Hole encountered: " <> n)
+-- We translate a constructor into a series of nested lambda abstractions, one
+-- for each argument to the constructor. When applied, the result is a fully
+-- saturated constructor.
+translateExpr env k (S.Cons n) =
+  let con     = lookupCon n env
+      a       = arity con
+      newVars = map fresh (take a [k ..])
+  in  (k + a, buildAbs (Cons con (map Var newVars)) (map VarPat newVars))
+translateExpr _ k (S.Hole (Name n)) = (k, Bottom $ "Hole encountered: " <> n)
 translateExpr env k (S.Abs vars e) =
   let (k', body) = translateExpr env k e
   in  (k', buildAbs body (map VarPat vars))

@@ -27,6 +27,7 @@ description: |
 
 default-extensions:
 - OverloadedStrings
+- LambdaCase
 
 dependencies:
 - base >= 4.7 && < 5
@@ -53,7 +54,7 @@ library:
   - -Wall
 
 executables:
-  lam-exe:
+  lam:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

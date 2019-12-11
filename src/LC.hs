@@ -20,6 +20,9 @@ data Exp = Const Constant
          | Cons Con [Exp]
          | App Exp Exp
          | Abs Name Exp
+         -- We include simple lets here because it is more efficient to execute
+         -- them directly than to convert them to abstractions.
+         | Let Name Exp Exp
          | Bottom String
          | Fail
          | Fatbar Exp Exp
@@ -31,11 +34,15 @@ data Exp = Const Constant
          -- it, and passes the values inside it as arguments to f
          | UnpackProduct Int Exp Exp
          -- UnpackSum t i f a  expects a to be a sum with tag t, arity i
-         -- it unpacks it and passes the values insite it as arguments to f
+         -- it unpacks it and passes the values inside it as arguments to f
          | UnpackSum Int Int Exp Exp
          | Project Int Int Exp   -- arity of the constructor; index of the field
          -- The Y combinator
          | Y Exp
+         -- CASE-N inspects the tag of the expression (expected to be a sum
+         -- constructor) and selects the corresponding branch.
+         -- CASE-N n (si ...) b1...bn = bi
+         | CaseN Int Exp [Exp]
          deriving (Eq, Show)
 
 type NameGen = State Int
@@ -46,8 +53,11 @@ fresh = do
   put (k + 1)
   pure $ Name $ "$lc" ++ show k
 
-runConvert :: ELC.Exp -> Exp
-runConvert e = evalState (convert e) 0
+runConvert :: NameGen b -> b
+runConvert m = evalState m 0
+
+convertEnv :: ELC.Env -> NameGen [(Name, Exp)]
+convertEnv = mapSndM convert
 
 convert :: ELC.Exp -> NameGen Exp
 convert = go
@@ -83,21 +93,19 @@ convertAbs (ConPat Sum { tag = t, arity = a } pats) e = do
   pure $ Abs f (UnpackSum t a lam (Var f))
 
 convertLet :: Pattern -> ELC.Exp -> ELC.Exp -> NameGen Exp
-convertLet (VarPat n) val body = convertSimpleLet n val body
+convertLet (VarPat n) val body = Let n <$> convert val <*> convert body
 convertLet pat        val body = do
   (pat', val') <- convertRefutableLetBinding (pat, val)
-  simple       <- convertIrrefutableLet pat' val' body
-  let ELC.Let (VarPat n) v e = simple
-  convertSimpleLet n v e
+  (n, v, e)    <- convertIrrefutableLet pat' val' body
+  convertSimpleELCLet n v e
 
 convertLetRec :: [(Pattern, ELC.Exp)] -> ELC.Exp -> NameGen Exp
 convertLetRec alts body = do
   alts'          <- mapM convertRefutableLetBinding alts
   irrefutableLet <- irrefutableLetRec2IrrefutableLet alts' body
   let ELC.Let pat val body' = irrefutableLet
-  simple <- convertIrrefutableLet pat val body'
-  let ELC.Let (VarPat n) v e = simple
-  convertSimpleLet n v e
+  (n, v, e) <- convertIrrefutableLet pat val body'
+  convertSimpleELCLet n v e
 
 --------------------------------------------------------------------------------
 -- Definition: Irrefutable Pattern
@@ -144,15 +152,28 @@ convertSimpleLet v val body = do
   body' <- convert body
   pure $ App (Abs v body') val'
 
+-- Convert a simple ELC let expression to an LC let expression
+convertSimpleELCLet :: Name -> ELC.Exp -> ELC.Exp -> NameGen Exp
+convertSimpleELCLet n v e = Let n <$> convert v <*> convert e
+
 -- Convert an irrefutable let expression to a simple let expression
-convertIrrefutableLet :: Pattern -> ELC.Exp -> ELC.Exp -> NameGen ELC.Exp
+-- TODO: make sure we can't encounter constant patterns here, and try to express
+-- that in the type.
+convertIrrefutableLet
+  :: Pattern -> ELC.Exp -> ELC.Exp -> NameGen (Name, ELC.Exp, ELC.Exp)
 convertIrrefutableLet (ConPat Prod { arity = a } pats) val body = do
   var <- fresh
   let patBinds =
         zipWith (\p i -> (p, ELC.Project a i (ELC.Var var))) pats [0 ..]
-  body' <- foldrM (\(p, v) acc -> convertIrrefutableLet p v acc) body patBinds
-  pure $ ELC.Let (VarPat var) val body'
-convertIrrefutableLet p val body = pure $ ELC.Let p val body
+  body' <- foldrM
+    (\(p, v) acc -> do
+      (n, value, e) <- convertIrrefutableLet p v acc
+      pure $ ELC.Let (VarPat n) value e
+    )
+    body
+    patBinds
+  pure (var, val, body')
+convertIrrefutableLet (VarPat v) val body = pure (v, val, body)
 
 -- Convert an irrefutable letrec expression to a simple letrec expression
 convertIrrefutableLetRec :: [(Pattern, ELC.Exp)] -> ELC.Exp -> NameGen ELC.Exp
@@ -209,4 +230,31 @@ extractPatternVars (ConPat _ pats) = nub $ concatMap extractPatternVars pats
 -- TODO: dependency analysis (§6.2.8)
 
 convertCase :: Name -> [Clause] -> NameGen Exp
-convertCase = undefined
+-- Product types:
+-- case v of         ==> let v1 = PROJECT 1 v
+--   t v1...vn -> E          ...
+--                           vn = PROJECT n v
+--                        in E
+convertCase n [Clause p@Prod{} vars body] =
+  unpackClause (Var n) (Clause p vars body)
+-- Sum types:
+convertCase varName clauses = do
+  let n = length clauses
+  branches <- mapM (unpackClause (Var varName)) clauses
+  pure $ CaseN n (Var varName) branches
+
+unpackClause :: Exp -> Clause -> NameGen Exp
+unpackClause scrut (Clause c vars body) = do
+  body' <- convert body
+  let binds = zipWith (\v i -> Let v (Project (arity c) i scrut)) vars [0 ..]
+  pure $ if null binds then body' else foldl1 (.) binds body'
+
+buildAbs :: Exp -> [Name] -> Exp
+buildAbs = foldr Abs
+
+mapSndM :: Monad m => (b -> m c) -> [(a, b)] -> m [(a, c)]
+mapSndM _ []            = return []
+mapSndM f ((a, b) : xs) = do
+  c  <- f b
+  rs <- mapSndM f xs
+  return ((a, c) : rs)

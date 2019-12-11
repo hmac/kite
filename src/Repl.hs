@@ -27,6 +27,11 @@ import           ELC                            ( translateExpr
                                                 , eval
                                                 , primConstructors
                                                 )
+import           LC                             ( runConvert
+                                                , convertEnv
+                                                , convert
+                                                )
+import qualified EvalLC                         ( eval )
 import           Data.Maybe                     ( fromMaybe )
 import           System.IO                      ( hSetBuffering
                                                 , BufferMode(..)
@@ -62,38 +67,51 @@ processDecl decls =
   in  case tiModule core of
         Left  (Error err) -> putStrLn err >> pure False
         Right _           -> do
-          let evalEnv = translateModule 0 primConstructors m
-          pPrint evalEnv
+          let env =
+                runConvert (convertEnv (translateModule 0 primConstructors m))
+          pPrint env
           pure True
 
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
-  let main = Fun { funComments = []
-                 , funName     = "main"
-                 , funType     = TyHole "replExpression"
-                 , funDefs     = [Def { defArgs = [], defExpr = e }]
-                 }
-      m = Module { moduleName     = ModuleName ["Repl"]
-                 , moduleImports  = []
-                 , moduleExports  = []
-                 , moduleDecls    = decls
-                 , moduleMetadata = []
-                 }
-      modCore              = desugarModule m
-      (env, assumps, prog) = toProgram modCore
-      mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
-      classEnv = fromMaybe (error "failed to construct prelude typeclasses")
-                           (primitiveInsts initialEnv)
-      prog' = prog ++ [mainBindGroup]
-  in  case tiProgram classEnv assumps prog' of
-        Left (Error err) -> putStrLn err
-        Right _ ->
-          let evalEnv = translateModule 0 primConstructors m
-              -- ideally we want to take the updated integer from
-              -- translateModule and pass it into translateExpr but for now we
-              -- fake it by setting the number high
-              answer  = eval evalEnv (snd (translateExpr evalEnv 1000 e))
-          in  pPrint answer
+  let
+    main = Fun { funComments = []
+               , funName     = "main"
+               , funType     = TyHole "replExpression"
+               , funDefs     = [Def { defArgs = [], defExpr = e }]
+               }
+    m = Module { moduleName     = ModuleName ["Repl"]
+               , moduleImports  = []
+               , moduleExports  = []
+               , moduleDecls    = decls
+               , moduleMetadata = []
+               }
+    modCore              = desugarModule m
+    (env, assumps, prog) = toProgram modCore
+    mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
+    classEnv = fromMaybe (error "failed to construct prelude typeclasses")
+                         (primitiveInsts initialEnv)
+    prog' = prog ++ [mainBindGroup]
+  in
+    case tiProgram classEnv assumps prog' of
+      Left (Error err) -> putStrLn err
+      Right _ ->
+        -- TODO: the better way to do this is to bind e as a declaration with
+        -- name $main and then just eval (Var "$main")
+        let
+          elcEnv    = translateModule 0 primConstructors m
+          -- ideally we want to take the updated integer from
+          -- translateModule and pass it into translateExpr but for now we
+          -- fake it by setting the number high
+          (_, elce) = translateExpr elcEnv 1000 e
+          (lce, lcEnv) =
+            runConvert
+              (   convertEnv elcEnv
+              >>= \env -> convert elce >>= \e -> pure (e, env)
+              )
+          answer = EvalLC.eval lcEnv lce
+        in
+          pPrint answer
 
 data Input = Expression Syn | Definition (Decl Syn)
 
