@@ -13,7 +13,7 @@ import ELC (Constant(..), Con(..))
 -- just display the resulting string.
 print :: LC.Exp -> Doc a
 print = \case
-  Const c -> printConstant c
+  Const c _ -> printConstant c
   Var (Name n) -> pretty n
   Cons c args -> let Name n = name c
                   in pretty n <+> hsep (map print args)

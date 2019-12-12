@@ -15,7 +15,7 @@ import           Data.List                      ( nub )
 import           Data.Foldable                  ( foldrM )
 import           Control.Monad.Extra            ( mconcatMapM )
 
-data Exp = Const Constant
+data Exp = Const Constant [Exp]
          | Var Name
          | Cons Con [Exp]
          | App Exp Exp
@@ -63,10 +63,10 @@ convert :: ELC.Exp -> NameGen Exp
 convert = go
  where
   go (ELC.Var n           ) = pure (Var n)
-  go (ELC.Cons c es       ) = Cons c <$> mapM go es
-  go (ELC.Const c         ) = pure (Const c)
-  go (ELC.App a b         ) = App <$> go a <*> go b
-  go (ELC.Abs p e         ) = convertAbs p e
+  go (ELC.Cons  c es      ) = Cons c <$> mapM go es
+  go (ELC.Const c es      ) = Const c <$> mapM go es
+  go (ELC.App   a b       ) = App <$> go a <*> go b
+  go (ELC.Abs   p e       ) = convertAbs p e
   go (ELC.Let pat bind e  ) = convertLet pat bind e
   go (ELC.LetRec alts e   ) = convertLetRec alts e
   go (ELC.Fatbar a    b   ) = Fatbar <$> go a <*> go b
@@ -81,7 +81,7 @@ convertAbs :: Pattern -> ELC.Exp -> NameGen Exp
 convertAbs (ConstPat c) e = do
   e' <- convert e
   v  <- fresh
-  pure $ Abs v (If (Eq (Var v) (Const c)) e' Fail)
+  pure $ Abs v (If (Eq (Var v) (Const c [])) e' Fail)
 convertAbs (VarPat v                      ) e = Abs v <$> convert e
 convertAbs (ConPat Prod { arity = a } pats) e = do
   lam <- convert (ELC.buildAbs e pats)

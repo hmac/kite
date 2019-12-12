@@ -54,6 +54,8 @@ primitiveConstructors =
         , primShow
         , primStringConcat
         , primNumPlus
+        , primNumSub
+        , primNumMult
         , primOrdLt
         ]
 
@@ -288,6 +290,14 @@ primShow :: Assump
 primShow = "$prim_show" :>: Forall [Star] ([] :=> (TGen 0 `fn` tString))
 primNumPlus :: Assump
 primNumPlus = "+" :>: Forall
+  [Star]
+  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
+primNumSub :: Assump
+primNumSub = "-" :>: Forall
+  [Star]
+  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
+primNumMult :: Assump
+primNumMult = "*" :>: Forall
   [Star]
   ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
 primOrdLt :: Assump

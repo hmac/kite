@@ -28,5 +28,9 @@ length : [a] -> Int
 length [] = 0
 length (x :: xs) = 1 + (length xs)
 
+fac : Int -> Int
+fac 0 = 1
+fac n = n * (n - 1)
+
 main : Int
 main = length [True, False]

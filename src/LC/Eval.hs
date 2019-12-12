@@ -1,6 +1,6 @@
 module LC.Eval where
 
-import ELC (Con(..))
+import ELC (Con(..), Constant(..), Primitive(..))
 import           LC
 import           Syntax                         ( Name(..) )
 
@@ -14,7 +14,7 @@ evalVar n env = eval env (Var n)
 
 eval :: Env -> Exp -> Exp
 eval env = \case
-  Const c -> Const c
+  Const c es -> evalConst env c es
   Var n -> case lookup n env of
              Just e -> eval env e
              Nothing -> error $ "unknown variable: " <> show n
@@ -53,8 +53,32 @@ eval env = \case
   CaseN _ (Cons Sum { tag = t } _) branches -> eval env (branches !! t)
   CaseN n e branches -> eval env $ CaseN n (eval env e) branches
 
+evalConst :: Env -> Constant -> [Exp] -> Exp
+evalConst env (Prim f) args = evalPrim f args
+evalConst _ c es = Const c es
+
+evalPrim :: Primitive -> [Exp] -> Exp
+evalPrim PrimStringAppend [Const (String a) _, Const (String b) _] = Const (String (a <> b)) []
+evalPrim PrimShow [e] = primShow e
+evalPrim PrimAdd [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
+evalPrim PrimSub [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
+evalPrim PrimMult [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
+
+primShow :: Exp -> Exp
+primShow Fail       = Fail
+primShow (Bottom s) = Bottom s
+primShow e          = Const (String (go e)) []
+ where
+  go (Const (Int    i) _   ) = show i
+  go (Const (Float  f) _   ) = show f
+  go (Const (String s) _   ) = s
+  go (Const (Prim   _) _   ) = "<builtin>"
+  go (Abs   _          _   ) = "<function>"
+  go (Cons c args) = let Name n = name c in n <> " " <> unwords (map go args)
+  go _                       = "<unevaluated>"
+
 subst :: Exp -> Name -> Exp -> Exp
-subst _ _ (Const c) = Const c
+subst a n (Const c es) = Const c (map (subst a n) es)
 subst a n (Var m) | n == m    = a
                   | otherwise = Var m
 subst a n (Cons c es) = Cons c (map (subst a n) es)

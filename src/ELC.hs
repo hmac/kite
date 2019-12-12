@@ -9,6 +9,7 @@ import           Data.List.Extra                ( groupOn )
 import           Data.Foldable                  ( foldlM
                                                 , foldrM
                                                 )
+import           Data.Semigroup.Foldable        ( foldrM1 )
 import           Data.List                      ( partition )
 import           Syntax                         ( Syn
                                                 , Name(..)
@@ -18,7 +19,7 @@ import           Syntax                         ( Syn
                                                 )
 import qualified Syntax                        as S
 
-data Exp = Const Constant
+data Exp = Const Constant [Exp]
          | Var Name
          | Cons Con [Exp]
          | App Exp Exp
@@ -93,9 +94,11 @@ data Constant = Int Int
              | Prim Primitive
          deriving (Show, Eq)
 
-data Primitive = PrimStringConcat
-               | PrimShow
+data Primitive = PrimShow
                | PrimStringAppend
+               | PrimAdd
+               | PrimSub
+               | PrimMult
          deriving (Show, Eq)
 
 type Env = [(Name, Exp)]
@@ -199,8 +202,8 @@ buildTuplePat elems = case length elems of
   n -> error $ "cannot handle tuples of length " <> show n
 
 translateExpr :: Env -> Syn -> NameGen Exp
-translateExpr _   (S.IntLit   i       ) = pure (Const (Int i))
-translateExpr _   (S.FloatLit i       ) = pure (Const (Float i))
+translateExpr _   (S.IntLit   i       ) = pure (Const (Int i) [])
+translateExpr _   (S.FloatLit i       ) = pure (Const (Float i) [])
 translateExpr env (S.StringLit s parts) = translateStringLit env s parts
 translateExpr env (S.ListLit elems    ) = do
   elems' <- mapM (translateExpr env) elems
@@ -208,6 +211,12 @@ translateExpr env (S.ListLit elems    ) = do
 translateExpr env (S.TupleLit elems) = do
   elems' <- mapM (translateExpr env) elems
   pure (buildTuple elems')
+-- TODO: what's a better way to handle this?
+-- possible have a Prelude module which puts these variables in scope, bound to
+-- "$prim$Num$add" or something?
+translateExpr _   (S.Var "+") = binaryPrim PrimAdd
+translateExpr _   (S.Var "*") = binaryPrim PrimMult
+translateExpr _   (S.Var "-") = binaryPrim PrimSub
 translateExpr _   (S.Var n  ) = pure (Var n)
 translateExpr env (S.App a b) = do
   a' <- translateExpr env a
@@ -258,14 +267,29 @@ translateExpr env (S.Case scrut alts) = do
 translateStringLit :: Env -> String -> [(S.Syn, String)] -> NameGen Exp
 translateStringLit env prefix parts = do
   rest <- go parts
-  pure $ foldr1 (\x acc -> App (App (Const (Prim PrimStringAppend)) x) acc)
-                (Const (String prefix) : rest)
+  foldrM
+    (\x acc -> do
+      f <- stringAppendFn
+      pure $ App (App f x) acc
+    )
+    (Const (String "") [])
+    (Const (String prefix) [] : rest)
  where
+  stringAppendFn = do
+    l <- fresh
+    r <- fresh
+    pure $ Abs (VarPat l)
+               (Abs (VarPat r) (Const (Prim PrimStringAppend) [Var l, Var r]))
+  showFn = do
+    v <- fresh
+    pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
+  go :: [(S.Syn, String)] -> NameGen [Exp]
   go []            = pure []
   go ((e, s) : is) = do
     e'   <- translateExpr env e
     rest <- go is
-    pure $ App (Const (Prim PrimShow)) e' : Const (String s) : rest
+    show <- showFn
+    pure $ App show e' : Const (String s) [] : rest
 
 -- here we follow the same scheme as with normal constructors
 buildList :: [Exp] -> NameGen Exp
@@ -291,21 +315,14 @@ buildTuple elems = case length elems of
   6 -> Cons tuple6 elems
   n -> error $ "cannot handle tuples of length " <> show n
 
-primShow :: Exp -> Exp
-primShow Fail       = Fail
-primShow (Bottom s) = Bottom s
-primShow e          = Const $ String $ go e
- where
-  go (Const (Int    i)) = show i
-  go (Const (Float  f)) = show f
-  go (Const (String s)) = s
-  go (Const (Prim   _)) = "<builtin>"
-  go (Abs  _ _        ) = "<function>"
-  go (Cons c args) = let Name n = name c in n <> " " <> unwords (map go args)
-  go _                  = "<unevaluated>"
+binaryPrim :: Primitive -> NameGen Exp
+binaryPrim p = do
+  v1 <- fresh
+  v2 <- fresh
+  pure $ Abs (VarPat v1) (Abs (VarPat v2) (Const (Prim p) [Var v1, Var v2]))
 
 subst :: Exp -> Name -> Exp -> Exp
-subst _ _ (Const c) = Const c
+subst a n (Const c es) = Const c (map (subst a n) es)
 subst a n (Var m) | n == m    = a
                   | otherwise = Var m
 subst a n (Cons c es) = Cons c (map (subst a n) es)
