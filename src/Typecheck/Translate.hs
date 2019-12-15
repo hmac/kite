@@ -1,4 +1,4 @@
-module Translate where
+module Typecheck.Translate where
 
 -- Convert types in Syntax to types in THIH
 
@@ -9,16 +9,20 @@ import           Data.Maybe                     ( mapMaybe
                                                 , fromMaybe
                                                 )
 import qualified Syntax                        as S
-import           THIH
-import           Desugar                        ( Core )
-import qualified Desugar                       as D
+import           Typecheck.THIH
+import           Typecheck.Desugar              ( Core )
+import qualified Typecheck.Desugar             as D
 
 tiModule :: S.Module Core -> Either Error [Assump]
 tiModule m =
-  let (_, assumps, p) = toProgram m
+  let (_, assumps, p) = toProgram mempty m
       classEnv = fromMaybe (error "failed to construct prelude typeclasses")
                            (primitiveInsts initialEnv)
   in  tiProgram classEnv assumps p
+
+defaultClassEnv :: ClassEnv
+defaultClassEnv = fromMaybe (error "failed to construct prelude typeclasses")
+                            (primitiveInsts initialEnv)
 
 --          type cons     data cons
 type Env = ([(Id, Type)], [(Id, Scheme)])
@@ -29,13 +33,16 @@ lookupTyCon n (tycons, _) = lookup n tycons
 lookupDataCon :: Id -> Env -> Maybe Scheme
 lookupDataCon n (_, datacons) = lookup n datacons
 
-toProgram :: S.Module Core -> (Env, [Assump], Program)
-toProgram m =
+mergeEnv :: Env -> Env -> Env
+mergeEnv (a, b) (c, d) = (a <> c, b <> d)
+
+toProgram :: Env -> S.Module Core -> (Env, [Assump], Program)
+toProgram env m =
   let tycons   = primitiveTypeConstructors ++ typeConstructors m
       datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
       assumps  = map (uncurry (:>:)) datacons
-      env      = (tycons, datacons)
-  in  (env, assumps, mapMaybe (toBindGroup env) (S.moduleDecls m))
+      env'     = mergeEnv (tycons, datacons) env
+  in  (env', assumps, mapMaybe (toBindGroup env') (S.moduleDecls m))
 
 primitiveTypeConstructors :: [(Id, Type)]
 primitiveTypeConstructors =

@@ -1,0 +1,9 @@
+module B
+
+import C (c)
+
+defaultBar : Int
+defaultBar = c
+
+otherBar : Int
+otherBar = 2

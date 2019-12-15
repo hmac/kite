@@ -4,7 +4,7 @@ module PrintTest
 where
 
 import           Test.Hspec
-import Print
+import Syn.Print
 import           Syntax
 import Data.Maybe (fromMaybe)
 import Data.Text.Prettyprint.Doc (Doc)

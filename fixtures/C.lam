@@ -1,0 +1,7 @@
+module C
+
+c : Int
+c = 5
+
+a : String
+a = "apples"

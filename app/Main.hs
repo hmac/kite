@@ -1,22 +1,26 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Main where
 
-import           Parse
-import           Print
+import           Syn.Parse
+import           Syn.Print
 
 import           Text.Pretty.Simple             ( pPrint )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 
-import           Desugar                        ( desugarModule )
-import           Translate                      ( tiModule )
-import           THIH                           ( Error(..) )
-import qualified Repl                           ( run )
-import           ELC                            ( translateModule
-                                                , primConstructors
+import qualified ModuleLoader
+import           ModuleGraphTypechecker         ( typecheckModule )
+import           ModuleGraphCompiler            ( compileModule
+                                                , CompiledModule(..)
                                                 )
-import           LC                             ( runConvert
+
+import           Typecheck.Desugar              ( desugarModule )
+import           Typecheck.Translate            ( tiModule )
+import           Typecheck.THIH                 ( Error(..) )
+import qualified Repl                           ( run )
+import qualified ELC.Compile                   as ELC
+import           LC.Compile                     ( runConvert
                                                 , convertEnv
                                                 )
 import qualified LC.Print                       ( print )
@@ -24,6 +28,7 @@ import           LC.Eval                        ( evalMain )
 import           Syntax                         ( Module
                                                 , Syn
                                                 )
+import qualified Canonicalise                  as Can
 import           Options.Generic
 
 data Config =
@@ -57,12 +62,12 @@ dumpParse path = do
     Right m -> pPrint m
 
 dumpELC :: FilePath -> IO ()
-dumpELC = withParsedFile
-  $ \m -> pPrint $ runConvert (translateModule primConstructors m)
+dumpELC = withParsedFile $ \m -> pPrint
+  $ runConvert (ELC.translateModule ELC.defaultEnv (Can.canonicaliseModule m))
 
 dumpLC :: FilePath -> IO ()
-dumpLC = withParsedFile $ \m ->
-  pPrint $ runConvert (translateModule primConstructors m >>= convertEnv)
+dumpLC = withParsedFile $ \m -> pPrint $ runConvert
+  (ELC.translateModule ELC.defaultEnv (Can.canonicaliseModule m) >>= convertEnv)
 
 typecheck :: FilePath -> IO ()
 typecheck = withParsedFile $ \m -> case tiModule (desugarModule m) of
@@ -70,12 +75,16 @@ typecheck = withParsedFile $ \m -> case tiModule (desugarModule m) of
   Right _           -> putStrLn "Success."
 
 run :: FilePath -> IO ()
-run = withParsedFile $ \m -> case tiModule (desugarModule m) of
-  Left  (Error err) -> putStrLn err
-  Right _           -> do
-    let env = runConvert (translateModule primConstructors m >>= convertEnv)
-    let answer = evalMain env
-    renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
+run path = do
+  mod <- ModuleLoader.loadFromPath path
+  case mod of
+    Left  err -> putStrLn err
+    Right l   -> case typecheckModule l of
+      Left err -> putStrLn err
+      Right _ ->
+        let cm     = compileModule l
+            answer = evalMain (cModuleName cm) (cModuleEnv cm)
+        in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
 
 withParsedFile :: (Module Syn -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do

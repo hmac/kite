@@ -9,8 +9,8 @@ import           Test.Hspec
 import           Text.Megaparsec                ( parse )
 
 import           Syntax
-import           Parse
-import           Print
+import           Syn.Parse
+import           Syn.Print
 
 import           Data.Text.Prettyprint.Doc      ( Doc )
 import qualified Hedgehog                      as H

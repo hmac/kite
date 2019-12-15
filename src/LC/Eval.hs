@@ -1,13 +1,12 @@
 module LC.Eval where
 
+import Data.Name
 import ELC (Con(..), Constant(..), Primitive(..))
 import           LC
-import           Syntax                         ( Name(..) )
+import Canonical (Name(..))
 
-type Env = [(Name, Exp)]
-
-evalMain :: Env -> Exp
-evalMain = evalVar "main"
+evalMain :: ModuleName -> Env -> Exp
+evalMain mn env = evalVar (TopLevel mn "main") env
 
 evalVar :: Name -> Env -> Exp
 evalVar n env = eval env (Var n)
@@ -54,7 +53,7 @@ eval env = \case
   CaseN n e branches -> eval env $ CaseN n (eval env e) branches
 
 evalConst :: Env -> Constant -> [Exp] -> Exp
-evalConst env (Prim f) args = evalPrim f args
+evalConst _ (Prim f) args = evalPrim f args
 evalConst _ c es = Const c es
 
 evalPrim :: Primitive -> [Exp] -> Exp
@@ -74,7 +73,7 @@ primShow e          = Const (String (go e)) []
   go (Const (String s) _   ) = s
   go (Const (Prim   _) _   ) = "<builtin>"
   go (Abs   _          _   ) = "<function>"
-  go (Cons c args) = let Name n = name c in n <> " " <> unwords (map go args)
+  go (Cons c args) = let TopLevel _ (Name n) = name c in n <> " " <> unwords (map go args)
   go _                       = "<unevaluated>"
 
 subst :: Exp -> Name -> Exp -> Exp

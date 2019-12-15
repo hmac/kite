@@ -1,6 +1,5 @@
 module Repl where
 
-import           Text.Pretty.Simple             ( pPrint )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout
@@ -8,35 +7,37 @@ import           System.IO                      ( stdout
                                                 , BufferMode(..)
                                                 )
 import           Data.Maybe                     ( fromMaybe )
-import           Parse                          ( pExpr
+import           Syn.Parse                      ( pExpr
                                                 , pDecl
                                                 )
 import           Text.Megaparsec                ( parse
                                                 , errorBundlePretty
                                                 , (<|>)
                                                 )
-import           THIH                           ( initialEnv
+import           Typecheck.THIH                 ( initialEnv
                                                 , Error(..)
                                                 , tiProgram
                                                 )
-import           Translate                      ( primitiveInsts
+import           Typecheck.Translate            ( primitiveInsts
                                                 , tiModule
                                                 , toProgram
                                                 , funToImpl
                                                 )
-import           Desugar                        ( desugarModule
+import           Typecheck.Desugar              ( desugarModule
                                                 , desugarFun
                                                 )
 
-import           ELC                            ( translateModule
-                                                , primConstructors
+import           ELC.Compile                    ( translateModule
+                                                , defaultEnv
                                                 )
-import           LC                             ( runConvert
+import           LC.Compile                     ( runConvert
                                                 , convertEnv
                                                 )
 import qualified LC.Eval                        ( evalVar )
 import qualified LC.Print                       ( print )
 import           Syntax
+import qualified Canonicalise                  as Can
+import           Canonical                      ( Name(..) )
 
 run :: IO ()
 run = do
@@ -45,6 +46,7 @@ run = do
 
 repl :: [Decl Syn] -> IO ()
 repl env = do
+  putStrLn "Welcome to the Lam REPL."
   input <- parseInput
   case input of
     Definition decl -> do
@@ -76,7 +78,7 @@ processExpr decls e =
                }
     m                    = buildModule decls
     modCore              = desugarModule m
-    (env, assumps, prog) = toProgram modCore
+    (env, assumps, prog) = toProgram mempty modCore
     mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
     classEnv = fromMaybe (error "failed to construct prelude typeclasses")
                          (primitiveInsts initialEnv)
@@ -85,9 +87,13 @@ processExpr decls e =
     case tiProgram classEnv assumps prog' of
       Left  (Error err) -> putStrLn err
       Right _           -> do
-        let m' = m { moduleDecls = FunDecl main : moduleDecls m }
-        let answer = LC.Eval.evalVar "$main" $ runConvert
-              (translateModule primConstructors m' >>= convertEnv)
+        let
+          m' = Can.canonicaliseModule m
+            { moduleDecls = FunDecl main : moduleDecls m
+            }
+        let answer =
+              LC.Eval.evalVar (TopLevel (moduleName m') "$main") $ runConvert
+                (translateModule ELC.Compile.defaultEnv m' >>= convertEnv)
         renderIO stdout
                  (layoutPretty defaultLayoutOptions (LC.Print.print answer))
         putStrLn ""

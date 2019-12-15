@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Desugar where
+module Typecheck.Desugar where
 
 -- This module translates the surface syntax (Syn) to a smaller core syntax.
 -- This is mainly to make it easier to infer and check types.
@@ -9,12 +9,10 @@ module Desugar where
 -- - convert case expressions to inline function definitions
 -- - convert lambda abstractions to let bindings
 
-import           Data.Bifunctor                 ( second
-                                                , first
-                                                )
+import           Util
 import           GHC.Generics                   ( Generic )
 import qualified Syntax                        as S
-import           Syntax                         ( Name(..)
+import           Syntax                         ( Name
                                                 , Syn
                                                 , Pattern
                                                 )
@@ -104,9 +102,3 @@ desugarCase scrut alts =
   let freshName = "$f"
       pats      = map (\(pat, a) -> ([pat], desugarExpr a)) alts
   in  Let [(freshName, pats)] (App (Var freshName) (desugarExpr scrut))
-
-mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
-mapSnd = map . second
-
-mapFst :: (a -> c) -> [(a, b)] -> [(c, b)]
-mapFst = map . first

@@ -1,4 +1,4 @@
-module Parse where
+module Syn.Parse where
 
 import           Data.List                      ( groupBy )
 import           Data.Maybe                     ( isJust
@@ -16,6 +16,7 @@ import           Syntax
 
 type Parser = Parsec Void String
 
+-- TODO: importing types and constructors
 -- TODO: markdown in comments & doctests
 -- TODO: escape quote chars in string literals
 -- TOOD: heredocs

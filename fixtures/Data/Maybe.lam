@@ -1,7 +1,8 @@
 module Maybe
 
+import Data.Bool
+
 data Maybe a = Just a | Nothing
-data Bool = True | False
 
 fromMaybe : a -> Maybe a -> a
 fromMaybe def (Just x) = x

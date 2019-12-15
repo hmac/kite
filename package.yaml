@@ -37,9 +37,8 @@ dependencies:
 - prettyprinter
 - prettyprinter-ansi-terminal
 - pretty-simple
-- unordered-containers
+- containers
 - transformers
-- hashable
 - mtl
 - optparse-generic
 - semigroupoids

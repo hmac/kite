@@ -1,0 +1,17 @@
+module A
+
+import B (defaultBar)
+
+a : Int
+a = defaultBar
+
+x : Int -> Int
+x otherBar = otherBar
+
+fac : Int -> Int
+fac n = case n of
+          0 -> 1
+          n -> n * (fac (n - 1))
+
+main : Int
+main = fac a

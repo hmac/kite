@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-module THIH where
+module Typecheck.THIH where
 
 -- This module is taken from Typing Haskell in Haskell by Mark P Jones (Haskell
 -- Workshop Vol 7, 1999).

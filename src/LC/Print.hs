@@ -4,7 +4,8 @@ import Prelude hiding (print)
 import           Data.Text.Prettyprint.Doc
 
 import           LC
-import Syntax (Name(..))
+import Data.Name
+import Canonical (Name(..))
 import ELC (Constant(..), Con(..))
 
 
@@ -14,9 +15,9 @@ import ELC (Constant(..), Con(..))
 print :: LC.Exp -> Doc a
 print = \case
   Const c _ -> printConstant c
-  Var (Name n) -> pretty n
-  Cons c args -> let Name n = name c
-                  in pretty n <+> hsep (map print args)
+  Var n -> printName n
+  Cons c args -> let n = name c
+                  in printName n <+> hsep (map print args)
   Bottom s -> "error:" <+> pretty s
   App _ _ -> "<unevaluated application>"
   Abs _ _ -> "<function>"
@@ -30,3 +31,8 @@ printConstant = \case
   String s -> "\"" <> pretty s <> "\""
   Float f -> pretty f
   Prim _ -> "<builtin>"
+
+printName :: Name -> Doc a
+printName (Local (Name n)) = pretty n
+printName (TopLevel (ModuleName parts) (Name n)) =
+  hcat $ punctuate "." (map pretty (parts ++ [n]))

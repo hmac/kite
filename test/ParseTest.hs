@@ -6,7 +6,7 @@ where
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
 import           Text.Megaparsec                ( parse )
-import           Parse                          ( pModule
+import           Syn.Parse                      ( pModule
                                                 , pDecl
                                                 , pExpr
                                                 , pType

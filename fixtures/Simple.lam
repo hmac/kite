@@ -5,8 +5,7 @@ tag: fixture
 module Simple (fun1, fun2)
 
 
-import Data.Maybe (fromMaybe, f, g, h, i)
-import qualified Text.Megaparsec.Char.Lexer as L
+import Data.Maybe
 
 
 data AVeryLongType = AVeryLongType
@@ -16,9 +15,6 @@ data AVeryLongType = AVeryLongType
 someTuple : (AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType, AVeryLongType)
 
 -- some comments
-
-data Maybe a = Nothing
-             | Just a
 
 data Pair a b = MkPair a b
 

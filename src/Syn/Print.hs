@@ -1,4 +1,4 @@
-module Print where
+module Syn.Print where
 
 import           Data.Maybe                     ( catMaybes )
 import           Data.List                      ( intersperse )
