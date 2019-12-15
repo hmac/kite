@@ -67,10 +67,11 @@ processDecl decls =
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
   let
-    main = Fun { funComments = []
-               , funName     = "$main"
-               , funType     = TyHole "replExpression"
-               , funDefs     = [Def { defArgs = [], defExpr = e }]
+    main = Fun { funComments   = []
+               , funName       = "$main"
+               , funType       = TyHole "replExpression"
+               , funConstraint = Nothing
+               , funDefs       = [Def { defArgs = [], defExpr = e }]
                }
     m                    = buildModule decls
     modCore              = desugarModule m

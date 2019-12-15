@@ -20,31 +20,34 @@ test = do
   describe "declarations" $ do
     it "parses a basic function definition" $ do
       parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl
-        Fun { funComments = ["a comment"]
-            , funName     = "id"
-            , funType     = TyVar "a" `fn` TyVar "a"
-            , funDefs     = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
+        Fun { funComments   = ["a comment"]
+            , funName       = "id"
+            , funType       = TyVar "a" `fn` TyVar "a"
+            , funConstraint = Nothing
+            , funDefs = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
             }
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
         Fun
-          { funComments = []
-          , funName     = "const"
-          , funType     = TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
-          , funDefs     = [ Def { defArgs = [VarPat "x", VarPat "y"]
-                                , defExpr = Var "x"
-                                }
-                          ]
+          { funComments   = []
+          , funName       = "const"
+          , funType       = TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
+          , funConstraint = Nothing
+          , funDefs       = [ Def { defArgs = [VarPat "x", VarPat "y"]
+                                  , defExpr = Var "x"
+                                  }
+                            ]
           }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap f m = undefined"
         `shouldParse` FunDecl Fun
-                        { funComments = []
-                        , funName     = "map"
-                        , funType     = (TyVar "a" `fn` TyVar "b")
-                                        `fn` ((TyVar "f") :@: (TyVar "a"))
-                                        `fn` ((TyVar "f") :@: (TyVar "b"))
+                        { funComments   = []
+                        , funName       = "map"
+                        , funType       = (TyVar "a" `fn` TyVar "b")
+                                          `fn` ((TyVar "f") :@: (TyVar "a"))
+                                          `fn` ((TyVar "f") :@: (TyVar "b"))
+                        , funConstraint = Nothing
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
@@ -56,10 +59,11 @@ test = do
           ""
           "head : [a] -> a\nhead [] = error \"head: empty list\"\nhead (Cons x xs) = x"
         `shouldParse` FunDecl Fun
-                        { funComments = []
-                        , funName     = "head"
-                        , funType     = TyList (TyVar "a") `fn` TyVar "a"
-                        , funDefs     =
+                        { funComments   = []
+                        , funName       = "head"
+                        , funType       = TyList (TyVar "a") `fn` TyVar "a"
+                        , funConstraint = Nothing
+                        , funDefs       =
                           [ Def
                             { defArgs = [ListPat []]
                             , defExpr = App (Var "error")
@@ -73,6 +77,19 @@ test = do
                             }
                           ]
                         }
+    it "parses a function with typeclass constraints" $ do
+      parse pDecl "" "concat : Monoid a => [a] -> a\nconcat [] = empty"
+        `shouldParse` FunDecl Fun
+                        { funComments   = []
+                        , funName       = "concat"
+                        , funType       = TyList (TyVar "a") `fn` TyVar "a"
+                        , funConstraint = Just (CInst "Monoid" [TyVar "a"])
+                        , funDefs       = [ Def { defArgs = [ListPat []]
+                                                , defExpr = Var "empty"
+                                                }
+                                          ]
+                        }
+
     it "parses a simple data definition" $ do
       parse pDecl "" "data Unit = Unit" `shouldParse` DataDecl Data
         { dataName   = "Unit"
@@ -139,13 +156,14 @@ test = do
                         , moduleExports  = []
                         , moduleDecls    =
                           [ FunDecl Fun
-                              { funName     = "one"
-                              , funComments = []
-                              , funType     = TyCon "Int"
-                              , funDefs     = [ Def { defArgs = []
-                                                    , defExpr = IntLit 1
-                                                    }
-                                              ]
+                              { funName       = "one"
+                              , funComments   = []
+                              , funType       = TyCon "Int"
+                              , funConstraint = Nothing
+                              , funDefs       = [ Def { defArgs = []
+                                                      , defExpr = IntLit 1
+                                                      }
+                                                ]
                               }
                           ]
                         , moduleMetadata = [("key", "val")]

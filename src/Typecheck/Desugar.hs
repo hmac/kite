@@ -1,11 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Typecheck.Desugar where
 
--- This module translates the surface syntax (Syn) to a smaller core syntax.
--- This is mainly to make it easier to infer and check types.
+-- This module translates the surface syntax (Syn) to a smaller core syntax used
+-- for typechecking.
 --
 -- We perform the following translations:
--- - convert interpolated string to applications of `show` and `concat`
+-- - convert interpolated strings to applications of `show` and `concat`
 -- - convert case expressions to inline function definitions
 -- - convert lambda abstractions to let bindings
 

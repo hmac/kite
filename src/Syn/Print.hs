@@ -91,13 +91,21 @@ printDecl (TypeclassDecl t) = printTypeclass t
 printDecl (TypeclassInst i) = printInstance i
 
 printFun :: Fun Syn -> Document
-printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty }
+printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty, funConstraint = constraint }
   = vsep $ printComments comments ++ [sig] ++ map (printDef name) defs
  where
-  sig = printName name <> align (space <> colon <+> printType ty)
+  sig = case constraint of
+    Just c -> printName name <> align
+      (space <> colon <+> printConstraint c <+> "=>" <+> printType ty)
+    Nothing -> printName name <> align (space <> colon <+> printType ty)
   printComments [] = []
   printComments cs = map printComment cs
 
+-- TODO: properly print 3+ element constraint tuples
+printConstraint :: Constraint -> Document
+printConstraint (CInst tyclass vars) =
+  printName tyclass <+> hsep (map printType vars)
+printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
 -- a -> b
 -- f a -> f b
 -- a -> b -> c

@@ -7,6 +7,10 @@ length : [a] -> Int
 length [] = 0
 length (x :: xs) = 1 + (length xs)
 
+concat : Monoid a => [a] -> a
+concat [] = empty
+concat (x :: xs) = append x (concat xs)
+
 -- The pattern matching compiler can't (yet) handle constants in patterns
 -- fac : Int -> Int
 -- fac 0 = 1

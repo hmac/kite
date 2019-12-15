@@ -47,7 +47,11 @@ canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f =
   f { Syn.funName = TopLevel mod (Syn.funName f)
     , Syn.funDefs = fmap (canonicaliseDef (mod, imps)) (Syn.funDefs f)
+    , Syn.funConstraint = canonicaliseConstraint (mod, imps) <$> (Syn.funConstraint f)
     }
+
+canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
+canonicaliseConstraint env c = undefined
 
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d =

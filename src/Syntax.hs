@@ -54,9 +54,18 @@ type Fun exp = Fun_ Name exp
 data Fun_ name exp = Fun { funComments :: [String]
                          , funName :: name
                          , funType :: Ty
+                         , funConstraint :: Maybe (Constraint_ name)
                          , funDefs :: [Def_ name exp]
                          }
                          deriving (Eq, Show)
+
+-- Typeclass constaints
+-- Monoid a => ...
+-- (Applicative a, Alternative b) => ...
+type Constraint = Constraint_ Name
+data Constraint_ name = CInst name [Ty_ name]
+                | CTuple (Constraint_ name) (Constraint_ name)
+                deriving (Show, Eq)
 
 type Data = Data_ Name
 data Data_ name = Data { dataName :: name

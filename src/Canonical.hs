@@ -23,6 +23,7 @@ type Typeclass = Typeclass_ Name
 type Data = Data_ Name
 type Def = Def_ Name
 type Fun = Fun_ Name
+type Constraint = Constraint_ Name
 type Decl = Decl_ Name
 type Import = Import_ Name
 type Module = Module_ Name

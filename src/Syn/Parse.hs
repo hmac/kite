@@ -111,15 +111,31 @@ pData = do
 -- definitions
 pFun :: Parser (Fun Syn)
 pFun = do
-  comments   <- many pComment
-  name       <- lowercaseName <?> "declaration type name"
-  annotation <- symbol ":" >> lexemeN pType
-  defs       <- many (lexemeN (pDef name))
-  pure Fun { funComments = comments
-           , funName     = name
-           , funType     = annotation
-           , funDefs     = defs
+  comments         <- many pComment
+  name             <- lowercaseName <?> "declaration type name"
+  (constraint, ty) <- symbol ":" >> lexemeN pFunSig
+  defs             <- many (lexemeN (pDef name))
+  pure Fun { funComments   = comments
+           , funName       = name
+           , funType       = ty
+           , funConstraint = constraint
+           , funDefs       = defs
            }
+
+-- Monoid a => [a] -> a
+pFunSig :: Parser (Maybe Constraint, Ty)
+pFunSig = do
+  constraint <- optional (try pConstraint <* lexeme "=>")
+  ty         <- pType
+  pure (constraint, ty)
+
+pConstraint :: Parser Constraint
+pConstraint =
+  let one   = CInst <$> uppercaseName <*> (map TyVar <$> some lowercaseName)
+      multi = do
+        cs <- parens (pConstraint `sepBy2` comma)
+        pure (foldl1 CTuple cs)
+  in  one <|> multi
 
 -- TODO: currently we require at least one typeclass method
 -- and no newlines between the class line and the first method
@@ -128,8 +144,7 @@ pTypeclass = do
   void (symbol "class")
   name   <- uppercaseName
   tyvars <- some lowercaseName
-  void (symbol "where")
-  void (many newline)
+  void (symbol "where" >> some newline)
   indentation <- some (char ' ')
   first       <- pTypeclassDef
   rest        <- many (string indentation >> pTypeclassDef)
@@ -150,8 +165,7 @@ pInstance = do
   void (symbol "instance")
   name  <- uppercaseName
   types <- many pType
-  void (symbol "where")
-  void (many newline)
+  void (symbol "where" >> some newline)
   indentation <- some (char ' ')
   first       <- pDef'
   rest        <- many (try (newline >> string indentation) >> pDef')

@@ -12,6 +12,7 @@ import           Syntax
 import           Syn.Parse
 import           Syn.Print
 
+import           Control.Applicative            ( liftA2 )
 import           Data.Text.Prettyprint.Doc      ( Doc )
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
@@ -137,7 +138,19 @@ genFun =
     <$> Gen.list (Range.linear 0 5) genComment
     <*> genLowerName
     <*> genType
+    <*> genConstraint
     <*> Gen.list (Range.linear 1 5) genDef
+
+genConstraint :: H.Gen (Maybe Constraint)
+genConstraint = Gen.recursive
+  Gen.choice
+  [ Just
+      <$> (   CInst
+          <$> genUpperName
+          <*> (map TyVar <$> Gen.list (Range.linear 1 1) genLowerName)
+          )
+  ]
+  [Gen.subterm2 genConstraint genConstraint (liftA2 CTuple)]
 
 genType :: H.Gen Ty
 genType = Gen.recursive
