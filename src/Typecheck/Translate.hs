@@ -14,15 +14,15 @@ import           Typecheck.Desugar              ( Core )
 import qualified Typecheck.Desugar             as D
 
 tiModule :: S.Module Core -> Either Error [Assump]
-tiModule m =
+tiModule m = do
   let (_, assumps, p) = toProgram mempty m
-      classEnv = fromMaybe (error "failed to construct prelude typeclasses")
-                           (primitiveInsts initialEnv)
-  in  tiProgram classEnv assumps p
+  classEnv <- primitiveInsts initialEnv
+  tiProgram classEnv assumps p
 
 defaultClassEnv :: ClassEnv
-defaultClassEnv = fromMaybe (error "failed to construct prelude typeclasses")
-                            (primitiveInsts initialEnv)
+defaultClassEnv = case primitiveInsts initialEnv of
+  Left  e -> error $ "failed to construct prelude typeclasses: " <> show e
+  Right c -> c
 
 --          type cons     data cons
 type Env = ([(Id, Type)], [(Id, Scheme)])

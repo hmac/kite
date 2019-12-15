@@ -1,6 +1,6 @@
-module Maybe
+module Data.Maybe
 
-import Data.Bool
+import Data.Bool (Bool, True, False)
 
 data Maybe a = Just a | Nothing
 

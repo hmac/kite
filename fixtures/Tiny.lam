@@ -1,15 +1,7 @@
 module Tiny
 
-import Data.Maybe
-import Data.Bool
-
-bindMaybe : Maybe a -> (a -> Maybe b) -> Maybe b
-bindMaybe Nothing _ = Nothing
-bindMaybe (Just x) f = f x
-
-head : [a] -> Maybe a
-head [] = Nothing
-head (x :: _) = Just x
+import Data.Maybe (Maybe, Just, Nothing)
+import Data.Bool (Bool, True, False, not)
 
 length : [a] -> Int
 length [] = 0
@@ -24,5 +16,5 @@ fac n = case n of
           0 -> 1
           n -> n * (fac (n - 1))
 
-main : Int
-main = fac 30
+main : Bool
+main = not True

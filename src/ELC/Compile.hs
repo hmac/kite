@@ -2,6 +2,7 @@ module ELC.Compile where
 
 -- Compile Can.Exp to ELC.Exp
 
+import           Util
 import           Control.Applicative            ( (<|>) )
 import           Control.Monad.State.Strict
 import           Control.Monad                  ( replicateM )
@@ -37,7 +38,8 @@ collapseEnv :: Env -> [(Name, Exp)]
 collapseEnv env = locals env <> imports env <> builtins env
 
 lookupEnv :: Name -> Env -> Maybe Exp
-lookupEnv (TopLevel mn n) env = lookup (TopLevel mn n) (imports env)
+lookupEnv (TopLevel mn n) env =
+  lookup (TopLevel mn n) (imports env <> locals env)
 lookupEnv n env = lookup n (locals env) <|> lookup n (builtins env)
 
 type NameGen = State Int
@@ -119,7 +121,7 @@ translatePattern _ S.WildPat = VarPat <$> fresh
 lookupCon :: Name -> Env -> Con
 lookupCon n env = case lookupEnv n env of
   Just (Cons c _) -> c
-  _               -> error $ "unknown constructor: " <> show n
+  _ -> error $ "unknown constructor: " <> show n <> "\n\n" <> pShow env
 
 buildListPat :: [Pattern] -> Pattern
 buildListPat []       = ConPat listNil []
@@ -296,9 +298,6 @@ binds :: Pattern -> Name -> Bool
 binds (ConstPat _   ) _ = False
 binds (VarPat   m   ) n = m == n
 binds (ConPat _ pats) n = any (`binds` n) pats
-
-mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
-mapSnd f = map (\(x, y) -> (x, f y))
 
 --------------------------------------------------------------------------------
 -- The Pattern Match Compiler

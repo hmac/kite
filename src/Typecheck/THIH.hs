@@ -8,7 +8,6 @@ module Typecheck.THIH where
 -- It's got a lot of edge cases specific to Haskell that I'm hoping to smooth
 -- off in time.
 
-import           Data.String                    ( IsString(..) )
 import           Control.Monad.Except           ( MonadError(..) )
 import           Control.Applicative            ( liftA2 )
 import           Control.Monad                  ( (>=>)
@@ -62,7 +61,7 @@ data Tycon = Tycon Id Kind
 -- Examples of types
 ---------------------
 
-tUnit, tChar, tInt, tInteger, tFloat, tDouble, tBool :: Type
+tUnit, tChar, tString, tInt, tInteger, tFloat, tDouble, tBool :: Type
 tUnit = TCon (Tycon "()" Star)
 tChar = TCon (Tycon "Char" Star)
 tString = TCon (Tycon "String" Star)
@@ -182,10 +181,10 @@ s1 @@ s2 = [ (u, apply s1 t) | (u, t) <- s2 ] <> s1
 -- The two substitutions must agree on the mapping of every variable in the
 -- domain of both.
 -- Postcondition: apply (s1 <> s2) == apply (s2 <> s1)
-merge :: (MonadError e m, IsString e) => Subst -> Subst -> m Subst
+merge :: Subst -> Subst -> TI Subst
 merge s1 s2 = if agree
   then pure (s1 <> s2)
-  else throw "merge: substitutions do not agree"
+  else throw (SubstitutionsDontAgree s1 s2)
  where
   agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v))
               (map fst s1 `intersect` map fst s2)
@@ -200,7 +199,7 @@ merge s1 s2 = if agree
 -- unifier s can be written as s' @@ u for some substitution s'.
 
 -- Calculate the most general unifier of two types
-mgu :: (MonadError e m, IsString e) => Type -> Type -> m Subst
+mgu :: Type -> Type -> TI Subst
 mgu (TAp l r) (TAp l' r') = do
   s1 <- mgu l l'
   s2 <- mgu (apply s1 r) (apply s1 r')
@@ -208,34 +207,29 @@ mgu (TAp l r) (TAp l' r') = do
 mgu (TVar u) t                         = varBind u t
 mgu t        (TVar u)                  = varBind u t
 mgu (TCon tc1) (TCon tc2) | tc1 == tc2 = pure nullSubst
-mgu t1 t2 = throw $ "mgu: cannot unify " <> show t1 <> " with " <> show t2
+mgu t1 t2                              = throw (CannotUnify t1 t2)
 
 -- Unify a variable u with a type t.
 -- We must check that t doesn't not mention u
 -- and that t and u have the same kinds.
-varBind :: (MonadError e m, IsString e) => Tyvar -> Type -> m Subst
-varBind u t
-  | t == TVar u
-  = pure nullSubst
-  | u `elem` tv t
-  = throw $ "occurs check failed for " <> show u <> " and " <> show t
-  | kind u /= kind t
-  = throw $ "kinds don't match: " <> show u <> " and " <> show t
-  | otherwise
-  = pure (u +-> t)
+varBind :: Tyvar -> Type -> TI Subst
+varBind u t | t == TVar u      = pure nullSubst
+            | u `elem` tv t    = throw $ OccursCheckFailed u t
+            | kind u /= kind t = throw $ KindsDontMatch u t
+            | otherwise        = pure (u +-> t)
 
 -- Matching: find a substitution s such that apply s t1 == t2.
 -- Similar to unification but is one-way.
 -- Follows the same pattern as unification but uses merge instead of @@ to
 -- combine substitutions, and does not allow binding of variables in t2.
-match :: (MonadError e m, IsString e) => Type -> Type -> m Subst
+match :: Type -> Type -> TI Subst
 match (TAp l r) (TAp l' r') = do
   sl <- match l l'
   sr <- match r r'
   merge sl sr
-match (TVar u) t | kind u == kind t = pure (u +-> t)
+match (TVar u) t | kind u == kind t      = pure (u +-> t)
 match (TCon tc1) (TCon tc2) | tc1 == tc2 = pure nullSubst
-match t1 t2 = throw $ "types do not match: " <> show t1 <> " and " <> show t2
+match t1 t2                              = throw $ TypesDontMatch t1 t2
 
 ----------------
 -- Type Classes
@@ -264,15 +258,12 @@ mguPred = lift mgu
 matchPred :: Pred -> Pred -> Maybe Subst
 matchPred = lift match
 
-lift
-  :: (MonadError e m, IsString e)
-  => (Type -> Type -> m a)
-  -> Pred
-  -> Pred
-  -> m a
+lift :: (Type -> Type -> TI a) -> Pred -> Pred -> Maybe a
 lift m (IsIn i t) (IsIn i' t')
-  | i == i'   = m t t'
-  | otherwise = throw $ "classes differ: " <> show i <> " vs " <> show i'
+  | i == i' = case runTI (m t t') of
+    Left  _ -> Nothing
+    Right r -> Just r
+  | otherwise = Nothing
 
 -- Classes and Instances
 
@@ -315,9 +306,8 @@ modify :: ClassEnv -> Id -> Class -> ClassEnv
 modify ce i c = ce { classes = \j -> if i == j then Just c else classes ce j }
 
 initialEnv :: ClassEnv
-initialEnv = ClassEnv { classes  = const (throw "class not defined")
-                      , defaults = [tInteger, tDouble]
-                      }
+initialEnv =
+  ClassEnv { classes = const Nothing, defaults = [tInteger, tDouble] }
 
 -- As we process each class or instance declaration in a program we transform
 -- the initial class environment to add entries. There's a possibility that the
@@ -325,7 +315,7 @@ initialEnv = ClassEnv { classes  = const (throw "class not defined")
 -- if it attempts to redefine an existing class. Therefore we describe
 -- transformations using the following type, with Maybe for modelling the
 -- possibility of failure.
-type EnvTransformer = ClassEnv -> Maybe ClassEnv
+type EnvTransformer = ClassEnv -> Either Error ClassEnv
 
 -- Note: (>=>) :: (a -> m b) -> (b -> m c) -> (a -> m c)
 
@@ -367,8 +357,8 @@ addNumClasses =
 -- - the instance doesn't overlap with any previously defined instance
 addInst :: [Pred] -> Pred -> EnvTransformer
 addInst ps p@(IsIn i _) ce
-  | isNothing (classes ce i) = throw "no class for instance"
-  | any (overlap p) qs       = throw "overlapping instance"
+  | isNothing (classes ce i) = throw (NoClassForInstance p)
+  | any (overlap p) qs       = throw (OverlappingInstance p)
   | otherwise                = pure (modify ce i c)
  where
   its = insts ce i
@@ -461,16 +451,16 @@ inHnf (IsIn _ t) = hnf t
 
 -- Predicates not in HNF are broken down using byInst. If this fails, then the
 -- predicate is unsatisfiable.
-toHnfs :: (MonadError e m, IsString e) => ClassEnv -> [Pred] -> m [Pred]
+toHnfs :: ClassEnv -> [Pred] -> TI [Pred]
 toHnfs ce ps = do
   pss <- mapM (toHnf ce) ps
   pure (concat pss)
 
-toHnf :: (MonadError e m, IsString e) => ClassEnv -> Pred -> m [Pred]
+toHnf :: ClassEnv -> Pred -> TI [Pred]
 toHnf ce p
   | inHnf p = pure [p]
   | otherwise = case byInst ce p of
-    Nothing -> throw "context reduction failed"
+    Nothing -> throw (ContextReductionFailed p)
     Just ps -> toHnfs ce ps
 
 -- A predicate p in a list of predicates (p : ps) can be eliminated if ps
@@ -484,7 +474,7 @@ simplify ce = loop []
 
 -- Context reduction is then a combination of toHnfs and simplify.
 -- Note: there is some redundancy in this definition: see p.19 of THIH.
-reduce :: (MonadError e m, IsString e) => ClassEnv -> [Pred] -> m [Pred]
+reduce :: ClassEnv -> [Pred] -> TI [Pred]
 reduce ce ps = do
   qs <- toHnfs ce ps
   pure (simplify ce qs)
@@ -534,8 +524,8 @@ instance Types Assump where
   tv (_ :>: sc) = tv sc
 
 -- Find the type of a variable in a set of assumptions
-find :: (MonadError e m, IsString e) => Id -> [Assump] -> m Scheme
-find i [] = throw $ "unbound identifier: " <> i
+find :: Id -> [Assump] -> TI Scheme
+find i [] = throw $ UnboundIdentifier i
 find i ((i' :>: sc) : as) | i == i'   = pure sc
                           | otherwise = find i as
 
@@ -550,17 +540,19 @@ find i ((i' :>: sc) : as) | i == i'   = pure sc
 -- Errors are represented as Left String, and signalled by throw
 
 newtype TI a = TI (Subst -> Int -> Either Error (Subst, Int, a))
-newtype Error = Error String deriving (Eq, Show)
-
-instance IsString Error where
-  fromString = Error
-
--- This is here because some functions in this module are polymorphic in their
--- monad and get instantiated to Maybe, which has a MonadError () Maybe
--- instance. For our error reporting to work we need IsString e for
--- MonadError e m, so we need IsString ().
-instance IsString () where
-  fromString _ = ()
+data Error = UnboundIdentifier Id
+           | CannotUnify Type Type
+           | OccursCheckFailed Tyvar Type
+           | TypesDontMatch Type Type
+           | KindsDontMatch Tyvar Type
+           | SubstitutionsDontAgree Subst Subst
+           | SignatureTooGeneral Scheme Scheme
+           | ContextTooWeak [Pred]
+           | ContextReductionFailed Pred
+           | CannotResolveAmbiguity [Ambiguity]
+           | NoClassForInstance Pred
+           | OverlappingInstance Pred
+           deriving (Show, Eq)
 
 instance Functor TI where
   fmap f (TI g) = TI $ \s n -> fmap (\(s', n', x) -> (s', n', f x)) (g s n)
@@ -586,8 +578,8 @@ instance MonadError Error TI where
     Left  err -> let (TI h') = h err in h' s n
     Right x   -> Right x
 
-throw :: (MonadError e m, IsString e) => String -> m a
-throw = throwError . fromString
+throw :: (MonadError e m) => e -> m a
+throw = throwError
 
 runTI :: TI a -> Either Error a
 runTI (TI f) = case f nullSubst 0 of
@@ -767,13 +759,7 @@ tiAlts ce as alts t = do
 -- split paritions a list of predicates into deferred predicates and retained
 -- predicates.
 -- TODO: explain this a bit more
-split
-  :: (MonadError e m, IsString e)
-  => ClassEnv
-  -> [Tyvar]
-  -> [Tyvar]
-  -> [Pred]
-  -> m ([Pred], [Pred])
+split :: ClassEnv -> [Tyvar] -> [Tyvar] -> [Pred] -> TI ([Pred], [Pred])
 split ce fs gs ps = do
   ps' <- reduce ce ps
   let (ds, rs) = partition (all (`elem` fs) . tv) ps'
@@ -822,24 +808,17 @@ candidates ce (v, qs) =
   ]
 
 withDefaults
-  :: (MonadError e m, IsString e)
-  => ([Ambiguity] -> [Type] -> a)
-  -> ClassEnv
-  -> [Tyvar]
-  -> [Pred]
-  -> m a
-withDefaults f ce vs ps | any null tss = throw "cannot resolve ambiguity"
+  :: ([Ambiguity] -> [Type] -> a) -> ClassEnv -> [Tyvar] -> [Pred] -> TI a
+withDefaults f ce vs ps | any null tss = throw (CannotResolveAmbiguity vps)
                         | otherwise    = pure (f vps (map head tss))
  where
   vps = ambiguities ce vs ps
   tss = map (candidates ce) vps
 
-defaultedPreds
-  :: (MonadError e m, IsString e) => ClassEnv -> [Tyvar] -> [Pred] -> m [Pred]
+defaultedPreds :: ClassEnv -> [Tyvar] -> [Pred] -> TI [Pred]
 defaultedPreds = withDefaults (\vps ts -> concatMap snd vps)
 
-defaultSubst
-  :: (MonadError e m, IsString e) => ClassEnv -> [Tyvar] -> [Pred] -> m Subst
+defaultSubst :: ClassEnv -> [Tyvar] -> [Pred] -> TI Subst
 defaultSubst = withDefaults (\vps ts -> zip (map fst vps) ts)
 
 ------------------
@@ -873,8 +852,8 @@ tiExpl ce as (i, sc, alts) = do
       ps' = filter (not . entail ce qs') (apply s ps)
   (ds, rs) <- split ce fs gs ps'
   if sc /= sc'
-    then throw "signature too general"
-    else if not (null rs) then throw "context too weak" else pure ds
+    then throw (SignatureTooGeneral sc sc')
+    else if not (null rs) then throw (ContextTooWeak rs) else pure ds
 
 -- Implicitly typed bindings
 -- There are two complications:

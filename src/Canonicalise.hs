@@ -90,7 +90,7 @@ canonicaliseExp (mod,imps) = go
           Cons n | n `elem` locals -> Cons (Local n)
                  | otherwise -> case Map.lookup n imps of
                                   Just i -> Cons (TopLevel i n)
-                                  Nothing -> Cons (Local n)
+                                  Nothing -> Cons (TopLevel mod n)
           Abs ns e -> Abs (fmap Local ns) $ go (ns <> locals) e
           App a b -> App (go locals a) (go locals b)
           Let binds e -> canonicaliseLet (binds, e)

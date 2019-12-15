@@ -1,10 +1,11 @@
 module Util
   ( module Util
-  , pPrint
+  , Text.Pretty.Simple.pPrint
   )
 where
 
-import           Text.Pretty.Simple             ( pPrint )
+import           Data.Text.Lazy                 ( unpack )
+import qualified Text.Pretty.Simple
 import qualified Data.Bifunctor
 import           Data.List.Extra                ( concatUnzip
                                                 , concatUnzip3
@@ -44,3 +45,7 @@ splitOn x xs = go xs []
  where
   go []       acc = [reverse acc]
   go (y : ys) acc = if x == y then reverse acc : go ys [] else go ys (y : acc)
+
+-- Pretty printing
+pShow :: Show a => a -> String
+pShow = unpack . Text.Pretty.Simple.pShow

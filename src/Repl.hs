@@ -6,7 +6,6 @@ import           System.IO                      ( stdout
                                                 , hSetBuffering
                                                 , BufferMode(..)
                                                 )
-import           Data.Maybe                     ( fromMaybe )
 import           Syn.Parse                      ( pExpr
                                                 , pDecl
                                                 )
@@ -14,14 +13,11 @@ import           Text.Megaparsec                ( parse
                                                 , errorBundlePretty
                                                 , (<|>)
                                                 )
-import           Typecheck.THIH                 ( initialEnv
-                                                , Error(..)
-                                                , tiProgram
-                                                )
-import           Typecheck.Translate            ( primitiveInsts
-                                                , tiModule
+import           Typecheck.THIH                 ( tiProgram )
+import           Typecheck.Translate            ( tiModule
                                                 , toProgram
                                                 , funToImpl
+                                                , defaultClassEnv
                                                 )
 import           Typecheck.Desugar              ( desugarModule
                                                 , desugarFun
@@ -61,8 +57,8 @@ processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
   let core = desugarModule (buildModule decls)
   in  case tiModule core of
-        Left (Error err) -> do
-          putStrLn err
+        Left (err) -> do
+          print err
           pure False
         Right _ -> do
           putStrLn "OK."
@@ -80,13 +76,12 @@ processExpr decls e =
     modCore              = desugarModule m
     (env, assumps, prog) = toProgram mempty modCore
     mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
-    classEnv = fromMaybe (error "failed to construct prelude typeclasses")
-                         (primitiveInsts initialEnv)
-    prog' = prog ++ [mainBindGroup]
+    classEnv             = defaultClassEnv
+    prog'                = prog ++ [mainBindGroup]
   in
     case tiProgram classEnv assumps prog' of
-      Left  (Error err) -> putStrLn err
-      Right _           -> do
+      Left  (err) -> print err
+      Right _     -> do
         let
           m' = Can.canonicaliseModule m
             { moduleDecls = FunDecl main : moduleDecls m

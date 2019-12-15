@@ -1,4 +1,4 @@
-module Bool
+module Data.Bool
 
 data Bool = True | False
 

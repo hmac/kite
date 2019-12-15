@@ -17,7 +17,7 @@ import           ModuleGraphCompiler            ( compileModule
 
 import           Typecheck.Desugar              ( desugarModule )
 import           Typecheck.Translate            ( tiModule )
-import           Typecheck.THIH                 ( Error(..) )
+import           Typecheck.Error                ( printError )
 import qualified Repl                           ( run )
 import qualified ELC.Compile                   as ELC
 import           LC.Compile                     ( runConvert
@@ -71,8 +71,8 @@ dumpLC = withParsedFile $ \m -> pPrint $ runConvert
 
 typecheck :: FilePath -> IO ()
 typecheck = withParsedFile $ \m -> case tiModule (desugarModule m) of
-  Left  (Error err) -> putStrLn err
-  Right _           -> putStrLn "Success."
+  Left  err -> putStrLn (printError err)
+  Right _   -> putStrLn "Success."
 
 run :: FilePath -> IO ()
 run path = do
@@ -80,7 +80,7 @@ run path = do
   case mod of
     Left  err -> putStrLn err
     Right l   -> case typecheckModule l of
-      Left err -> putStrLn err
+      Left err -> putStrLn (printError err)
       Right _ ->
         let cm     = compileModule l
             answer = evalMain (cModuleName cm) (cModuleEnv cm)

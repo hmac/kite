@@ -18,6 +18,7 @@ import           Typecheck.Translate            ( defaultClassEnv
                                                 , primitiveConstructors
                                                 , primitiveTypeConstructors
                                                 )
+import           Typecheck.THIH                 ( Error )
 import           Data.Maybe                     ( mapMaybe )
 
 -- This module takes a LoadedModule from the loader and attempts to typecheck it
@@ -57,12 +58,12 @@ import           Data.Maybe                     ( mapMaybe )
 --    typechecker.
 -- 3. Repeat for each dependent module, and their dependencies.
 
-typecheckModule :: LoadedModule -> Either String ()
+typecheckModule :: LoadedModule -> Either Error ()
 typecheckModule lm =
   let (_tycons, datacons, depfuns, funs) = extractDecls lm
       assumps = map (uncurry (:>:)) (datacons <> depfuns)
   in  case tiProgram defaultClassEnv assumps [(funs, [])] of
-        Left  e -> Left (show e)
+        Left  e -> Left e
         Right _ -> Right ()
 
 extractDecls

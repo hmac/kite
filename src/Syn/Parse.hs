@@ -16,7 +16,6 @@ import           Syntax
 
 type Parser = Parsec Void String
 
--- TODO: importing types and constructors
 -- TODO: markdown in comments & doctests
 -- TODO: escape quote chars in string literals
 -- TOOD: heredocs
