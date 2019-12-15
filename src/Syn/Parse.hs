@@ -75,7 +75,7 @@ pImport = do
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
   alias     <- optional (symbol "as" >> uppercaseName)
-  items     <- optional $ parens (lowercaseName `sepBy` comma)
+  items     <- optional $ parens (pName `sepBy` comma)
   pure Import { importQualified = qualified
               , importName      = name
               , importAlias     = alias

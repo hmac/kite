@@ -2,8 +2,10 @@ module B
 
 import C (c)
 
-defaultBar : Int
-defaultBar = c
+data Bar = MkBar Int
+
+defaultInt : Int
+defaultInt = 3
 
 otherBar : Int
 otherBar = 2

@@ -1,9 +1,9 @@
 module A
 
-import B (defaultBar)
+import B (defaultBar, Bar, MkBar, MkBoo)
 
-a : Int
-a = defaultBar
+a : Bar
+a = MkBar 1
 
 x : Int -> Int
 x otherBar = otherBar
@@ -13,5 +13,5 @@ fac n = case n of
           0 -> 1
           n -> n * (fac (n - 1))
 
-main : Int
-main = fac a
+main : Bar
+main = a
