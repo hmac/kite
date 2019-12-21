@@ -1,0 +1,9 @@
+module Data.Either
+
+import Data.Maybe (Just, Nothing)
+
+fromLeft : Either a b -> Maybe a
+fromLeft (Left x) = Just x
+fromLeft (Right _) = Nothing
+
+data Either a b = Left a | Right b

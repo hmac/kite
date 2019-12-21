@@ -1,0 +1,11 @@
+module Test
+
+import Data.Bool (True, False)
+import Data.Maybe (Just, Nothing)
+import Data.Either (Either, Left, Right)
+
+e : Either Int String
+e = Left 1
+
+main : Maybe Int
+main = fromLeft e

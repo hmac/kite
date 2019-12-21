@@ -1,0 +1,11 @@
+module Data.Semigroup
+
+class Semigroup a where
+  append : a -> a -> a
+
+instance Semigroup Int where
+  append x y = x + y
+
+foo : Semigroup a => a -> [a] -> a
+foo x [] = x
+foo x (y :: ys) = append x (foo y ys)

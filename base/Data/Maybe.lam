@@ -1,0 +1,3 @@
+module Data.Maybe
+
+data Maybe a = Just a | Nothing
