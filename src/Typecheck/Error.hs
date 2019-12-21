@@ -13,6 +13,7 @@ printError = \case
   KindsDontMatch (Tyvar name k) t ->
     "The kind of " <> show name <> " is " <> printKind k
       <> ", which doesn't match the kind of " <> printType t
+  ContextTooWeak ctx -> "Could not satisfy all constraints: " <> show ctx
   -- TODO: the rest
   err -> show err
 

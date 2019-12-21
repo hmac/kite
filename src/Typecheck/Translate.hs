@@ -13,11 +13,25 @@ import           Typecheck.THIH
 import           Typecheck.Desugar              ( Core )
 import qualified Typecheck.Desugar             as D
 
+-- TODO: this module is a mess with no clear entrypoint.
+-- Restrict the exports and clean this up.
+
 tiModule :: S.Module Core -> Either Error [Assump]
 tiModule m = do
   let (_, assumps, p) = toProgram mempty m
-  classEnv <- primitiveInsts initialEnv
+  classEnv <- do
+    e <- primitiveInsts initialEnv
+    addTypeclasses (S.typeclassDecls m) e
   tiProgram classEnv assumps p
+
+toProgram :: Env -> S.Module Core -> (Env, [Assump], Program)
+toProgram env m =
+  let tycons   = primitiveTypeConstructors ++ typeConstructors m
+      datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
+      methods  = concatMap (typeclassMethods env) (S.typeclassDecls m)
+      assumps  = map (uncurry (:>:)) datacons <> methods
+      env'     = mergeEnv (tycons, datacons) env
+  in  (env', assumps, mapMaybe (toBindGroup env') (S.moduleDecls m))
 
 defaultClassEnv :: ClassEnv
 defaultClassEnv = case primitiveInsts initialEnv of
@@ -35,14 +49,6 @@ lookupDataCon n (_, datacons) = lookup n datacons
 
 mergeEnv :: Env -> Env -> Env
 mergeEnv (a, b) (c, d) = (a <> c, b <> d)
-
-toProgram :: Env -> S.Module Core -> (Env, [Assump], Program)
-toProgram env m =
-  let tycons   = primitiveTypeConstructors ++ typeConstructors m
-      datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
-      assumps  = map (uncurry (:>:)) datacons
-      env'     = mergeEnv (tycons, datacons) env
-  in  (env', assumps, mapMaybe (toBindGroup env') (S.moduleDecls m))
 
 primitiveTypeConstructors :: [(Id, Type)]
 primitiveTypeConstructors =
@@ -78,6 +84,14 @@ typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
     conKind = foldr (Kfun . const Star) Star (S.dataTyVars d)
     name    = toId (S.dataName d)
 
+-- TODO: superclass constraints
+addTypeclasses :: [S.Typeclass] -> EnvTransformer
+addTypeclasses ts classEnv = foldl f (Right classEnv) ts
+ where
+  f mce t = case mce of
+    Left  err -> Left err
+    Right ce  -> addClass (S.unName (S.typeclassName t)) [] ce
+
 -- These are the data constructors in the module
 dataConstructors :: Env -> S.Module Core -> [(Id, Scheme)]
 dataConstructors env m = concatMap toAssumps
@@ -110,8 +124,19 @@ toBindGroup :: Env -> S.Decl Core -> Maybe BindGroup
 toBindGroup env  (S.FunDecl       f) = Just ([funToExpl env f], [])
 toBindGroup _env (S.DataDecl      _) = Nothing
 toBindGroup _env (S.Comment       _) = Nothing
-toBindGroup _env (S.TypeclassDecl _) = Nothing
+toBindGroup env  (S.TypeclassDecl _) = Nothing
 toBindGroup _env (S.TypeclassInst _) = Nothing
+
+typeclassMethods :: Env -> S.Typeclass -> [Assump]
+typeclassMethods env t = flip map (S.typeclassDefs t)
+  $ \(name, ty) -> S.unName name :>: tyToScheme env ty (Just constraint)
+ where
+  -- In a typeclass definition
+  -- class Eq a where
+  --   eq : a -> a -> Bool
+  -- we need to add a constraint to get
+  -- eq : Eq a => a -> a -> Bool
+  constraint = S.CInst (S.typeclassName t) (map S.TyVar (S.typeclassTyVars t))
 
 funToExpl :: Env -> S.Fun Core -> Expl
 funToExpl env f =

@@ -261,3 +261,6 @@ test = do
         `shouldParse` (    (TyCon "Either" :@: TyVar "a" :@: TyVar "b")
                       `fn` (TyCon "Maybe" :@: TyVar "a")
                       )
+    it "parses parameterised constructors inside lists" $ do
+      parse pType "" "[Maybe a]"
+        `shouldParse` TyList (TyCon "Maybe" :@: TyVar "a")

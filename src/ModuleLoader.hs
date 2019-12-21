@@ -1,5 +1,7 @@
 module ModuleLoader where
 
+import           System.Directory               ( getCurrentDirectory )
+
 import           Syn.Parse                      ( parseLamFile )
 import           Syntax
 import           Data.List                      ( nub
@@ -32,8 +34,8 @@ data LoadedModule = LoadedModule (Module Syn) [LoadedModule]
 
 loadFromPath :: FilePath -> IO (Either String LoadedModule)
 loadFromPath path = do
-  let root = fst (breakOnEnd "/" path)
-  m <- parseLamFile <$> readFile path
+  root <- getCurrentDirectory
+  m    <- parseLamFile <$> readFile path
   case m of
     Left  err -> pure (Left err)
     Right m   -> do

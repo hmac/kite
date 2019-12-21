@@ -42,6 +42,7 @@ dependencies:
 - mtl
 - optparse-generic
 - semigroupoids
+- directory
 # Testing - here so hoogle picks them up
 - QuickCheck
 - hspec

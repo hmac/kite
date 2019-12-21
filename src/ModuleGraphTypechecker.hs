@@ -9,6 +9,9 @@ import           Typecheck.THIH                 ( Id
                                                 , Assump(..)
                                                 , Alt
                                                 , tiProgram
+                                                , Error
+                                                , Program
+                                                , ClassEnv
                                                 )
 import           Typecheck.Desugar              ( desugarModule )
 import           Typecheck.Translate            ( defaultClassEnv
@@ -17,8 +20,10 @@ import           Typecheck.Translate            ( defaultClassEnv
                                                 , toBindGroup
                                                 , primitiveConstructors
                                                 , primitiveTypeConstructors
+                                                , Env
+                                                , addTypeclasses
+                                                , typeclassMethods
                                                 )
-import           Typecheck.THIH                 ( Error )
 import           Data.Maybe                     ( mapMaybe )
 
 -- This module takes a LoadedModule from the loader and attempts to typecheck it
@@ -60,31 +65,49 @@ import           Data.Maybe                     ( mapMaybe )
 
 typecheckModule :: LoadedModule -> Either Error ()
 typecheckModule lm =
-  let (_tycons, datacons, depfuns, funs) = extractDecls lm
+  let (_tycons, datacons, depfuns, funs, typeclasses, methods) =
+          extractDecls lm
+      assumps = map (uncurry (:>:)) (datacons <> depfuns) <> methods
+  in  do
+        classEnv <- addTypeclasses typeclasses defaultClassEnv
+        case tiProgram classEnv assumps [(funs, [])] of
+          Left  e -> Left e
+          Right _ -> Right ()
+
+dumpEnv :: LoadedModule -> ([Assump], Program)
+dumpEnv lm =
+  let (_tycons, datacons, depfuns, funs, _typeclasses, _methods) =
+          extractDecls lm
       assumps = map (uncurry (:>:)) (datacons <> depfuns)
-  in  case tiProgram defaultClassEnv assumps [(funs, [])] of
-        Left  e -> Left e
-        Right _ -> Right ()
+  in  (assumps, [(funs, [])])
 
 extractDecls
   :: LoadedModule
-  -> ([(Id, Type)], [(Id, Scheme)], [(Id, Scheme)], [(Id, Scheme, [Alt])])
+  -> ( [(Id, Type)]
+     , [(Id, Scheme)]
+     , [(Id, Scheme)]
+     , [(Id, Scheme, [Alt])]
+     , [Typeclass]
+     , [Assump]
+     )
 extractDecls (LoadedModule m deps) =
-  let core        = desugarModule m
-      (deptycons, depdatacons, _, depfuns) = concat4 (map extractDecls deps)
+  let core = desugarModule m
+      -- TODO: do something with typeclasses/methods in deps
+      (deptycons, depdatacons, _, depfuns, _typeclasses, _depmethods) =
+          concat6 (map extractDecls deps)
       depfunTypes = map (\(id_, scheme, _) -> (id_, scheme)) depfuns
       tycons :: [(Id, Type)]
       tycons = primitiveTypeConstructors <> typeConstructors core
       datacons :: [(Id, Scheme)]
       datacons =
           primitiveConstructors <> dataConstructors (deptycons <> tycons, []) core
+      env = (deptycons <> tycons, depdatacons <> depfunTypes <> datacons)
+      methods :: [Assump]
+      methods = concatMap (typeclassMethods env) (typeclassDecls m)
       funs :: [(Id, Scheme, [Alt])]
-      funs = concatMap fst $ mapMaybe
-        (toBindGroup
-          (deptycons <> tycons, depdatacons <> depfunTypes <> datacons)
-        )
-        (moduleDecls core)
-  in  (tycons, datacons, depfunTypes, funs)
+      funs = concatMap fst $ mapMaybe (toBindGroup env) (moduleDecls core)
+      typeclasses = typeclassDecls core
+  in  (tycons, datacons, depfunTypes, funs, typeclasses, methods)
 
 assumpToTuple :: Assump -> (Id, Scheme)
 assumpToTuple (n :>: s) = (n, s)

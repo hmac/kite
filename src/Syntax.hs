@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 module Syntax
   ( module Syntax
@@ -9,6 +8,7 @@ where
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
                                                 )
+import           Util
 
 -- module Foo
 type Module = Module_ Name
@@ -22,6 +22,11 @@ data Module_ name a = Module { moduleName :: ModuleName
 
 modifyModuleDecls :: (Decl a -> Decl a) -> Module a -> Module a
 modifyModuleDecls f m = m { moduleDecls = map f (moduleDecls m) }
+
+typeclassDecls :: Module_ n a -> [Typeclass_ n]
+typeclassDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
+    TypeclassDecl t -> Just t
+    _               -> Nothing
 
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)

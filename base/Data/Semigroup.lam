@@ -1,11 +1,16 @@
 module Data.Semigroup
 
+import Data.NonEmpty (NonEmpty, NonEmpty)
+
 class Semigroup a where
   append : a -> a -> a
 
 instance Semigroup Int where
   append x y = x + y
 
-foo : Semigroup a => a -> [a] -> a
-foo x [] = x
-foo x (y :: ys) = append x (foo y ys)
+fold : Semigroup a => a -> [a] -> a
+fold x [] = x
+fold x (y :: ys) = append x (fold y ys)
+
+concat : Semigroup a => NonEmpty a -> a
+concat (NonEmpty x xs) = fold x xs

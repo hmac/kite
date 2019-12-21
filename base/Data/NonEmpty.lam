@@ -1,0 +1,6 @@
+module Data.NonEmpty
+
+data NonEmpty a = NonEmpty a [a]
+
+head : NonEmpty a -> a
+head (NonEmpty x _) = x

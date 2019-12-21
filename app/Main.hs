@@ -10,7 +10,7 @@ import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 
 import qualified ModuleLoader
-import           ModuleGraphTypechecker         ( typecheckModule )
+import qualified ModuleGraphTypechecker
 import           ModuleGraphCompiler            ( compileModule
                                                 , CompiledModule(..)
                                                 )
@@ -38,6 +38,7 @@ data Config =
     | Parse FilePath
     | DumpElc FilePath
     | DumpLc FilePath
+    | DumpTypeEnv FilePath
     deriving (Generic, Show)
 
 instance ParseRecord Config
@@ -47,12 +48,13 @@ main :: IO ()
 main = do
   cfg <- getRecord "lam"
   case cfg of
-    Repl        -> Repl.run
-    Run       f -> run f
-    Parse     f -> parse f
-    DumpElc   f -> dumpELC f
-    DumpLc    f -> dumpLC f
-    Typecheck f -> typecheck f
+    Repl          -> Repl.run
+    Run         f -> run f
+    Parse       f -> parse f
+    DumpElc     f -> dumpELC f
+    DumpLc      f -> dumpLC f
+    DumpTypeEnv f -> dumpTypeEnv f
+    Typecheck   f -> typecheck f
 
 parse :: FilePath -> IO ()
 parse path = do
@@ -69,12 +71,19 @@ dumpLC :: FilePath -> IO ()
 dumpLC = withParsedFile $ \m -> pPrint $ runConvert
   (ELC.translateModule ELC.defaultEnv (Can.canonicaliseModule m) >>= convertEnv)
 
+dumpTypeEnv :: FilePath -> IO ()
+dumpTypeEnv path = do
+  modul <- ModuleLoader.loadFromPath path
+  case modul of
+    Left  err -> putStrLn err
+    Right l   -> let env = ModuleGraphTypechecker.dumpEnv l in pPrint env
+
 typecheck :: FilePath -> IO ()
 typecheck path = do
   modul <- ModuleLoader.loadFromPath path
   case modul of
     Left  err -> putStrLn err
-    Right l   -> case typecheckModule l of
+    Right l   -> case ModuleGraphTypechecker.typecheckModule l of
       Left  err -> putStrLn (printError err)
       Right _   -> putStrLn "Success."
 
@@ -83,7 +92,7 @@ run path = do
   modul <- ModuleLoader.loadFromPath path
   case modul of
     Left  err -> putStrLn err
-    Right l   -> case typecheckModule l of
+    Right l   -> case ModuleGraphTypechecker.typecheckModule l of
       Left err -> putStrLn (printError err)
       Right _ ->
         let cm     = compileModule l
