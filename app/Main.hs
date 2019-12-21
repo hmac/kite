@@ -35,7 +35,7 @@ data Config =
       Repl
     | Run FilePath
     | Typecheck FilePath
-    | DumpParse FilePath
+    | Parse FilePath
     | DumpElc FilePath
     | DumpLc FilePath
     deriving (Generic, Show)
@@ -49,13 +49,13 @@ main = do
   case cfg of
     Repl        -> Repl.run
     Run       f -> run f
-    DumpParse f -> dumpParse f
+    Parse     f -> parse f
     DumpElc   f -> dumpELC f
     DumpLc    f -> dumpLC f
     Typecheck f -> typecheck f
 
-dumpParse :: FilePath -> IO ()
-dumpParse path = do
+parse :: FilePath -> IO ()
+parse path = do
   input <- readFile path
   case parseLamFile input of
     Left  e -> putStrLn e
@@ -70,14 +70,18 @@ dumpLC = withParsedFile $ \m -> pPrint $ runConvert
   (ELC.translateModule ELC.defaultEnv (Can.canonicaliseModule m) >>= convertEnv)
 
 typecheck :: FilePath -> IO ()
-typecheck = withParsedFile $ \m -> case tiModule (desugarModule m) of
-  Left  err -> putStrLn (printError err)
-  Right _   -> putStrLn "Success."
+typecheck path = do
+  modul <- ModuleLoader.loadFromPath path
+  case modul of
+    Left  err -> putStrLn err
+    Right l   -> case typecheckModule l of
+      Left  err -> putStrLn (printError err)
+      Right _   -> putStrLn "Success."
 
 run :: FilePath -> IO ()
 run path = do
-  mod <- ModuleLoader.loadFromPath path
-  case mod of
+  modul <- ModuleLoader.loadFromPath path
+  case modul of
     Left  err -> putStrLn err
     Right l   -> case typecheckModule l of
       Left err -> putStrLn (printError err)

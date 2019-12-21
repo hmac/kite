@@ -168,4 +168,4 @@ data Syn_ name = Var name
 
 -- Supported binary operators
 binOps :: [Name]
-binOps = ["+", "-", "*", "/", ">", "<", "&&", "||", ">=", "<="]
+binOps = ["+", "-", "*", "/", ">", "<", "&&", "||", ">=", "<=", "<>"]

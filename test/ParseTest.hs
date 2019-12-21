@@ -17,7 +17,7 @@ import           Syntax
 
 test :: Spec
 test = do
-  describe "declarations" $ do
+  describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
       parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl
         Fun { funComments   = ["a comment"]
@@ -89,6 +89,41 @@ test = do
                                                 }
                                           ]
                         }
+      parse pDecl "" "foo : (Eq a, Show a) => a -> String\nfoo x = bar"
+        `shouldParse` FunDecl Fun
+                        { funComments   = []
+                        , funName       = "foo"
+                        , funType       = (TyVar "a") `fn` TyCon "String"
+                        , funConstraint =
+                          Just
+                            (CTuple (CInst "Eq" [TyVar "a"])
+                                    (CInst "Show" [TyVar "a"])
+                            )
+                        , funDefs       = [ Def { defArgs = [VarPat "x"]
+                                                , defExpr = Var "bar"
+                                                }
+                                          ]
+                        }
+    it "parses a function with a multi param argument type" $ do
+      parse
+          pDecl
+          ""
+          "fromLeft : Either a b -> Maybe a\nfromLeft (Left x) = Just x\nfromLeft (Right _) = Nothing"
+        `shouldParse` FunDecl Fun
+                        { funComments   = []
+                        , funName       = "fromLeft"
+                        , funType = (TyCon "Either" :@: TyVar "a" :@: TyVar "b")
+                                      `fn` (TyCon "Maybe" :@: TyVar "a")
+                        , funConstraint = Nothing
+                        , funDefs       =
+                          [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
+                                , defExpr = App (Cons "Just") (Var "x")
+                                }
+                          , Def { defArgs = [ConsPat "Right" [WildPat]]
+                                , defExpr = Cons "Nothing"
+                                }
+                          ]
+                        }
 
     it "parses a simple data definition" $ do
       parse pDecl "" "data Unit = Unit" `shouldParse` DataDecl Data
@@ -147,7 +182,7 @@ test = do
                             )
                           ]
                         }
-  describe "modules" $ do
+  describe "parsing modules" $ do
     it "parses a basic module with metadata" $ do
       parse pModule "" "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"
         `shouldParse` Module
@@ -191,7 +226,7 @@ test = do
                         , moduleDecls    = []
                         , moduleMetadata = []
                         }
-  describe "expressions" $ do
+  describe "parsing expressions" $ do
     it "parses an application" $ do
       parse pExpr "" "foo x y z"
         `shouldParse` App (App (App (Var "foo") (Var "x")) (Var "y")) (Var "z")
@@ -212,7 +247,7 @@ test = do
     it "parses a tuple" $ do
       parse pExpr "" "(\"\", 0.0)"
         `shouldParse` TupleLit [StringLit "" [], FloatLit 0.0]
-  describe "types" $ do
+  describe "parsing types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")
     it "parses multi arg function types" $ do
@@ -221,3 +256,8 @@ test = do
     it "parses higher order function types" $ do
       parse pType "" "(a -> b) -> a -> b"
         `shouldParse` ((TyVar "a" `fn` TyVar "b") `fn` TyVar "a" `fn` TyVar "b")
+    it "parses multi parameter type constructors" $ do
+      parse pType "" "Either a b -> Maybe a"
+        `shouldParse` (    (TyCon "Either" :@: TyVar "a" :@: TyVar "b")
+                      `fn` (TyCon "Maybe" :@: TyVar "a")
+                      )

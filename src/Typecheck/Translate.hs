@@ -73,7 +73,9 @@ typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
   getData _              = Nothing
   constructorToType d = (name, TCon $ Tycon name conKind)
    where
-    conKind = foldl Kfun Star (map (const Star) (S.dataTyVars d))
+    -- Note: this assumes that type variables all have kind *, so it doesn't
+    -- support things like monad transformers (where m has kind * -> *)
+    conKind = foldr (Kfun . const Star) Star (S.dataTyVars d)
     name    = toId (S.dataName d)
 
 -- These are the data constructors in the module
@@ -114,7 +116,7 @@ toBindGroup _env (S.TypeclassInst _) = Nothing
 funToExpl :: Env -> S.Fun Core -> Expl
 funToExpl env f =
   ( toId (S.funName f)
-  , tyToScheme env (S.funType f)
+  , tyToScheme env (S.funType f) (S.funConstraint f)
   , map (defToAlt env) (S.funDefs f)
   )
 
@@ -122,10 +124,25 @@ funToExpl env f =
 funToImpl :: Env -> S.Fun Core -> Impl
 funToImpl env f = (toId (S.funName f), map (defToAlt env) (S.funDefs f))
 
-tyToScheme :: Env -> S.Ty -> Scheme
-tyToScheme env (S.TyList t) = quantify (tv t') ([] :=> list t')
+tyToScheme :: Env -> S.Ty -> Maybe (S.Constraint) -> Scheme
+tyToScheme env (S.TyList t) c = quantify
+  (tv t')
+  (constraintToPreds env c :=> list t')
   where t' = tyToType env t
-tyToScheme env t = quantify (tv (tyToType env t)) ([] :=> tyToType env t)
+tyToScheme env t c =
+  quantify (tv (tyToType env t)) (constraintToPreds env c :=> tyToType env t)
+
+-- currently we only support single parameter typeclasses
+constraintToPreds :: Env -> Maybe S.Constraint -> [Pred]
+constraintToPreds _ Nothing = []
+constraintToPreds env (Just (S.CInst (S.Name className) [ty])) =
+  [IsIn className (tyToType env ty)]
+constraintToPreds _ (Just (S.CInst _ vs))
+  | length vs > 1 = error
+    "cannot handle multi parameter typeclass instances yet"
+  | otherwise = error "cannot handle zero parameter typeclass instance"
+constraintToPreds env (Just (S.CTuple a b)) =
+  constraintToPreds env (Just a) <> constraintToPreds env (Just b)
 
 tyToType :: Env -> S.Ty -> Type
 tyToType _env (S.TyVar n)  = TVar (Tyvar (toId n) Star)

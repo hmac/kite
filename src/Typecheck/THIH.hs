@@ -124,11 +124,16 @@ instance HasKind Tycon where
   kind (Tycon _ k) = k
 
 instance HasKind Type where
-  kind (TCon tc) = kind tc
-  kind (TVar u ) = kind u
-  kind (TAp t _) = case kind t of
+  kind (  TCon tc) = kind tc
+  kind (  TVar u ) = kind u
+  kind u@(TAp t _) = case kind t of
     (Kfun _ k) -> k
-    Star -> error $ "invalid kind * on left of type application: " <> show t
+    Star ->
+      error
+        $  "invalid kind * on left of type application: "
+        <> show t
+        <> " in type "
+        <> show u
   kind (TGen _) = error "kind: no case for TGen for some reason"
 
 -----------------
@@ -537,7 +542,7 @@ find i ((i' :>: sc) : as) | i == i'   = pure sc
 -- - to keep track of the current substitution
 -- - to generate fresh type variables
 
--- Errors are represented as Left String, and signalled by throw
+-- Errors are represented by the Error type, and signalled by throw
 
 newtype TI a = TI (Subst -> Int -> Either Error (Subst, Int, a))
 data Error = UnboundIdentifier Id

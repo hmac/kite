@@ -125,7 +125,7 @@ pFun = do
 -- Monoid a => [a] -> a
 pFunSig :: Parser (Maybe Constraint, Ty)
 pFunSig = do
-  constraint <- optional (try pConstraint <* lexeme "=>")
+  constraint <- optional (try (pConstraint <* lexeme "=>"))
   ty         <- pType
   pure (constraint, ty)
 
@@ -320,7 +320,8 @@ pBinApp = do
   pOp :: Parser Syn
   pOp =
     (Cons . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
-  twoCharOp = string "&&" <|> string "||" <|> string ">=" <|> string "<="
+  twoCharOp =
+    string "&&" <|> string "||" <|> string ">=" <|> string "<=" <> string "<>"
   oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
 
 pApp :: Parser Syn
