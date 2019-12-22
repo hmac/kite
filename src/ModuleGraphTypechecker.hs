@@ -26,49 +26,13 @@ import           Data.Maybe                     ( mapMaybe )
 -- This module takes a ModuleGroup from the loader and attempts to typecheck it
 -- and its dependent modules.
 
--- The tricky part here is making sure that we resolve names such that
--- everything is in scope when we typecheck it.
-
--- Imagine these three modules:
-
--- module A                 module B                module C
--- import B                 import C
--- import C
---
--- a1 : Int                 b : Int                 c1 : Int
--- a1 = b                   b = c                   c1 = 1
---
--- a2 : String                                      c2 : String
--- a2 = c2                                          c2 = "hi"
-
--- To typecheck A, we need to load and typecheck B and C.
--- To typecheck B, we need to load and typecheck C.
-
--- We want to:
--- - only typecheck each module once
--- - typecheck everything that could influence the typing of the main module
-
--- Because we (currently) enforce top level type signatures on functions, we
--- are able to extract these out beforehand for each dependent module and so we
--- can typecheck modules in any order. If we allow omission of top level type
--- signatures in future, we may have to change this.
-
--- To typecheck a module M, the overall plan is:
--- 1. Fetch names and type sigs for all top level declarations in direct
---    dependent modules of M.
--- 2. Add these to the initial typing environment and run M through the
---    typechecker.
--- 3. Repeat for each dependent module, and their dependencies.
-
-
--- I think we can simplify this drastically by performing canonicalisation
--- before typechecking, thereby ensuring we have a unique name for everything.
+-- At this point the module has already been canonicalised, so we can assume
+-- that all names are unique and not worry about clashes.
 
 typecheckModule :: ModuleGroup -> Either Error ()
-typecheckModule lm =
-  let (_tycons, datacons, depfuns, funs, typeclasses, methods) =
-          extractDecls lm
-      assumps = map (uncurry (:>:)) (datacons <> depfuns) <> methods
+typecheckModule g =
+  let (_types, datacons, funs, typeclasses, methods) = extractDecls' g
+      assumps = map (uncurry (:>:)) (datacons <> Prim.constructors) <> methods
   in  do
         classEnv <- Prim.classEnv >>= addTypeclasses typeclasses
         case tiProgram classEnv assumps [(funs, [])] of
@@ -77,40 +41,31 @@ typecheckModule lm =
 
 dumpEnv :: ModuleGroup -> ([Assump], Program)
 dumpEnv lm =
-  let (_tycons, datacons, depfuns, funs, _typeclasses, _methods) =
-          extractDecls lm
-      assumps = map (uncurry (:>:)) (datacons <> depfuns)
+  let (_types, datacons, funs, _typeclasses, _methods) = extractDecls' lm
+      assumps = map (uncurry (:>:)) (Prim.constructors <> datacons)
   in  (assumps, [(funs, [])])
 
-extractDecls
+extractDecls'
   :: ModuleGroup
   -> ( [(Id, Type)]
-     , [(Id, Scheme)]
      , [(Id, Scheme)]
      , [(Id, Scheme, [Alt])]
      , [Can.Typeclass]
      , [Assump]
      )
-extractDecls (ModuleGroup m deps) =
-  let
-    core = desugarModule m
-    -- TODO: do something with typeclasses/methods in deps
-    (deptycons, depdatacons, _, depfuns, _typeclasses, _depmethods) =
-      concat6 (map extractDecls deps)
-    depfunTypes = map (\(id_, scheme, _) -> (id_, scheme)) depfuns
-    tycons :: [(Id, Type)]
-    tycons = Prim.typeConstructors <> typeConstructors core
-    datacons :: [(Id, Scheme)]
-    datacons =
-      Prim.constructors <> dataConstructors (deptycons <> tycons, []) core
-    env = (deptycons <> tycons, depdatacons <> depfunTypes <> datacons)
-    methods :: [Assump]
-    methods = concatMap (typeclassMethods env) (typeclassDecls m)
-    funs :: [(Id, Scheme, [Alt])]
-    funs        = concatMap fst $ mapMaybe (toBindGroup env) (moduleDecls core)
-    typeclasses = typeclassDecls core
-  in
-    (tycons, datacons, depfunTypes, funs, typeclasses, methods)
-
-assumpToTuple :: Assump -> (Id, Scheme)
-assumpToTuple (n :>: s) = (n, s)
+extractDecls' (ModuleGroup m deps) =
+  let (deptypes, depdatacons, depfuns, deptypeclasses, depmethods) =
+          concat5 (map extractDecls' deps)
+      core  = desugarModule m
+      types = typeConstructors core
+      datacons =
+          dataConstructors (deptypes <> types <> Prim.typeConstructors, []) core
+      depfuntypes = map (\(id_, scheme, _) -> (id_, scheme)) depfuns
+      env =
+          ( deptypes <> types <> Prim.typeConstructors
+          , depdatacons <> datacons <> depfuntypes <> Prim.constructors
+          )
+      funs = concatMap fst $ mapMaybe (toBindGroup env) (moduleDecls core)
+      typeclasses = deptypeclasses <> typeclassDecls core
+      methods = depmethods <> concatMap (typeclassMethods env) typeclasses
+  in  (types, datacons, funs, typeclasses, methods)
