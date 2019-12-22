@@ -26,33 +26,32 @@ import           Data.List                      ( nub
 
 -- TODO: structured errors
 
--- TODO: rename to ModuleGroup or something
 --                               the module   its dependencies
-data LoadedModule = LoadedModule (Module Syn) [LoadedModule]
+data ModuleGroup = ModuleGroup (Module Syn) [ModuleGroup]
   deriving (Show)
 
-loadFromPath :: FilePath -> IO (Either String LoadedModule)
+loadFromPath :: FilePath -> IO (Either String ModuleGroup)
 loadFromPath path = do
-  root <- getCurrentDirectory
-  m    <- parseLamFile <$> readFile path
-  case m of
+  root  <- getCurrentDirectory
+  modul <- parseLamFile <$> readFile path
+  case modul of
     Left  err -> pure (Left err)
     Right m   -> do
       deps <- mapM (loadAll root) (dependencies m)
       case sequence deps of
         Left  err   -> pure (Left err)
-        Right deps' -> pure $ Right $ LoadedModule m deps'
+        Right deps' -> pure $ Right $ ModuleGroup m deps'
 
-loadAll :: FilePath -> ModuleName -> IO (Either String LoadedModule)
+loadAll :: FilePath -> ModuleName -> IO (Either String ModuleGroup)
 loadAll root name = do
-  m <- load root name
-  case m of
+  modul <- load root name
+  case modul of
     Left  err -> pure (Left err)
     Right m   -> do
       deps <- mapM (loadAll root) (dependencies m)
       case sequence deps of
         Left  err   -> pure (Left err)
-        Right deps' -> pure $ Right $ LoadedModule m deps'
+        Right deps' -> pure $ Right $ ModuleGroup m deps'
 
 load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
 load root name = parseLamFile <$> readFile (filePath root name)

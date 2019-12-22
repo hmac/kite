@@ -21,7 +21,7 @@ import           Canonical                      ( Name(..) )
 import qualified ModuleGraphTypechecker
 import           ModuleGraphCompiler            ( CompiledModule(..) )
 import qualified ModuleGraphCompiler
-import           ModuleLoader                   ( LoadedModule(..) )
+import           ModuleLoader                   ( ModuleGroup(..) )
 
 run :: IO ()
 run = do
@@ -43,7 +43,7 @@ repl env = do
 
 processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
-  let l = LoadedModule (buildModule decls) []
+  let l = ModuleGroup (buildModule decls) []
   in  case ModuleGraphTypechecker.typecheckModule l of
         Left err -> do
           print err
@@ -62,7 +62,7 @@ processExpr decls e =
                        , funDefs       = [Def { defArgs = [], defExpr = e }]
                        }
     m = buildModule (decls ++ [main])
-    l = LoadedModule m []
+    l = ModuleGroup m []
   in
     case ModuleGraphTypechecker.typecheckModule l of
       Left  err -> print err

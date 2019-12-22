@@ -1,10 +1,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 module ModuleGraphCompiler where
 
--- This module takes a LoadedModule, compiles each module in it, and somehow
+-- This module takes a ModuleGroup, compiles each module in it, and somehow
 -- merges it all together.
 
-import           ModuleLoader                   ( LoadedModule(..) )
+import           ModuleLoader                   ( ModuleGroup(..) )
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
 import           Syntax
@@ -35,7 +35,7 @@ data CompiledModule a = CompiledModule { cModuleName :: ModuleName
   deriving Show
 
 -- Recursively compiles a module and its dependencies to LC
-compileModule :: LoadedModule -> CompiledModule LC.Env
+compileModule :: ModuleGroup -> CompiledModule LC.Env
 compileModule l = compileToLC (compileModule' l)
  where
   compileToLC :: CompiledModule ELC.Env -> CompiledModule LC.Env
@@ -44,8 +44,8 @@ compileModule l = compileToLC (compileModule' l)
                     }
 
 -- Recursively compiles a module and its dependencies to ELC
-compileModule' :: LoadedModule -> CompiledModule ELC.Env
-compileModule' (LoadedModule m deps) =
+compileModule' :: ModuleGroup -> CompiledModule ELC.Env
+compileModule' (ModuleGroup m deps) =
   let deps'    = map compileModule' deps
       depEnvs  = concatMap (ELC.collapseEnv . cModuleEnv) deps'
       elcEnv   = ELC.defaultEnv { ELC.imports = depEnvs }

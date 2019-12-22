@@ -2,7 +2,7 @@ module ModuleGraphTypechecker where
 
 import           Util
 import           Syntax
-import           ModuleLoader                   ( LoadedModule(..) )
+import           ModuleLoader                   ( ModuleGroup(..) )
 import           Typecheck.THIH                 ( Id
                                                 , Type
                                                 , Scheme
@@ -22,7 +22,7 @@ import           Typecheck.Translate            ( typeConstructors
 import qualified Typecheck.Primitive           as Prim
 import           Data.Maybe                     ( mapMaybe )
 
--- This module takes a LoadedModule from the loader and attempts to typecheck it
+-- This module takes a ModuleGroup from the loader and attempts to typecheck it
 -- and its dependent modules.
 
 -- The tricky part here is making sure that we resolve names such that
@@ -59,7 +59,7 @@ import           Data.Maybe                     ( mapMaybe )
 --    typechecker.
 -- 3. Repeat for each dependent module, and their dependencies.
 
-typecheckModule :: LoadedModule -> Either Error ()
+typecheckModule :: ModuleGroup -> Either Error ()
 typecheckModule lm =
   let (_tycons, datacons, depfuns, funs, typeclasses, methods) =
           extractDecls lm
@@ -70,7 +70,7 @@ typecheckModule lm =
           Left  e -> Left e
           Right _ -> Right ()
 
-dumpEnv :: LoadedModule -> ([Assump], Program)
+dumpEnv :: ModuleGroup -> ([Assump], Program)
 dumpEnv lm =
   let (_tycons, datacons, depfuns, funs, _typeclasses, _methods) =
           extractDecls lm
@@ -78,7 +78,7 @@ dumpEnv lm =
   in  (assumps, [(funs, [])])
 
 extractDecls
-  :: LoadedModule
+  :: ModuleGroup
   -> ( [(Id, Type)]
      , [(Id, Scheme)]
      , [(Id, Scheme)]
@@ -86,7 +86,7 @@ extractDecls
      , [Typeclass]
      , [Assump]
      )
-extractDecls (LoadedModule m deps) =
+extractDecls (ModuleGroup m deps) =
   let
     core = desugarModule m
     -- TODO: do something with typeclasses/methods in deps
