@@ -13,36 +13,24 @@ import           Text.Megaparsec                ( parse
                                                 , errorBundlePretty
                                                 , (<|>)
                                                 )
-import           Typecheck.THIH                 ( tiProgram )
-import           Typecheck.Translate            ( tiModule
-                                                , toProgram
-                                                , funToImpl
-                                                , defaultClassEnv
-                                                )
-import           Typecheck.Desugar              ( desugarModule
-                                                , desugarFun
-                                                )
 
-import           ELC.Compile                    ( translateModule
-                                                , defaultEnv
-                                                )
-import           LC.Compile                     ( runConvert
-                                                , convertEnv
-                                                )
 import qualified LC.Eval                        ( evalVar )
 import qualified LC.Print                       ( print )
 import           Syntax
-import qualified Canonicalise                  as Can
 import           Canonical                      ( Name(..) )
+import qualified ModuleGraphTypechecker
+import           ModuleGraphCompiler            ( CompiledModule(..) )
+import qualified ModuleGraphCompiler
+import           ModuleLoader                   ( LoadedModule(..) )
 
 run :: IO ()
 run = do
   hSetBuffering stdout NoBuffering
+  putStrLn "Welcome to the Lam REPL."
   repl []
 
 repl :: [Decl Syn] -> IO ()
 repl env = do
-  putStrLn "Welcome to the Lam REPL."
   input <- parseInput
   case input of
     Definition decl -> do
@@ -55,9 +43,9 @@ repl env = do
 
 processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
-  let core = desugarModule (buildModule decls)
-  in  case tiModule core of
-        Left (err) -> do
+  let l = LoadedModule (buildModule decls) []
+  in  case ModuleGraphTypechecker.typecheckModule l of
+        Left err -> do
           print err
           pure False
         Right _ -> do
@@ -67,29 +55,22 @@ processDecl decls =
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
   let
-    main = Fun { funComments   = []
-               , funName       = "$main"
-               , funType       = TyHole "replExpression"
-               , funConstraint = Nothing
-               , funDefs       = [Def { defArgs = [], defExpr = e }]
-               }
-    m                    = buildModule decls
-    modCore              = desugarModule m
-    (env, assumps, prog) = toProgram mempty modCore
-    mainBindGroup        = ([], [[funToImpl env (desugarFun main)]])
-    classEnv             = defaultClassEnv
-    prog'                = prog ++ [mainBindGroup]
+    main = FunDecl Fun { funComments   = []
+                       , funName       = "$main"
+                       , funType       = TyHole "replExpression"
+                       , funConstraint = Nothing
+                       , funDefs       = [Def { defArgs = [], defExpr = e }]
+                       }
+    m = buildModule (decls ++ [main])
+    l = LoadedModule m []
   in
-    case tiProgram classEnv assumps prog' of
-      Left  (err) -> print err
-      Right _     -> do
-        let
-          m' = Can.canonicaliseModule m
-            { moduleDecls = FunDecl main : moduleDecls m
-            }
-        let answer =
-              LC.Eval.evalVar (TopLevel (moduleName m') "$main") $ runConvert
-                (translateModule ELC.Compile.defaultEnv m' >>= convertEnv)
+    case ModuleGraphTypechecker.typecheckModule l of
+      Left  err -> print err
+      Right _   -> do
+        let compiled = ModuleGraphCompiler.compileModule l
+        let answer = LC.Eval.evalVar
+              (TopLevel (cModuleName compiled) "$main")
+              (cModuleEnv compiled)
         renderIO stdout
                  (layoutPretty defaultLayoutOptions (LC.Print.print answer))
         putStrLn ""

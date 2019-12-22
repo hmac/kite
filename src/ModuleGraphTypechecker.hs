@@ -11,19 +11,15 @@ import           Typecheck.THIH                 ( Id
                                                 , tiProgram
                                                 , Error
                                                 , Program
-                                                , ClassEnv
                                                 )
 import           Typecheck.Desugar              ( desugarModule )
-import           Typecheck.Translate            ( defaultClassEnv
-                                                , typeConstructors
+import           Typecheck.Translate            ( typeConstructors
                                                 , dataConstructors
                                                 , toBindGroup
-                                                , primitiveConstructors
-                                                , primitiveTypeConstructors
-                                                , Env
                                                 , addTypeclasses
                                                 , typeclassMethods
                                                 )
+import qualified Typecheck.Primitive           as Prim
 import           Data.Maybe                     ( mapMaybe )
 
 -- This module takes a LoadedModule from the loader and attempts to typecheck it
@@ -69,7 +65,7 @@ typecheckModule lm =
           extractDecls lm
       assumps = map (uncurry (:>:)) (datacons <> depfuns) <> methods
   in  do
-        classEnv <- addTypeclasses typeclasses defaultClassEnv
+        classEnv <- Prim.classEnv >>= addTypeclasses typeclasses
         case tiProgram classEnv assumps [(funs, [])] of
           Left  e -> Left e
           Right _ -> Right ()
@@ -91,23 +87,25 @@ extractDecls
      , [Assump]
      )
 extractDecls (LoadedModule m deps) =
-  let core = desugarModule m
-      -- TODO: do something with typeclasses/methods in deps
-      (deptycons, depdatacons, _, depfuns, _typeclasses, _depmethods) =
-          concat6 (map extractDecls deps)
-      depfunTypes = map (\(id_, scheme, _) -> (id_, scheme)) depfuns
-      tycons :: [(Id, Type)]
-      tycons = primitiveTypeConstructors <> typeConstructors core
-      datacons :: [(Id, Scheme)]
-      datacons =
-          primitiveConstructors <> dataConstructors (deptycons <> tycons, []) core
-      env = (deptycons <> tycons, depdatacons <> depfunTypes <> datacons)
-      methods :: [Assump]
-      methods = concatMap (typeclassMethods env) (typeclassDecls m)
-      funs :: [(Id, Scheme, [Alt])]
-      funs = concatMap fst $ mapMaybe (toBindGroup env) (moduleDecls core)
-      typeclasses = typeclassDecls core
-  in  (tycons, datacons, depfunTypes, funs, typeclasses, methods)
+  let
+    core = desugarModule m
+    -- TODO: do something with typeclasses/methods in deps
+    (deptycons, depdatacons, _, depfuns, _typeclasses, _depmethods) =
+      concat6 (map extractDecls deps)
+    depfunTypes = map (\(id_, scheme, _) -> (id_, scheme)) depfuns
+    tycons :: [(Id, Type)]
+    tycons = Prim.typeConstructors <> typeConstructors core
+    datacons :: [(Id, Scheme)]
+    datacons =
+      Prim.constructors <> dataConstructors (deptycons <> tycons, []) core
+    env = (deptycons <> tycons, depdatacons <> depfunTypes <> datacons)
+    methods :: [Assump]
+    methods = concatMap (typeclassMethods env) (typeclassDecls m)
+    funs :: [(Id, Scheme, [Alt])]
+    funs        = concatMap fst $ mapMaybe (toBindGroup env) (moduleDecls core)
+    typeclasses = typeclassDecls core
+  in
+    (tycons, datacons, depfunTypes, funs, typeclasses, methods)
 
 assumpToTuple :: Assump -> (Id, Scheme)
 assumpToTuple (n :>: s) = (n, s)

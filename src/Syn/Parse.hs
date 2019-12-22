@@ -279,7 +279,7 @@ pInt = do
   digits <- lexeme (some digitChar)
   pure . read $ fromMaybe "" sign <> digits
 
-pFloat :: Parser Float
+pFloat :: Parser Double
 pFloat = do
   sign    <- optional (string "-")
   numeral <- many digitChar

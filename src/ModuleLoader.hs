@@ -7,7 +7,6 @@ import           Syntax
 import           Data.List                      ( nub
                                                 , intercalate
                                                 )
-import           Data.List.Extra                ( breakOnEnd )
 
 -- This module is responsible for loading Lam modules. It should attempt to
 -- cache modules so they're not loaded multiple times.

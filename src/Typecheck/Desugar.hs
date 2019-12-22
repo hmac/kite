@@ -25,7 +25,7 @@ data Core = Var Name
           | Tuple [Core]
           | List [Core]
           | IntLit Int
-          | FloatLit Float
+          | FloatLit Double
           | StringLit String
           deriving (Eq, Show, Generic)
 

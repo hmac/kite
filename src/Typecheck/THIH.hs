@@ -10,9 +10,7 @@ module Typecheck.THIH where
 
 import           Control.Monad.Except           ( MonadError(..) )
 import           Control.Applicative            ( liftA2 )
-import           Control.Monad                  ( (>=>)
-                                                , zipWithM
-                                                )
+import           Control.Monad                  ( zipWithM )
 import           Data.Maybe                     ( fromMaybe
                                                 , isJust
                                                 , isNothing
@@ -333,30 +331,6 @@ addClass i is ce
   | any (isNothing . classes ce) is = error "superclass not defined"
   | otherwise                       = pure (modify ce i (is, []))
 
-addPreludeClasses :: EnvTransformer
-addPreludeClasses = addCoreClasses >=> addNumClasses
-
-addCoreClasses :: EnvTransformer
-addCoreClasses =
-  addClass "Eq" []
-    >=> addClass "Ord"     ["Eq"]
-    >=> addClass "Show"    []
-    >=> addClass "Read"    []
-    >=> addClass "Bounded" []
-    >=> addClass "Enum"    []
-    >=> addClass "Functor" []
-    >=> addClass "Monad"   []
-
-addNumClasses :: EnvTransformer
-addNumClasses =
-  addClass "Num" ["Eq", "Show"]
-    >=> addClass "Real"       ["Num", "Ord"]
-    >=> addClass "Fractional" ["Num"]
-    >=> addClass "Integral"   ["Real", "Enum"]
-    >=> addClass "RealFrac"   ["Real", "Fractional"]
-    >=> addClass "Floating"   ["Fractional"]
-    >=> addClass "RealFloat"  ["RealFrac", "Floating"]
-
 -- To add a new instance to a class, we must check:
 -- - the class is defined
 -- - the instance doesn't overlap with any previously defined instance
@@ -645,15 +619,17 @@ type Infer e t = ClassEnv -> [Assump] -> e -> TI ([Pred], t)
 data Literal = LitInt Integer
              | LitChar Char
              | LitRat Rational
+             | LitFloat Double
              | LitStr String
              deriving Show
 
 tiLit :: Literal -> TI ([Pred], Type)
-tiLit (LitChar _) = pure ([], tChar)
+tiLit (LitChar  _) = pure ([], tChar)
 -- Integers are not overloaded (yet)
-tiLit (LitInt  _) = pure ([], tInt)
-tiLit (LitStr  _) = pure ([], tString)
-tiLit (LitRat  _) = do
+tiLit (LitInt   _) = pure ([], tInt)
+tiLit (LitStr   _) = pure ([], tString)
+tiLit (LitFloat _) = pure ([], tFloat)
+tiLit (LitRat   _) = do
   v <- newTVar Star
   pure ([IsIn "Fractional" v], v)
 

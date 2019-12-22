@@ -15,8 +15,6 @@ import           ModuleGraphCompiler            ( compileModule
                                                 , CompiledModule(..)
                                                 )
 
-import           Typecheck.Desugar              ( desugarModule )
-import           Typecheck.Translate            ( tiModule )
 import           Typecheck.Error                ( printError )
 import qualified Repl                           ( run )
 import qualified ELC.Compile                   as ELC

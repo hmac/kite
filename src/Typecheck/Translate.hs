@@ -2,7 +2,6 @@ module Typecheck.Translate where
 
 -- Convert types in Syntax to types in THIH
 
-import           Control.Monad                  ( (>=>) )
 import qualified Data.List                     as List
                                                 ( find )
 import           Data.Maybe                     ( mapMaybe
@@ -12,31 +11,10 @@ import qualified Syntax                        as S
 import           Typecheck.THIH
 import           Typecheck.Desugar              ( Core )
 import qualified Typecheck.Desugar             as D
+import qualified Typecheck.Primitive           as Prim
 
 -- TODO: this module is a mess with no clear entrypoint.
 -- Restrict the exports and clean this up.
-
-tiModule :: S.Module Core -> Either Error [Assump]
-tiModule m = do
-  let (_, assumps, p) = toProgram mempty m
-  classEnv <- do
-    e <- primitiveInsts initialEnv
-    addTypeclasses (S.typeclassDecls m) e
-  tiProgram classEnv assumps p
-
-toProgram :: Env -> S.Module Core -> (Env, [Assump], Program)
-toProgram env m =
-  let tycons   = primitiveTypeConstructors ++ typeConstructors m
-      datacons = primitiveConstructors ++ dataConstructors (tycons, []) m
-      methods  = concatMap (typeclassMethods env) (S.typeclassDecls m)
-      assumps  = map (uncurry (:>:)) datacons <> methods
-      env'     = mergeEnv (tycons, datacons) env
-  in  (env', assumps, mapMaybe (toBindGroup env') (S.moduleDecls m))
-
-defaultClassEnv :: ClassEnv
-defaultClassEnv = case primitiveInsts initialEnv of
-  Left  e -> error $ "failed to construct prelude typeclasses: " <> show e
-  Right c -> c
 
 --          type cons     data cons
 type Env = ([(Id, Type)], [(Id, Scheme)])
@@ -49,28 +27,6 @@ lookupDataCon n (_, datacons) = lookup n datacons
 
 mergeEnv :: Env -> Env -> Env
 mergeEnv (a, b) (c, d) = (a <> c, b <> d)
-
-primitiveTypeConstructors :: [(Id, Type)]
-primitiveTypeConstructors =
-  [("Int", tInt), ("String", tString), ("Bool", tBool)]
-
-primitiveConstructors :: [(Id, Scheme)]
-primitiveConstructors =
-  let tuple (f :>: s) = (f, s)
-  in  map
-        tuple
-        [ listCons
-        , listNil
-        , true
-        , false
-        , primError
-        , primShow
-        , primStringConcat
-        , primNumPlus
-        , primNumSub
-        , primNumMult
-        , primOrdLt
-        ]
 
 typeConstructors :: S.Module Core -> [(Id, Type)]
 typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
@@ -121,10 +77,10 @@ dataConstructors env m = concatMap toAssumps
       Nothing -> error $ "unknown type constructor " <> tyName
 
 toBindGroup :: Env -> S.Decl Core -> Maybe BindGroup
-toBindGroup env  (S.FunDecl       f) = Just ([funToExpl env f], [])
+toBindGroup env  (S.FunDecl       f) = Just (funToBindGroup env f)
 toBindGroup _env (S.DataDecl      _) = Nothing
 toBindGroup _env (S.Comment       _) = Nothing
-toBindGroup env  (S.TypeclassDecl _) = Nothing
+toBindGroup _env (S.TypeclassDecl _) = Nothing
 toBindGroup _env (S.TypeclassInst _) = Nothing
 
 typeclassMethods :: Env -> S.Typeclass -> [Assump]
@@ -138,6 +94,14 @@ typeclassMethods env t = flip map (S.typeclassDefs t)
   -- eq : Eq a => a -> a -> Bool
   constraint = S.CInst (S.typeclassName t) (map S.TyVar (S.typeclassTyVars t))
 
+funToBindGroup :: Env -> S.Fun Core -> BindGroup
+funToBindGroup env f = case S.funType f of
+  S.TyHole _ -> ([], [[funToImpl env f]])
+  _          -> ([funToExpl env f], [])
+
+funToImpl :: Env -> S.Fun Core -> Impl
+funToImpl env f = (toId (S.funName f), map (defToAlt env) (S.funDefs f))
+
 funToExpl :: Env -> S.Fun Core -> Expl
 funToExpl env f =
   ( toId (S.funName f)
@@ -145,11 +109,7 @@ funToExpl env f =
   , map (defToAlt env) (S.funDefs f)
   )
 
--- Only used to typecheck expressions entered in the REPL
-funToImpl :: Env -> S.Fun Core -> Impl
-funToImpl env f = (toId (S.funName f), map (defToAlt env) (S.funDefs f))
-
-tyToScheme :: Env -> S.Ty -> Maybe (S.Constraint) -> Scheme
+tyToScheme :: Env -> S.Ty -> Maybe S.Constraint -> Scheme
 tyToScheme env (S.TyList t) c = quantify
   (tv t')
   (constraintToPreds env c :=> list t')
@@ -202,16 +162,18 @@ defToAlt env d = (map (toPat env) (S.defArgs d), toExpr env (S.defExpr d))
 
 -- TODO: pass in a context of constructors in scope, with their declared types
 toPat :: Env -> S.Pattern -> Pat
-toPat _env (S.VarPat n) = PVar (toId n)
-toPat _env S.WildPat    = PWildcard
-toPat _env (S.IntPat n) = PLit (LitInt (toInteger n))
-toPat env (S.ListPat pats) =
-  foldr (\pat acc -> PCon listCons [toPat env pat, acc]) (PCon listNil []) pats
+toPat _env (S.VarPat n)     = PVar (toId n)
+toPat _env S.WildPat        = PWildcard
+toPat _env (S.IntPat  n   ) = PLit (LitInt (toInteger n))
+toPat env  (S.ListPat pats) = foldr
+  (\pat acc -> PCon Prim.listCons [toPat env pat, acc])
+  (PCon Prim.listNil [])
+  pats
 toPat env (S.TuplePat pats) =
   let tupleCon = case length pats of
-        2 -> tuple2
-        3 -> tuple3
-        4 -> tuple4
+        2 -> Prim.tuple2
+        3 -> Prim.tuple3
+        4 -> Prim.tuple4
         n -> error $ "cannot translate tuple patterns of length " <> show n
   in  PCon tupleCon (map (toPat env) pats)
 toPat env (S.ConsPat name pats) = PCon (lookupCon (toId name))
@@ -232,127 +194,22 @@ toExpr _env (D.Hole _      ) = error "cannot translate holes yet"
 toExpr env  (D.App a     b ) = Ap (toExpr env a) (toExpr env b)
 toExpr env  (D.Let binds e ) = Let (bindsToBindGroup env binds) (toExpr env e)
 toExpr _env (D.IntLit    i ) = Lit (LitInt (toInteger i))
+toExpr _env (D.FloatLit  f ) = Lit (LitFloat f)
 toExpr _env (D.StringLit s ) = Lit (LitStr s)
 toExpr env  (D.List      es) = foldr
-  (\x acc -> Ap (Ap (Const listCons) (toExpr env x)) acc)
-  (Const listNil)
+  (\x acc -> Ap (Ap (Const Prim.listCons) (toExpr env x)) acc)
+  (Const Prim.listNil)
   es
 toExpr env (D.Tuple es) =
   let c = case length es of
-        2 -> tuple2
-        3 -> tuple3
-        4 -> tuple4
-        5 -> tuple5
-        6 -> tuple6
-        7 -> tuple7
+        2 -> Prim.tuple2
+        3 -> Prim.tuple3
+        4 -> Prim.tuple4
+        5 -> Prim.tuple5
+        6 -> Prim.tuple6
+        7 -> Prim.tuple7
         n -> error $ "cannot translate tuples of length " <> show n
   in  foldl Ap (Const c) (map (toExpr env) es)
-toExpr env (D.List es) = foldr
-  (\e acc -> Ap (Ap (Const listCons) (toExpr env e)) acc)
-  (Const listNil)
-  es
-
--- Primitive tuple constructor types
-tuple2 :: Assump
-tuple2 = "$prim_tuple2" :>: Forall
-  [Star, Star]
-  ([] :=> (TGen 0 `fn` TGen 1 `fn` foldl TAp tTuple2 (map TGen [0 .. 1])))
-tuple3 :: Assump
-tuple3 = "$prim_tuple3" :>: Forall
-  [Star, Star, Star]
-  (   []
-  :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` foldl TAp
-                                                 tTuple3
-                                                 (map TGen [0 .. 2])
-      )
-  )
-tuple4 :: Assump
-tuple4 = "$prim_tuple4" :>: Forall
-  [Star, Star, Star, Star]
-  (   []
-  :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` TGen 3 `fn` foldl
-        TAp
-        tTuple4
-        (map TGen [0 .. 3])
-      )
-  )
-tuple5 :: Assump
-tuple5 = "$prim_tuple5" :>: Forall
-  [Star, Star, Star, Star, Star]
-  (   []
-  :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` TGen 3 `fn` TGen 4 `fn` foldl
-        TAp
-        tTuple5
-        (map TGen [0 .. 4])
-      )
-  )
-tuple6 :: Assump
-tuple6 = "$prim_tuple6" :>: Forall
-  [Star, Star, Star, Star, Star, Star]
-  (   []
-  :=> (    TGen 0
-      `fn` TGen 1
-      `fn` TGen 2
-      `fn` TGen 3
-      `fn` TGen 4
-      `fn` TGen 5
-      `fn` foldl TAp tTuple6 (map TGen [0 .. 5])
-      )
-  )
-tuple7 :: Assump
-tuple7 = "$prim_tuple7" :>: Forall
-  [Star, Star, Star, Star, Star, Star, Star]
-  (   []
-  :=> (    TGen 0
-      `fn` TGen 1
-      `fn` TGen 2
-      `fn` TGen 3
-      `fn` TGen 4
-      `fn` TGen 5
-      `fn` TGen 6
-      `fn` foldl TAp tTuple7 (map TGen [0 .. 6])
-      )
-  )
-
--- primitive List constructors
-listNil :: Assump
-listNil = "[]" :>: Forall [Star] ([] :=> TAp tList (TGen 0))
-listCons :: Assump
-listCons = "::" :>: Forall
-  [Star]
-  ([] :=> (TGen 0 `fn` TAp tList (TGen 0) `fn` TAp tList (TGen 0)))
-
--- primitive Bool constructors
-true :: Assump
-true = "True" :>: Forall [] ([] :=> tBool)
-false :: Assump
-false = "False" :>: Forall [] ([] :=> tBool)
-
--- other primitive functions
-primError :: Assump
-primError = "error" :>: Forall [Star] ([] :=> (tString `fn` TGen 0))
-primStringConcat :: Assump
-primStringConcat =
-  "$prim_stringconcat" :>: Forall [] ([] :=> (list tString `fn` tString))
--- TODO: add Show constraint
-primShow :: Assump
-primShow = "$prim_show" :>: Forall [Star] ([] :=> (TGen 0 `fn` tString))
-primNumPlus :: Assump
-primNumPlus = "+" :>: Forall
-  [Star]
-  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
-primNumSub :: Assump
-primNumSub = "-" :>: Forall
-  [Star]
-  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
-primNumMult :: Assump
-primNumMult = "*" :>: Forall
-  [Star]
-  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
-primOrdLt :: Assump
-primOrdLt = "<" :>: Forall
-  [Star]
-  ([IsIn "Ord" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` tBool))
 
 bindsToBindGroup :: Env -> [(S.Name, [([S.Pattern], Core)])] -> BindGroup
 bindsToBindGroup env binds = ([], map ((: []) . toBind) binds)
@@ -364,16 +221,3 @@ bindsToBindGroup env binds = ([], map ((: []) . toBind) binds)
 
 toId :: S.Name -> Id
 toId (S.Name n) = n
-
-primitiveInsts :: EnvTransformer
-primitiveInsts =
-  addPreludeClasses
-    >=> addInst [] (IsIn "Ord" tUnit)
-    >=> addInst [] (IsIn "Ord" tChar)
-    >=> addInst [] (IsIn "Ord" tInt)
-    >=> addInst
-          [ IsIn "Ord" (TVar (Tyvar "a" Star))
-          , IsIn "Ord" (TVar (Tyvar "b" Star))
-          ]
-          (IsIn "Ord" (pair (TVar (Tyvar "a" Star)) (TVar (Tyvar "b" Star))))
-    >=> addInst [] (IsIn "Num" tInt)

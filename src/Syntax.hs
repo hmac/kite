@@ -168,7 +168,7 @@ data Syn_ name = Var name
          | ListLit [Syn_ name]
          | StringLit String [(Syn_ name, String)]
          | IntLit Int
-         | FloatLit Float
+         | FloatLit Double
          deriving (Eq, Show)
 
 -- Supported binary operators
