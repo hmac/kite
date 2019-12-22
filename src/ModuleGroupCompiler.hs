@@ -1,5 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-module ModuleGraphCompiler where
+module ModuleGroupCompiler where
 
 -- This module takes a ModuleGroup, compiles each module in it, and somehow
 -- merges it all together.

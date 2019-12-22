@@ -10,10 +10,10 @@ import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 
 import           ModuleLoader                   ( ModuleGroup(..) )
-import           ModuleGraphCompiler            ( CompiledModule(..) )
+import           ModuleGroupCompiler            ( CompiledModule(..) )
 import qualified ModuleLoader
 import qualified ModuleGroupTypechecker
-import qualified ModuleGraphCompiler
+import qualified ModuleGroupCompiler
 
 import           Typecheck.Error                ( printError )
 import qualified Repl                           ( run )
@@ -54,10 +54,10 @@ parse path = do
     Right m -> pPrint m
 
 dumpELC :: FilePath -> IO ()
-dumpELC = withParsedFile $ \m -> pPrint $ ModuleGraphCompiler.compileModule' m
+dumpELC = withParsedFile $ \m -> pPrint $ ModuleGroupCompiler.compileModule' m
 
 dumpLC :: FilePath -> IO ()
-dumpLC = withParsedFile $ \m -> pPrint $ ModuleGraphCompiler.compileModule m
+dumpLC = withParsedFile $ \m -> pPrint $ ModuleGroupCompiler.compileModule m
 
 dumpTypeEnv :: FilePath -> IO ()
 dumpTypeEnv path = do
@@ -83,7 +83,7 @@ run path = do
     Right l   -> case ModuleGroupTypechecker.typecheckModule l of
       Left err -> putStrLn (printError err)
       Right _ ->
-        let cm     = ModuleGraphCompiler.compileModule l
+        let cm     = ModuleGroupCompiler.compileModule l
             answer = evalMain (cModuleName cm) (cModuleEnv cm)
         in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
 

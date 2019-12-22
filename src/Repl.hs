@@ -21,8 +21,8 @@ import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
 import           Canonicalise                   ( canonicaliseModule )
 import qualified ModuleGroupTypechecker
-import           ModuleGraphCompiler            ( CompiledModule(..) )
-import qualified ModuleGraphCompiler
+import           ModuleGroupCompiler            ( CompiledModule(..) )
+import qualified ModuleGroupCompiler
 import           ModuleLoader                   ( ModuleGroup(..) )
 
 run :: IO ()
@@ -69,7 +69,7 @@ processExpr decls e =
     case ModuleGroupTypechecker.typecheckModule l of
       Left  err -> print err
       Right _   -> do
-        let compiled = ModuleGraphCompiler.compileModule l
+        let compiled = ModuleGroupCompiler.compileModule l
         let answer = LC.Eval.evalVar
               (TopLevel (cModuleName compiled) "$main")
               (cModuleEnv compiled)
