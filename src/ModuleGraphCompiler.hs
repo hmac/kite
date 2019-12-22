@@ -8,7 +8,7 @@ import           ModuleLoader                   ( ModuleGroup(..) )
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
 import           Syntax
-import qualified Canonicalise                  as Can
+import qualified Canonical                     as Can
 
 
 -- We'll attempt this as follows:
@@ -28,7 +28,7 @@ import qualified Canonicalise                  as Can
 
 data CompiledModule a = CompiledModule { cModuleName :: ModuleName
                                        , cModuleImports :: [Import]
-                                       , cModuleExports :: [Name]
+                                       , cModuleExports :: [Can.Name]
                                        , cModuleEnv :: a
                                        , cModuleDeps :: [CompiledModule a]
                                        }
@@ -49,8 +49,7 @@ compileModule' (ModuleGroup m deps) =
   let deps'    = map compileModule' deps
       depEnvs  = concatMap (ELC.collapseEnv . cModuleEnv) deps'
       elcEnv   = ELC.defaultEnv { ELC.imports = depEnvs }
-      mcanon   = Can.canonicaliseModule m
-      m'       = LC.runConvert (ELC.translateModule elcEnv mcanon)
+      m'       = LC.runConvert (ELC.translateModule elcEnv m)
       compiled = CompiledModule { cModuleName    = moduleName m
                                 , cModuleEnv     = m'
                                 , cModuleImports = moduleImports m

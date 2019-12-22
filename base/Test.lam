@@ -1,11 +1,14 @@
 module Test
 
-import Data.Bool (True, False)
+import Data.Bool (True, False, Bool)
 import Data.Maybe (Just, Nothing)
 import Data.Either (Either, Left, Right)
 
-e : Either Int String
-e = Left 1
+e : Either Bool String
+e = Left True
 
-main : Maybe Int
-main = fromLeft e
+f : ?someHole
+f = 4
+
+main : String
+main = "#{45 + 54} is a number"

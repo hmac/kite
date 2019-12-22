@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 module Typecheck.Desugar where
 
 -- This module translates the surface syntax (Syn) to a smaller core syntax used
@@ -10,46 +9,44 @@ module Typecheck.Desugar where
 -- - convert lambda abstractions to let bindings
 
 import           Util
-import           GHC.Generics                   ( Generic )
+import           Data.Name
+import qualified Canonical                     as Can
 import qualified Syntax                        as S
-import           Syntax                         ( Name
-                                                , Syn
-                                                , Pattern
-                                                )
+import           Syntax                         ( Name )
 
-data Core = Var Name
-          | Cons Name
+data Core = Var Can.Name
+          | Cons Can.Name
           | Hole Name
           | App Core Core
-          | Let [(Name, [([S.Pattern], Core)])] Core
+          | Let [(Can.Name, [([Can.Pattern], Core)])] Core
           | Tuple [Core]
           | List [Core]
           | IntLit Int
           | FloatLit Double
           | StringLit String
-          deriving (Eq, Show, Generic)
+          deriving (Eq, Show)
 
-desugarModule :: S.Module S.Syn -> S.Module Core
+desugarModule :: Can.Module Can.Exp -> Can.Module Core
 desugarModule m = m { S.moduleDecls = map desugarDecl (S.moduleDecls m) }
 
-desugarDecl :: S.Decl S.Syn -> S.Decl Core
+desugarDecl :: Can.Decl Can.Exp -> Can.Decl Core
 desugarDecl (S.FunDecl       f) = S.FunDecl (desugarFun f)
 desugarDecl (S.TypeclassInst i) = S.TypeclassInst (desugarInstance i)
 desugarDecl (S.DataDecl      d) = S.DataDecl d
 desugarDecl (S.TypeclassDecl t) = S.TypeclassDecl t
 desugarDecl (S.Comment       c) = S.Comment c
 
-desugarFun :: S.Fun S.Syn -> S.Fun Core
+desugarFun :: Can.Fun Can.Exp -> Can.Fun Core
 desugarFun f = f { S.funDefs = map desugarDef (S.funDefs f) }
 
-desugarInstance :: S.Instance S.Syn -> S.Instance Core
+desugarInstance :: Can.Instance Can.Exp -> Can.Instance Core
 desugarInstance i =
   i { S.instanceDefs = mapSnd (map desugarDef) (S.instanceDefs i) }
 
-desugarDef :: S.Def S.Syn -> S.Def Core
+desugarDef :: Can.Def Can.Exp -> Can.Def Core
 desugarDef d = d { S.defExpr = desugarExpr (S.defExpr d) }
 
-desugarExpr :: Syn -> Core
+desugarExpr :: Can.Exp -> Core
 desugarExpr (S.Var  n     ) = Var n
 desugarExpr (S.Cons n     ) = Cons n
 desugarExpr (S.Hole n     ) = Hole n
@@ -71,9 +68,9 @@ desugarExpr (S.FloatLit f) = FloatLit f
 -- becomes
 --
 -- let f x = e in f
-desugarAbs :: [Name] -> Core -> Core
+desugarAbs :: [Can.Name] -> Core -> Core
 desugarAbs vars e =
-  let freshName = "$f"
+  let freshName = Can.Local "$f"
   in  Let [(freshName, [(map S.VarPat vars, e)])] (Var freshName)
 
 -- Convert a string interpolation into applications of concat and show
@@ -81,11 +78,17 @@ desugarAbs vars e =
 -- TODO: this needs to be independent of whatever variables are in scope
 -- ideally concat is part of Monoid/Semigroup and show is part of Show
 desugarString :: String -> [(Core, String)] -> Core
-desugarString prefix interps = App (Var "$prim_stringconcat")
-                                   (List (StringLit prefix : go interps))
+desugarString prefix interps = App
+  (Var (Can.TopLevel modPrim "$prim_stringconcat"))
+  (List (StringLit prefix : go interps))
  where
-  go []            = []
-  go ((e, s) : is) = App (Var "$prim_show") e : StringLit s : go is
+  go [] = []
+  go ((e, s) : is) =
+    App (Var (Can.TopLevel modPrim "$prim_show")) e : StringLit s : go is
+
+-- TODO: deduplicate with ELC.Primitive
+modPrim :: ModuleName
+modPrim = ModuleName ["Lam", "Primitive"]
 
 -- case scrut of
 --   pat1 -> e1
@@ -96,9 +99,9 @@ desugarString prefix interps = App (Var "$prim_stringconcat")
 -- let $fresh_name pat1 = e1
 --     $fresh_name pat2 = e2
 --  in $fresh_name scrut
-desugarCase :: Syn -> [(Pattern, Syn)] -> Core
+desugarCase :: Can.Exp -> [(Can.Pattern, Can.Exp)] -> Core
 desugarCase scrut alts =
   -- TODO: generate an actual fresh, unique name
-  let freshName = "$f"
+  let freshName = Can.Local "$f"
       pats      = map (\(pat, a) -> ([pat], desugarExpr a)) alts
   in  Let [(freshName, pats)] (App (Var freshName) (desugarExpr scrut))

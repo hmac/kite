@@ -1,13 +1,13 @@
 {-# LANGUAGE TupleSections #-}
 module Canonicalise where
 
-import           qualified Data.Map.Strict               as Map
+import qualified Data.Map.Strict         as Map
 
-import Util
-import Data.Name
-import Syntax                        as Syn
-import qualified Canonical                     as Can
-import Canonical (Name(Local, TopLevel))
+import           Util
+import           Data.Name
+import           Syntax                  as Syn
+import           Canonical (Name(..))
+import qualified Canonical               as Can
 import qualified Canonical.Primitive
 
 -- Converts raw names to canonical names.
@@ -47,11 +47,35 @@ canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f =
   f { Syn.funName = TopLevel mod (Syn.funName f)
     , Syn.funDefs = fmap (canonicaliseDef (mod, imps)) (Syn.funDefs f)
-    , Syn.funConstraint = canonicaliseConstraint (mod, imps) <$> (Syn.funConstraint f)
+    , Syn.funConstraint = canonicaliseConstraint (mod, imps) <$> Syn.funConstraint f
+    , Syn.funType = canonicaliseType (mod, imps) (Syn.funType f)
     }
 
+canonicaliseType :: Env -> Syn.Ty -> Can.Type
+canonicaliseType env@(mod, imps) = \case
+  -- Note: type variables are assumed to be local to the type
+  -- this may need rethinking when we support type aliases
+  Syn.TyVar v -> Syn.TyVar (Local v)
+  Syn.TyCon n -> case Map.lookup n imps of
+                   Just i -> Syn.TyCon (TopLevel i n)
+                   Nothing -> Syn.TyCon (TopLevel mod n)
+  a Syn.:@: b -> canonicaliseType env a Syn.:@: canonicaliseType env b
+  Syn.TyList a -> Syn.TyList (canonicaliseType env a)
+  Syn.TyTuple as -> Syn.TyTuple $ fmap (canonicaliseType env) as
+  Syn.TyHole n -> Syn.TyHole n
+  Syn.TyArr -> Syn.TyArr
+  Syn.TyInt -> Syn.TyInt
+  Syn.TyFloat -> Syn.TyFloat
+  Syn.TyString -> Syn.TyString
+
 canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
-canonicaliseConstraint env c = undefined
+canonicaliseConstraint env@(mod, imps) = \case
+  CInst n tys ->
+    let n' = case Map.lookup n imps of
+               Just i -> TopLevel i n
+               Nothing -> TopLevel mod n
+     in CInst n' $ fmap (canonicaliseType env) tys
+  CTuple a b -> CTuple (canonicaliseConstraint env a) (canonicaliseConstraint env b)
 
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d =
@@ -61,12 +85,14 @@ canonicaliseData (mod, imps) d =
 
 canonicaliseDataCon :: Env -> Syn.DataCon -> Can.DataCon
 canonicaliseDataCon (mod, imps) d =
-  d { Syn.conName = TopLevel mod (Syn.conName d) }
+  d { Syn.conName = TopLevel mod (Syn.conName d)
+    , Syn.conArgs = fmap (canonicaliseType (mod, imps)) (Syn.conArgs d)
+    }
 
 canonicaliseTypeclass :: Env -> Syn.Typeclass -> Can.Typeclass
 canonicaliseTypeclass (mod, imps) t =
   t { Syn.typeclassName = TopLevel mod (Syn.typeclassName t)
-    , Syn.typeclassDefs = mapFst (TopLevel mod) (Syn.typeclassDefs t)
+    , Syn.typeclassDefs = bimapL (TopLevel mod) (canonicaliseType (mod, imps)) (Syn.typeclassDefs t)
     }
 
 canonicaliseInstance :: Env -> Syn.Instance Syn.Syn -> Can.Instance Can.Exp

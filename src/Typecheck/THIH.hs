@@ -22,13 +22,16 @@ import           Data.List                      ( nub
                                                 , partition
                                                 )
 import           Data.Foldable                  ( asum )
+import           Data.Name
+import           Canonical                      ( Name(..) )
+import           Data.String                    ( fromString )
 
 
 -- The type of identifiers
-type Id = String
+type Id = Name
 
 enumId :: Int -> Id
-enumId n = "v" <> show n
+enumId n = Local $ fromString ("v" <> show n)
 
 ---------
 -- Kinds
@@ -59,33 +62,40 @@ data Tycon = Tycon Id Kind
 -- Examples of types
 ---------------------
 
+-- TODO: move these to Typecheck.Primitive or similar
+
 tUnit, tChar, tString, tInt, tInteger, tFloat, tDouble, tBool :: Type
-tUnit = TCon (Tycon "()" Star)
-tChar = TCon (Tycon "Char" Star)
-tString = TCon (Tycon "String" Star)
-tInt = TCon (Tycon "Int" Star)
-tInteger = TCon (Tycon "Integer" Star)
-tFloat = TCon (Tycon "Float" Star)
-tDouble = TCon (Tycon "Double" Star)
-tBool = TCon (Tycon "Bool" Star)
+tUnit = TCon (Tycon (TopLevel modPrim "()") Star)
+tChar = TCon (Tycon (TopLevel modPrim "Char") Star)
+tString = TCon (Tycon (TopLevel modPrim "String") Star)
+tInt = TCon (Tycon (TopLevel modPrim "Int") Star)
+tInteger = TCon (Tycon (TopLevel modPrim "Integer") Star)
+tFloat = TCon (Tycon (TopLevel modPrim "Float") Star)
+tDouble = TCon (Tycon (TopLevel modPrim "Double") Star)
+tBool = TCon (Tycon (TopLevel modPrim "Bool") Star)
 
 tList, tArrow, tTuple2, tTuple3, tTuple4, tTuple5, tTuple6, tTuple7 :: Type
-tList = TCon (Tycon "[]" (Kfun Star Star))
-tArrow = TCon (Tycon "(->)" (Kfun Star (Kfun Star Star)))
-tTuple2 = TCon (Tycon "(,)" (Kfun Star (Kfun Star Star)))
-tTuple3 = TCon (Tycon "(,)" (Kfun Star (Kfun Star (Kfun Star Star))))
-tTuple4 =
-  TCon (Tycon "(,)" (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star)))))
+tList = TCon (Tycon (TopLevel modPrim "[]") (Kfun Star Star))
+tArrow = TCon (Tycon (TopLevel modPrim "(->)") (Kfun Star (Kfun Star Star)))
+tTuple2 = TCon (Tycon (TopLevel modPrim "(,)") (Kfun Star (Kfun Star Star)))
+tTuple3 =
+  TCon (Tycon (TopLevel modPrim "(,)") (Kfun Star (Kfun Star (Kfun Star Star))))
+tTuple4 = TCon
+  (Tycon (TopLevel modPrim "(,)")
+         (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star))))
+  )
 tTuple5 = TCon
-  (Tycon "(,)" (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star))))))
+  (Tycon (TopLevel modPrim "(,)")
+         (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star)))))
+  )
 tTuple6 = TCon
   (Tycon
-    "(,)"
+    (TopLevel modPrim "(,)")
     (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star (Kfun Star Star))))))
   )
 tTuple7 = TCon
   (Tycon
-    "(,)"
+    (TopLevel modPrim "(,)")
     (Kfun
       Star
       (Kfun Star
@@ -276,12 +286,18 @@ type Inst = Qual Pred
 -- An example typeclass
 exampleOrd :: Class
 exampleOrd =
-  ( ["Eq"]
-  , [ [] :=> IsIn "Ord" tUnit
-    , [] :=> IsIn "Ord" tChar
-    , [] :=> IsIn "Ord" tInt
-    , [IsIn "Ord" (TVar (Tyvar "a" Star)), IsIn "Ord" (TVar (Tyvar "b" Star))]
-      :=> IsIn "Ord" (pair (TVar (Tyvar "a" Star)) (TVar (Tyvar "b" Star)))
+  ( [eqClass]
+  , [ [] :=> IsIn (ordClass) tUnit
+    , [] :=> IsIn (ordClass) tChar
+    , [] :=> IsIn (ordClass) tInt
+    , [ IsIn (ordClass) (TVar (Tyvar (Local "a") Star))
+      , IsIn (ordClass) (TVar (Tyvar (Local "b") Star))
+      ]
+      :=> IsIn
+            (ordClass)
+            (pair (TVar (Tyvar (Local "a") Star))
+                  (TVar (Tyvar (Local "b") Star))
+            )
     ]
   )
 
@@ -631,7 +647,7 @@ tiLit (LitStr   _) = pure ([], tString)
 tiLit (LitFloat _) = pure ([], tFloat)
 tiLit (LitRat   _) = do
   v <- newTVar Star
-  pure ([IsIn "Fractional" v], v)
+  pure ([IsIn (fractionalClass) v], v)
 
 -- Patterns
 
@@ -661,7 +677,7 @@ tiPat (PLit l) = do
   pure (ps, [], t)
 tiPat (PNpk i _k) = do
   t <- newTVar Star
-  pure ([IsIn "Integral" t], [i :>: toScheme t], t)
+  pure ([IsIn integralClass t], [i :>: toScheme t], t)
 tiPat (PCon (_ :>: sc) pats) = do
   (ps, as, ts) <- tiPats pats
   t'           <- newTVar Star
@@ -757,24 +773,32 @@ type Ambiguity = (Tyvar, [Pred])
 ambiguities :: ClassEnv -> [Tyvar] -> [Pred] -> [Ambiguity]
 ambiguities _ce vs ps = [ (v, filter (elem v . tv) ps) | v <- tv ps \\ vs ]
 
+modPrim :: ModuleName
+modPrim = ModuleName ["Lam", "Primitive"]
+
+-- TODO: cull some of these classes
 numClasses :: [Id]
-numClasses =
-  ["Num", "Integral", "Floating", "Fractional", "Real", "RealFloat", "RealFrac"]
+numClasses = [integralClass, fractionalClass, numClass]
+
+ordClass :: Id
+ordClass = TopLevel modPrim "Ord"
+eqClass :: Id
+eqClass = TopLevel modPrim "Eq"
+showClass :: Id
+showClass = TopLevel modPrim "Show"
+fractionalClass :: Id
+fractionalClass = TopLevel modPrim "Fractional"
+integralClass :: Id
+integralClass = TopLevel modPrim "Integral"
+numClass :: Id
+numClass = TopLevel modPrim "Num"
 
 stdClasses :: [Id]
 stdClasses =
-  [ "Eq"
-    , "Ord"
-    , "Show"
-    , "Read"
-    , "Bounded"
-    , "Enum"
-    , "Ix"
-    , "Functor"
-    , "Monad"
-    , "MonadPlus"
-    ]
-    ++ numClasses
+  numClasses
+    ++ [eqClass, ordClass, showClass, fractionalClass, integralClass]
+    ++ map (TopLevel modPrim)
+           ["Read", "Bounded", "Enum", "Ix", "Functor", "Monad", "MonadPlus"]
 
 candidates :: ClassEnv -> Ambiguity -> [Type]
 candidates ce (v, qs) =

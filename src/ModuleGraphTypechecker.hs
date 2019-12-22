@@ -2,6 +2,7 @@ module ModuleGraphTypechecker where
 
 import           Util
 import           Syntax
+import qualified Canonical                     as Can
 import           ModuleLoader                   ( ModuleGroup(..) )
 import           Typecheck.THIH                 ( Id
                                                 , Type
@@ -59,6 +60,10 @@ import           Data.Maybe                     ( mapMaybe )
 --    typechecker.
 -- 3. Repeat for each dependent module, and their dependencies.
 
+
+-- I think we can simplify this drastically by performing canonicalisation
+-- before typechecking, thereby ensuring we have a unique name for everything.
+
 typecheckModule :: ModuleGroup -> Either Error ()
 typecheckModule lm =
   let (_tycons, datacons, depfuns, funs, typeclasses, methods) =
@@ -83,7 +88,7 @@ extractDecls
      , [(Id, Scheme)]
      , [(Id, Scheme)]
      , [(Id, Scheme, [Alt])]
-     , [Typeclass]
+     , [Can.Typeclass]
      , [Assump]
      )
 extractDecls (ModuleGroup m deps) =

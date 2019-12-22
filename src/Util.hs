@@ -23,6 +23,9 @@ second = Data.Bifunctor.second
 bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
 bimap = Data.Bifunctor.bimap
 
+bimapL :: (a -> b) -> (c -> d) -> [(a, c)] -> [(b, d)]
+bimapL f g = map (bimap f g)
+
 mapFst :: (a -> b) -> [(a, c)] -> [(b, c)]
 mapFst f = map (Data.Bifunctor.first f)
 

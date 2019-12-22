@@ -1,6 +1,6 @@
 module Data.Either
 
-import Data.Maybe (Just, Nothing)
+import Data.Maybe (Just, Nothing, Maybe)
 
 fromLeft : Either a b -> Maybe a
 fromLeft (Left x) = Just x

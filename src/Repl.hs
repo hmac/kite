@@ -17,7 +17,9 @@ import           Text.Megaparsec                ( parse
 import qualified LC.Eval                        ( evalVar )
 import qualified LC.Print                       ( print )
 import           Syntax
+import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
+import           Canonicalise                   ( canonicaliseModule )
 import qualified ModuleGraphTypechecker
 import           ModuleGraphCompiler            ( CompiledModule(..) )
 import qualified ModuleGraphCompiler
@@ -75,13 +77,14 @@ processExpr decls e =
                  (layoutPretty defaultLayoutOptions (LC.Print.print answer))
         putStrLn ""
 
-buildModule :: [Decl Syn] -> Module Syn
-buildModule decls = Module { moduleName     = ModuleName ["Repl"]
-                           , moduleImports  = []
-                           , moduleExports  = []
-                           , moduleDecls    = decls
-                           , moduleMetadata = []
-                           }
+buildModule :: [Decl Syn] -> Can.Module Can.Exp
+buildModule decls = canonicaliseModule Module
+  { moduleName     = ModuleName ["Repl"]
+  , moduleImports  = []
+  , moduleExports  = []
+  , moduleDecls    = decls
+  , moduleMetadata = []
+  }
 
 data Input = Expression Syn | Definition (Decl Syn)
 

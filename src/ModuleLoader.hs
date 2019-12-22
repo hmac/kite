@@ -7,6 +7,8 @@ import           Syntax
 import           Data.List                      ( nub
                                                 , intercalate
                                                 )
+import qualified Canonical                     as Can
+import           Canonicalise                   ( canonicaliseModule )
 
 -- This module is responsible for loading Lam modules. It should attempt to
 -- cache modules so they're not loaded multiple times.
@@ -27,13 +29,13 @@ import           Data.List                      ( nub
 -- TODO: structured errors
 
 --                               the module   its dependencies
-data ModuleGroup = ModuleGroup (Module Syn) [ModuleGroup]
+data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [ModuleGroup]
   deriving (Show)
 
 loadFromPath :: FilePath -> IO (Either String ModuleGroup)
 loadFromPath path = do
   root  <- getCurrentDirectory
-  modul <- parseLamFile <$> readFile path
+  modul <- fmap canonicaliseModule . parseLamFile <$> readFile path
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
@@ -44,7 +46,7 @@ loadFromPath path = do
 
 loadAll :: FilePath -> ModuleName -> IO (Either String ModuleGroup)
 loadAll root name = do
-  modul <- load root name
+  modul <- fmap canonicaliseModule <$> load root name
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
@@ -56,7 +58,7 @@ loadAll root name = do
 load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
 load root name = parseLamFile <$> readFile (filePath root name)
 
-dependencies :: Module Syn -> [ModuleName]
+dependencies :: Module_ n (Syn_ n) -> [ModuleName]
 dependencies Module { moduleImports = imports } = nub $ map importName imports
 
 filePath :: FilePath -> ModuleName -> FilePath

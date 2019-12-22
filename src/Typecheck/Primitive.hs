@@ -15,14 +15,15 @@ where
 
 import           Typecheck.THIH
 import           Control.Monad                  ( (>=>) )
+import           Canonical                      ( Name(..) )
 
 -- Primitive tuple constructor types
 tuple2 :: Assump
-tuple2 = "$prim_tuple2" :>: Forall
+tuple2 = TopLevel modPrim "$prim_tuple2" :>: Forall
   [Star, Star]
   ([] :=> (TGen 0 `fn` TGen 1 `fn` foldl TAp tTuple2 (map TGen [0 .. 1])))
 tuple3 :: Assump
-tuple3 = "$prim_tuple3" :>: Forall
+tuple3 = TopLevel modPrim "$prim_tuple3" :>: Forall
   [Star, Star, Star]
   (   []
   :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` foldl TAp
@@ -31,7 +32,7 @@ tuple3 = "$prim_tuple3" :>: Forall
       )
   )
 tuple4 :: Assump
-tuple4 = "$prim_tuple4" :>: Forall
+tuple4 = TopLevel modPrim "$prim_tuple4" :>: Forall
   [Star, Star, Star, Star]
   (   []
   :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` TGen 3 `fn` foldl
@@ -41,7 +42,7 @@ tuple4 = "$prim_tuple4" :>: Forall
       )
   )
 tuple5 :: Assump
-tuple5 = "$prim_tuple5" :>: Forall
+tuple5 = TopLevel modPrim "$prim_tuple5" :>: Forall
   [Star, Star, Star, Star, Star]
   (   []
   :=> (TGen 0 `fn` TGen 1 `fn` TGen 2 `fn` TGen 3 `fn` TGen 4 `fn` foldl
@@ -51,7 +52,7 @@ tuple5 = "$prim_tuple5" :>: Forall
       )
   )
 tuple6 :: Assump
-tuple6 = "$prim_tuple6" :>: Forall
+tuple6 = TopLevel modPrim "$prim_tuple6" :>: Forall
   [Star, Star, Star, Star, Star, Star]
   (   []
   :=> (    TGen 0
@@ -64,7 +65,7 @@ tuple6 = "$prim_tuple6" :>: Forall
       )
   )
 tuple7 :: Assump
-tuple7 = "$prim_tuple7" :>: Forall
+tuple7 = TopLevel modPrim "$prim_tuple7" :>: Forall
   [Star, Star, Star, Star, Star, Star, Star]
   (   []
   :=> (    TGen 0
@@ -80,47 +81,56 @@ tuple7 = "$prim_tuple7" :>: Forall
 
 -- primitive List constructors
 listNil :: Assump
-listNil = "[]" :>: Forall [Star] ([] :=> TAp tList (TGen 0))
+listNil = TopLevel modPrim "[]" :>: Forall [Star] ([] :=> TAp tList (TGen 0))
 listCons :: Assump
-listCons = "::" :>: Forall
+listCons = TopLevel modPrim "::" :>: Forall
   [Star]
   ([] :=> (TGen 0 `fn` TAp tList (TGen 0) `fn` TAp tList (TGen 0)))
 
 -- primitive Bool constructors
+-- We need these because the comparison functions (>, <, etc.) have a return
+-- type of Bool and they are primitives.
+-- Maybe we can change their return type to Data.Bool.Bool or something?
 true :: Assump
-true = "True" :>: Forall [] ([] :=> tBool)
+true = TopLevel modPrim "True" :>: Forall [] ([] :=> tBool)
 false :: Assump
-false = "False" :>: Forall [] ([] :=> tBool)
+false = TopLevel modPrim "False" :>: Forall [] ([] :=> tBool)
 
 -- other primitive functions
 primError :: Assump
-primError = "error" :>: Forall [Star] ([] :=> (tString `fn` TGen 0))
+primError =
+  TopLevel modPrim "error" :>: Forall [Star] ([] :=> (tString `fn` TGen 0))
 primStringConcat :: Assump
-primStringConcat =
-  "$prim_stringconcat" :>: Forall [] ([] :=> (list tString `fn` tString))
+primStringConcat = TopLevel modPrim "$prim_stringconcat"
+  :>: Forall [] ([] :=> (list tString `fn` tString))
 -- TODO: add Show constraint
 primShow :: Assump
-primShow = "$prim_show"
-  :>: Forall [Star] ([IsIn "Show" (TGen 0)] :=> (TGen 0 `fn` tString))
+primShow = TopLevel modPrim "$prim_show"
+  :>: Forall [Star] ([IsIn showClass (TGen 0)] :=> (TGen 0 `fn` tString))
 primNumPlus :: Assump
-primNumPlus = "+" :>: Forall
+primNumPlus = TopLevel modPrim "+" :>: Forall
   [Star]
-  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
+  ([IsIn numClass (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
 primNumSub :: Assump
-primNumSub = "-" :>: Forall
+primNumSub = TopLevel modPrim "-" :>: Forall
   [Star]
-  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
+  ([IsIn numClass (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
 primNumMult :: Assump
-primNumMult = "*" :>: Forall
+primNumMult = TopLevel modPrim "*" :>: Forall
   [Star]
-  ([IsIn "Num" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
+  ([IsIn numClass (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` TGen 0))
 primOrdLt :: Assump
-primOrdLt = "<" :>: Forall
-  [Star]
-  ([IsIn "Ord" (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` tBool))
+primOrdLt = TopLevel modPrim "<"
+  :>: Forall
+        [Star]
+        ([IsIn ordClass (TGen 0)] :=> (TGen 0 `fn` TGen 0 `fn` tBool))
 
 typeConstructors :: [(Id, Type)]
-typeConstructors = [("Int", tInt), ("String", tString), ("Bool", tBool)]
+typeConstructors =
+  [ (TopLevel modPrim "Int"   , tInt)
+  , (TopLevel modPrim "String", tString)
+  , (TopLevel modPrim "Float" , tFloat)
+  ]
 
 constructors :: [(Id, Scheme)]
 constructors =
@@ -145,49 +155,50 @@ classEnv = transform initialEnv
  where
   transform =
     addPreludeClasses
-      >=> addInst [] (IsIn "Ord" tUnit)
-      >=> addInst [] (IsIn "Ord" tChar)
-      >=> addInst [] (IsIn "Ord" tInt)
+      >=> addInst [] (IsIn ordClass tUnit)
+      >=> addInst [] (IsIn ordClass tChar)
+      >=> addInst [] (IsIn ordClass tInt)
       >=> addInst
-            [ IsIn "Ord" (TVar (Tyvar "a" Star))
-            , IsIn "Ord" (TVar (Tyvar "b" Star))
+            [ IsIn ordClass (TVar (Tyvar (Local "a") Star))
+            , IsIn ordClass (TVar (Tyvar (Local "b") Star))
             ]
-            (IsIn "Ord" (pair (TVar (Tyvar "a" Star)) (TVar (Tyvar "b" Star))))
-      >=> addInst [] (IsIn "Num" tInt)
+            (IsIn
+              ordClass
+              (pair (TVar (Tyvar (Local "a") Star))
+                    (TVar (Tyvar (Local "b") Star))
+              )
+            )
+      >=> addInst [] (IsIn numClass tInt)
       >=> addShowInstances
 
 -- TODO: in future I think we want to derive Show via generics
 addShowInstances :: EnvTransformer
 addShowInstances =
-  addInst [] (IsIn "Show" tString)
-    >=> addInst [] (IsIn "Show" tInt)
-    >=> addInst [] (IsIn "Show" tFloat)
-    >=> addInst [] (IsIn "Show" tChar)
-    >=> addInst [] (IsIn "Show" tInteger)
-    >=> addInst [] (IsIn "Show" tBool)
-    >=> addInst [] (IsIn "Show" tDouble)
-    >=> addInst [] (IsIn "Show" tUnit)
+  addInst [] (IsIn showClass tString)
+    >=> addInst [] (IsIn showClass tInt)
+    >=> addInst [] (IsIn showClass tFloat)
+    >=> addInst [] (IsIn showClass tChar)
+    >=> addInst [] (IsIn showClass tInteger)
+    >=> addInst [] (IsIn showClass tBool)
+    >=> addInst [] (IsIn showClass tDouble)
+    >=> addInst [] (IsIn showClass tUnit)
 
 addPreludeClasses :: EnvTransformer
 addPreludeClasses = addCoreClasses >=> addNumClasses
 
 addCoreClasses :: EnvTransformer
 addCoreClasses =
-  addClass "Eq" []
-    >=> addClass "Ord"     ["Eq"]
-    >=> addClass "Show"    []
-    >=> addClass "Read"    []
-    >=> addClass "Bounded" []
-    >=> addClass "Enum"    []
-    >=> addClass "Functor" []
-    >=> addClass "Monad"   []
+  addClass eqClass []
+    >=> addClass ordClass                     [eqClass]
+    >=> addClass showClass                    []
+    >=> addClass (TopLevel modPrim "Read")    []
+    >=> addClass (TopLevel modPrim "Bounded") []
+    >=> addClass (TopLevel modPrim "Enum")    []
+    >=> addClass (TopLevel modPrim "Functor") []
+    >=> addClass (TopLevel modPrim "Monad")   []
 
 addNumClasses :: EnvTransformer
 addNumClasses =
-  addClass "Num" ["Eq", "Show"]
-    >=> addClass "Real"       ["Num", "Ord"]
-    >=> addClass "Fractional" ["Num"]
-    >=> addClass "Integral"   ["Real", "Enum"]
-    >=> addClass "RealFrac"   ["Real", "Fractional"]
-    >=> addClass "Floating"   ["Fractional"]
-    >=> addClass "RealFloat"  ["RealFrac", "Floating"]
+  addClass numClass [eqClass, showClass]
+    >=> addClass fractionalClass [numClass]
+    >=> addClass integralClass   [TopLevel modPrim "Enum"]

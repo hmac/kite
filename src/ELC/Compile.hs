@@ -50,6 +50,8 @@ fresh = do
   put (k + 1)
   pure $ Local (Name ("$elc" ++ show k))
 
+-- TODO: remove non-local definitions which aren't reachable from definitions in
+-- the local module. This will get rid of most of the stuff from Lam.Primitive.
 translateModule :: Env -> Can.Module Can.Exp -> NameGen Env
 translateModule env S.Module { S.moduleDecls = decls } =
   -- to ensure that all data types are in scope, we process data decls first
@@ -226,10 +228,10 @@ translateStringLit env prefix parts = do
   go :: [(Can.Exp, String)] -> NameGen [Exp]
   go []            = pure []
   go ((e, s) : is) = do
-    e'   <- translateExpr env e
-    rest <- go is
-    show <- showFn
-    pure $ App show e' : Const (String s) [] : rest
+    e'     <- translateExpr env e
+    rest   <- go is
+    showfn <- showFn
+    pure $ App showfn e' : Const (String s) [] : rest
 
 -- here we follow the same scheme as with normal constructors
 buildList :: [Exp] -> NameGen Exp

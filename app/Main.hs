@@ -9,24 +9,16 @@ import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 
+import           ModuleLoader                   ( ModuleGroup(..) )
+import           ModuleGraphCompiler            ( CompiledModule(..) )
 import qualified ModuleLoader
 import qualified ModuleGraphTypechecker
-import           ModuleGraphCompiler            ( compileModule
-                                                , CompiledModule(..)
-                                                )
+import qualified ModuleGraphCompiler
 
 import           Typecheck.Error                ( printError )
 import qualified Repl                           ( run )
-import qualified ELC.Compile                   as ELC
-import           LC.Compile                     ( runConvert
-                                                , convertEnv
-                                                )
 import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
-import           Syntax                         ( Module
-                                                , Syn
-                                                )
-import qualified Canonicalise                  as Can
 import           Options.Generic
 
 data Config =
@@ -62,12 +54,10 @@ parse path = do
     Right m -> pPrint m
 
 dumpELC :: FilePath -> IO ()
-dumpELC = withParsedFile $ \m -> pPrint
-  $ runConvert (ELC.translateModule ELC.defaultEnv (Can.canonicaliseModule m))
+dumpELC = withParsedFile $ \m -> pPrint $ ModuleGraphCompiler.compileModule' m
 
 dumpLC :: FilePath -> IO ()
-dumpLC = withParsedFile $ \m -> pPrint $ runConvert
-  (ELC.translateModule ELC.defaultEnv (Can.canonicaliseModule m) >>= convertEnv)
+dumpLC = withParsedFile $ \m -> pPrint $ ModuleGraphCompiler.compileModule m
 
 dumpTypeEnv :: FilePath -> IO ()
 dumpTypeEnv path = do
@@ -93,16 +83,16 @@ run path = do
     Right l   -> case ModuleGraphTypechecker.typecheckModule l of
       Left err -> putStrLn (printError err)
       Right _ ->
-        let cm     = compileModule l
+        let cm     = ModuleGraphCompiler.compileModule l
             answer = evalMain (cModuleName cm) (cModuleEnv cm)
         in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
 
-withParsedFile :: (Module Syn -> IO ()) -> FilePath -> IO ()
+withParsedFile :: (ModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
-  input <- readFile path
-  case parseLamFile input of
+  mgroup <- ModuleLoader.loadFromPath path
+  case mgroup of
     Left  e -> putStrLn e
-    Right m -> cb m
+    Right g -> cb g
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutPretty defaultLayoutOptions doc)

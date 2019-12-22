@@ -58,7 +58,7 @@ data Decl_ name exp = FunDecl (Fun_ name exp)
 type Fun exp = Fun_ Name exp
 data Fun_ name exp = Fun { funComments :: [String]
                          , funName :: name
-                         , funType :: Ty
+                         , funType :: Ty_ name
                          , funConstraint :: Maybe (Constraint_ name)
                          , funDefs :: [Def_ name exp]
                          }
@@ -85,7 +85,7 @@ data Data_ name = Data { dataName :: name
 type Typeclass = Typeclass_ Name
 data Typeclass_ name = Typeclass { typeclassName :: name
                                  , typeclassTyVars :: [Name]
-                                 , typeclassDefs :: [(name, Ty)]
+                                 , typeclassDefs :: [(name, Ty_ name)]
                                  }
                                  deriving (Eq, Show)
 
@@ -97,10 +97,10 @@ data Instance_ name exp = Instance { instanceName :: name
                                    deriving (Eq, Show)
 
 type DataCon = DataCon_ Name
-data DataCon_ a = DataCon { conName :: a
-                          , conArgs :: [Ty]
-                          }
-                          deriving (Eq, Show)
+data DataCon_ name = DataCon { conName :: name
+                             , conArgs :: [Ty_ name]
+                             }
+                             deriving (Eq, Show)
 
 -- Consider adding defName here - I think it might simplify things elsewhere
 type Def = Def_ Name
