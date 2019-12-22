@@ -1,4 +1,4 @@
-module ModuleGraphTypechecker where
+module ModuleGroupTypechecker where
 
 import           Util
 import           Syntax

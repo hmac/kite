@@ -20,7 +20,7 @@ import           Syntax
 import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
 import           Canonicalise                   ( canonicaliseModule )
-import qualified ModuleGraphTypechecker
+import qualified ModuleGroupTypechecker
 import           ModuleGraphCompiler            ( CompiledModule(..) )
 import qualified ModuleGraphCompiler
 import           ModuleLoader                   ( ModuleGroup(..) )
@@ -46,7 +46,7 @@ repl env = do
 processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
   let l = ModuleGroup (buildModule decls) []
-  in  case ModuleGraphTypechecker.typecheckModule l of
+  in  case ModuleGroupTypechecker.typecheckModule l of
         Left err -> do
           print err
           pure False
@@ -66,7 +66,7 @@ processExpr decls e =
     m = buildModule (decls ++ [main])
     l = ModuleGroup m []
   in
-    case ModuleGraphTypechecker.typecheckModule l of
+    case ModuleGroupTypechecker.typecheckModule l of
       Left  err -> print err
       Right _   -> do
         let compiled = ModuleGraphCompiler.compileModule l

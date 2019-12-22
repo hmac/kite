@@ -12,7 +12,7 @@ import           System.IO                      ( stdout )
 import           ModuleLoader                   ( ModuleGroup(..) )
 import           ModuleGraphCompiler            ( CompiledModule(..) )
 import qualified ModuleLoader
-import qualified ModuleGraphTypechecker
+import qualified ModuleGroupTypechecker
 import qualified ModuleGraphCompiler
 
 import           Typecheck.Error                ( printError )
@@ -64,14 +64,14 @@ dumpTypeEnv path = do
   modul <- ModuleLoader.loadFromPath path
   case modul of
     Left  err -> putStrLn err
-    Right l   -> let env = ModuleGraphTypechecker.dumpEnv l in pPrint env
+    Right l   -> let env = ModuleGroupTypechecker.dumpEnv l in pPrint env
 
 typecheck :: FilePath -> IO ()
 typecheck path = do
   modul <- ModuleLoader.loadFromPath path
   case modul of
     Left  err -> putStrLn err
-    Right l   -> case ModuleGraphTypechecker.typecheckModule l of
+    Right l   -> case ModuleGroupTypechecker.typecheckModule l of
       Left  err -> putStrLn (printError err)
       Right _   -> putStrLn "Success."
 
@@ -80,7 +80,7 @@ run path = do
   modul <- ModuleLoader.loadFromPath path
   case modul of
     Left  err -> putStrLn err
-    Right l   -> case ModuleGraphTypechecker.typecheckModule l of
+    Right l   -> case ModuleGroupTypechecker.typecheckModule l of
       Left err -> putStrLn (printError err)
       Right _ ->
         let cm     = ModuleGraphCompiler.compileModule l
