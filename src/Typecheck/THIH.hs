@@ -280,31 +280,41 @@ lift m (IsIn i t) (IsIn i' t')
 
 -- Classes and Instances
 
-type Class = ([Id], [Inst])
+data Class = Class { superclasses :: [Id], instances :: [Inst], methods :: [(Id, Scheme)] }
 type Inst = Qual Pred
 
 -- An example typeclass
 exampleOrd :: Class
-exampleOrd =
-  ( [eqClass]
-  , [ [] :=> IsIn (ordClass) tUnit
-    , [] :=> IsIn (ordClass) tChar
-    , [] :=> IsIn (ordClass) tInt
-    , [ IsIn (ordClass) (TVar (Tyvar (Local "a") Star))
-      , IsIn (ordClass) (TVar (Tyvar (Local "b") Star))
-      ]
-      :=> IsIn
-            (ordClass)
-            (pair (TVar (Tyvar (Local "a") Star))
-                  (TVar (Tyvar (Local "b") Star))
-            )
-    ]
-  )
+exampleOrd = Class
+  { superclasses = [eqClass]
+  , instances    = [ [] :=> IsIn ordClass tUnit
+                   , [] :=> IsIn ordClass tChar
+                   , [] :=> IsIn ordClass tInt
+                   , [ IsIn ordClass (TVar (Tyvar (Local "a") Star))
+                     , IsIn ordClass (TVar (Tyvar (Local "b") Star))
+                     ]
+                     :=> IsIn
+                           ordClass
+                           (pair (TVar (Tyvar (Local "a") Star))
+                                 (TVar (Tyvar (Local "b") Star))
+                           )
+                   ]
+  , methods      = [ ( Local ">"
+                     , Forall [Star] ([] :=> (TGen 0 `fn` TGen 0 `fn` tBool))
+                     )
+                   , ( Local "<"
+                     , Forall [Star] ([] :=> (TGen 0 `fn` TGen 0 `fn` tBool))
+                     )
+                     -- etc.
+                   ]
+  }
+
 
 ----------------------
 -- Class Environments
 ----------------------
 
+-- TODO: change this from a function to a map so we can print it when debugging
 data ClassEnv = ClassEnv
   { classes :: Id -> Maybe Class -- maps identifiers to Class values
   , defaults :: [Type] }         -- provides a list of types for defaulting
@@ -312,12 +322,12 @@ data ClassEnv = ClassEnv
 -- Partial functions for extracting class information from the environment
 super :: ClassEnv -> Id -> [Id]
 super ce i = case classes ce i of
-  Just (is, _) -> is
+  Just class_ -> superclasses class_
 
 insts :: ClassEnv -> Id -> [Inst]
 insts ce i = case classes ce i of
-  Just (_, its) -> its
-  Nothing       -> error $ "unknown class " <> show i
+  Just class_ -> instances class_
+  Nothing     -> error $ "unknown class " <> show i
 
 -- Update a class environment to reflect a new binding of a Class value to a
 -- given identifier.
@@ -341,24 +351,34 @@ type EnvTransformer = ClassEnv -> Either Error ClassEnv
 -- To add a new class to an environment we must check:
 -- - there isn't already a class with that name
 -- - all the named superclasses are already defined
-addClass :: Id -> [Id] -> EnvTransformer
-addClass i is ce
-  | isJust (classes ce i)           = error "class already defined"
-  | any (isNothing . classes ce) is = error "superclass not defined"
-  | otherwise                       = pure (modify ce i (is, []))
+-- TODO: check that the methods have the right number of quantified variables,
+-- of the right kind, etc.
+addClass :: Id -> [Id] -> [(Id, Scheme)] -> EnvTransformer
+addClass className supers methods ce
+  | isJust (classes ce className)
+  = error $ "class already defined: " <> show className
+  | any (isNothing . classes ce) supers
+  = error $ "superclass not defined: " <> show supers
+  | otherwise
+  = pure
+    (modify ce
+            className
+            Class { superclasses = supers, instances = [], methods = methods }
+    )
 
 -- To add a new instance to a class, we must check:
 -- - the class is defined
 -- - the instance doesn't overlap with any previously defined instance
 addInst :: [Pred] -> Pred -> EnvTransformer
-addInst ps p@(IsIn i _) ce
-  | isNothing (classes ce i) = throw (NoClassForInstance p)
-  | any (overlap p) qs       = throw (OverlappingInstance p)
-  | otherwise                = pure (modify ce i c)
- where
-  its = insts ce i
-  qs  = [ q | (_ :=> q) <- its ]
-  c   = (super ce i, (ps :=> p) : its)
+addInst ps p@(IsIn i _) ce = case classes ce i of
+  Nothing -> throw (NoClassForInstance p)
+  Just class_ ->
+    let its = instances class_
+        qs  = [ q | (_ :=> q) <- its ]
+        c   = class_ { instances = (ps :=> p) : its }
+    in  if any (overlap p) qs
+          then throw (OverlappingInstance p)
+          else pure (modify ce i c)
 
 -- Two instances overlap if there is some predicate that is a substitution
 -- instance of the heads of both instance declarations.
@@ -512,7 +532,7 @@ toScheme t = Forall [] ([] :=> t)
 -- TODO: what are assumptions? what is an example assumtion?
 
 data Assump = Id :>: Scheme
-  deriving (Show)
+  deriving (Show, Eq)
 
 instance Types Assump where
   apply s (i :>: sc) = i :>: apply s sc
@@ -637,7 +657,7 @@ data Literal = LitInt Integer
              | LitRat Rational
              | LitFloat Double
              | LitStr String
-             deriving Show
+             deriving (Show, Eq)
 
 tiLit :: Literal -> TI ([Pred], Type)
 tiLit (LitChar  _) = pure ([], tChar)
@@ -660,7 +680,7 @@ data Pat = PVar Id
          | PLit Literal
          | PNpk Id Integer
          | PCon Assump [Pat]
-         deriving (Show)
+         deriving (Show, Eq)
 
 tiPat :: Pat -> TI ([Pred], [Assump], Type)
 tiPat (PVar i) = do
@@ -700,7 +720,7 @@ data Expr = Var Id
           | Const Assump
           | Ap Expr Expr
           | Let BindGroup Expr
-          deriving Show
+          deriving (Show, Eq)
 
 tiExpr :: Infer Expr Type
 tiExpr _ce as (Var i) = do
@@ -773,19 +793,18 @@ type Ambiguity = (Tyvar, [Pred])
 ambiguities :: ClassEnv -> [Tyvar] -> [Pred] -> [Ambiguity]
 ambiguities _ce vs ps = [ (v, filter (elem v . tv) ps) | v <- tv ps \\ vs ]
 
-modPrim :: ModuleName
-modPrim = ModuleName ["Lam", "Primitive"]
-
--- TODO: cull some of these classes
 numClasses :: [Id]
 numClasses = [integralClass, fractionalClass, numClass]
+
+modPrim :: ModuleName
+modPrim = ModuleName ["Lam", "Primitive"]
 
 ordClass :: Id
 ordClass = TopLevel modPrim "Ord"
 eqClass :: Id
 eqClass = TopLevel modPrim "Eq"
 showClass :: Id
-showClass = TopLevel modPrim "Show"
+showClass = TopLevel (ModuleName ["Lam", "Show"]) "Show"
 fractionalClass :: Id
 fractionalClass = TopLevel modPrim "Fractional"
 integralClass :: Id
@@ -795,10 +814,9 @@ numClass = TopLevel modPrim "Num"
 
 stdClasses :: [Id]
 stdClasses =
-  numClasses
-    ++ [eqClass, ordClass, showClass, fractionalClass, integralClass]
-    ++ map (TopLevel modPrim)
-           ["Read", "Bounded", "Enum", "Ix", "Functor", "Monad", "MonadPlus"]
+  numClasses ++ [eqClass, ordClass, fractionalClass, integralClass] ++ map
+    (TopLevel modPrim)
+    ["Read", "Bounded", "Enum", "Ix", "Functor", "Monad", "MonadPlus"]
 
 candidates :: ClassEnv -> Ambiguity -> [Type]
 candidates ce (v, qs) =

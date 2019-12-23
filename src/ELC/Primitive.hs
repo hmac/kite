@@ -50,3 +50,10 @@ mult = TopLevel modPrim "*"
 
 sub :: Name
 sub = TopLevel modPrim "-"
+
+primShow :: Name
+primShow = TopLevel (ModuleName ["Lam", "Show"]) "show"
+
+-- TODO: change to Semigroup when we have superclass constraints
+primAppend :: Name
+primAppend = TopLevel (ModuleName ["Lam", "Monoid"]) "append"

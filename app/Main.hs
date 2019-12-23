@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Main where
 
-import           Syn.Parse
 import           Syn.Print
 
 import           Text.Pretty.Simple             ( pPrint )
@@ -47,45 +46,30 @@ main = do
     Typecheck   f -> typecheck f
 
 parse :: FilePath -> IO ()
-parse path = do
-  input <- readFile path
-  case parseLamFile input of
-    Left  e -> putStrLn e
-    Right m -> pPrint m
+parse = withParsedFile pPrint
 
 dumpELC :: FilePath -> IO ()
-dumpELC = withParsedFile $ \m -> pPrint $ ModuleGroupCompiler.compileModule' m
+dumpELC = withParsedFile (pPrint . ModuleGroupCompiler.compileModule')
 
 dumpLC :: FilePath -> IO ()
-dumpLC = withParsedFile $ \m -> pPrint $ ModuleGroupCompiler.compileModule m
+dumpLC = withParsedFile (pPrint . ModuleGroupCompiler.compileModule)
 
 dumpTypeEnv :: FilePath -> IO ()
-dumpTypeEnv path = do
-  modul <- ModuleLoader.loadFromPath path
-  case modul of
-    Left  err -> putStrLn err
-    Right l   -> let env = ModuleGroupTypechecker.dumpEnv l in pPrint env
+dumpTypeEnv = withParsedFile (pPrint . ModuleGroupTypechecker.dumpEnv)
 
 typecheck :: FilePath -> IO ()
-typecheck path = do
-  modul <- ModuleLoader.loadFromPath path
-  case modul of
-    Left  err -> putStrLn err
-    Right l   -> case ModuleGroupTypechecker.typecheckModule l of
-      Left  err -> putStrLn (printError err)
-      Right _   -> putStrLn "Success."
+typecheck = withParsedFile $ \g ->
+  case ModuleGroupTypechecker.typecheckModule g of
+    Left  err -> putStrLn (printError err)
+    Right _   -> putStrLn "Success."
 
 run :: FilePath -> IO ()
-run path = do
-  modul <- ModuleLoader.loadFromPath path
-  case modul of
-    Left  err -> putStrLn err
-    Right l   -> case ModuleGroupTypechecker.typecheckModule l of
-      Left err -> putStrLn (printError err)
-      Right _ ->
-        let cm     = ModuleGroupCompiler.compileModule l
-            answer = evalMain (cModuleName cm) (cModuleEnv cm)
-        in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
+run = withParsedFile $ \g -> case ModuleGroupTypechecker.typecheckModule g of
+  Left err -> putStrLn (printError err)
+  Right _ ->
+    let cm     = ModuleGroupCompiler.compileModule g
+        answer = evalMain (cModuleName cm) (cModuleEnv cm)
+    in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
 
 withParsedFile :: (ModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do

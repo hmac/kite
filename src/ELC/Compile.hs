@@ -221,17 +221,13 @@ translateStringLit env prefix parts = do
     l <- fresh
     r <- fresh
     pure $ Abs (VarPat l)
-               (Abs (VarPat r) (Const (Prim PrimStringAppend) [Var l, Var r]))
-  showFn = do
-    v <- fresh
-    pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
+               (Abs (VarPat r) (App (App (Var primAppend) (Var l)) (Var r)))
   go :: [(Can.Exp, String)] -> NameGen [Exp]
   go []            = pure []
   go ((e, s) : is) = do
-    e'     <- translateExpr env e
-    rest   <- go is
-    showfn <- showFn
-    pure $ App showfn e' : Const (String s) [] : rest
+    e'   <- translateExpr env e
+    rest <- go is
+    pure $ App (Var primShow) e' : Const (String s) [] : rest
 
 -- here we follow the same scheme as with normal constructors
 buildList :: [Exp] -> NameGen Exp

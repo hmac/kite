@@ -1,0 +1,4 @@
+module Lam.Semigroup
+
+class Semigroup a where
+  append : a -> a -> a

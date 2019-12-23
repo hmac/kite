@@ -1,0 +1,12 @@
+module Lam.Show
+
+import Lam.Primitive (showInt, showFloat)
+
+class Show a where
+  show : a -> String
+
+instance Show String where
+  show x = x
+
+instance Show Int where
+  show i = showInt i

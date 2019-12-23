@@ -52,13 +52,11 @@ canonicaliseFun (mod, imps) f =
     }
 
 canonicaliseType :: Env -> Syn.Ty -> Can.Type
-canonicaliseType env@(mod, imps) = \case
+canonicaliseType env = \case
   -- Note: type variables are assumed to be local to the type
   -- this may need rethinking when we support type aliases
   Syn.TyVar v -> Syn.TyVar (Local v)
-  Syn.TyCon n -> case Map.lookup n imps of
-                   Just i -> Syn.TyCon (TopLevel i n)
-                   Nothing -> Syn.TyCon (TopLevel mod n)
+  Syn.TyCon n -> Syn.TyCon (canonicaliseName env n)
   a Syn.:@: b -> canonicaliseType env a Syn.:@: canonicaliseType env b
   Syn.TyList a -> Syn.TyList (canonicaliseType env a)
   Syn.TyTuple as -> Syn.TyTuple $ fmap (canonicaliseType env) as
@@ -69,11 +67,9 @@ canonicaliseType env@(mod, imps) = \case
   Syn.TyString -> Syn.TyString
 
 canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
-canonicaliseConstraint env@(mod, imps) = \case
+canonicaliseConstraint env = \case
   CInst n tys ->
-    let n' = case Map.lookup n imps of
-               Just i -> TopLevel i n
-               Nothing -> TopLevel mod n
+    let n' = canonicaliseName env n
      in CInst n' $ fmap (canonicaliseType env) tys
   CTuple a b -> CTuple (canonicaliseConstraint env a) (canonicaliseConstraint env b)
 
@@ -93,13 +89,15 @@ canonicaliseTypeclass :: Env -> Syn.Typeclass -> Can.Typeclass
 canonicaliseTypeclass (mod, imps) t =
   t { Syn.typeclassName = TopLevel mod (Syn.typeclassName t)
     , Syn.typeclassDefs = bimapL (TopLevel mod) (canonicaliseType (mod, imps)) (Syn.typeclassDefs t)
+    , Syn.typeclassTyVars = map Local (Syn.typeclassTyVars t)
     }
 
 canonicaliseInstance :: Env -> Syn.Instance Syn.Syn -> Can.Instance Can.Exp
-canonicaliseInstance (mod, imps) i = 
-  i { Syn.instanceName = TopLevel mod (Syn.instanceName i)
-    , Syn.instanceDefs = fmap (bimap (TopLevel mod) (fmap (canonicaliseDef (mod, imps)))) (Syn.instanceDefs i)
-    }
+canonicaliseInstance env@(mod, _) i =
+   i { Syn.instanceName = canonicaliseName env (Syn.instanceName i)
+        , Syn.instanceDefs = fmap (bimap (TopLevel mod) (fmap (canonicaliseDef env))) (Syn.instanceDefs i)
+        , Syn.instanceTypes = fmap (canonicaliseType env) (Syn.instanceTypes i)
+        }
 
 canonicaliseDef :: Env -> Syn.Def Syn.Syn -> Can.Def Can.Exp
 canonicaliseDef env d =
@@ -111,16 +109,12 @@ canonicaliseDef env d =
        }
 
 canonicaliseExp :: Env -> [Syn.Name] -> Syn.Syn -> Can.Exp
-canonicaliseExp (mod,imps) = go
+canonicaliseExp env = go
   where go locals = \case
           Var n | n `elem` locals -> Var (Local n)
-                | otherwise -> case Map.lookup n imps of
-                                 Just i -> Var (TopLevel i n)
-                                 Nothing -> Var (TopLevel mod n)
+                | otherwise -> Var $ canonicaliseName env n
           Cons n | n `elem` locals -> Cons (Local n)
-                 | otherwise -> case Map.lookup n imps of
-                                  Just i -> Cons (TopLevel i n)
-                                  Nothing -> Cons (TopLevel mod n)
+                 | otherwise -> Cons $ canonicaliseName env n
           Abs ns e -> Abs (fmap Local ns) $ go (ns <> locals) e
           App a b -> App (go locals a) (go locals b)
           Let binds e -> canonicaliseLet (binds, e)
@@ -142,33 +136,35 @@ canonicaliseExp (mod,imps) = go
             canonicaliseCase :: (Syn.Syn, [(Pattern, Syn.Syn)]) -> Can.Exp
             canonicaliseCase (e, alts) =
               let alts' = map (\(pat, e) ->
-                                    let (vars, pat') = canonicalisePattern (mod, imps) pat
+                                    let (vars, pat') = canonicalisePattern env pat
                                         e' = go (vars <> locals) e
                                     in (pat', e')) alts
-             in 
+             in
               Case (go locals e) alts'
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([Syn.Name], Can.Pattern)
-canonicalisePattern (mod, imps) = \case
+canonicalisePattern env = \case
   VarPat n -> ([n], VarPat (Local n))
   WildPat -> ([], WildPat)
   IntPat i -> ([], IntPat i)
   TuplePat pats ->
-    let res = map (canonicalisePattern (mod, imps)) pats
+    let res = map (canonicalisePattern env) pats
         vars = concatMap fst res
         pats' = map snd res
      in (vars, TuplePat pats')
   ListPat pats ->
-    let res = map (canonicalisePattern (mod, imps)) pats
+    let res = map (canonicalisePattern env) pats
         vars = concatMap fst res
         pats' = map snd res
      in (vars, ListPat pats')
   ConsPat c pats ->
-    let c' = case Map.lookup c imps of
-               Just i -> TopLevel i c
-               Nothing -> TopLevel mod c
-        res = map (canonicalisePattern (mod,imps)) pats
+    let c' = canonicaliseName env c
+        res = map (canonicalisePattern env) pats
         vars = concatMap fst res
         pats' = map snd res
      in (vars, ConsPat c' pats')
 
+canonicaliseName :: Env -> Syn.Name -> Can.Name
+canonicaliseName (thisModule, imps) n = case Map.lookup n imps of
+  Just i  -> TopLevel i n
+  Nothing -> TopLevel thisModule n

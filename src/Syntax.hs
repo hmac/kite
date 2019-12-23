@@ -28,6 +28,11 @@ typeclassDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
     TypeclassDecl t -> Just t
     _               -> Nothing
 
+instanceDecls :: Module_ n e -> [Instance_ n e]
+instanceDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
+  TypeclassInst i -> Just i
+  _ -> Nothing
+
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
 type Import = Import_ Name
@@ -84,14 +89,17 @@ data Data_ name = Data { dataName :: name
 -- defs
 type Typeclass = Typeclass_ Name
 data Typeclass_ name = Typeclass { typeclassName :: name
-                                 , typeclassTyVars :: [Name]
+                                 , typeclassTyVars :: [name]
                                  , typeclassDefs :: [(name, Ty_ name)]
                                  }
                                  deriving (Eq, Show)
 
+-- TODO: instance constraints
+-- e.g. instance (Eq a, Eq b) => Eq (a, b)
+--               ^^^^^^^^^^^^^^^
 type Instance exp = Instance_ Name exp
 data Instance_ name exp = Instance { instanceName :: name
-                                   , instanceTypes :: [Ty]
+                                   , instanceTypes :: [Ty_ name]
                                    , instanceDefs :: [(name, [Def_ name exp])]
                                    }
                                    deriving (Eq, Show)

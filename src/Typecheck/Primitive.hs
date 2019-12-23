@@ -100,13 +100,25 @@ false = TopLevel modPrim "False" :>: Forall [] ([] :=> tBool)
 primError :: Assump
 primError =
   TopLevel modPrim "error" :>: Forall [Star] ([] :=> (tString `fn` TGen 0))
-primStringConcat :: Assump
-primStringConcat = TopLevel modPrim "$prim_stringconcat"
+primConcatString :: Assump
+primConcatString = TopLevel modPrim "concatString"
   :>: Forall [] ([] :=> (list tString `fn` tString))
--- TODO: add Show constraint
-primShow :: Assump
-primShow = TopLevel modPrim "$prim_show"
-  :>: Forall [Star] ([IsIn showClass (TGen 0)] :=> (TGen 0 `fn` tString))
+primAppendString :: Assump
+primAppendString = TopLevel modPrim "appendString"
+  :>: Forall [] ([] :=> (tString `fn` tString `fn` tString))
+
+-- This needs to change a bit.
+-- We should have primitive show functions for each primitive type (Int, Float
+-- etc.) and a standard Lam typeclass for Show.
+-- The Show instances for the primitive types will then reference their
+-- corresponding primitive show functions.
+primShowInt :: Assump
+primShowInt =
+  TopLevel modPrim "showInt" :>: Forall [] ([] :=> (tInt `fn` tString))
+primShowFloat :: Assump
+primShowFloat =
+  TopLevel modPrim "showFloat" :>: Forall [] ([] :=> (tFloat `fn` tString))
+
 primNumPlus :: Assump
 primNumPlus = TopLevel modPrim "+" :>: Forall
   [Star]
@@ -142,8 +154,10 @@ constructors =
         , true
         , false
         , primError
-        , primShow
-        , primStringConcat
+        , primShowInt
+        , primShowFloat
+        , primConcatString
+        , primAppendString
         , primNumPlus
         , primNumSub
         , primNumMult
@@ -169,7 +183,7 @@ classEnv = transform initialEnv
               )
             )
       >=> addInst [] (IsIn numClass tInt)
-      >=> addShowInstances
+      -- >=> addShowInstances
 
 -- TODO: in future I think we want to derive Show via generics
 addShowInstances :: EnvTransformer
@@ -186,19 +200,23 @@ addShowInstances =
 addPreludeClasses :: EnvTransformer
 addPreludeClasses = addCoreClasses >=> addNumClasses
 
+-- TODO: fill in methods, or move these to Lam code
 addCoreClasses :: EnvTransformer
 addCoreClasses =
-  addClass eqClass []
-    >=> addClass ordClass                     [eqClass]
-    >=> addClass showClass                    []
-    >=> addClass (TopLevel modPrim "Read")    []
-    >=> addClass (TopLevel modPrim "Bounded") []
-    >=> addClass (TopLevel modPrim "Enum")    []
-    >=> addClass (TopLevel modPrim "Functor") []
-    >=> addClass (TopLevel modPrim "Monad")   []
+  addClass
+      eqClass
+      []
+      [(Local "==", Forall [Star] ([] :=> (TGen 0 `fn` TGen 0 `fn` tBool)))]
+    >=> addClass ordClass                     [eqClass] []
+    >=> addClass (TopLevel modPrim "Read")    []        []
+    >=> addClass (TopLevel modPrim "Bounded") []        []
+    >=> addClass (TopLevel modPrim "Enum")    []        []
+    >=> addClass (TopLevel modPrim "Functor") []        []
+    >=> addClass (TopLevel modPrim "Monad")   []        []
 
+-- TODO: fill in methods, or move these to Lam code
 addNumClasses :: EnvTransformer
 addNumClasses =
-  addClass numClass [eqClass, showClass]
-    >=> addClass fractionalClass [numClass]
-    >=> addClass integralClass   [TopLevel modPrim "Enum"]
+  addClass numClass [eqClass] []
+    >=> addClass fractionalClass [numClass]                []
+    >=> addClass integralClass   [TopLevel modPrim "Enum"] []

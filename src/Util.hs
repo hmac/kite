@@ -2,9 +2,11 @@ module Util
   ( module Util
   , Text.Pretty.Simple.pPrint
   , Data.Maybe.mapMaybe
+  , Data.List.nub
   )
 where
 
+import qualified Data.List
 import qualified Data.Maybe
 import           Data.Text.Lazy                 ( unpack )
 import qualified Text.Pretty.Simple
@@ -55,6 +57,21 @@ concat6 [] = ([], [], [], [], [], [])
 concat6 ((as, bs, cs, ds, es, fs) : xs) =
   let (as', bs', cs', ds', es', fs') = concat6 xs
   in  (as <> as', bs <> bs', cs <> cs', ds <> ds', es <> es', fs <> fs')
+
+concat7
+  :: [([a], [b], [c], [d], [e], [f], [g])]
+  -> ([a], [b], [c], [d], [e], [f], [g])
+concat7 [] = ([], [], [], [], [], [], [])
+concat7 ((as, bs, cs, ds, es, fs, gs) : xs) =
+  let (as', bs', cs', ds', es', fs', gs') = concat7 xs
+  in  ( as <> as'
+      , bs <> bs'
+      , cs <> cs'
+      , ds <> ds'
+      , es <> es'
+      , fs <> fs'
+      , gs <> gs'
+      )
 
 -- | Split a list into sublists delimited by the given element.
 splitOn :: Eq a => a -> [a] -> [[a]]

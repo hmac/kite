@@ -2,7 +2,7 @@ module Typecheck.Translate where
 
 -- Convert types in Syntax to types in THIH
 
-import           Util
+import           Data.Name
 import qualified Data.List                     as List
                                                 ( find )
 import           Data.Maybe                     ( mapMaybe
@@ -14,9 +14,7 @@ import           Typecheck.Desugar              ( Core )
 import qualified Typecheck.Desugar             as D
 import qualified Typecheck.Primitive           as Prim
 import qualified Canonical                     as Can
-
--- TODO: this module is a mess with no clear entrypoint.
--- Restrict the exports and clean this up.
+import           Canonical                      ( Name(..) )
 
 --          type cons     data cons
 type Env = ([(Id, Type)], [(Id, Scheme)])
@@ -43,12 +41,95 @@ typeConstructors m = map constructorToType $ mapMaybe getData (S.moduleDecls m)
     name    = S.dataName d
 
 -- TODO: superclass constraints
-addTypeclasses :: [Can.Typeclass] -> EnvTransformer
-addTypeclasses ts classEnv = foldl f (Right classEnv) ts
+addTypeclasses :: Env -> [Can.Typeclass] -> EnvTransformer
+addTypeclasses env ts classEnv = foldl (addTypeclass env) (Right classEnv) ts
+addTypeclass
+  :: Env -> Either Error ClassEnv -> Can.Typeclass -> Either Error ClassEnv
+addTypeclass env classEnv t = case classEnv of
+  Left err -> Left err
+  Right ce ->
+    addClass (S.typeclassName t) [] (map translateMethod (S.typeclassDefs t)) ce
  where
-  f mce t = case mce of
+  translateMethod :: (Name, Can.Type) -> (Id, Scheme)
+  translateMethod (name, ty) =
+    let
+      scheme = Forall [Star] (apply subst typ)
+      typ    = [] :=> tyToType env ty
+      subst  = zip (map (`Tyvar` Star) (S.typeclassTyVars t)) (map TGen [0 ..])
+    in
+      (name, scheme)
+
+-- Given a typeclass instance, we convert it into two things:
+-- 1. an EnvTransformer which adds the instance to the class environment
+-- 2. a set of function definitions which get typechecked
+--
+-- e.g. given this instance
+-- instance Monoid String where
+--   empty = ""
+--   append x y = $primStringAppend x y
+-- we generate
+-- 1. addInst [] (IsIn Monoid String)
+-- 2. [ empty : String
+--      empty = ""
+--    , append : String -> String -> String
+--      append x y = $primStringAppend x y ]
+-- TODO: instance constraints
+translateInstance :: Env -> Can.Instance Core -> (Id, Type)
+translateInstance env i =
+  (S.instanceName i, tyToType env (head (S.instanceTypes i)))
+
+instanceMethods :: ClassEnv -> Env -> Can.Instance Core -> [Expl]
+instanceMethods ce env i =
+  map (translateInstanceMethod ce env i) (S.instanceDefs i)
+
+-- We take      class Monoid a where
+--                append : a -> a -> a
+--     and      instance Monoid String where
+--                append = ...
+--
+-- and produce  $String$append : String -> String -> String
+-- by matching a with String
+-- and substituting in a -> a -> a
+-- Note: this currently only works for single param typeclasses
+-- TODO: do we need to check that the kinds match?
+translateInstanceMethod
+  :: ClassEnv -> Env -> Can.Instance Core -> (Name, [Can.Def Core]) -> Expl
+translateInstanceMethod ce env i (name, defs) =
+  let instanceType  = head (S.instanceTypes i)
+      typeclassName = S.instanceName i
+      typeclass     = fromMaybe (error ("unknown class " <> show typeclassName))
+                                (classes ce typeclassName)
+      methodName = name
+  in  ( mkName instanceType methodName
+      , mkType typeclass instanceType methodName
+      , map (defToAlt env) defs
+      )
+ where
+  -- The name is $<type name>$<method name>
+  mkName (S.TyCon (Can.TopLevel _ (Name ty))) (TopLevel modName (Name fun)) =
+    Can.TopLevel modName $ Name $ "$" <> ty <> "$" <> fun
+  -- The type is the type from the typeclass with all instances of the typeclass
+  -- variable replaced with the instance type.
+  -- e.g. a -> a -> a ==> String -> String -> String
+  --
+  -- TODO: we can't yet handle:
+  -- - polymorphic variables that aren't the typeclass variable
+  -- - constraints on typeclass methods
+  mkType :: Class -> Can.Type -> Name -> Scheme
+  mkType tyclass ty (TopLevel _ methodName) =
+    case
+        List.find (\((TopLevel _ n), _) -> n == methodName) (methods tyclass)
+      of
+        Nothing -> error $ "unknown instance method: " <> show methodName
+        Just (_, Forall [_methodVarKinds] methodType) ->
+          let ty' = tyToType env ty in Forall [] (inst [ty'] methodType)
+
+addInstances :: [(Id, Type)] -> EnvTransformer
+addInstances is classEnv = foldl f (Right classEnv) is
+ where
+  f mce (className, ty) = case mce of
     Left  err -> Left err
-    Right ce  -> addClass (S.typeclassName t) [] ce
+    Right ce  -> addInst [] (IsIn className ty) ce
 
 -- These are the data constructors in the module
 dataConstructors :: Env -> Can.Module Core -> [(Id, Scheme)]
@@ -93,8 +174,7 @@ typeclassMethods env t = flip map (S.typeclassDefs t)
   --   eq : a -> a -> Bool
   -- we need to add a constraint to get
   -- eq : Eq a => a -> a -> Bool
-  constraint = S.CInst (S.typeclassName t)
-                       (map (S.TyVar . Can.Local) (S.typeclassTyVars t))
+  constraint = S.CInst (S.typeclassName t) (map S.TyVar (S.typeclassTyVars t))
 
 funToBindGroup :: Env -> Can.Fun Core -> BindGroup
 funToBindGroup env f = case S.funType f of

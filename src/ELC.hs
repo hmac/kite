@@ -35,8 +35,8 @@ data Constant = Int Int
              | Prim Primitive
          deriving (Show, Eq)
 
-data Primitive = PrimShow
-               | PrimStringAppend
+-- TODO: add PrimShowInt, PrimShowFloat etc.
+data Primitive = PrimStringAppend
                | PrimAdd
                | PrimSub
                | PrimMult

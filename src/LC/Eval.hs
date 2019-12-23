@@ -57,8 +57,8 @@ evalConst _ (Prim f) args = evalPrim f args
 evalConst _ c es = Const c es
 
 evalPrim :: Primitive -> [Exp] -> Exp
+evalPrim PrimStringAppend [] = Const (String "") []
 evalPrim PrimStringAppend [Const (String a) _, Const (String b) _] = Const (String (a <> b)) []
-evalPrim PrimShow [e] = primShow e
 evalPrim PrimAdd [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
 evalPrim PrimSub [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
 evalPrim PrimMult [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []

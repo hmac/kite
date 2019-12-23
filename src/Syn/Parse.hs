@@ -458,7 +458,7 @@ lowercaseName = Name <$> lowercaseString
 
 lowercaseString :: Parser String
 lowercaseString = lexeme . try $ do
-  t <- (:) <$> lowerChar <*> many alphaNumChar
+  t <- (:) <$> (lowerChar <|> char '$') <*> many alphaNumChar
   guard (t `notElem` keywords)
   pure t
 

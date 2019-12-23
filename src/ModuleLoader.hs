@@ -28,6 +28,7 @@ import           Canonicalise                   ( canonicaliseModule )
 
 -- TODO: structured errors
 
+-- With canonicalisation we can probably flatten this tree.
 --                               the module   its dependencies
 data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [ModuleGroup]
   deriving (Show)
@@ -58,8 +59,12 @@ loadAll root name = do
 load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
 load root name = parseLamFile <$> readFile (filePath root name)
 
+-- We skip any references to Lam.Primitive because it's not a normal module.
+-- It has no corresponding file and its definitions are automatically in scope
+-- anyway.
 dependencies :: Module_ n (Syn_ n) -> [ModuleName]
-dependencies Module { moduleImports = imports } = nub $ map importName imports
+dependencies Module { moduleImports = imports } =
+  filter (/= ModuleName ["Lam", "Primitive"]) $ nub $ map importName imports
 
 filePath :: FilePath -> ModuleName -> FilePath
 filePath root (ModuleName components) =

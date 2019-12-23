@@ -5,7 +5,10 @@ import           ELC.Primitive                  ( modPrim )
 import           Syntax                        as Syn
 
 primitives :: [(Syn.Name, Syn.ModuleName)]
-primitives = map (, modPrim) $ numFunctions <> list <> types
+primitives = map (, modPrim) $ miscFunctions <> numFunctions <> list <> types
+
+miscFunctions :: [Syn.Name]
+miscFunctions = ["error"]
 
 numFunctions, list, types :: [Syn.Name]
 numFunctions = ["+", "*", "-"]

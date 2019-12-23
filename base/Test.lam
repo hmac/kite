@@ -3,6 +3,8 @@ module Test
 import Data.Bool (True, False, Bool)
 import Data.Maybe (Just, Nothing)
 import Data.Either (Either, Left, Right)
+import Lam.Show (Show, show)
+import Lam.Monoid (Monoid, concat)
 
 e : Either Bool String
 e = Left True

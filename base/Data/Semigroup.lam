@@ -1,9 +1,7 @@
 module Data.Semigroup
 
-import Data.NonEmpty (NonEmpty, NonEmpty)
-
-class Semigroup a where
-  append : a -> a -> a
+import Lam.Semigroup (Semigroup, append)
+import Data.NonEmpty (NonEmpty)
 
 instance Semigroup Int where
   append x y = x + y
