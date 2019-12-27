@@ -55,25 +55,33 @@ dumpLC :: FilePath -> IO ()
 dumpLC = withParsedFile (pPrint . ModuleGroupCompiler.compileModule)
 
 dumpTypeEnv :: FilePath -> IO ()
-dumpTypeEnv = withParsedFile (pPrint . ModuleGroupTypechecker.dumpEnv)
+dumpTypeEnv = withParsedFile' (pPrint . ModuleGroupTypechecker.dumpEnv)
 
 typecheck :: FilePath -> IO ()
-typecheck = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModule g of
+typecheck = withParsedFile' $ \ms ->
+  case ModuleGroupTypechecker.typecheckModules ms of
     Left  err -> putStrLn (printError err)
     Right _   -> putStrLn "Success."
 
 run :: FilePath -> IO ()
-run = withParsedFile $ \g -> case ModuleGroupTypechecker.typecheckModule g of
-  Left err -> putStrLn (printError err)
-  Right _ ->
-    let cm     = ModuleGroupCompiler.compileModule g
-        answer = evalMain (cModuleName cm) (cModuleEnv cm)
-    in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
+run = withParsedFile $ \g@(ModuleGroup m deps) ->
+  let modules = concatMap ModuleLoader.flatten deps ++ [m]
+  in  case ModuleGroupTypechecker.typecheckModules modules of
+        Left err -> putStrLn (printError err)
+        Right _ ->
+          let cm     = ModuleGroupCompiler.compileModule g
+              answer = evalMain (cModuleName cm) (cModuleEnv cm)
+          in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
 
 withParsedFile :: (ModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
   mgroup <- ModuleLoader.loadFromPath path
+  case mgroup of
+    Left  e -> putStrLn e
+    Right g -> cb g
+
+withParsedFile' cb path = do
+  mgroup <- ModuleLoader.loadFromPath' path
   case mgroup of
     Left  e -> putStrLn e
     Right g -> cb g

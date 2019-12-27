@@ -6,6 +6,8 @@ import           Syn.Parse                      ( parseLamFile )
 import           Syntax
 import           Data.List                      ( nub
                                                 , intercalate
+                                                , sortBy
+                                                , permutations
                                                 )
 import qualified Canonical                     as Can
 import           Canonicalise                   ( canonicaliseModule )
@@ -33,6 +35,15 @@ import           Canonicalise                   ( canonicaliseModule )
 data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [ModuleGroup]
   deriving (Show)
 
+-- like loadFromPath but returns a flat list of modules, in dependency order
+loadFromPath' :: FilePath -> IO (Either String [Can.Module Can.Exp])
+loadFromPath' path = do
+  result <- loadFromPath path
+  pure $ case result of
+    Left err -> Left err
+    Right (ModuleGroup m deps) ->
+      (++ [m]) <$> sortModules (nub (concatMap flatten deps))
+
 loadFromPath :: FilePath -> IO (Either String ModuleGroup)
 loadFromPath path = do
   root  <- getCurrentDirectory
@@ -59,6 +70,10 @@ loadAll root name = do
 load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
 load root name = parseLamFile <$> readFile (filePath root name)
 
+flatten :: ModuleGroup -> [Can.Module Can.Exp]
+flatten (ModuleGroup m []  ) = [m]
+flatten (ModuleGroup m deps) = m : concatMap flatten deps
+
 -- We skip any references to Lam.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
 -- anyway.
@@ -69,3 +84,27 @@ dependencies Module { moduleImports = imports } =
 filePath :: FilePath -> ModuleName -> FilePath
 filePath root (ModuleName components) =
   root <> "/" <> intercalate "/" components <> ".lam"
+
+-- Sorts a set of modules in dependency order. Each module will only depend on
+-- modules before it in the list. Returns an error if there are cyclic
+-- dependencies.
+sortModules :: [Can.Module Can.Exp] -> Either String [Can.Module Can.Exp]
+sortModules []  = Right []
+sortModules [m] = Right [m]
+sortModules ms =
+  let pairs = map (take 2) (permutations ms)
+  in  if any (\[a, b] -> a `dependsOn` b && b `dependsOn` a) pairs
+        then Left "Cyclic dependency detected"
+        else Right $ sortBy compareModules ms
+
+compareModules :: Can.Module Can.Exp -> Can.Module Can.Exp -> Ordering
+compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of
+  (True , False) -> GT
+  (False, True ) -> LT
+  (False, False) -> EQ
+  (True , True ) -> EQ
+
+dependsOn :: Can.Module Can.Exp -> Can.Module Can.Exp -> Bool
+m1 `dependsOn` m2
+  | any (\i -> importName i == moduleName m2) (moduleImports m1) = True
+  | otherwise = False
