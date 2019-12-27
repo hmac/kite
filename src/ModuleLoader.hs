@@ -1,4 +1,8 @@
-module ModuleLoader where
+module ModuleLoader
+  ( ModuleGroup(..)
+  , loadFromPath
+  )
+where
 
 import           System.Directory               ( getCurrentDirectory )
 
@@ -31,18 +35,9 @@ import           Canonicalise                   ( canonicaliseModule )
 -- TODO: structured errors
 
 -- With canonicalisation we can probably flatten this tree.
---                               the module   its dependencies
-data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [ModuleGroup]
+--                             the module   its dependencies
+data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [Can.Module Can.Exp]
   deriving (Show)
-
--- like loadFromPath but returns a flat list of modules, in dependency order
-loadFromPath' :: FilePath -> IO (Either String [Can.Module Can.Exp])
-loadFromPath' path = do
-  result <- loadFromPath path
-  pure $ case result of
-    Left err -> Left err
-    Right (ModuleGroup m deps) ->
-      (++ [m]) <$> sortModules (nub (concatMap flatten deps))
 
 loadFromPath :: FilePath -> IO (Either String ModuleGroup)
 loadFromPath path = do
@@ -53,10 +48,11 @@ loadFromPath path = do
     Right m   -> do
       deps <- mapM (loadAll root) (dependencies m)
       case sequence deps of
-        Left  err   -> pure (Left err)
-        Right deps' -> pure $ Right $ ModuleGroup m deps'
+        Left err -> pure (Left err)
+        Right deps' ->
+          pure $ ModuleGroup m <$> sortModules (nub (concat deps'))
 
-loadAll :: FilePath -> ModuleName -> IO (Either String ModuleGroup)
+loadAll :: FilePath -> ModuleName -> IO (Either String [Can.Module Can.Exp])
 loadAll root name = do
   modul <- fmap canonicaliseModule <$> load root name
   case modul of
@@ -65,14 +61,10 @@ loadAll root name = do
       deps <- mapM (loadAll root) (dependencies m)
       case sequence deps of
         Left  err   -> pure (Left err)
-        Right deps' -> pure $ Right $ ModuleGroup m deps'
+        Right deps' -> pure $ Right $ m : concat deps'
 
 load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
 load root name = parseLamFile <$> readFile (filePath root name)
-
-flatten :: ModuleGroup -> [Can.Module Can.Exp]
-flatten (ModuleGroup m []  ) = [m]
-flatten (ModuleGroup m deps) = m : concatMap flatten deps
 
 -- We skip any references to Lam.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope

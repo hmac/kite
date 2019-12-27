@@ -804,7 +804,7 @@ ordClass = TopLevel modPrim "Ord"
 eqClass :: Id
 eqClass = TopLevel modPrim "Eq"
 showClass :: Id
-showClass = TopLevel (ModuleName ["Lam", "Show"]) "Show"
+showClass = TopLevel modPrim "Show"
 fractionalClass :: Id
 fractionalClass = TopLevel modPrim "Fractional"
 integralClass :: Id

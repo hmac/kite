@@ -2,6 +2,8 @@ module ELC.Compile where
 
 -- Compile Can.Exp to ELC.Exp
 
+import           Data.Map.Strict                ( Map )
+import qualified Data.Map.Strict               as Map
 import           Util
 import           Control.Applicative            ( (<|>) )
 import           Control.Monad.State.Strict
@@ -19,28 +21,23 @@ import qualified Canonical                     as Can
 import qualified Syntax                        as S
 import           Data.Name
 
-data Env = Env { locals :: [(Name, Exp)]
-               , imports :: [(Name, Exp)]
-               , builtins :: [(Name, Exp)]
-               }
-               deriving (Eq, Show)
+-- TODO: use Data.Map
+type Env = Map Name Exp
 
 emptyEnv :: Env
-emptyEnv = Env { locals = [], imports = [], builtins = [] }
+emptyEnv = mempty
 
 defaultEnv :: Env
-defaultEnv = emptyEnv { builtins = primConstructors }
+defaultEnv = Map.fromList primConstructors
 
 mergeLocals :: Env -> [(Name, Exp)] -> Env
-mergeLocals env ls = env { locals = locals env <> ls }
+mergeLocals env ls = env <> Map.fromList ls
 
 collapseEnv :: Env -> [(Name, Exp)]
-collapseEnv env = locals env <> imports env <> builtins env
+collapseEnv = Map.toList
 
 lookupEnv :: Name -> Env -> Maybe Exp
-lookupEnv (TopLevel mn n) env =
-  lookup (TopLevel mn n) (imports env <> locals env)
-lookupEnv n env = lookup n (locals env) <|> lookup n (builtins env)
+lookupEnv = Map.lookup
 
 type NameGen = State Int
 
@@ -220,8 +217,9 @@ translateStringLit env prefix parts = do
   stringAppendFn = do
     l <- fresh
     r <- fresh
-    pure $ Abs (VarPat l)
-               (Abs (VarPat r) (App (App (Var primAppend) (Var l)) (Var r)))
+    pure $ Abs
+      (VarPat l)
+      (Abs (VarPat r) (App (App (Var primAppendString) (Var l)) (Var r)))
   go :: [(Can.Exp, String)] -> NameGen [Exp]
   go []            = pure []
   go ((e, s) : is) = do

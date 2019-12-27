@@ -45,10 +45,10 @@ repl env = do
 
 processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
-  let m = buildModule decls
-  in  case ModuleGroupTypechecker.typecheckModules [m] of
+  let g = ModuleGroup (buildModule decls) []
+  in  case ModuleGroupTypechecker.typecheckModule g of
         Left err -> do
-          print err
+          putStrLn $ "Type error: " <> show err
           pure False
         Right _ -> do
           putStrLn "OK."
@@ -63,13 +63,12 @@ processExpr decls e =
                        , funConstraint = Nothing
                        , funDefs       = [Def { defArgs = [], defExpr = e }]
                        }
-    m = buildModule (decls ++ [main])
-    l = ModuleGroup m []
+    g = ModuleGroup (buildModule (decls ++ [main])) []
   in
-    case ModuleGroupTypechecker.typecheckModules [m] of
-      Left  err -> print err
+    case ModuleGroupTypechecker.typecheckModule g of
+      Left  err -> putStrLn $ "Type error: " <> show err
       Right _   -> do
-        let compiled = ModuleGroupCompiler.compileModule l
+        let compiled = ModuleGroupCompiler.compileModule g
         let answer = LC.Eval.evalVar
               (TopLevel (cModuleName compiled) "$main")
               (cModuleEnv compiled)

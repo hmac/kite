@@ -1,12 +1,7 @@
 module Lam.Show
 
-import Lam.Primitive (showInt, showFloat)
+-- This class is built in to the compiler.
+-- The code here is for documentation only.
 
-class Show a where
-  show : a -> String
-
-instance Show String where
-  show x = x
-
-instance Show Int where
-  show i = showInt i
+-- class Show a where
+--   show : a -> String

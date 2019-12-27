@@ -4,7 +4,7 @@ import           Control.Monad                  ( void )
 import           Data.Foldable                  ( foldlM )
 import           Syntax
 import qualified Canonical                     as Can
-import           Typecheck.THIH                 ( Expl
+import           Typecheck.THIH                 ( BindGroup
                                                 , ClassEnv
                                                 , Assump(..)
                                                 , tiProgram
@@ -23,34 +23,38 @@ import           Typecheck.Translate            ( typeConstructors
                                                 )
 import qualified Typecheck.Primitive           as Prim
 import           Data.Maybe                     ( mapMaybe )
+import           ModuleLoader                   ( ModuleGroup(..) )
 
--- This module takes a ModuleGroup from the loader and attempts to typecheck it
--- and its dependent modules.
+-- This module takes a list of modules from the loader and attempts to typecheck
+-- them.
 
 -- At this point the module has already been canonicalised, so we can assume
--- that all names are unique and not worry about clashes.
+-- that all names are unique and not worry about clashes. We also assume that
+-- the modules are in dependency order (this is handled by the ModuleLoader).
 
-typecheckModules :: [Can.Module Can.Exp] -> Either Error ()
-typecheckModules ms = do
+typecheckModule :: ModuleGroup -> Either Error ()
+typecheckModule (ModuleGroup m deps) = do
+  let ms = deps ++ [m]
   (classEnv, (_tycons, datacons), funs, methods) <- buildEnv ms
   let assumps = map (uncurry (:>:)) datacons <> methods
-  void $ tiProgram classEnv assumps [(funs, [])]
+  void $ tiProgram classEnv assumps funs
 
-dumpEnv :: [Can.Module Can.Exp] -> Either Error (Env, [Expl], [Assump])
-dumpEnv ms = do
+dumpEnv :: ModuleGroup -> Either Error (Env, [BindGroup], [Assump])
+dumpEnv (ModuleGroup m deps) = do
+  let ms = deps ++ [m]
   (_ce, env, funs, methods) <- buildEnv ms
   pure (env, funs, methods)
 
 buildEnv
-  :: [Can.Module Can.Exp] -> Either Error (ClassEnv, Env, [Expl], [Assump])
+  :: [Can.Module Can.Exp] -> Either Error (ClassEnv, Env, [BindGroup], [Assump])
 buildEnv ms = do
   classEnv <- Prim.classEnv
   foldlM f (classEnv, (Prim.typeConstructors, Prim.constructors), [], []) ms
  where
   f
-    :: (ClassEnv, Env, [Expl], [Assump])
+    :: (ClassEnv, Env, [BindGroup], [Assump])
     -> Can.Module Can.Exp
-    -> Either Error (ClassEnv, Env, [Expl], [Assump])
+    -> Either Error (ClassEnv, Env, [BindGroup], [Assump])
   f (ce, (tycons, datacons), funs, typeclassmethods) m = do
     let core = desugarModule m
         env =
@@ -58,7 +62,7 @@ buildEnv ms = do
           , datacons
             <> dataConstructors (tycons <> typeConstructors core, []) core
           )
-        funs' = concatMap fst $ mapMaybe (toBindGroup env) (moduleDecls core)
+        funs'     = mapMaybe (toBindGroup env) (moduleDecls core)
         instances = map (translateInstance env) (instanceDecls core)
 
     -- Extend the class env
@@ -73,4 +77,6 @@ buildEnv ms = do
         methods' = typeclassmethods
           <> concatMap (typeclassMethods env) (typeclassDecls core)
 
-    pure (ce', env, funs' <> funs <> instancemethods, methods')
+    -- Note: the order of BindGroups matters.
+    -- Dependencies must come before dependents.
+    pure (ce', env, funs <> funs' <> [(instancemethods, [])], methods')

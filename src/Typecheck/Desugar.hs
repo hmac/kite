@@ -73,25 +73,21 @@ desugarAbs vars e =
   let freshName = Can.Local "$f"
   in  Let [(freshName, [(map S.VarPat vars, e)])] (Var freshName)
 
--- Convert a string interpolation into applications of concat and show
--- "x: #{a}, y: #{b}" ==> concat ["x: ", show a, ", y :", show b, ""]
+-- Convert a string interpolation into applications of appendString and show
+-- "x: #{a}, y: #{b}" ==> "x: " <> show a <> ", y :" <> show b <> ""
 desugarString :: String -> [(Core, String)] -> Core
-desugarString prefix interps = App (Var (Can.TopLevel modMonoid "concat"))
-                                   (List (StringLit prefix : go interps))
+desugarString prefix interps = foldr (\x acc -> App (App appendString x) acc)
+                                     (StringLit "")
+                                     (StringLit prefix : go interps)
  where
+  appendString = Var (Can.TopLevel modPrim "appendString")
   go [] = []
   go ((e, s) : is) =
-    App (Var (Can.TopLevel modShow "show")) e : StringLit s : go is
+    App (Var (Can.TopLevel modPrim "show")) e : StringLit s : go is
 
 -- TODO: deduplicate with ELC.Primitive
 modPrim :: ModuleName
 modPrim = ModuleName ["Lam", "Primitive"]
-
-modShow :: ModuleName
-modShow = ModuleName ["Lam", "Show"]
-
-modMonoid :: ModuleName
-modMonoid = ModuleName ["Lam", "Monoid"]
 
 -- case scrut of
 --   pat1 -> e1

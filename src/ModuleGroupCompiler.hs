@@ -34,26 +34,15 @@ data CompiledModule a = CompiledModule { cModuleName :: ModuleName
                                        }
   deriving Show
 
--- Recursively compiles a module and its dependencies to LC
 compileModule :: ModuleGroup -> CompiledModule LC.Env
-compileModule l = compileToLC (compileModule' l)
- where
-  compileToLC :: CompiledModule ELC.Env -> CompiledModule LC.Env
-  compileToLC m = m { cModuleEnv  = LC.runConvert (LC.convertEnv (cModuleEnv m))
-                    , cModuleDeps = map compileToLC (cModuleDeps m)
-                    }
+compileModule (ModuleGroup m deps) = CompiledModule
+  { cModuleName    = moduleName m
+  , cModuleImports = moduleImports m
+  , cModuleExports = moduleExports m
+  , cModuleEnv     = LC.runConvert (LC.convertEnv env)
+  , cModuleDeps    = []
+  }
+  where env = foldl compileModule'' ELC.defaultEnv (deps ++ [m])
 
--- Recursively compiles a module and its dependencies to ELC
-compileModule' :: ModuleGroup -> CompiledModule ELC.Env
-compileModule' (ModuleGroup m deps) =
-  let deps'    = map compileModule' deps
-      depEnvs  = concatMap (ELC.collapseEnv . cModuleEnv) deps'
-      elcEnv   = ELC.defaultEnv { ELC.imports = depEnvs }
-      m'       = LC.runConvert (ELC.translateModule elcEnv m)
-      compiled = CompiledModule { cModuleName    = moduleName m
-                                , cModuleEnv     = m'
-                                , cModuleImports = moduleImports m
-                                , cModuleExports = moduleExports m
-                                , cModuleDeps    = deps'
-                                }
-  in  compiled
+compileModule'' :: ELC.Env -> Can.Module Can.Exp -> ELC.Env
+compileModule'' env m = LC.runConvert (ELC.translateModule env m)

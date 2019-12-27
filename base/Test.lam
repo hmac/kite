@@ -1,6 +1,6 @@
 module Test
 
-import Data.Bool (True, False, Bool)
+import Data.Bool (True, False, Bool, all)
 import Data.Maybe (Just, Nothing)
 import Data.Either (Either, Left, Right)
 import Lam.Show (Show, show)
