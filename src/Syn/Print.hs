@@ -261,7 +261,15 @@ printData d =
     <+> hsep (punctuate pipe (map printCon (dataCons d)))
 
 printCon :: DataCon -> Document
-printCon c = printName (conName c) <+> hsep (map printType (conArgs c))
+printCon DataCon { conName = name, conArgs = args } =
+  printName name <+> hsep (map printType args)
+printCon RecordCon { conName = name, conFields = fields } =
+  printName name <+> braces
+    (hsep
+      (punctuate comma
+                 (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)
+      )
+    )
 
 printTypeclass :: Typeclass -> Document
 printTypeclass t = vsep (header : map printTypeclassDef (typeclassDefs t))

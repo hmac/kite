@@ -105,9 +105,14 @@ data Instance_ name exp = Instance { instanceName :: name
                                    deriving (Eq, Show)
 
 type DataCon = DataCon_ Name
+-- Left a
+-- Foo { unFoo : a, label : String }
 data DataCon_ name = DataCon { conName :: name
                              , conArgs :: [Ty_ name]
                              }
+                   | RecordCon { conName :: name
+                               , conFields :: [(name, Ty_ name)]
+                               } 
                              deriving (Eq, Show)
 
 -- Consider adding defName here - I think it might simplify things elsewhere
@@ -154,10 +159,12 @@ a `fn` b = (TyArr :@: a) :@: b
 -- Syn represents the code that users write. It goes through several
 -- translations before being executed.
 
--- For typechecking we convert Syn to Core and typechecking the Core.
--- For evaluation we convert Syn to ELC.
--- We currently evaluate ELC directly but in future ELC will be converted to LC
--- before evaluation.
+-- Immediately after a module is loaded (in ModuleLoader) it is canonicalised,
+-- a process that qualifies all names with their full module path. This produces
+-- a Canonical.Exp which is another name for Syn (Canonical.Name).
+
+-- For typechecking we convert Syn to Core and typecheck the Core.
+-- For evaluation we convert Syn to ELC, then to LC for evaluation.
 
 type Syn = Syn_ Name
 data Syn_ name = Var name

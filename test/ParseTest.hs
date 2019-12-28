@@ -131,6 +131,21 @@ test = do
         , dataTyVars = []
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
+    it "parses a record definition" $ do
+      parse pDecl "" "data Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+        `shouldParse` DataDecl Data
+                        { dataName   = "Foo"
+                        , dataTyVars = ["a"]
+                        , dataCons   =
+                          [ RecordCon
+                              { conName   = "Foo"
+                              , conFields = [ ("unFoo", TyVar "a")
+                                            , ("label", TyHole "b")
+                                            , ("c"    , TyCon "A" :@: TyCon "A")
+                                            ]
+                              }
+                          ]
+                        }
     it "parses the definition of List" $ do
       parse pDecl "" "data List a = Nil | Cons a (List a)"
         `shouldParse` DataDecl Data
@@ -230,6 +245,9 @@ test = do
     it "parses an application" $ do
       parse pExpr "" "foo x y z"
         `shouldParse` App (App (App (Var "foo") (Var "x")) (Var "y")) (Var "z")
+    it "parses an infix application" $ do
+      parse pExpr "" "(a <= a)"
+        `shouldParse` App (App (Var "<=") (Var "a")) (Var "a")
     it "parses a case expression" $ do
       parse pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
         `shouldParse` Case

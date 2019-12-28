@@ -5,7 +5,6 @@ module ELC.Compile where
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Util
-import           Control.Applicative            ( (<|>) )
 import           Control.Monad.State.Strict
 import           Control.Monad                  ( replicateM )
 import           Data.List.Extra                ( groupOn )

@@ -20,8 +20,8 @@ type Parser = Parsec Void String
 -- TODO: escape quote chars in string literals
 -- TOOD: heredocs
 -- TODO: do notation
--- TODO: where clause
--- TODO: records
+-- TODO: where clause?
+-- TODO: record construction, record patterns
 -- TODO: record field syntax
 -- TODO: typeclass constraints
 -- TODO: infix constructors (like List ::)
@@ -105,7 +105,17 @@ pData = do
   pure Data { dataName = name, dataTyVars = tyvars, dataCons = constructors }
  where
   pCon :: Parser DataCon
-  pCon = DataCon <$> uppercaseName <*> many pConType
+  pCon       = try pRecordCon <|> pBasicCon
+  pBasicCon  = DataCon <$> uppercaseName <*> many pConType
+  pRecordCon = do
+    name   <- uppercaseName
+    fields <- braces $ pRecordField `sepBy1` comma
+    pure $ RecordCon { conName = name, conFields = fields }
+  pRecordField = do
+    fName <- lowercaseName
+    void (symbol ":")
+    ty <- pType
+    pure (fName, ty)
 
 -- TODO: we can make this more flexible by allowing annotations separate from
 -- definitions
@@ -225,13 +235,14 @@ pType = try arr <|> try app <|> pType'
 pConType :: Parser Ty
 pConType = ty
  where
-  ty    = var <|> con <|> list <|> parens (try arr <|> try tuple <|> app)
+  ty = hole <|> var <|> con <|> list <|> parens (try arr <|> try tuple <|> app)
   app   = (:@:) <$> ty <*> ty
   arr   = TyArr <$ symbol "->"
   con   = TyCon <$> uppercaseName
   var   = TyVar <$> lowercaseName
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma
+  hole  = TyHole <$> (string "?" >> pHoleName)
 
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
@@ -321,7 +332,7 @@ pBinApp = do
   pOp =
     (Cons . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
   twoCharOp =
-    string "&&" <|> string "||" <|> string ">=" <|> string "<=" <> string "<>"
+    string "&&" <|> string "||" <|> string ">=" <|> string "<=" <|> string "<>"
   oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
 
 pApp :: Parser Syn
@@ -504,6 +515,9 @@ lexemeN = L.lexeme spaceConsumerN
 
 parens :: Parser p -> Parser p
 parens = between (symbol "(") (symbol ")")
+
+braces :: Parser p -> Parser p
+braces = between (symbol "{") (symbol "}")
 
 brackets :: Parser p -> Parser p
 brackets = between (symbol "[") (symbol "]")

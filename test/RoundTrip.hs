@@ -130,7 +130,13 @@ genData =
     <*> Gen.list (Range.linear 1 3) genDataCon
 
 genDataCon :: H.Gen DataCon
-genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
+genDataCon = Gen.choice [genSimpleDataCon, genRecordCon]
+ where
+  genSimpleDataCon =
+    DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
+  genRecordCon = RecordCon <$> genUpperName <*> Gen.list
+    (Range.linear 1 3)
+    ((,) <$> genLowerName <*> genType)
 
 genFun :: H.Gen (Fun Syn)
 genFun =

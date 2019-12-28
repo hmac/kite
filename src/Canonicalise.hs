@@ -21,50 +21,50 @@ type Env = (ModuleName, Imports)
 buildImports :: Syn.Module Syn.Syn -> Imports
 buildImports m =
   let imports = concatMap
-        (\imp -> fmap (, Syn.importName imp) (Syn.importItems imp))
-        (Syn.moduleImports m)
+        (\imp -> fmap (, importName imp) (importItems imp))
+        (moduleImports m)
   in  Map.fromList (imports <> Canonical.Primitive.primitives)
 
 canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module Can.Exp
 canonicaliseModule m =
   let imports = buildImports m
-      env = (Syn.moduleName m, imports)
+      env = (moduleName m, imports)
   in  m
-        { Syn.moduleExports = fmap Can.Local (Syn.moduleExports m)
-        , Syn.moduleDecls   = fmap (canonicaliseDecl env)
-                                   (Syn.moduleDecls m)
+        { moduleExports = fmap Can.Local (moduleExports m)
+        , moduleDecls   = fmap (canonicaliseDecl env)
+                                   (moduleDecls m)
         }
 
 canonicaliseDecl :: Env -> Syn.Decl Syn.Syn -> Can.Decl Can.Exp
 canonicaliseDecl env = \case
-  Syn.FunDecl f -> Syn.FunDecl $ canonicaliseFun env f
-  Syn.DataDecl d -> Syn.DataDecl $ canonicaliseData env d
-  Syn.TypeclassDecl t -> Syn.TypeclassDecl $ canonicaliseTypeclass env t
-  Syn.TypeclassInst i -> Syn.TypeclassInst $ canonicaliseInstance env i
-  Syn.Comment s -> Syn.Comment s
+  FunDecl f -> FunDecl $ canonicaliseFun env f
+  DataDecl d -> DataDecl $ canonicaliseData env d
+  TypeclassDecl t -> TypeclassDecl $ canonicaliseTypeclass env t
+  TypeclassInst i -> TypeclassInst $ canonicaliseInstance env i
+  Comment s -> Comment s
 
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f =
-  f { Syn.funName = TopLevel mod (Syn.funName f)
-    , Syn.funDefs = fmap (canonicaliseDef (mod, imps)) (Syn.funDefs f)
-    , Syn.funConstraint = canonicaliseConstraint (mod, imps) <$> Syn.funConstraint f
-    , Syn.funType = canonicaliseType (mod, imps) (Syn.funType f)
+  f { funName = TopLevel mod (funName f)
+    , funDefs = fmap (canonicaliseDef (mod, imps)) (funDefs f)
+    , funConstraint = canonicaliseConstraint (mod, imps) <$> funConstraint f
+    , funType = canonicaliseType (mod, imps) (funType f)
     }
 
 canonicaliseType :: Env -> Syn.Ty -> Can.Type
 canonicaliseType env = \case
   -- Note: type variables are assumed to be local to the type
   -- this may need rethinking when we support type aliases
-  Syn.TyVar v -> Syn.TyVar (Local v)
-  Syn.TyCon n -> Syn.TyCon (canonicaliseName env n)
-  a Syn.:@: b -> canonicaliseType env a Syn.:@: canonicaliseType env b
-  Syn.TyList a -> Syn.TyList (canonicaliseType env a)
-  Syn.TyTuple as -> Syn.TyTuple $ fmap (canonicaliseType env) as
-  Syn.TyHole n -> Syn.TyHole n
-  Syn.TyArr -> Syn.TyArr
-  Syn.TyInt -> Syn.TyInt
-  Syn.TyFloat -> Syn.TyFloat
-  Syn.TyString -> Syn.TyString
+  TyVar v -> TyVar (Local v)
+  TyCon n -> TyCon (canonicaliseName env n)
+  a :@: b -> canonicaliseType env a :@: canonicaliseType env b
+  TyList a -> TyList (canonicaliseType env a)
+  TyTuple as -> TyTuple $ fmap (canonicaliseType env) as
+  TyHole n -> TyHole n
+  TyArr -> TyArr
+  TyInt -> TyInt
+  TyFloat -> TyFloat
+  TyString -> TyString
 
 canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
 canonicaliseConstraint env = \case
@@ -75,37 +75,41 @@ canonicaliseConstraint env = \case
 
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d =
-  d { Syn.dataName = TopLevel mod (Syn.dataName d)
-    , Syn.dataCons = fmap (canonicaliseDataCon (mod,imps)) (Syn.dataCons d)
+  d { dataName = TopLevel mod (dataName d)
+    , dataCons = fmap (canonicaliseDataCon (mod,imps)) (dataCons d)
     }
 
 canonicaliseDataCon :: Env -> Syn.DataCon -> Can.DataCon
-canonicaliseDataCon (mod, imps) d =
-  d { Syn.conName = TopLevel mod (Syn.conName d)
-    , Syn.conArgs = fmap (canonicaliseType (mod, imps)) (Syn.conArgs d)
-    }
+canonicaliseDataCon (mod, imps) DataCon { conName = name, conArgs = args } =
+  DataCon { conName = TopLevel mod name
+          , conArgs = fmap (canonicaliseType (mod, imps)) args
+          }
+canonicaliseDataCon (mod, imps) RecordCon { conName = name, conFields = fields } =
+  RecordCon { conName = TopLevel mod name
+            , conFields = map (bimap (TopLevel mod) (canonicaliseType (mod, imps))) fields
+            }
 
 canonicaliseTypeclass :: Env -> Syn.Typeclass -> Can.Typeclass
 canonicaliseTypeclass (mod, imps) t =
-  t { Syn.typeclassName = TopLevel mod (Syn.typeclassName t)
-    , Syn.typeclassDefs = bimapL (TopLevel mod) (canonicaliseType (mod, imps)) (Syn.typeclassDefs t)
-    , Syn.typeclassTyVars = map Local (Syn.typeclassTyVars t)
+  t { typeclassName = TopLevel mod (typeclassName t)
+    , typeclassDefs = bimapL (TopLevel mod) (canonicaliseType (mod, imps)) (typeclassDefs t)
+    , typeclassTyVars = map Local (typeclassTyVars t)
     }
 
 canonicaliseInstance :: Env -> Syn.Instance Syn.Syn -> Can.Instance Can.Exp
 canonicaliseInstance env@(mod, _) i =
-   i { Syn.instanceName = canonicaliseName env (Syn.instanceName i)
-        , Syn.instanceDefs = fmap (bimap (TopLevel mod) (fmap (canonicaliseDef env))) (Syn.instanceDefs i)
-        , Syn.instanceTypes = fmap (canonicaliseType env) (Syn.instanceTypes i)
+   i { instanceName = canonicaliseName env (instanceName i)
+        , instanceDefs = fmap (bimap (TopLevel mod) (fmap (canonicaliseDef env))) (instanceDefs i)
+        , instanceTypes = fmap (canonicaliseType env) (instanceTypes i)
         }
 
 canonicaliseDef :: Env -> Syn.Def Syn.Syn -> Can.Def Can.Exp
 canonicaliseDef env d =
-  let res = map (canonicalisePattern env) (Syn.defArgs d)
+  let res = map (canonicalisePattern env) (defArgs d)
       locals = concatMap fst res
       args = map snd res
-  in d { Syn.defExpr = canonicaliseExp env locals (Syn.defExpr d)
-       , Syn.defArgs = args
+  in d { defExpr = canonicaliseExp env locals (defExpr d)
+       , defArgs = args
        }
 
 canonicaliseExp :: Env -> [Syn.Name] -> Syn.Syn -> Can.Exp
