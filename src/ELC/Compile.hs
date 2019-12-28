@@ -93,6 +93,8 @@ translateSumCon f t S.DataCon { S.conName = n, S.conArgs = args } =
 translateProdCon :: Can.DataCon -> (Name, Exp)
 translateProdCon S.DataCon { S.conName = n, S.conArgs = args } =
   (n, Cons Prod { name = n, arity = length args } [])
+translateProdCon S.RecordCon { S.conName = n, S.conFields = fields } =
+  (n, Cons Prod { name = n, arity = length fields } [])
 
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.

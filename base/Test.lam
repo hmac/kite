@@ -12,5 +12,10 @@ e = Left True
 f : ?someHole
 f = 4
 
+data Foo a = Foo { unFoo : a }
+
+foo : Foo Int
+foo = Foo 1
+
 main : String
 main = "#{45 + 54} is a number"

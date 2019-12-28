@@ -144,14 +144,18 @@ dataConstructors env m = concatMap toAssumps
     )
     (S.dataCons d)
   -- data Maybe a = Nothing | Just a
-  -- becomes:
-  -- Nothing : forall a. Maybe a
-  -- Just : forall a. a -> Maybe a
+  -- becomes Nothing : forall a. Maybe a and Just : forall a. a -> Maybe a
+  -- data Foo a = Foo { unFoo : a }
+  -- becomes Foo : forall a. a -> Foo a
   toAssump :: Id -> [Tyvar] -> Can.DataCon -> (Id, Scheme)
-  toAssump tyName tyVars con = (S.conName con, scheme)
+  toAssump tyName tyVars con =
+    let argTypes = case con of
+          S.DataCon { S.conArgs = args }       -> args
+          S.RecordCon { S.conFields = fields } -> map snd fields
+        ty     = [] :=> foldr (fn . tyToType env) returnTy argTypes
+        scheme = Forall (map kind tyVars) (apply subst ty)
+    in  (S.conName con, scheme)
    where
-    scheme   = Forall (map kind tyVars) (apply subst ty)
-    ty       = [] :=> foldr fn returnTy (map (tyToType env) (S.conArgs con))
     returnTy = foldl TAp tycon (map TVar tyVars)
     subst    = zip tyVars (map TGen [0 ..])
     tycon    = case lookupTyCon tyName env of
