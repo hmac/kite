@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module ELC.Compile where
 
 -- Compile Can.Exp to ELC.Exp
@@ -7,11 +8,11 @@ import qualified Data.Map.Strict               as Map
 import           Util
 import           Control.Monad.State.Strict
 import           Control.Monad                  ( replicateM )
+import           Data.List                      ( sortBy )
 import           Data.List.Extra                ( groupOn )
 import           Data.Foldable                  ( foldlM
                                                 , foldrM
                                                 )
-import           Data.List                      ( partition )
 
 import           ELC
 import           ELC.Primitive
@@ -20,23 +21,46 @@ import qualified Canonical                     as Can
 import qualified Syntax                        as S
 import           Data.Name
 
--- TODO: use Data.Map
-type Env = Map Name Exp
+-- defs are normal definitions
+-- instances is a mapping from the name of the typeclass and the type(s) of the
+-- instance to the name of the dictionary representing that instance.
+--
+-- TODO: whilst this looks reasonable on the surface, it turns out not to work
+-- in all but the most trivial of cases. The main challenge here is that we need
+-- to insert the correct dictionary into all typeclass method calls, based on
+-- the type of the instance, which is inferred at typechecking time.
+-- In the current architecture we have no access to inferred types in the
+-- compile phase, so we have no idea which dictionary to insert.
+--
+-- I think the correct way to resolve this is for the typechecker to elaborate
+-- the AST with type information, and for the compiler to operate on this
+-- representation. This requires a significant restructuring as right now the
+-- typechecker and the compiler use entirely orthogonal ASTs.
+-- See https://www.youtube.com/watch?v=x3evzO8O9e8 for how GHC does this.
+data Env = Env { defs :: Map Name Exp, instances :: Map (Name, [Can.Type]) Name }
+  deriving (Show)
 
-emptyEnv :: Env
-emptyEnv = mempty
+type InstMap = [((Name, [Can.Type]), Name)]
 
 defaultEnv :: Env
-defaultEnv = Map.fromList primConstructors
+defaultEnv = Env { defs      = Map.fromList primConstructors
+                 , instances = Map.fromList primInstances
+                 }
 
-mergeLocals :: Env -> [(Name, Exp)] -> Env
-mergeLocals env ls = env <> Map.fromList ls
+merge :: Env -> ([(Name, Exp)], InstMap) -> Env
+merge env (newDefs, newInsts) = env
+  { defs      = defs env <> Map.fromList newDefs
+  , instances = instances env <> Map.fromList newInsts
+  }
 
 collapseEnv :: Env -> [(Name, Exp)]
-collapseEnv = Map.toList
+collapseEnv = Map.toList . defs
 
 lookupEnv :: Name -> Env -> Maybe Exp
-lookupEnv = Map.lookup
+lookupEnv n env = Map.lookup n (defs env)
+
+lookupInstance :: Name -> [Can.Type] -> Env -> Maybe Name
+lookupInstance n ts env = Map.lookup (n, ts) (instances env)
 
 type NameGen = State Int
 
@@ -46,40 +70,120 @@ fresh = do
   put (k + 1)
   pure $ Local (Name ("$elc" ++ show k))
 
+freshTopLevel :: ModuleName -> NameGen Name
+freshTopLevel m = do
+  k <- get
+  put (k + 1)
+  pure $ TopLevel m (Name ("$elc" <> show k))
+
 -- TODO: remove unreachable definitions
 translateModule :: Env -> Can.Module Can.Exp -> NameGen Env
 translateModule env S.Module { S.moduleDecls = decls } =
-  -- to ensure that all data types are in scope, we process data decls first
-  let isDataDecl (S.DataDecl _) = True
-      isDataDecl _              = False
-      orderedDecls =
-          let (dataDecls, otherDecls) = partition isDataDecl decls
-          in  dataDecls ++ otherDecls
-  in  foldlM (\e decl -> mergeLocals e <$> translateDecl e decl)
-             env
-             orderedDecls
+  -- To ensure the right things are in scope when needed, we process decls in a
+  -- particular order:
+  -- 1. data decls
+  -- 2. typeclass decls
+  -- 3. instance decls
+  -- 4. everything else
+  let ordering (S.DataDecl      _) _                   = LT
+      ordering (S.TypeclassDecl _) (S.DataDecl _)      = GT
+      ordering (S.TypeclassDecl _) _                   = LT
+      ordering (S.TypeclassInst _) (S.DataDecl      _) = GT
+      ordering (S.TypeclassInst _) (S.TypeclassDecl _) = GT
+      ordering (S.TypeclassInst _) _                   = LT
+      ordering (S.FunDecl       _) (S.Comment _)       = LT
+      ordering (S.FunDecl       _) _                   = GT
+      ordering _                   _                   = EQ
+      orderedDecls = sortBy ordering decls
+  in  foldlM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
 
-translateDecl :: Env -> Can.Decl Can.Exp -> NameGen [(Name, Exp)]
+translateDecl :: Env -> Can.Decl Can.Exp -> NameGen ([(Name, Exp)], InstMap)
 translateDecl env (S.FunDecl S.Fun { S.funName = n, S.funDefs = defs }) = do
   let numVars = length (S.defArgs (head defs))
   varNames <- replicateM numVars fresh
   let vars = map VarPat varNames
   equations <- mapM (translateDef env) defs
   caseExpr  <- match varNames equations (Bottom "pattern match failed")
-  pure [(n, buildAbs caseExpr vars)]
+  pure ([(n, buildAbs caseExpr vars)], [])
 
-translateDecl _env (S.DataDecl d) =
+translateDecl _env (S.DataDecl d) = do
+  let cons = S.dataCons d
+  datadefs <- if length cons > 1
+    then
+      let cs = zipWith (translateSumCon cs) [0 ..] cons
+      in  pure $ map (\c -> (name c, Cons c [])) cs
+    else concat <$> mapM translateProdCon cons
+  pure (datadefs, [])
+translateDecl env (S.TypeclassDecl t) = translateTypeclass env t
+translateDecl env (S.TypeclassInst i) = translateInstance env i
+translateDecl _   (S.Comment       _) = pure ([], [])
+
+-- Translating typeclasses
+-- -----------------------
+-- Typeclasses get translated into record types. Each method corresponds to a
+-- field in the record.
+-- e.g.    class Monoid a where
+--           empty : a
+--           append : a -> a -> a
+-- becomes data Monoid a = Monoid {
+--           empty : a,
+--           append : a -> a -> a }
+translateTypeclass :: Env -> Can.Typeclass -> NameGen ([(Name, Exp)], InstMap)
+translateTypeclass env t = do
+  let record = S.Data
+        { S.dataName   = S.typeclassName t
+        , S.dataTyVars = map Can.fromLocal (S.typeclassTyVars t)
+        , S.dataCons   = [ S.RecordCon { S.conName   = S.typeclassName t
+                                       , S.conFields = S.typeclassDefs t
+                                       }
+                         ]
+        }
+  translateDecl env (S.DataDecl record)
+
+-- Translating typeclass instances
+-- -------------------------------
+-- Typeclass instances get translated into record values.
+-- e.g.    instance Monoid Int where
+--           empty = 0
+--           append x y = x + y
+-- becomes $freshName : Monoid Int
+--         $freshName = Monoid { empty = 0, append = \x y -> x + y }
+--
+-- The compiler will automatically generate selectors for each field, which
+-- correspond to each typeclass method. The other half of this translation is
+-- adding an extra argument to each use of a typeclass method, passing in the
+-- correct instance record... and we can't do this unless we know the
+-- instantiated type of each method call.
+-- Note: we can't construct a friendly record name in general because not all
+--       types can be easily converted to names. (e.g. a -> [(a, b)]).
+-- Note: we register the instance in the env so it can be inserted into method
+--       calls elsewhere in the program.
+-- TODO: Currently the order of methods has to match the order in the typeclass
+--       definition. Fix this.
+--       (when we support { a = .. } style record construction we can use that)
+translateInstance
+  :: Env -> Can.Instance Can.Exp -> NameGen ([(Name, Exp)], InstMap)
+translateInstance env i = do
+  let typeclassName@(TopLevel moduleName rawTypeclassName) = S.instanceName i
+  let recordType = fromMaybe
+        (error $ "undefined typeclass " <> show typeclassName)
+        (lookupEnv typeclassName env)
+  let defs = S.instanceDefs i
+  let defsAsFuns = map
+        (\(name, defs) -> S.Fun { S.funComments   = []
+                                , S.funName       = name
+                                , S.funType       = S.TyHole "method"
+                                , S.funConstraint = Nothing
+                                , S.funDefs       = defs
+                                }
+        )
+        defs
+  defsAsExps <-
+    concatMap fst <$> mapM (translateDecl env . S.FunDecl) defsAsFuns
+  let record = foldl App recordType (map snd defsAsExps)
+  recordName <- freshTopLevel moduleName
   pure
-    $ let cons = S.dataCons d
-      in  if length cons > 1
-            then
-              let cs = zipWith (translateSumCon cs) [0 ..] cons
-              in  map (\c -> (name c, Cons c [])) cs
-            else concatMap translateProdCon cons
-translateDecl _ (S.TypeclassDecl _) = error "cannot translate typeclasses"
-translateDecl _ (S.TypeclassInst _) =
-  error "cannot translate typeclass instances"
-translateDecl _ (S.Comment _) = pure []
+    ([(recordName, record)], [((typeclassName, S.instanceTypes i), recordName)])
 
 -- Note: we do a weird trick here where each constructor has a reference to a
 -- list of constructors that includes itself.
@@ -89,24 +193,24 @@ translateSumCon :: [Con] -> Int -> Can.DataCon -> Con
 translateSumCon f t S.DataCon { S.conName = n, S.conArgs = args } =
   Sum { name = n, tag = t, arity = length args, family = f }
 
-translateProdCon :: Can.DataCon -> [(Name, Exp)]
+translateProdCon :: Can.DataCon -> NameGen [(Name, Exp)]
 translateProdCon S.DataCon { S.conName = n, S.conArgs = args } =
-  [(n, Cons Prod { name = n, arity = length args } [])]
-translateProdCon S.RecordCon { S.conName = n, S.conFields = fields } =
+  pure [(n, Cons Prod { name = n, arity = length args } [])]
+translateProdCon S.RecordCon { S.conName = n, S.conFields = fields } = do
   let constructor = Prod { name = n, arity = length fields }
-      wildPat     = VarPat (Local "todo:freshname")
-      selectorPat i = map
-        (\x -> if x == i then VarPat (Local "x") else wildPat)
+      wildPat     = VarPat <$> fresh
+      selectorPat i var = mapM
+        (\x -> if x == i then pure (VarPat var) else wildPat)
         [0 .. length fields - 1]
-      selectors = zipWith
-        (\i (fieldName, _) ->
-          ( fieldName
-          , Abs (ConPat constructor (selectorPat i)) (Var (Local "x"))
-          )
-        )
-        [0 ..]
-        fields
-  in  (n, Cons constructor []) : selectors
+  selectors <- zipWithM
+    (\i (fieldName, _) -> do
+      var    <- fresh
+      selPat <- selectorPat i var
+      pure (fieldName, Abs (ConPat constructor selPat) (Var var))
+    )
+    [0 ..]
+    fields
+  pure $ (n, Cons constructor []) : selectors
 
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.
@@ -219,6 +323,7 @@ translateExpr env (S.Case scrut alts) = do
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
 translateStringLit :: Env -> String -> [(Can.Exp, String)] -> NameGen Exp
+translateStringLit _   prefix []    = pure $ Const (String prefix) []
 translateStringLit env prefix parts = do
   rest <- go parts
   foldrM

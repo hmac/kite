@@ -2,6 +2,7 @@ module Util
   ( module Util
   , Text.Pretty.Simple.pPrint
   , Data.Maybe.mapMaybe
+  , Data.Maybe.fromMaybe
   , Data.List.nub
   )
 where

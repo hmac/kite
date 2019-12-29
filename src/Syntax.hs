@@ -89,7 +89,7 @@ data Data_ name = Data { dataName :: name
 -- defs
 type Typeclass = Typeclass_ Name
 data Typeclass_ name = Typeclass { typeclassName :: name
-                                 , typeclassTyVars :: [name]
+                                 , typeclassTyVars :: [name] -- should this be [Name]?
                                  , typeclassDefs :: [(name, Ty_ name)]
                                  }
                                  deriving (Eq, Show)
@@ -149,7 +149,7 @@ data Ty_ a = Ty_ a :@: Ty_ a
         | TyInt
         | TyFloat
         | TyString
-        deriving (Eq, Show)
+        deriving (Eq, Show, Ord)
 
 infixr 4 `fn`
 fn :: Ty -> Ty -> Ty

@@ -14,6 +14,10 @@ data Name
   | TopLevel ModuleName RawName
   deriving (Eq, Show, Ord)
 
+fromLocal :: Name -> RawName
+fromLocal (Local n) = n
+fromLocal n         = error $ "Expected Local name, found " <> show n
+
 type Exp = Syn_ Name
 type Type = Ty_ Name
 type Pattern = Pattern_ Name
