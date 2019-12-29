@@ -92,3 +92,58 @@ type holes or explicit variables.
 The type checker will attempt to infer all unknown types, which wil be filled
 in. The output is a fully annotated Core AST. This can then be compiled,
 complete with typeclass dictionary insertion.
+
+Typechecking as constraint solving
+----------------------------------
+
+As well as this new architecture, we can also redesign the typechecker itself to
+use a very different approach based on explicit constraint generation followed
+by constraint solving. This is what GHC has evolved to do, and has some nice
+benefits. Namely, that constraint generation involves many cases but all are
+_simple_, and constraint solving is complex but involves _few cases_.
+
+The idea is that for each term in the language you can generate a set of
+constraints which must be satisfied in order to determine a unique, correct type
+for the term. For example, consider the following program fragment:
+
+```haskell
+reverse : [a] -> [a]
+and : [Bool] -> Bool
+
+foo xs = (reverse xs, and xs)
+```
+
+From this fragment we can generate the following constraints:
+```
+-- from 'reverse xs'
+xs : ⍺
+reverse : [β] -> [β]
+⍺ ~ [β]
+-- from 'and xs'
+⍺ ~ [Bool]
+```
+
+The first constraint is generated from the argument `xs`, which has an unknown
+type (represented by the variable ⍺). The second constraint is generated from
+the type signature for `reverse`, with the type variable `a` instantiated to a
+fresh variable β. The third constraint models the expectation that the type of
+the argument given to reverse must match the first argument in its type
+signature. The fourth constraint does the same for `and xs`, requiring that its
+input type (⍺, the as-yet-unknown type of `xs`) be equal to `[Bool]`.
+
+Given this set of constraints, we can attempt to simplify/solve them.
+Informally, this goes as follows:
+
+1. `⍺ ~ [Bool]`, therefore ⍺ is `[Bool]`.
+2. Applying (1) to `⍺ ~ [β]`, we get `[Bool] ~ [β]`
+3. From (3), we conclude `β ~ Bool`, therefore β is `Bool`.
+
+This gives a resulting substitution `⍺ := [Bool], β := Bool`.
+
+We can then apply the substitution to the original AST to produce a fully
+typechecked and type annotated AST.
+
+I'm not yet sure whether this change is orthogonal to the architecture change or
+not. Both are inspired by recent GHC designs but it may be easier to separate
+them out to avoid doing too much at once. If we can keep THIH in the new
+architecture then we should do that, if only temporarily.
