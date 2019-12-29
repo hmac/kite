@@ -17,7 +17,7 @@ import           ELC                            ( Con(..)
                                                 , Clause(..)
                                                 )
 import qualified ELC
-import qualified ELC.Compile                    ( Env(..)
+import qualified ELC.Compile                    ( Env
                                                 , collapseEnv
                                                 )
 import           Data.Name

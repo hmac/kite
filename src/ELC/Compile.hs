@@ -46,8 +46,7 @@ fresh = do
   put (k + 1)
   pure $ Local (Name ("$elc" ++ show k))
 
--- TODO: remove non-local definitions which aren't reachable from definitions in
--- the local module. This will get rid of most of the stuff from Lam.Primitive.
+-- TODO: remove unreachable definitions
 translateModule :: Env -> Can.Module Can.Exp -> NameGen Env
 translateModule env S.Module { S.moduleDecls = decls } =
   -- to ensure that all data types are in scope, we process data decls first
@@ -76,7 +75,7 @@ translateDecl _env (S.DataDecl d) =
             then
               let cs = zipWith (translateSumCon cs) [0 ..] cons
               in  map (\c -> (name c, Cons c [])) cs
-            else map translateProdCon cons
+            else concatMap translateProdCon cons
 translateDecl _ (S.TypeclassDecl _) = error "cannot translate typeclasses"
 translateDecl _ (S.TypeclassInst _) =
   error "cannot translate typeclass instances"
@@ -90,11 +89,24 @@ translateSumCon :: [Con] -> Int -> Can.DataCon -> Con
 translateSumCon f t S.DataCon { S.conName = n, S.conArgs = args } =
   Sum { name = n, tag = t, arity = length args, family = f }
 
-translateProdCon :: Can.DataCon -> (Name, Exp)
+translateProdCon :: Can.DataCon -> [(Name, Exp)]
 translateProdCon S.DataCon { S.conName = n, S.conArgs = args } =
-  (n, Cons Prod { name = n, arity = length args } [])
+  [(n, Cons Prod { name = n, arity = length args } [])]
 translateProdCon S.RecordCon { S.conName = n, S.conFields = fields } =
-  (n, Cons Prod { name = n, arity = length fields } [])
+  let constructor = Prod { name = n, arity = length fields }
+      wildPat     = VarPat (Local "todo:freshname")
+      selectorPat i = map
+        (\x -> if x == i then VarPat (Local "x") else wildPat)
+        [0 .. length fields - 1]
+      selectors = zipWith
+        (\i (fieldName, _) ->
+          ( fieldName
+          , Abs (ConPat constructor (selectorPat i)) (Var (Local "x"))
+          )
+        )
+        [0 ..]
+        fields
+  in  (n, Cons constructor []) : selectors
 
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.
@@ -156,6 +168,8 @@ translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "*")) =
   binaryPrim PrimMult
 translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "-")) =
   binaryPrim PrimSub
+translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "appendString"))
+  = binaryPrim PrimStringAppend
 
 translateExpr _   (S.Var n  ) = pure (Var n)
 translateExpr env (S.App a b) = do
@@ -216,11 +230,10 @@ translateStringLit env prefix parts = do
     (Const (String prefix) [] : rest)
  where
   stringAppendFn = do
-    l <- fresh
-    r <- fresh
-    pure $ Abs
-      (VarPat l)
-      (Abs (VarPat r) (App (App (Var primAppendString) (Var l)) (Var r)))
+    l      <- fresh
+    r      <- fresh
+    append <- binaryPrim PrimStringAppend
+    pure $ Abs (VarPat l) (Abs (VarPat r) (App (App append (Var l)) (Var r)))
   go :: [(Can.Exp, String)] -> NameGen [Exp]
   go []            = pure []
   go ((e, s) : is) = do
