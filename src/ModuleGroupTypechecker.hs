@@ -22,7 +22,6 @@ import           Typecheck.Translate            ( typeConstructors
                                                 , Env
                                                 )
 import qualified Typecheck.Primitive           as Prim
-import           Data.Maybe                     ( mapMaybe )
 import           ModuleLoader                   ( ModuleGroup(..) )
 
 -- This module takes a list of modules from the loader and attempts to typecheck
@@ -62,7 +61,7 @@ buildEnv ms = do
           , datacons
             <> dataConstructors (tycons <> typeConstructors core, []) core
           )
-        funs'     = mapMaybe (toBindGroup env) (moduleDecls core)
+        funs'     = concatMap (toBindGroup env) (moduleDecls core)
         instances = map (translateInstance env) (instanceDecls core)
 
     -- Extend the class env

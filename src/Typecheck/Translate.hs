@@ -132,6 +132,7 @@ addInstances is classEnv = foldl f (Right classEnv) is
     Right ce  -> addInst [] (IsIn className ty) ce
 
 -- These are the data constructors in the module
+-- We also translate each record field into a selector function
 dataConstructors :: Env -> Can.Module Core -> [(Id, Scheme)]
 dataConstructors env m = concatMap toAssumps
   $ mapMaybe getData (S.moduleDecls m)
@@ -139,7 +140,7 @@ dataConstructors env m = concatMap toAssumps
   getData (S.DataDecl d) = Just d
   getData _              = Nothing
   toAssumps :: Can.Data -> [(Id, Scheme)]
-  toAssumps d = map
+  toAssumps d = concatMap
     (toAssump (S.dataName d) (map ((`Tyvar` Star) . Can.Local) (S.dataTyVars d))
     )
     (S.dataCons d)
@@ -147,8 +148,12 @@ dataConstructors env m = concatMap toAssumps
   -- becomes Nothing : forall a. Maybe a and Just : forall a. a -> Maybe a
   -- data Foo a = Foo { unFoo : a }
   -- becomes Foo : forall a. a -> Foo a
-  toAssump :: Id -> [Tyvar] -> Can.DataCon -> (Id, Scheme)
-  toAssump tyName tyVars con =
+  toAssump :: Id -> [Tyvar] -> Can.DataCon -> [(Id, Scheme)]
+  toAssump tyName tyVars d@S.DataCon{} = [extractConstructor tyName tyVars d]
+  toAssump tyName tyVars d@S.RecordCon{} =
+    extractConstructor tyName tyVars d : extractSelectors tyName tyVars d
+  extractConstructor :: Id -> [Tyvar] -> Can.DataCon -> (Id, Scheme)
+  extractConstructor tyName tyVars con =
     let argTypes = case con of
           S.DataCon { S.conArgs = args }       -> args
           S.RecordCon { S.conFields = fields } -> map snd fields
@@ -158,16 +163,34 @@ dataConstructors env m = concatMap toAssumps
    where
     returnTy = foldl TAp tycon (map TVar tyVars)
     subst    = zip tyVars (map TGen [0 ..])
-    tycon    = case lookupTyCon tyName env of
-      Just t  -> t
-      Nothing -> error $ "unknown type constructor " <> show tyName
+    tycon    = fromMaybe (error $ "unknown type constructor " <> show tyName)
+                         (lookupTyCon tyName env)
+  -- data Foo a = { unFoo : a, label : String }
+  -- produces
+  -- unFoo : forall a. Foo a -> a
+  -- label : forall a. Foo a -> String
+  extractSelectors :: Id -> [Tyvar] -> Can.DataCon -> [(Id, Scheme)]
+  extractSelectors _      _      S.DataCon{}                          = []
+  extractSelectors tyName tyVars S.RecordCon { S.conFields = fields } = map
+    translateRecordSelector
+    fields
+   where
+    subst = zip tyVars (map TGen [0 ..])
+    tycon = fromMaybe (error $ "unknown type constructor " <> show tyName)
+                      (lookupTyCon tyName env)
+    domainType = foldl TAp tycon (map TVar tyVars)
+    translateRecordSelector (fieldName, ty) =
+      ( fieldName
+      , Forall (map kind tyVars)
+               (apply subst ([] :=> (domainType `fn` tyToType env ty)))
+      )
 
-toBindGroup :: Env -> Can.Decl Core -> Maybe BindGroup
-toBindGroup env  (S.FunDecl       f) = Just (funToBindGroup env f)
-toBindGroup _env (S.DataDecl      _) = Nothing
-toBindGroup _env (S.Comment       _) = Nothing
-toBindGroup _env (S.TypeclassDecl _) = Nothing
-toBindGroup _env (S.TypeclassInst _) = Nothing
+toBindGroup :: Env -> Can.Decl Core -> [BindGroup]
+toBindGroup env  (S.FunDecl       f) = [funToBindGroup env f]
+toBindGroup _env (S.DataDecl      _) = []
+toBindGroup _env (S.Comment       _) = []
+toBindGroup _env (S.TypeclassDecl _) = []
+toBindGroup _env (S.TypeclassInst _) = []
 
 typeclassMethods :: Env -> Can.Typeclass -> [Assump]
 typeclassMethods env t = flip map (S.typeclassDefs t)

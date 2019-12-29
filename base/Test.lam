@@ -12,10 +12,16 @@ e = Left True
 f : ?someHole
 f = 4
 
-data Foo a = Foo { unFoo : a }
+data Foo a = Foo { unFoo : a, tag : Int }
 
-foo : Foo Int
-foo = Foo 1
+foo : Foo String
+foo = Foo "isfoo" 1
+
+one : Int
+one = tag foo
+
+isfoo : String
+isfoo = unFoo foo
 
 main : String
 main = "#{45 + 54} is a number"
