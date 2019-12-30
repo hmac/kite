@@ -181,26 +181,63 @@ operators will remain because they're familiar to everyone, and we still use `.`
 for function composition because it's so useful. A named function can be made
 infix by placing it in backticks.
 
-Lam has Haskell's ADTs and records, with the addition of a `.field` syntax for
-accessing record fields. I aim to steal a lot from the recent [GHC
-proposals](https://github.com/ghc-proposals/ghc-proposals/pull/282) on record
-fields.
+Lam has Haskell's ADTs and records, but aims to provide better ergonomics around
+record field selection. Out-of-the-box Haskell doesn't deal well with multiple
+record types having the same field name. There are a variety of solutions to
+this, each with their own tradeoffs. Lam aims to find one which is both simple
+and unsurprising, though the exact solution is not yet settled.
+
+### Solution 1. Dot notation for record selectors
+This solution adds a new syntax form for accessing a field: `.field`. Given a
+record `foo` with a field `bar`, you can extract the value of the field with
+`foo.bar`. How this is supported isn't decided, but it will probably be stolen
+from [TDNR](https://wiki.haskell.org/TypeDirectedNameResolution) or the recent
+[GHC proposals](https://github.com/ghc-proposals/ghc-proposals/pull/282) on
+record fields.
 
 An example:
 ```haskell
-data User = { name : String, age : Int }
+data User = User { name : String, age : Int }
 
-users = [User { name = "Harry", age = 26}, User { name = "Bob", age = 100}]
+users = [User { name = "Kurt", age = 114}, User { name = "Alan", age = 108}]
 
 userNames = map (.name) users
 
-harryAge = (head users).age
+kurtAge = (head users).age
 
-oldUsers = filter ((> 80) . .age) users
+olderUsers = filter ((> 110) . .age) users
 ```
 
 We require no spaces between the dot and the field name in `.field` to
 disambiguate between this and function composition.
+
+### Solution 2. Record selection without dot notation
+This solution introduces no new syntax. Record selectors look just like normal
+functions, but behind the scenes they exist in a separate namespace defined by
+the record type they belong to. When applied to an argument, the type of the
+argument determines the namespace that the compiler will infer for the function,
+and therefore what specific selector is chosen. For example:
+
+```haskell
+data User = User { name : String, age : Int }
+-- internally, this generates
+-- User.name : User -> String
+-- User.age : User -> Int
+
+kurt = User { name = "Kurt", age = 114 }
+
+-- age is resolved to User.age because kurt : User
+kurtAge = age kurt
+
+data Animal = Animal { age : Int, mammal : Bool }
+
+whale = Animal { age = 60, mammal = True }
+
+-- age is resolved to Animal.age because whale : Animal
+whaleAge = age whale
+```
+
+### Other language features
 
 Lam has some syntactic sugar borrowed from Haskell and Ruby:
 ```haskell
