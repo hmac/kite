@@ -48,6 +48,7 @@ data Eq a = Eq { _eq : a -> a -> Bool }
 eq : Eq a -> a -> a -> Bool
 eq d x y = _eq d x y
 
+$eqInt : Eq Int
 $eqInt = Eq { eq = primIntEq }
 
 nub : Eq a -> [a] -> [a]
