@@ -16,5 +16,5 @@ test = do
       let c2 = TVar (U "a") :~: TCon "List" [TCon "Bool" []]
       solve [c1, c2] `shouldBe` Right
         [ TVar (U "b") :~: TCon "Bool" []
-        , TVar (U "a") :~: TCon "List" [TVar (U "b")]
+        , TVar (U "a") :~: TCon "List" [TCon "Bool" []]
         ]
