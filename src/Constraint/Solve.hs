@@ -27,6 +27,7 @@ type Solve = State [Constraint]
 
 -- Solve a set of constraints
 -- Repeatedly applies rewrite rules until there's nothing left to do
+-- TODO: this should handle CConstraints
 solve :: [Constraint] -> Either Error [Constraint]
 solve cs = case applyRewrite cs of
   Left  err -> Left err
@@ -154,6 +155,7 @@ canonCompare (TVar (R _)) (TVar (U _)) = GT
 canonCompare (TVar a    ) (TVar b    ) = compare a b
 canonCompare _            (TCon _ _  ) = LT
 canonCompare (TCon _ _)   _            = GT
+canonCompare _            _            = EQ
 
 -- Calculate the free type variables of a type
 ftv :: Type -> [Var]
@@ -170,7 +172,7 @@ subst _   _   t                   = t
 focus :: [a] -> [(a, [a])]
 focus = go []
  where
-  go ys []       = []
+  go _  []       = []
   go ys (x : xs) = (x, reverse ys ++ xs) : go (x : ys) xs
 
 focusPairs :: [a] -> [(a, a, [a])]
@@ -180,5 +182,5 @@ focusPairs xs =
 -- Extract the first Just value from a list
 firstJust :: [Maybe a] -> Maybe a
 firstJust []             = Nothing
-firstJust (Just x  : xs) = Just x
+firstJust (Just x  : _ ) = Just x
 firstJust (Nothing : xs) = firstJust xs

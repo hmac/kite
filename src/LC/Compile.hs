@@ -21,17 +21,16 @@ import qualified ELC.Compile                    ( Env
                                                 , collapseEnv
                                                 )
 import           Data.Name
-
-type NameGen = State Int
+import           NameGen                        ( NameGen
+                                                , freshM
+                                                , run
+                                                )
 
 fresh :: NameGen Name
-fresh = do
-  k <- get
-  put (k + 1)
-  pure $ Local $ Name $ "$lc" ++ show k
+fresh = freshM (\i -> Local (Name ("$lc" ++ show i)))
 
 runConvert :: NameGen b -> b
-runConvert m = evalState m 0
+runConvert = run
 
 convertEnv :: ELC.Compile.Env -> NameGen Env
 convertEnv env = mapSndM convert (ELC.Compile.collapseEnv env)

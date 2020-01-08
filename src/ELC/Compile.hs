@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module ELC.Compile where
 
 -- Compile Can.Exp to ELC.Exp
@@ -20,6 +19,10 @@ import           Canonical                      ( Name(..) )
 import qualified Canonical                     as Can
 import qualified Syntax                        as S
 import           Data.Name
+import           NameGen                        ( NameGen
+                                                , freshM
+                                                , run
+                                                )
 
 -- defs are normal definitions
 -- instances is a mapping from the name of the typeclass and the type(s) of the
@@ -62,19 +65,11 @@ lookupEnv n env = Map.lookup n (defs env)
 lookupInstance :: Name -> [Can.Type] -> Env -> Maybe Name
 lookupInstance n ts env = Map.lookup (n, ts) (instances env)
 
-type NameGen = State Int
-
 fresh :: NameGen Name
-fresh = do
-  k <- get
-  put (k + 1)
-  pure $ Local (Name ("$elc" ++ show k))
+fresh = freshM (\i -> Local (Name ("$elc" ++ show i)))
 
 freshTopLevel :: ModuleName -> NameGen Name
-freshTopLevel m = do
-  k <- get
-  put (k + 1)
-  pure $ TopLevel m (Name ("$elc" <> show k))
+freshTopLevel m = freshM (\i -> TopLevel m (Name ("$elc" ++ show i)))
 
 -- TODO: remove unreachable definitions
 translateModule :: Env -> Can.Module Can.Exp -> NameGen Env
