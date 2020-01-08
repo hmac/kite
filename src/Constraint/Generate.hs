@@ -8,6 +8,8 @@ import           Data.Set                       ( Set
                                                 , (\\)
                                                 )
 import qualified Data.Set                      as Set
+import           Data.Map.Strict                ( Map )
+import qualified Data.Map.Strict               as Map
 import           Data.Name
 import           NameGen                        ( NameGen )
 import qualified NameGen
@@ -49,11 +51,11 @@ fresh :: NameGen Var
 fresh = NameGen.freshM (U . Name . show)
 
 -- TODO: use Data.Map
-type Env = [(RawName, Scheme)]
+type Env = Map RawName Scheme
 
 generate :: Env -> Exp -> NameGen (Type, CConstraint)
 -- VARCON
-generate env (Var name) = case lookup name env of
+generate env (Var name) = case Map.lookup name env of
   Just (Forall tvars c t) -> do
     subst <- mapM (\tv -> (tv, ) <$> fresh) tvars
     let t' = substVarsT subst t
@@ -61,7 +63,7 @@ generate env (Var name) = case lookup name env of
     pure (t', Simple q')
   Nothing -> do
     a <- TVar <$> fresh
-    pure (a, Simple CNil)
+    pure (a, mempty)
 -- Data constructors are treated identically to variables
 generate env (Con (C n)) = generate env (Var n)
 -- APP
@@ -70,29 +72,29 @@ generate env (App e1 e2) = do
   (t2, c2) <- generate env e2
   a        <- TVar <$> fresh
   let funcConstraint = Simple $ t1 :~: (t2 `fn` a)
-  pure (a, c1 :^^: (c2 :^^: funcConstraint))
+  pure (a, c1 <> (c2 <> funcConstraint))
 -- ABS
 generate env (Abs x e) = do
   a      <- TVar <$> fresh
-  (t, c) <- generate ((x, Forall [] CNil a) : env) e
+  (t, c) <- generate (Map.insert x (Forall [] CNil a) env) e
   pure (a `fn` t, c)
 -- LET
 generate env (Let x e1 e2) = do
   (t1, c1) <- generate env e1
-  (t2, c2) <- generate ((x, Forall [] CNil t1) : env) e2
-  pure (t2, c1 :^^: c2)
+  (t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
+  pure (t2, c1 <> c2)
 -- LETA
 generate env (LetA x (Forall [] CNil t1) e1 e2) = do
   (t , c1) <- generate env e1
-  (t2, c2) <- generate ((x, Forall [] CNil t1) : env) e2
-  pure (t2, c1 :^^: (c2 :^^: Simple (t :~: t1)))
+  (t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
+  pure (t2, c1 <> c2 <> Simple (t :~: t1))
 -- GLETA
 generate env (LetA x s1@(Forall tvars q1 t1) e1 e2) = do
   (t, c) <- generate env e1
   let betas = Set.toList $ fuvT t <> fuvCC c \\ fuvEnv env
   let c1    = E betas q1 (c :^^: Simple (t :~: t1))
-  (t2, c2) <- generate ((x, s1) : env) e2
-  pure (t2, c1 :^^: c2)
+  (t2, c2) <- generate (Map.insert x s1 env) e2
+  pure (t2, c1 <> c2)
 
 -- CASE
 -- We use the simplified version from Fig 6 because Lam doesn't have GADTs. If
@@ -103,21 +105,21 @@ generate env (LetA x s1@(Forall tvars q1 t1) e1 e2) = do
 -- unification variable, which will cause a type error
 generate env (Case e []) = do
   a <- fresh
-  pure (TVar a, Simple CNil)
+  pure (TVar a, mempty)
 generate env (Case e (alt : alts)) = do
   (t, c) <- generate env e
   -- get the tycon from the constructor in the first alt
   let (Alt (C k) _ _) = alt
-  case lookup k env of
+  case Map.lookup k env of
     Nothing -> do
       a <- TVar <$> fresh
-      pure (a, Simple CNil)
+      pure (a, mempty)
     Just (Forall tvars _ tk) -> do
       let (TCon tyname _) = last (unfoldFnType tk)
       ys <- mapM (const fresh) tvars
-      let c' = Simple (TCon tyname (map TVar ys) :~: t) :^^: c
+      let c' = Simple (TCon tyname (map TVar ys) :~: t) <> c
       beta <- TVar <$> fresh
-      cis  <- forM (alt : alts) $ \(Alt (C k) xi ei) -> case lookup k env of
+      cis  <- forM (alt : alts) $ \(Alt (C k) xi ei) -> case Map.lookup k env of
         Nothing -> do
           a <- TVar <$> fresh
           pure $ Simple (a :~: TCon k [])
@@ -127,12 +129,12 @@ generate env (Case e (alt : alts)) = do
           let subst = zip as ys
           let us = reverse (tail (reverse (unfoldFnType kt)))
           let us' = map (Forall [] CNil . substVarsT subst) us
-          let env'  = zip xi us' ++ env
+          let env'  = Map.fromList (zip xi us') <> env
           -- check ei under assumption that all xi have type [ys/as]t
           (ti, ci) <- generate env' ei
-          pure $ ci :^^: Simple (ti :~: beta)
+          pure $ ci <> Simple (ti :~: beta)
       -- combine all the generated constraints together
-      let c'' = c' :^^: foldl (:^^:) (Simple CNil) cis
+      let c'' = c' <> mconcat cis
       pure (beta, c'')
 
 fn :: Type -> Type -> Type
@@ -162,7 +164,7 @@ fuvS :: Scheme -> Set Var
 fuvS (Forall tvars c t) = fuvC c <> fuvT t \\ Set.fromList tvars
 
 fuvEnv :: Env -> Set Var
-fuvEnv env = Set.unions (map (fuvS . snd) env)
+fuvEnv env = Set.unions (map fuvS (Map.elems env))
 
 substVarsT :: Subst Var Var -> Type -> Type
 substVarsT s (TVar v) = case lookup v s of
