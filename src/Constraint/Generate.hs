@@ -41,8 +41,6 @@ newtype Con = C RawName
 data Scheme = Forall [Var] Constraint Type
   deriving (Eq, Show)
 
-type Subst a b = [(a, b)]
-
 run :: NameGen a -> a
 run = NameGen.run
 
@@ -50,7 +48,6 @@ run = NameGen.run
 fresh :: NameGen Var
 fresh = NameGen.freshM (U . Name . show)
 
--- TODO: use Data.Map
 type Env = Map RawName Scheme
 
 generate :: Env -> Exp -> NameGen (Type, CConstraint)
@@ -78,18 +75,18 @@ generate env (Abs x e) = do
   a      <- TVar <$> fresh
   (t, c) <- generate (Map.insert x (Forall [] CNil a) env) e
   pure (a `fn` t, c)
--- LET
+-- LET: let with no annotation
 generate env (Let x e1 e2) = do
   (t1, c1) <- generate env e1
   (t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
   pure (t2, c1 <> c2)
--- LETA
+-- LETA: let with a monomorphic annotation
 generate env (LetA x (Forall [] CNil t1) e1 e2) = do
   (t , c1) <- generate env e1
   (t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
   pure (t2, c1 <> c2 <> Simple (t :~: t1))
--- GLETA
-generate env (LetA x s1@(Forall tvars q1 t1) e1 e2) = do
+-- GLETA: let with a polymorphic annotation
+generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
   (t, c) <- generate env e1
   let betas = Set.toList $ fuvT t <> fuvCC c \\ fuvEnv env
   let c1    = E betas q1 (c :^^: Simple (t :~: t1))
@@ -103,7 +100,7 @@ generate env (LetA x s1@(Forall tvars q1 t1) e1 e2) = do
 
 -- Lam doesn't support empty cases. If there are no cases, just return a new
 -- unification variable, which will cause a type error
-generate env (Case e []) = do
+generate _ (Case _ []) = do
   a <- fresh
   pure (TVar a, mempty)
 generate env (Case e (alt : alts)) = do
@@ -136,9 +133,6 @@ generate env (Case e (alt : alts)) = do
       -- combine all the generated constraints together
       let c'' = c' <> mconcat cis
       pure (beta, c'')
-
-fn :: Type -> Type -> Type
-a `fn` b = TCon "->" [a, b]
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]

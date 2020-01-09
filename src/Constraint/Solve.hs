@@ -15,6 +15,7 @@
 module Constraint.Solve
   ( solve
   , solveDebug
+  , solveC
   )
 where
 
@@ -25,9 +26,31 @@ import           Prelude                 hiding ( interact )
 
 type Solve = State [Constraint]
 
+-- See fig. 14
+solveC :: CConstraint -> Either Error ([Constraint], Subst Var Type)
+solveC c = case solve' (simple c) of
+  Left  err             -> Left err
+    -- TODO: right now we ignore implication constraints
+    --       we should solve all of them, expecting an empty residual constraint
+    --       for each.
+  Right (residual, sub) -> Right (residual, sub)
+
+-- This (TODO) is the actual top level solver function
+-- Given a set of simple constraints it returns a substitution and any residual
+-- constraints
+-- TODO: should take touchable variables, given constraints and top level
+-- constraint scheme as args
+solve' :: [Constraint] -> Either Error ([Constraint], Subst Var Type)
+solve' cs = case solve cs of
+  Left err -> Left err
+  -- We assume that all the constraints are of the form u :~: ty
+  -- This won't be the case in the future.
+  -- See §7.5 for details
+  Right cs' ->
+    let sub = map (\(TVar a :~: b) -> (a, b)) cs' in Right ([], sub)
+
 -- Solve a set of constraints
 -- Repeatedly applies rewrite rules until there's nothing left to do
--- TODO: this should handle CConstraints
 solve :: [Constraint] -> Either Error [Constraint]
 solve cs = case applyRewrite cs of
   Left  err -> Left err
