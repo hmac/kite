@@ -16,7 +16,7 @@ import           Syntax
 
 
 test :: Spec
-test = do
+test = parallel $ do
   describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
       parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl

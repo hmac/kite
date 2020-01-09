@@ -15,7 +15,7 @@ printMaybe :: Maybe (Doc a) -> Doc a
 printMaybe = fromMaybe mempty
 
 test :: Spec
-test = do
+test = parallel $ do
   describe "printing types" $ do
     it "prints simple types" $ do
       show (printType (TyVar "a" `fn` TyVar "b")) `shouldBe` "a -> b"
