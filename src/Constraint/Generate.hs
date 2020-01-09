@@ -3,7 +3,6 @@
 {-# LANGUAGE TupleSections #-}
 module Constraint.Generate where
 
-import           Control.Monad                  ( forM )
 import           Data.Set                       ( Set
                                                 , (\\)
                                                 )
@@ -27,8 +26,15 @@ data Exp = Var RawName
          deriving (Eq, Show)
 
 -- [RawName] are the variables bound by the case branch
-data Alt = Alt Con [RawName] Exp
+data Alt = Alt Pat Exp
   deriving (Eq, Show)
+
+-- Notice that patterns aren't inductive: this simplifies constraint generation.
+-- The current plan is to desugar surface pattern syntax to nested case
+-- expressions prior to type checking.
+data Pat = SimpleConPat Con [RawName] -- T a b c
+         | VarPat RawName             -- a
+        deriving (Eq, Show)
 
 -- Note: raw data constructors have the following type (a Scheme):
 -- Forall [a, b, ..] [] t
@@ -88,7 +94,7 @@ generate env (LetA x (Forall [] CNil t1) e1 e2) = do
 -- GLETA: let with a polymorphic annotation
 generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
   (t, c) <- generate env e1
-  let betas = Set.toList $ fuvT t <> fuvCC c \\ fuvEnv env
+  let betas = Set.toList $ fuv t <> fuv c \\ fuv env
   let c1    = E betas q1 (c :^^: Simple (t :~: t1))
   (t2, c2) <- generate (Map.insert x s1 env) e2
   pure (t2, c1 <> c2)
@@ -103,62 +109,89 @@ generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
 generate _ (Case _ []) = do
   a <- fresh
   pure (TVar a, mempty)
-generate env (Case e (alt : alts)) = do
+generate env (Case e alts) = do
   (t, c) <- generate env e
-  -- get the tycon from the constructor in the first alt
-  let (Alt (C k) _ _) = alt
-  case Map.lookup k env of
-    Nothing -> do
-      a <- TVar <$> fresh
-      pure (a, mempty)
+  beta   <- TVar <$> fresh
+  -- if any of the alts contain a simple constructor pattern, use this to find
+  -- the relevant type constructor
+  case findConTypeInAlts env alts of
+    -- If one of the alts is a constructor pattern, generate uvars for the type
+    -- variables
     Just (Forall tvars _ tk) -> do
       let (TCon tyname _) = last (unfoldFnType tk)
       ys <- mapM (const fresh) tvars
       let c' = Simple (TCon tyname (map TVar ys) :~: t) <> c
-      beta <- TVar <$> fresh
-      cis  <- forM (alt : alts) $ \(Alt (C k) xi ei) -> case Map.lookup k env of
-        Nothing -> do
-          a <- TVar <$> fresh
-          pure $ Simple (a :~: TCon k [])
-        -- find k in env, get tyvars as
-        Just (Forall as _ kt) -> do
-          -- construct substitution
-          let subst = zip as ys
-          let us = reverse (tail (reverse (unfoldFnType kt)))
-          let us' = map (Forall [] CNil . substVarsT subst) us
-          let env'  = Map.fromList (zip xi us') <> env
-          -- check ei under assumption that all xi have type [ys/as]t
-          (ti, ci) <- generate env' ei
-          pure $ ci <> Simple (ti :~: beta)
-      -- combine all the generated constraints together
+      cis <- mapM (genAlt env beta ys) alts
       let c'' = c' <> mconcat cis
       pure (beta, c'')
+    -- otherwise, the patterns must all be VarPats, so we don't need the uvars
+    Nothing -> do
+      cis <- mapM (genAlt env beta []) alts
+      let c' = c <> mconcat cis
+      pure (beta, c')
+
+findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
+findConTypeInAlts _ [] = Nothing
+findConTypeInAlts env (Alt (SimpleConPat (C name) _) _ : alts) =
+  case Map.lookup name env of
+    Just t  -> Just t
+    Nothing -> findConTypeInAlts env alts
+findConTypeInAlts env (_ : alts) = findConTypeInAlts env alts
+
+-- beta: a uvar representing the type of the whole case expression
+-- ys:   uvars for each argument to the type constructor of the scrutinee
+genAlt :: Env -> Type -> [Var] -> Alt -> NameGen CConstraint
+genAlt env beta ys (Alt (SimpleConPat (C k) xi) e) = case Map.lookup k env of
+  Nothing -> do
+    a <- TVar <$> fresh
+    pure $ Simple (a :~: TCon k [])
+  Just (Forall as _ kt) -> do
+    -- construct substitution
+    let subst = zip as ys
+    let us    = init (unfoldFnType kt)
+    let us' = map (Forall [] CNil . substVarsT subst) us
+    let env'  = Map.fromList (zip xi us') <> env
+    -- check ei under assumption that all xi have type [ys/as]t
+    (ti, ci) <- generate env' e
+    pure $ ci <> Simple (ti :~: beta)
+
+genAlt env beta _ (Alt (VarPat x) e) = do
+  u <- TVar <$> fresh
+  let env' = Map.insert x (Forall [] CNil u) env
+  -- check e under the assumption that x has type u
+  (t, c) <- generate env' e
+  pure $ c <> Simple (t :~: beta)
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]
 unfoldFnType t = [t]
 
--- TODO: maybe a typeclass for these functions?
-fuvT :: Type -> Set Var
-fuvT (TVar (U v)) = Set.singleton (U v)
-fuvT (TVar _    ) = mempty
-fuvT (TCon _ ts ) = Set.unions (map fuvT ts)
+-- Vars is defined for any type for which we can extract a set of free
+-- unification variables
+class Vars a where
+  -- Get the free unification variables from `a`
+  fuv  :: a -> Set Var
 
-fuvC :: Constraint -> Set Var
-fuvC CNil      = mempty
-fuvC (a :^: b) = fuvC a <> fuvC b
-fuvC (t :~: v) = fuvT t <> fuvT v
+instance Vars Type where
+  fuv (TVar (U v)) = Set.singleton (U v)
+  fuv (TVar _    ) = mempty
+  fuv (TCon _ ts ) = Set.unions (map fuv ts)
 
-fuvCC :: CConstraint -> Set Var
-fuvCC (Simple c   ) = fuvC c
-fuvCC (a :^^: b   ) = fuvCC a <> fuvCC b
-fuvCC (E vars c cc) = fuvC c <> fuvCC cc \\ Set.fromList vars
+instance Vars Constraint where
+  fuv CNil      = mempty
+  fuv (a :^: b) = fuv a <> fuv b
+  fuv (t :~: v) = fuv t <> fuv v
 
-fuvS :: Scheme -> Set Var
-fuvS (Forall tvars c t) = fuvC c <> fuvT t \\ Set.fromList tvars
+instance Vars CConstraint where
+  fuv (Simple c   ) = fuv c
+  fuv (a :^^: b   ) = fuv a <> fuv b
+  fuv (E vars c cc) = fuv c <> fuv cc \\ Set.fromList vars
 
-fuvEnv :: Env -> Set Var
-fuvEnv env = Set.unions (map fuvS (Map.elems env))
+instance Vars Scheme where
+  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
+
+instance Vars b => Vars (Map a b) where
+  fuv env = Set.unions (map fuv (Map.elems env))
 
 substVarsT :: Subst Var Var -> Type -> Type
 substVarsT s (TVar v) = case lookup v s of

@@ -20,6 +20,7 @@ import           Constraint.Generate            ( run
                                                 , generate
                                                 , Exp(..)
                                                 , Alt(..)
+                                                , Pat(..)
                                                 , Con(..)
                                                 , Scheme(..)
                                                 , Env
@@ -95,8 +96,8 @@ test = do
       --   False -> True
       let expr = Case
             (Con (C "True"))
-            [ Alt (C "True")  [] (Con (C "False"))
-            , Alt (C "False") [] (Con (C "True"))
+            [ Alt (SimpleConPat (C "True") [])  (Con (C "False"))
+            , Alt (SimpleConPat (C "False") []) (Con (C "True"))
             ]
       infersType env expr (TCon "Bool" [])
     it "solves combined case and let expressions" $ do
@@ -107,10 +108,9 @@ test = do
       let idfun = Abs "y" (Var "y")
       let expr = Case
             (Con (C "True"))
-            [ Alt (C "True")
-                  []
+            [ Alt (SimpleConPat (C "True") [])
                   (Let "id" idfun (App (Var "id") (Con (C "True"))))
-            , Alt (C "False") [] (Con (C "True"))
+            , Alt (SimpleConPat (C "False") []) (Con (C "True"))
             ]
       infersType env expr (TCon "Bool" [])
     it "solves expressions with annotation lets" $ do
@@ -121,6 +121,25 @@ test = do
                       (Forall [R "a"] CNil (TVar (R "a") `fn` TVar (R "a")))
                       (Abs "x" (Var "x"))
                       (App (Var "id") (Con (C "True")))
+      infersType env expr (TCon "Bool" [])
+    it "solves case expressions with variable patterns" $ do
+      -- case True of
+      --   x -> False
+      let expr = Case (Con (C "True")) [Alt (VarPat "x") (Con (C "False"))]
+      infersType env expr (TCon "Bool" [])
+      -- case True of
+      --   x -> Zero
+      let expr' = Case (Con (C "True")) [Alt (VarPat "x") (Con (C "Zero"))]
+      infersType env expr' (TCon "Nat" [])
+    it "solves case expressions with a mixture of patterns" $ do
+      -- case True of
+      --   True -> False
+      --   x -> True
+      let expr = Case
+            (Con (C "True"))
+            [ Alt (SimpleConPat (C "True") []) (Con (C "False"))
+            , Alt (VarPat "x")                 (Con (C "True"))
+            ]
       infersType env expr (TCon "Bool" [])
 
 infersType :: Env -> Exp -> Type -> Expectation
