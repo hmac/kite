@@ -96,8 +96,8 @@ test = do
       --   False -> True
       let expr = Case
             (Con (C "True"))
-            [ Alt (SimpleConPat (C "True") [])  (Con (C "False"))
-            , Alt (SimpleConPat (C "False") []) (Con (C "True"))
+            [ Alt (ConPat (C "True") [])  (Con (C "False"))
+            , Alt (ConPat (C "False") []) (Con (C "True"))
             ]
       infersType env expr (TCon "Bool" [])
     it "solves combined case and let expressions" $ do
@@ -108,9 +108,9 @@ test = do
       let idfun = Abs "y" (Var "y")
       let expr = Case
             (Con (C "True"))
-            [ Alt (SimpleConPat (C "True") [])
+            [ Alt (ConPat (C "True") [])
                   (Let "id" idfun (App (Var "id") (Con (C "True"))))
-            , Alt (SimpleConPat (C "False") []) (Con (C "True"))
+            , Alt (ConPat (C "False") []) (Con (C "True"))
             ]
       infersType env expr (TCon "Bool" [])
     it "solves expressions with annotation lets" $ do
@@ -131,14 +131,19 @@ test = do
       --   x -> Zero
       let expr' = Case (Con (C "True")) [Alt (VarPat "x") (Con (C "Zero"))]
       infersType env expr' (TCon "Nat" [])
+    it "solves case expressions with wildcard patterns" $ do
+      -- case True of
+      --   _ -> False
+      let expr = Case (Con (C "True")) [Alt WildPat (Con (C "False"))]
+      infersType env expr (TCon "Bool" [])
     it "solves case expressions with a mixture of patterns" $ do
       -- case True of
       --   True -> False
       --   x -> True
       let expr = Case
             (Con (C "True"))
-            [ Alt (SimpleConPat (C "True") []) (Con (C "False"))
-            , Alt (VarPat "x")                 (Con (C "True"))
+            [ Alt (ConPat (C "True") []) (Con (C "False"))
+            , Alt (VarPat "x")           (Con (C "True"))
             ]
       infersType env expr (TCon "Bool" [])
 

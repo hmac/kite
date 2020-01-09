@@ -32,8 +32,9 @@ data Alt = Alt Pat Exp
 -- Notice that patterns aren't inductive: this simplifies constraint generation.
 -- The current plan is to desugar surface pattern syntax to nested case
 -- expressions prior to type checking.
-data Pat = SimpleConPat Con [RawName] -- T a b c
+data Pat = ConPat Con [RawName] -- T a b c
          | VarPat RawName             -- a
+         | WildPat
         deriving (Eq, Show)
 
 -- Note: raw data constructors have the following type (a Scheme):
@@ -132,7 +133,7 @@ generate env (Case e alts) = do
 
 findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
 findConTypeInAlts _ [] = Nothing
-findConTypeInAlts env (Alt (SimpleConPat (C name) _) _ : alts) =
+findConTypeInAlts env (Alt (ConPat (C name) _) _ : alts) =
   case Map.lookup name env of
     Just t  -> Just t
     Nothing -> findConTypeInAlts env alts
@@ -141,7 +142,7 @@ findConTypeInAlts env (_ : alts) = findConTypeInAlts env alts
 -- beta: a uvar representing the type of the whole case expression
 -- ys:   uvars for each argument to the type constructor of the scrutinee
 genAlt :: Env -> Type -> [Var] -> Alt -> NameGen CConstraint
-genAlt env beta ys (Alt (SimpleConPat (C k) xi) e) = case Map.lookup k env of
+genAlt env beta ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
   Nothing -> do
     a <- TVar <$> fresh
     pure $ Simple (a :~: TCon k [])
@@ -160,6 +161,12 @@ genAlt env beta _ (Alt (VarPat x) e) = do
   let env' = Map.insert x (Forall [] CNil u) env
   -- check e under the assumption that x has type u
   (t, c) <- generate env' e
+  pure $ c <> Simple (t :~: beta)
+
+genAlt env beta _ (Alt WildPat e) = do
+  -- The wildcard can't be used inside e, so we don't need to extend the
+  -- environment.
+  (t, c) <- generate env e
   pure $ c <> Simple (t :~: beta)
 
 -- Converts a -> b -> c into [a, b, c]
