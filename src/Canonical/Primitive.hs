@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module Canonical.Primitive where
 
 import           ELC.Primitive                  ( modPrim )

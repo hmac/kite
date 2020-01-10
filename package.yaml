@@ -28,6 +28,7 @@ description: |
 default-extensions:
 - OverloadedStrings
 - LambdaCase
+- TupleSections
 
 dependencies:
 - base >= 4.7 && < 5

@@ -26,6 +26,7 @@ import           Constraint.Generate            ( generate
                                                 , Scheme(..)
                                                 , Env
                                                 )
+import           Constraint.Generate.Bind
 
 -- Tests the constraint solver
 
@@ -165,6 +166,70 @@ test = do
             bool
       infersType env expr (TCon "Bool" [])
       inferAndZonk env expr annotatedExpr
+  describe "typing top level function binds" $ do
+    it "types a simple unannotated function bind" $ do
+      -- f = \x -> case x of
+      --             True -> True
+      --             False -> False
+      let expr = Abs
+            "x"
+            (Case
+              (Var "x")
+              [ Alt (ConPat true [])  (Con true)
+              , Alt (ConPat false []) (Con false)
+              ]
+            )
+      let bind = Bind "f" expr Nothing
+      let bindT = BindT
+            (Name "f")
+            (AbsT
+              (Name "x")
+              bool
+              (CaseT
+                (VarT (Name "x") bool)
+                [ AltT (ConPat true [])  (ConT true)
+                , AltT (ConPat false []) (ConT false)
+                ]
+                bool
+              )
+            )
+            (Forall [] CNil (TCon (Name "->") [bool, bool]))
+      let (res, _) = run (generateBind env bind)
+      case res of
+        Left  err        -> expectationFailure (show err)
+        Right (bind', _) -> bind' `shouldBe` bindT
+    it "types a simple annotated function bind" $ do
+      -- f : Bool -> Bool
+      -- f = \x -> case x of
+      --             True -> True
+      --             False -> False
+      let expr = Abs
+            "x"
+            (Case
+              (Var "x")
+              [ Alt (ConPat true [])  (Con true)
+              , Alt (ConPat false []) (Con false)
+              ]
+            )
+      let bind = Bind "f" expr (Just (Forall [] CNil (bool `fn` bool)))
+      let bindT = BindT
+            (Name "f")
+            (AbsT
+              (Name "x")
+              bool
+              (CaseT
+                (VarT (Name "x") bool)
+                [ AltT (ConPat true [])  (ConT true)
+                , AltT (ConPat false []) (ConT false)
+                ]
+                bool
+              )
+            )
+            (Forall [] CNil (TCon (Name "->") [bool, bool]))
+      let (res, _) = run (generateBind env bind)
+      case res of
+        Left  err        -> expectationFailure (show err)
+        Right (bind', _) -> bind' `shouldBe` bindT
 
 infersType :: Env -> Exp -> Type -> Expectation
 infersType env expr expectedType =

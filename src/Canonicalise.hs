@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module Canonicalise where
 
 import qualified Data.Map.Strict         as Map

@@ -13,6 +13,16 @@ import           Data.Name
 
 type GenerateM = WriterT (Set.Set Var) (State Int)
 
+-- Generate a fresh rigid type variable
+freshR :: GenerateM Var
+freshR = do
+  k <- get
+  put (k + 1)
+  let var = R (Name ("$R" <> show k))
+  tell (Set.singleton var)
+  pure var
+
+-- Generate a fresh unification type variable
 fresh :: GenerateM Var
 fresh = do
   k <- get

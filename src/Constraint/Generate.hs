@@ -1,6 +1,5 @@
 -- The constraint generator
 
-{-# LANGUAGE TupleSections #-}
 module Constraint.Generate where
 
 import           Data.Set                       ( (\\) )
@@ -43,15 +42,15 @@ instance Sub ExpT where
   sub s (LetT x e b t     ) = LetT x (sub s e) (sub s b) (sub s t)
   sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
 
-instance Sub AltT where
-  sub s (AltT p e) = AltT p (sub s e)
-
 -- [RawName] are the variables bound by the case branch
 data Alt = Alt Pat Exp
   deriving (Eq, Show)
 
 data AltT = AltT Pat ExpT
   deriving (Eq, Show)
+
+instance Sub AltT where
+  sub s (AltT p e) = AltT p (sub s e)
 
 -- Notice that patterns aren't inductive: this simplifies constraint generation.
 -- The current plan is to desugar surface pattern syntax to nested case
