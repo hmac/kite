@@ -74,12 +74,12 @@ test = do
       let annotatedExpr = LetT
             "x"
             (ConT true)
-            bool
             (LetT "id"
                   (AbsT "y" bool (VarT "y" bool))
-                  (bool `fn` bool)
                   (AppT (VarT "id" (bool `fn` bool)) (VarT "x" bool))
+                  bool
             )
+            bool
       infersType env expr (TCon "Bool" [])
       inferAndZonk env expr annotatedExpr
     it "solves simple case expressions" $ do
@@ -114,8 +114,8 @@ test = do
               (ConPat true [])
               (LetT "id"
                     (AbsT "y" bool (VarT "y" bool))
-                    (bool `fn` bool)
                     (AppT (VarT "id" (bool `fn` bool)) (ConT true))
+                    bool
               )
             , AltT (ConPat false []) (ConT true)
             ]
@@ -132,13 +132,10 @@ test = do
       let annotatedExpr = LetAT
             "id"
             idType
-            (AbsT "x" bool (VarT "x" bool))
+            (AbsT "x" (TVar (R "a")) (VarT "x" (TVar (R "a"))))
             (AppT (VarT "id" (bool `fn` bool)) (ConT true))
             bool
-      -- This currently fails when trying to solve (a ~ a) ^ (U0 ~ a)
       infersType env expr (TCon "Bool" [])
-      -- We can't yet deal with implication constraints in the solver, so this
-      -- doesn't work yet
       inferAndZonk env expr annotatedExpr
     it "solves case expressions with variable patterns" $ do
       -- case True of

@@ -12,12 +12,7 @@
 -- the SIMPLIFY rule (except for SEQFEQ and SFEQFEQ)
 -- the TOPREACT rule (except for FINST)
 
-module Constraint.Solve
-  ( solve
-  , solveDebug
-  , solveC
-  )
-where
+module Constraint.Solve where
 
 import           Util
 
@@ -46,16 +41,17 @@ data Error = OccursCheckFailure
 -- - given constraints
 -- - top level axiom scheme
 solveC :: Set Var -> CConstraint -> Either Error ([Constraint], Subst)
-solveC touchables c = case solve (touchables, simple c) of
+solveC touchables c = case solve (touchables, flattenConstraint (simple c)) of
   Left err -> Left err
   Right (residual, subst) ->
     -- All implication constraints should be completely solvable
     let implications = implic (sub subst c)
     in  do
-          results <- mapM (\(vars, q, cc) -> mconcat . fst <$> solveC vars cc)
+          results <- mapM (\(vars, q, cc) -> do (cs, s) <- solveC vars cc
+                                                pure (mconcat cs, s))
                           implications
-          case mconcat results of
-            CNil  -> Right (residual, subst)
+          case mconcat (map fst results) of
+            CNil  -> Right (residual, subst <> concatMap snd results)
             impls -> Left (UnsolvedConstraints impls)
 
 -- This is the actual top level solver function
@@ -127,17 +123,17 @@ interactM = do
 canonM :: Solve (Either Error ())
 canonM = do
   (vars, constraints) <- get
-  case canonAll constraints of
+  case canonAll (concatMap flattenConstraint constraints) of
     Left  err          -> pure $ Left err
     Right constraints' -> do
       put (vars, constraints')
       pure $ Right ()
- where
-  canonAll :: [Constraint] -> Either Error [Constraint]
-  canonAll []       = Right []
-  canonAll (c : cs) = case canon c of
-    Left  err -> Left err
-    Right c'  -> (flatten c' ++) <$> canonAll cs
+
+canonAll :: [Constraint] -> Either Error [Constraint]
+canonAll []       = Right []
+canonAll (c : cs) = case canon c of
+  Left  err -> Left err
+  Right c'  -> (flatten c' ++) <$> canonAll cs
 
 flatten :: Constraint -> [Constraint]
 flatten (a :^: b) = a : flatten b

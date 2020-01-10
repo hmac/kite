@@ -30,7 +30,7 @@ data ExpT = VarT RawName Type
           | AppT ExpT ExpT
           | AbsT RawName Type ExpT
           | CaseT ExpT [AltT] Type
-          | LetT RawName ExpT Type ExpT
+          | LetT RawName ExpT ExpT Type
           | LetAT RawName Scheme ExpT ExpT Type
          deriving (Eq, Show)
 
@@ -40,7 +40,7 @@ instance Sub ExpT where
   sub s (AppT a b         ) = AppT (sub s a) (sub s b)
   sub s (AbsT  x t    e   ) = AbsT x (sub s t) (sub s e)
   sub s (CaseT e alts t   ) = CaseT (sub s e) (map (sub s) alts) (sub s t)
-  sub s (LetT x e t b     ) = LetT x (sub s e) (sub s t) (sub s b)
+  sub s (LetT x e b t     ) = LetT x (sub s e) (sub s b) (sub s t)
   sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
 
 instance Sub AltT where
@@ -71,6 +71,9 @@ newtype Con = C RawName
 -- The Var will always be rigid type variables (I think)
 data Scheme = Forall [Var] Constraint Type
   deriving (Eq, Show)
+
+instance Vars Scheme where
+  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
 
 type Env = Map RawName Scheme
 
@@ -105,7 +108,7 @@ generate env (Abs x e) = do
 generate env (Let x e1 e2) = do
   (e1, t1, c1) <- generate env e1
   (e2, t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
-  pure (LetT x e1 t1 e2, t2, c1 <> c2)
+  pure (LetT x e1 e2 t2, t2, c1 <> c2)
 -- LETA: let with a monomorphic annotation
 generate env (LetA x (Forall [] CNil t1) e1 e2) = do
   (e1, t , c1) <- generate env e1
@@ -194,9 +197,3 @@ genAlt env beta _ (Alt WildPat e) = do
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]
 unfoldFnType t = [t]
-
-instance Vars Scheme where
-  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
-
-instance Vars b => Vars (Map a b) where
-  fuv env = Set.unions (map fuv (Map.elems env))
