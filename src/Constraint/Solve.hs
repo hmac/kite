@@ -19,69 +19,100 @@ module Constraint.Solve
   )
 where
 
-import           Data.List                      ( sort )
+import           Util
+
+import           Data.Set                       (Set )
+
 import           Control.Monad.State.Strict
 import           Constraint
+
 import           Prelude                 hiding ( interact )
 
-type Solve = State [Constraint]
+-- This is the quadruple described in §7.3
+-- It doesn't (yet) have all its elements, though
+-- Missing:
+-- - given constraints
+-- - top level axiom scheme
+type Quad = (Set Var, [Constraint])
+type Solve = State Quad
+
+data Error = OccursCheckFailure
+           | ConstructorMismatch
+           | UnsolvedConstraints Constraint
+  deriving (Show, Eq)
 
 -- See fig. 14
-solveC :: CConstraint -> Either Error ([Constraint], Subst Var Type)
-solveC c = case solve' (simple c) of
-  Left  err             -> Left err
-    -- TODO: right now we ignore implication constraints
-    --       we should solve all of them, expecting an empty residual constraint
-    --       for each.
-  Right (residual, sub) -> Right (residual, sub)
+-- TODO: solveC should take as arguments:
+-- - given constraints
+-- - top level axiom scheme
+solveC :: Set Var -> CConstraint -> Either Error ([Constraint], Subst)
+solveC touchables c = case solve (touchables, simple c) of
+  Left err -> Left err
+  Right (residual, subst) ->
+    -- All implication constraints should be completely solvable
+    let implications = implic (sub subst c)
+    in  do
+          results <- mapM (\(vars, q, cc) -> mconcat . fst <$> solveC vars cc)
+                          implications
+          case mconcat results of
+            CNil  -> Right (residual, subst)
+            impls -> Left (UnsolvedConstraints impls)
 
--- This (TODO) is the actual top level solver function
+-- This is the actual top level solver function
 -- Given a set of simple constraints it returns a substitution and any residual
 -- constraints
--- TODO: should take touchable variables, given constraints and top level
--- constraint scheme as args
-solve' :: [Constraint] -> Either Error ([Constraint], Subst Var Type)
-solve' cs = case solve cs of
+solve :: Quad -> Either Error ([Constraint], Subst)
+solve input = case rewriteAll input of
   Left err -> Left err
-  -- We assume that all the constraints are of the form u :~: ty
-  -- This won't be the case in the future.
   -- See §7.5 for details
-  Right cs' ->
-    let sub = map (\(TVar a :~: b) -> (a, b)) cs' in Right ([], sub)
+  Right (vars, cs) ->
+    let (epsilon, residual) = partition
+          (\case
+            (TVar b :~: t) -> b `elem` vars && b `notElem` fuv t
+            (t :~: TVar b) -> b `elem` vars && b `notElem` fuv t
+            _         -> False
+          )
+          cs
+        subst  = nubOn fst $ map (\case
+                                  (TVar b :~: t) -> (b, t)
+                                  (t :~: TVar b) -> (b, t)) epsilon
+    in  Right (map (sub subst) residual, subst)
 
 -- Solve a set of constraints
 -- Repeatedly applies rewrite rules until there's nothing left to do
-solve :: [Constraint] -> Either Error [Constraint]
-solve cs = case applyRewrite cs of
-  Left  err -> Left err
-  Right cs' -> if sort cs == sort cs' then Right cs' else solve cs'
+rewriteAll :: Quad -> Either Error Quad
+rewriteAll quad@(_, cs) = case applyRewrite quad of
+  Left err -> Left err
+  Right quad'@(_, cs') ->
+    if sort cs == sort cs' then Right quad' else rewriteAll quad'
 
 -- Like solve but shows the solving history
-solveDebug :: [Constraint] -> Either Error [[Constraint]]
-solveDebug cs = go cs [cs]
+solveDebug :: Quad -> Either Error [Quad]
+solveDebug q = go [q] q
  where
-  go d hist = case applyRewrite d of
-    Left err -> Left err
-    Right d' ->
-      if sort d == sort d' then Right (d' : hist) else go d' (d' : hist)
+  go hist quad@(_, d) = case applyRewrite quad of
+    Left  err           -> Left err
+    Right quad'@(_, d') -> if sort d == sort d'
+      then Right (quad' : hist)
+      else go (quad' : hist) quad'
 
-run :: Solve (Either Error ()) -> [Constraint] -> Either Error [Constraint]
+run :: Solve (Either Error ()) -> Quad -> Either Error Quad
 run f c = case runState f c of
   (Right (), c') -> Right c'
   (Left  e , _ ) -> Left e
 
 -- Apply a round of rewriting
-applyRewrite :: [Constraint] -> Either Error [Constraint]
-applyRewrite c = case run canonM c of
-  Left  e  -> Left e
-  Right c' -> run interactM c'
+applyRewrite :: Quad -> Either Error Quad
+applyRewrite quad = do
+  c' <- run canonM quad
+  run interactM c'
 
 interactM :: Solve (Either Error ())
 interactM = do
-  constraints <- get
+  (vars, constraints) <- get
   case firstJust (map interactEach (focusPairs constraints)) of
     Just constraints' -> do
-      put constraints'
+      put (vars, constraints')
       pure $ Right ()
     Nothing -> pure $ Right ()
  where
@@ -95,11 +126,11 @@ interactM = do
 
 canonM :: Solve (Either Error ())
 canonM = do
-  constraints <- get
+  (vars, constraints) <- get
   case canonAll constraints of
     Left  err          -> pure $ Left err
     Right constraints' -> do
-      put constraints'
+      put (vars, constraints')
       pure $ Right ()
  where
   canonAll :: [Constraint] -> Either Error [Constraint]
@@ -111,10 +142,6 @@ canonM = do
 flatten :: Constraint -> [Constraint]
 flatten (a :^: b) = a : flatten b
 flatten c         = [c]
-
-data Error = OccursCheckFailure
-           | ConstructorMismatch
-  deriving (Show, Eq)
 
 -- Canonicalise a constraint
 canon :: Constraint -> Either Error Constraint
@@ -152,7 +179,7 @@ interact (TVar a :~: b) (TVar a' :~: c) | a == a' =
 -- EQDIFF: One equality can be substituted into the other. We rely the ORIENT
 -- rule in on prior canonicalisation to ensure this makes progress.
 interact (TVar v1 :~: t1) (TVar v2 :~: t2) | v1 `elem` ftv t2 =
-  Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: subst v1 t1 t2)
+  Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: sub [(v1, t1)] t2)
 
 -- Redundant cases: drop CNil
 interact CNil c    = Just c
@@ -178,18 +205,11 @@ canonCompare (TVar (R _)) (TVar (U _)) = GT
 canonCompare (TVar a    ) (TVar b    ) = compare a b
 canonCompare _            (TCon _ _  ) = LT
 canonCompare (TCon _ _)   _            = GT
-canonCompare _            _            = EQ
 
 -- Calculate the free type variables of a type
 ftv :: Type -> [Var]
 ftv (TVar v   ) = [v]
 ftv (TCon _ ts) = concatMap ftv ts
-
--- Substitute a variable for a type in a type
-subst :: Var -> Type -> Type -> Type
-subst var sub (TVar v) | v == var = sub
-subst var sub (TCon c ts)         = TCon c (map (subst var sub) ts)
-subst _   _   t                   = t
 
 -- A list of each element in the given list paired with the remaining elements
 focus :: [a] -> [(a, [a])]

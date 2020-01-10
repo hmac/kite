@@ -4,9 +4,13 @@ module Util
   , Data.Maybe.mapMaybe
   , Data.Maybe.fromMaybe
   , Data.List.nub
+  , Data.List.sort
+  , Data.List.partition
+  , Data.List.Extra.nubOn
   )
 where
 
+import qualified Data.List.Extra
 import qualified Data.List
 import qualified Data.Maybe
 import           Data.Text.Lazy                 ( unpack )

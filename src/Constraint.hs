@@ -5,14 +5,21 @@ module Constraint
   , CConstraint(..)
   , Type(..)
   , Var(..)
+  , Vars(..)
   , Subst
   , simple
   , implic
   , fn
+  , Sub(..)
   )
 where
 
+import           Util                           ( fromMaybe )
 import           Data.Name
+import qualified Data.Set                      as Set
+import           Data.Set                       ( Set
+                                                , (\\)
+                                                )
 
 -- Simple constraints
 -- Created by the user via type annotations
@@ -58,7 +65,48 @@ data Var = R RawName
          deriving (Eq, Show, Ord)
 
 -- The type of substitutions
-type Subst a b = [(a, b)]
+type Subst = [(Var, Type)]
+
+-- A typeclass for applying substitutions
+class Sub a where
+  sub :: Subst -> a -> a
+
+instance Sub Type where
+  sub s (TVar v   ) = fromMaybe (TVar v) (lookup v s)
+  sub s (TCon n ts) = TCon n (map (sub s) ts)
+
+instance Sub Constraint where
+  sub _ CNil      = CNil
+  sub s (a :^: b) = sub s a :^: sub s b
+  sub s (t :~: v) = sub s t :~: sub s v
+
+instance Sub CConstraint where
+  sub s (Simple c) = Simple (sub s c)
+  sub s (c :^^: d) = sub s c :^^: sub s d
+-- not worrying about var capture here because unification vars are unique.
+-- this could be problematic, be aware
+  sub s (E vs q c) = E vs (sub s q) (sub s c)
+
+-- Vars is defined for any type for which we can extract a set of free
+-- unification variables
+class Vars a where
+  -- Get the free unification variables from `a`
+  fuv  :: a -> Set Var
+
+instance Vars Type where
+  fuv (TVar (U v)) = Set.singleton (U v)
+  fuv (TVar _    ) = mempty
+  fuv (TCon _ ts ) = Set.unions (map fuv ts)
+
+instance Vars Constraint where
+  fuv CNil      = mempty
+  fuv (a :^: b) = fuv a <> fuv b
+  fuv (t :~: v) = fuv t <> fuv v
+
+instance Vars CConstraint where
+  fuv (Simple c   ) = fuv c
+  fuv (a :^^: b   ) = fuv a <> fuv b
+  fuv (E vars c cc) = fuv c <> fuv cc \\ Set.fromList vars
 
 fn :: Type -> Type -> Type
 a `fn` b = TCon "->" [a, b]
@@ -68,7 +116,7 @@ simple E{}        = mempty
 simple (Simple c) = [c]
 simple (c :^^: d) = simple c <> simple d
 
-implic :: CConstraint -> CConstraint
-implic (Simple _) = mempty
-implic e@E{}      = e
-implic (c :^^: d) = implic c <> implic d
+implic :: CConstraint -> [(Set Var, Constraint, CConstraint)]
+implic (Simple _  ) = mempty
+implic (E vars q c) = [(Set.fromList vars, q, c)]
+implic (c :^^: d  ) = implic c <> implic d

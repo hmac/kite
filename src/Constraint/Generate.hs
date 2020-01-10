@@ -3,16 +3,14 @@
 {-# LANGUAGE TupleSections #-}
 module Constraint.Generate where
 
-import           Util
-import           Data.Set                       ( Set
-                                                , (\\)
-                                                )
+import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
+
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
+
 import           Data.Name
-import           NameGen                        ( NameGen )
-import qualified NameGen
+import           Constraint.GenerateM
 import           Constraint
 
 -- An example syntax type that we'll eventually replace with something linked to
@@ -36,19 +34,17 @@ data ExpT = VarT RawName Type
           | LetAT RawName Scheme ExpT ExpT Type
          deriving (Eq, Show)
 
-substExp :: Subst Var Type -> ExpT -> ExpT
-substExp s (VarT n v  ) = VarT n (substT s v)
-substExp _ (ConT c    ) = ConT c
-substExp s (AppT a b  ) = AppT (substExp s a) (substExp s b)
-substExp s (AbsT x t e) = AbsT x (substT s t) (substExp s e)
-substExp s (CaseT e alts t) =
-  CaseT (substExp s e) (map (substAlt s) alts) (substT s t)
-substExp s (LetT x e t b) = LetT x (substExp s e) (substT s t) (substExp s b)
-substExp s (LetAT x sch e b t) =
-  LetAT x sch (substExp s e) (substExp s b) (substT s t)
+instance Sub ExpT where
+  sub s (VarT n v         ) = VarT n (sub s v)
+  sub _ (ConT c           ) = ConT c
+  sub s (AppT a b         ) = AppT (sub s a) (sub s b)
+  sub s (AbsT  x t    e   ) = AbsT x (sub s t) (sub s e)
+  sub s (CaseT e alts t   ) = CaseT (sub s e) (map (sub s) alts) (sub s t)
+  sub s (LetT x e t b     ) = LetT x (sub s e) (sub s t) (sub s b)
+  sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
 
-substAlt :: Subst Var Type -> AltT -> AltT
-substAlt s (AltT p e) = AltT p (substExp s e)
+instance Sub AltT where
+  sub s (AltT p e) = AltT p (sub s e)
 
 -- [RawName] are the variables bound by the case branch
 data Alt = Alt Pat Exp
@@ -76,22 +72,15 @@ newtype Con = C RawName
 data Scheme = Forall [Var] Constraint Type
   deriving (Eq, Show)
 
-run :: NameGen a -> a
-run = NameGen.run
-
--- Generate a fresh unification variable
-fresh :: NameGen Var
-fresh = NameGen.freshM (U . Name . show)
-
 type Env = Map RawName Scheme
 
-generate :: Env -> Exp -> NameGen (ExpT, Type, CConstraint)
+generate :: Env -> Exp -> GenerateM (ExpT, Type, CConstraint)
 -- VARCON
 generate env (Var name) = case Map.lookup name env of
   Just (Forall tvars c t) -> do
-    subst <- mapM (\tv -> (tv, ) <$> fresh) tvars
-    let t' = substVarsT subst t
-    let q' = substVarsQ subst c
+    subst <- mapM (\tv -> (tv, ) . TVar <$> fresh) tvars
+    let t' = sub subst t
+    let q' = sub subst c
     pure (VarT name t', t', Simple q')
   Nothing -> do
     a <- TVar <$> fresh
@@ -125,7 +114,7 @@ generate env (LetA x (Forall [] CNil t1) e1 e2) = do
 -- GLETA: let with a polymorphic annotation
 generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
   (e1, t, c) <- generate env e1
-  let betas = Set.toList $ fuv t <> fuv c \\ fuv env
+  let betas = Set.toList $ (fuv t <> fuv c) \\ fuv env
   let c1    = E betas q1 (c :^^: Simple (t :~: t1))
   (e2, t2, c2) <- generate (Map.insert x s1 env) e2
   pure (LetAT x s1 e1 e2 t2, t2, c1 <> c2)
@@ -172,7 +161,7 @@ findConTypeInAlts env (_ : alts) = findConTypeInAlts env alts
 
 -- beta: a uvar representing the type of the whole case expression
 -- ys:   uvars for each argument to the type constructor of the scrutinee
-genAlt :: Env -> Type -> [Var] -> Alt -> NameGen (AltT, CConstraint)
+genAlt :: Env -> Type -> [Var] -> Alt -> GenerateM (AltT, CConstraint)
 genAlt env beta ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
   Nothing -> do
     a         <- TVar <$> fresh
@@ -180,9 +169,9 @@ genAlt env beta ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
     pure (AltT (ConPat (C k) xi) e, Simple (a :~: TCon k []))
   Just (Forall as _ kt) -> do
     -- construct substitution
-    let subst = zip as ys
+    let subst = zip as (map TVar ys)
     let us    = init (unfoldFnType kt)
-    let us' = map (Forall [] CNil . substVarsT subst) us
+    let us'   = map (Forall [] CNil . sub subst) us
     let env'  = Map.fromList (zip xi us') <> env
     -- check ei under assumption that all xi have type [ys/as]t
     (e, ti, ci) <- generate env' e
@@ -206,44 +195,8 @@ genAlt env beta _ (Alt WildPat e) = do
 unfoldFnType :: Type -> [Type]
 unfoldFnType t = [t]
 
--- Vars is defined for any type for which we can extract a set of free
--- unification variables
-class Vars a where
-  -- Get the free unification variables from `a`
-  fuv  :: a -> Set Var
-
-instance Vars Type where
-  fuv (TVar (U v)) = Set.singleton (U v)
-  fuv (TVar _    ) = mempty
-  fuv (TCon _ ts ) = Set.unions (map fuv ts)
-
-instance Vars Constraint where
-  fuv CNil      = mempty
-  fuv (a :^: b) = fuv a <> fuv b
-  fuv (t :~: v) = fuv t <> fuv v
-
-instance Vars CConstraint where
-  fuv (Simple c   ) = fuv c
-  fuv (a :^^: b   ) = fuv a <> fuv b
-  fuv (E vars c cc) = fuv c <> fuv cc \\ Set.fromList vars
-
 instance Vars Scheme where
   fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
 
 instance Vars b => Vars (Map a b) where
   fuv env = Set.unions (map fuv (Map.elems env))
-
-substT :: Subst Var Type -> Type -> Type
-substT s (TVar v   ) = fromMaybe (TVar v) (lookup v s)
-substT s (TCon n ts) = TCon n (map (substT s) ts)
-
-substVarsT :: Subst Var Var -> Type -> Type
-substVarsT s (TVar v) = case lookup v s of
-  Just v' -> TVar v'
-  Nothing -> TVar v
-substVarsT s (TCon n ts) = TCon n (map (substVarsT s) ts)
-
-substVarsQ :: Subst Var Var -> Constraint -> Constraint
-substVarsQ _ CNil      = CNil
-substVarsQ s (a :^: b) = substVarsQ s a :^: substVarsQ s b
-substVarsQ s (t :~: v) = substVarsT s t :~: substVarsT s v
