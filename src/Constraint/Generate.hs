@@ -9,7 +9,7 @@ import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 
 import           Data.Name
-import           Constraint.GenerateM
+import           Constraint.Generate.M
 import           Constraint
 
 -- An example syntax type that we'll eventually replace with something linked to

@@ -1,4 +1,4 @@
-module Constraint.GenerateM where
+module Constraint.Generate.M where
 
 -- The constraint generation monad, consisting of:
 -- - A State part, generate fresh variables (like NameGen)

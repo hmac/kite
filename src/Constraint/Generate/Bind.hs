@@ -2,7 +2,7 @@ module Constraint.Generate.Bind where
 
 import           Constraint
 import           Constraint.Generate
-import           Constraint.GenerateM
+import           Constraint.Generate.M
 import           Constraint.Solve
 import           Data.Name
 

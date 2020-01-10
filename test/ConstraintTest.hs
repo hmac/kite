@@ -15,7 +15,7 @@ import           Util
 import           Data.Name                      ( RawName(..) )
 import           Constraint
 import           Constraint.Solve               ( solveC )
-import           Constraint.GenerateM           ( run )
+import           Constraint.Generate.M          ( run )
 import           Constraint.Generate            ( generate
                                                 , Exp(..)
                                                 , ExpT(..)
