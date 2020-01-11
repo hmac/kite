@@ -37,18 +37,34 @@ test = do
   describe "Constraint Monoid" $ it "obeys the monoid laws" $ require
     (isLawfulMonoid genConstraint)
 
-  let env = Map.fromList
-        [ ("True" , Forall [] CNil (TCon "Bool" []))
-        , ("False", Forall [] CNil (TCon "Bool" []))
-        , ("Zero" , Forall [] CNil (TCon "Nat" []))
-        , ("Suc"  , Forall [] CNil (TCon "Nat" [] `fn` TCon "Nat" []))
-        ]
-  let bool  = TCon "Bool" []
-  let nat   = TCon "Nat" []
-  let true  = C "True"
-  let false = C "False"
-  let zero  = C "Zero"
-  let suc   = C "Suc"
+  let bool = TCon "Bool" []
+  let nat  = TCon "Nat" []
+  let pair a b = TCon "Pair" [a, b]
+  let wrap a = TCon "Wrap" [a]
+  let
+    env = Map.fromList
+      [ ("True" , Forall [] CNil (TCon "Bool" []))
+      , ("False", Forall [] CNil (TCon "Bool" []))
+      , ("Zero" , Forall [] CNil (TCon "Nat" []))
+      , ("Suc"  , Forall [] CNil (TCon "Nat" [] `fn` TCon "Nat" []))
+      , ( "MkWrap"
+        , Forall [R "a"] CNil (TVar (R "a") `fn` TCon "Wrap" [TVar (R "a")])
+        )
+      , ( "MkPair"
+        , Forall
+          [R "a", R "b"]
+          CNil
+          (    TVar (R "a")
+          `fn` (TVar (R "b") `fn` TCon "Pair" [TVar (R "a"), TVar (R "b")])
+          )
+        )
+      ]
+  let true   = C "True"
+  let false  = C "False"
+  let zero   = C "Zero"
+  let suc    = C "Suc"
+  let mkpair = C "MkPair"
+  let mkwrap = C "MkWrap"
 
   describe "Constraint generation and solving combined" $ do
     it "solves simple function applications" $ do
@@ -146,12 +162,27 @@ test = do
             CaseT (ConT true) [AltT (VarPat "x") (ConT (C "Zero"))] nat
       infersType env expr (TCon "Nat" [])
       inferAndZonk env expr annotatedExpr
+    it "solves case expressions that use bound variables" $ do
+      -- case True of
+      --   False -> False
+      --   x -> x
+      let expr = Case
+            (Con true)
+            [Alt (ConPat false []) (Con false), Alt (VarPat "x") (Var "x")]
+      let annotatedExpr = CaseT
+            (ConT true)
+            [ AltT (ConPat false []) (ConT false)
+            , AltT (VarPat "x")      (VarT "x" bool)
+            ]
+            bool
+      infersType env expr bool
+      inferAndZonk env expr annotatedExpr
     it "solves case expressions with wildcard patterns" $ do
       -- case True of
       --   _ -> False
       let expr          = Case (Con true) [Alt WildPat (Con false)]
       let annotatedExpr = CaseT (ConT true) [AltT WildPat (ConT false)] bool
-      infersType env expr (TCon "Bool" [])
+      infersType env expr bool
       inferAndZonk env expr annotatedExpr
     it "solves case expressions with a mixture of patterns" $ do
       -- case True of
@@ -164,8 +195,39 @@ test = do
             (ConT true)
             [AltT (ConPat true []) (ConT false), AltT (VarPat "x") (ConT true)]
             bool
-      infersType env expr (TCon "Bool" [])
+      infersType env expr bool
       inferAndZonk env expr annotatedExpr
+    it "creating an instance of a parameterised type" $ do
+      -- data Pair a b = MkPair a b
+      -- MkPair False Zero
+      let expr = App (App (Var "MkPair") (Con false)) (Con zero)
+      infersType env expr (pair bool nat)
+    it "deconstructing a parameterised type with a case expression (Wrap)" $ do
+      -- data Wrap a = MkWrap a
+      -- let x = MkWrap True
+      --  in case x of
+      --       MkWrap y -> y
+      let x = App (Var "MkWrap") (Con true)
+      let expr =
+            Let "x" x (Case (Var "x") [Alt (ConPat mkwrap ["y"]) (Var "y")])
+      infersType env expr bool
+    it "deconstructing a parameterised type with a case expression (Pair)" $ do
+      -- data Pair a b = MkPair a b
+      -- let x = MkPair False Zero
+      --  in case x of
+      --       MkPair y z -> y
+      --       w -> w
+      let x = App (App (Var "MkPair") (Con false)) (Con zero)
+      let expr = Let
+            "x"
+            x
+            (Case
+              (Var "x")
+              [ Alt (ConPat mkpair ["y", "z"]) (Var "y")
+              , Alt (VarPat "w")               (Var "w")
+              ]
+            )
+      infersType env expr bool
   describe "typing top level function binds" $ do
     it "types a simple unannotated function bind" $ do
       -- f = \x -> case x of

@@ -31,8 +31,8 @@ import           Prelude                 hiding ( interact )
 type Quad = (Set Var, [Constraint])
 type Solve = State Quad
 
-data Error = OccursCheckFailure
-           | ConstructorMismatch
+data Error = OccursCheckFailure Type Type
+           | ConstructorMismatch Type Type
            | UnsolvedConstraints Constraint
   deriving (Show, Eq)
 
@@ -150,10 +150,11 @@ canon (TCon k as :~: TCon k' bs) | k == k' =
   pure $ foldl (:^:) CNil (zipWith (:~:) as bs)
 
 -- FAILDEC: Equalities between constructor types must have the same constructor
-canon (TCon k _ :~: TCon k' _) | k /= k'            = Left ConstructorMismatch
+canon (t@(TCon k _) :~: v@(TCon k' _)) | k /= k'            = Left (ConstructorMismatch t v)
 
 -- OCCCHECK: a type variable cannot be equal to a type containing that variable
-canon (v@(TVar _) :~: t) | v /= t && t `contains` v = Left OccursCheckFailure
+canon (v@(TVar _) :~: t) | v /= t && t `contains` v =
+  Left $ OccursCheckFailure v t
 
 -- ORIENT: Flip an equality around if desirable
 canon (a :~: b) | canonCompare a b == GT            = pure (b :~: a)

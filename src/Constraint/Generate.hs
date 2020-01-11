@@ -144,12 +144,13 @@ generate env (Case e alts) = do
       let (TCon tyname _) = last (unfoldFnType tk)
       ys <- mapM (const fresh) tvars
       let c' = Simple (TCon tyname (map TVar ys) :~: t) <> c
-      (alts, cis) <- unzip <$> mapM (genAlt env beta ys) alts
+      (alts, cis) <- unzip <$> mapM (genAlt env beta t ys) alts
       let c'' = c' <> mconcat cis
       pure (CaseT e alts beta, beta, c'')
-    -- otherwise, the patterns must all be VarPats, so we don't need the uvars
+    -- otherwise, the patterns must all be VarPats, so we just need a single
+    -- uvar for the scrutinee type
     Nothing -> do
-      (alts, cis) <- unzip <$> mapM (genAlt env beta []) alts
+      (alts, cis) <- unzip <$> mapM (genAlt env beta t []) alts
       let c' = c <> mconcat cis
       pure (CaseT e alts beta, beta, c')
 
@@ -163,8 +164,8 @@ findConTypeInAlts env (_ : alts) = findConTypeInAlts env alts
 
 -- beta: a uvar representing the type of the whole case expression
 -- ys:   uvars for each argument to the type constructor of the scrutinee
-genAlt :: Env -> Type -> [Var] -> Alt -> GenerateM (AltT, CConstraint)
-genAlt env beta ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
+genAlt :: Env -> Type -> Type -> [Var] -> Alt -> GenerateM (AltT, CConstraint)
+genAlt env beta _ ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
   Nothing -> do
     a         <- TVar <$> fresh
     (e, _, _) <- generate env e
@@ -180,14 +181,16 @@ genAlt env beta ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
     let c' = ci <> Simple (ti :~: beta)
     pure (AltT (ConPat (C k) xi) e, c')
 
-genAlt env beta _ (Alt (VarPat x) e) = do
+genAlt env beta scrutTy _ (Alt (VarPat x) e) = do
   u <- TVar <$> fresh
-  let env' = Map.insert x (Forall [] CNil u) env
   -- check e under the assumption that x has type u
+  let env' = Map.insert x (Forall [] CNil u) env
   (e, t, c) <- generate env' e
-  pure (AltT (VarPat x) e, c <> Simple (t :~: beta))
+  -- require u ~ the type of the scrutinee
+  let c' = Simple (u :~: scrutTy)
+  pure (AltT (VarPat x) e, c <> c' <> Simple (t :~: beta))
 
-genAlt env beta _ (Alt WildPat e) = do
+genAlt env beta _ _ (Alt WildPat e) = do
   -- The wildcard can't be used inside e, so we don't need to extend the
   -- environment.
   (e, t, c) <- generate env e
@@ -195,4 +198,5 @@ genAlt env beta _ (Alt WildPat e) = do
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]
-unfoldFnType t = [t]
+unfoldFnType (TCon "->" [x, y]) = x : unfoldFnType y
+unfoldFnType t                  = [t]
