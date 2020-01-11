@@ -148,3 +148,39 @@ I'm not yet sure whether this change is orthogonal to the architecture change or
 not. Both are inspired by recent GHC designs but it may be easier to separate
 them out to avoid doing too much at once. If we can keep THIH in the new
 architecture then we should do that, if only temporarily.
+
+Constraint generation
+---------------------
+
+Closely following the approach in "Modular Type Inference with Local
+Assumptions", we have a constraint generator for a simple language that
+resembles Lam. The only big question left is how to deal with function
+definitions that utilise multiple equations and pattern matching. Our small
+language supports case expressions with constructor and variable patterns, but
+doesn't directly support things like this:
+
+```
+length [] = 0
+length (_ : xs) = 1 + length xs
+```
+
+The equivalent in our smaller language is
+```
+length l = case l of
+             [] -> 0
+             (:) x xs -> 1 + length xs
+```
+
+Notice that we can only have a single equation for the function and we can't mix
+wildcard patterns with variable patterns.
+
+We can desugar Lam into this language, but it's not clear if we should. The
+alternative is to attempt to generate constraints directly from surface Lam
+syntax, which gives the advantage that error messages relate to code that the
+programmer has directly written. The disadvantage is that it's significantly
+more complex to generate constraints for surface Lam code.
+
+The other factor to consider is that we wish to take the output AST of the type
+checker and use it as input to the compiler. This means that any structures the
+compiler needs (like, for example, pattern matching) must be present in the
+typechecking AST.
