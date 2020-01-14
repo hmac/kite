@@ -14,7 +14,9 @@ import qualified Data.Map.Strict               as Map
 import           Util
 import           Data.Name                      ( RawName(..) )
 import           Constraint
-import           Constraint.Solve               ( solveC )
+import           Constraint.Solve               ( solveC
+                                                , Error(..)
+                                                )
 import           Constraint.Generate.M          ( run )
 import           Constraint.Generate            ( generate
                                                 , Exp(..)
@@ -27,6 +29,7 @@ import           Constraint.Generate            ( generate
                                                 , Env
                                                 )
 import           Constraint.Generate.Bind
+import           Constraint.Print
 
 -- Tests the constraint solver
 
@@ -37,12 +40,20 @@ test = do
   describe "Constraint Monoid" $ it "obeys the monoid laws" $ require
     (isLawfulMonoid genConstraint)
 
-  let bool = TCon "Bool" []
-  let nat  = TCon "Nat" []
-  let pair a b = TCon "Pair" [a, b]
-  let wrap a = TCon "Wrap" [a]
   let
-    env = Map.fromList
+    bool = TCon "Bool" []
+    nat  = TCon "Nat" []
+    pair a b = TCon "Pair" [a, b]
+    wrap a = TCon "Wrap" [a]
+
+    true   = C "True"
+    false  = C "False"
+    zero   = C "Zero"
+    suc    = C "Suc"
+    mkpair = C "MkPair"
+    mkwrap = C "MkWrap"
+
+    env    = Map.fromList
       [ ("True" , Forall [] CNil (TCon "Bool" []))
       , ("False", Forall [] CNil (TCon "Bool" []))
       , ("Zero" , Forall [] CNil (TCon "Nat" []))
@@ -59,12 +70,6 @@ test = do
           )
         )
       ]
-  let true   = C "True"
-  let false  = C "False"
-  let zero   = C "Zero"
-  let suc    = C "Suc"
-  let mkpair = C "MkPair"
-  let mkwrap = C "MkWrap"
 
   describe "Constraint generation and solving combined" $ do
     it "solves simple function applications" $ do
@@ -215,19 +220,19 @@ test = do
       -- data Pair a b = MkPair a b
       -- let x = MkPair False Zero
       --  in case x of
-      --       MkPair y z -> y
-      --       w -> w
-      let x = App (App (Var "MkPair") (Con false)) (Con zero)
-      let expr = Let
+      --       MkPair y z -> MkWrap y
+      --       w -> MkWrap False
+      let x    = App (App (Var "MkPair") (Con false)) (Con zero)
+          expr = Let
             "x"
             x
             (Case
               (Var "x")
-              [ Alt (ConPat mkpair ["y", "z"]) (Var "y")
-              , Alt (VarPat "w")               (Var "w")
+              [ Alt (ConPat mkpair ["y", "z"]) (App (Var "MkWrap") (Var "y"))
+              , Alt (VarPat "w")               (App (Var "MkWrap") (Con false))
               ]
             )
-      infersType env expr bool
+      infersType env expr (wrap bool)
   describe "typing top level function binds" $ do
     it "types a simple unannotated function bind" $ do
       -- f = \x -> case x of
@@ -297,8 +302,7 @@ infersType :: Env -> Exp -> Type -> Expectation
 infersType env expr expectedType =
   let ((_, TVar t, constraints), touchables) = run (generate env expr)
   in  case solveC touchables constraints of
-        Left err ->
-          expectationFailure $ "Expected Right, found Left " <> show err
+        Left  err     -> expectationFailure $ printError err
         Right (cs, s) -> do
           lookup t s `shouldBe` Just expectedType
           cs `shouldBe` []
@@ -355,3 +359,19 @@ genName = Name <$> Gen.list (Range.linear 1 5) Gen.alphaNum
 
 genUVarName :: H.Gen RawName
 genUVarName = Name <$> Gen.list (Range.linear 1 5) Gen.digit
+
+printError :: Error -> String
+printError (OccursCheckFailure t v) =
+  show
+    $  "Occurs check failure between "
+    <> printType t
+    <> " and "
+    <> printType v
+printError (ConstructorMismatch t v) =
+  show
+    $  "Constructors do not match between "
+    <> printType t
+    <> " and "
+    <> printType v
+printError (UnsolvedConstraints c) =
+  show $ "Unsolved constraints: " <> printConstraint c
