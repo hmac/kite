@@ -64,13 +64,12 @@ data Tycon = Tycon Id Kind
 
 -- TODO: move these to Typecheck.Primitive or similar
 
-tUnit, tChar, tString, tInt, tInteger, tFloat, tDouble, tBool :: Type
+tUnit, tChar, tString, tInt, tInteger, tDouble, tBool :: Type
 tUnit = TCon (Tycon (TopLevel modPrim "()") Star)
 tChar = TCon (Tycon (TopLevel modPrim "Char") Star)
 tString = TCon (Tycon (TopLevel modPrim "String") Star)
 tInt = TCon (Tycon (TopLevel modPrim "Int") Star)
 tInteger = TCon (Tycon (TopLevel modPrim "Integer") Star)
-tFloat = TCon (Tycon (TopLevel modPrim "Float") Star)
 tDouble = TCon (Tycon (TopLevel modPrim "Double") Star)
 tBool = TCon (Tycon (TopLevel modPrim "Bool") Star)
 
@@ -655,17 +654,15 @@ type Infer e t = ClassEnv -> [Assump] -> e -> TI ([Pred], t)
 data Literal = LitInt Integer
              | LitChar Char
              | LitRat Rational
-             | LitFloat Double
              | LitStr String
              deriving (Show, Eq)
 
 tiLit :: Literal -> TI ([Pred], Type)
-tiLit (LitChar  _) = pure ([], tChar)
+tiLit (LitChar _) = pure ([], tChar)
 -- Integers are not overloaded (yet)
-tiLit (LitInt   _) = pure ([], tInt)
-tiLit (LitStr   _) = pure ([], tString)
-tiLit (LitFloat _) = pure ([], tFloat)
-tiLit (LitRat   _) = do
+tiLit (LitInt  _) = pure ([], tInt)
+tiLit (LitStr  _) = pure ([], tString)
+tiLit (LitRat  _) = do
   v <- newTVar Star
   pure ([IsIn (fractionalClass) v], v)
 

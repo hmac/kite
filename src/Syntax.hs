@@ -147,7 +147,6 @@ data Ty_ a = Ty_ a :@: Ty_ a
         | TyTuple [Ty_ a]
         | TyHole Name
         | TyInt
-        | TyFloat
         | TyString
   deriving (Eq, Show, Ord)
 
@@ -183,7 +182,6 @@ data Syn_ name = Var name
          | ListLit [Syn_ name]
          | StringLit String [(Syn_ name, String)]
          | IntLit Int
-         | FloatLit Double
          deriving (Eq, Show)
 
 -- Supported binary operators

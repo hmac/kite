@@ -85,7 +85,6 @@ data Type = TVar Var
           | TTuple [Type]
           | THole RawName
           | TInt
-          | TFloat
           | TString
           deriving (Eq, Show, Ord)
 
@@ -112,7 +111,6 @@ instance Sub Type where
   sub s (TTuple ts) = TTuple (map (sub s) ts)
   sub _ (THole  n ) = THole n
   sub _ TInt        = TInt
-  sub _ TFloat      = TFloat
   sub _ TString     = TString
 
 instance Sub Constraint where
@@ -140,7 +138,6 @@ instance Vars Type where
   fuv (TTuple ts ) = Set.unions (map fuv ts)
   fuv (THole  _  ) = mempty
   fuv TInt         = mempty
-  fuv TFloat       = mempty
   fuv TString      = mempty
 
 instance Vars Constraint where

@@ -290,14 +290,6 @@ pInt = do
   digits <- lexeme (some digitChar)
   pure . read $ fromMaybe "" sign <> digits
 
-pFloat :: Parser Double
-pFloat = do
-  sign    <- optional (string "-")
-  numeral <- many digitChar
-  void (string ".")
-  decimal <- lexeme (some digitChar)
-  pure . read $ fromMaybe "" sign <> numeral <> "." <> decimal
-
 pExpr :: Parser Syn
 pExpr = try pBinApp <|> try pApp <|> pExpr'
 
@@ -307,7 +299,6 @@ pExpr' =
     <|> parens pExpr
     <|> pHole
     <|> try pStringLit
-    <|> try (FloatLit <$> pFloat)
     <|> try (IntLit <$> pInt)
     <|> pVar
     <|> pAbs

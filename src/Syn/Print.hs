@@ -146,7 +146,6 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyList ts          ) -> brackets (printType' Root ts)
   (_   , TyTuple ts         ) -> tupled (map (printType' Root) ts)
   (_   , TyInt              ) -> "Int"
-  (_   , TyFloat            ) -> "Float"
   (_   , TyString           ) -> "String"
   (_   , _                  ) -> "nope"
 
@@ -182,8 +181,7 @@ printExpr (Case e     alts) = printCase e alts
 printExpr (TupleLit es    ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
-printExpr (IntLit   i              ) = pretty i
-printExpr (FloatLit f              ) = pretty f
+printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
 
 printInterpolatedString :: String -> [(Syn, String)] -> Document
@@ -307,7 +305,6 @@ singleton (Var      _) = True
 singleton (Hole     _) = True
 singleton (Cons     _) = True
 singleton (IntLit   _) = True
-singleton (FloatLit _) = True
 singleton (TupleLit _) = True
 singleton (ListLit  _) = True
 singleton _            = False

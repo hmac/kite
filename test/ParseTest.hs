@@ -263,8 +263,8 @@ test = parallel $ do
       parse pExpr "" "1 + 1"
         `shouldParse` App (App (Var "+") (IntLit 1)) (IntLit 1)
     it "parses a tuple" $ do
-      parse pExpr "" "(\"\", 0.0)"
-        `shouldParse` TupleLit [StringLit "" [], FloatLit 0.0]
+      parse pExpr "" "(\"\", 0)"
+        `shouldParse` TupleLit [StringLit "" [], IntLit 0]
   describe "parsing types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")

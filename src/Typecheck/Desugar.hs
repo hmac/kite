@@ -22,7 +22,6 @@ data Core = Var Can.Name
           | Tuple [Core]
           | List [Core]
           | IntLit Int
-          | FloatLit Double
           | StringLit String
           deriving (Eq, Show)
 
@@ -59,8 +58,7 @@ desugarExpr (S.TupleLit es) = Tuple (map desugarExpr es)
 desugarExpr (S.ListLit  es) = List (map desugarExpr es)
 desugarExpr (S.StringLit prefix interps) =
   desugarString prefix (mapFst desugarExpr interps)
-desugarExpr (S.IntLit   i) = IntLit i
-desugarExpr (S.FloatLit f) = FloatLit f
+desugarExpr (S.IntLit i) = IntLit i
 
 -- Convert lambda abstractions to inline let bindings
 -- \x -> e

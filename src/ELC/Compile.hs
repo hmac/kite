@@ -248,8 +248,7 @@ buildTuplePat elems = case length elems of
   n -> error $ "cannot handle tuples of length " <> show n
 
 translateExpr :: Env -> Can.Exp -> NameGen Exp
-translateExpr _   (S.IntLit   i       ) = pure (Const (Int i) [])
-translateExpr _   (S.FloatLit i       ) = pure (Const (Float i) [])
+translateExpr _   (S.IntLit i         ) = pure (Const (Int i) [])
 translateExpr env (S.StringLit s parts) = translateStringLit env s parts
 translateExpr env (S.ListLit elems    ) = do
   elems' <- mapM (translateExpr env) elems

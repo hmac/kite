@@ -29,7 +29,6 @@ printConstant :: Constant -> Doc a
 printConstant = \case
   Int i -> pretty i
   String s -> "\"" <> pretty s <> "\""
-  Float f -> pretty f
   Prim _ -> "<builtin>"
 
 printName :: Name -> Doc a

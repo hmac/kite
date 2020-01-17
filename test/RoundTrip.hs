@@ -178,7 +178,6 @@ genExpr = Gen.recursive
   , Cons <$> genUpperName
   , Hole <$> genHoleName
   , IntLit <$> genInt
-  , FloatLit <$> Gen.realFloat (Range.linearFrac (-5) 5)
   ]
   [ Gen.subtermM
     genExpr

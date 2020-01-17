@@ -31,11 +31,10 @@ data Clause = Clause Con [Name] Exp deriving (Eq, Show)
 
 data Constant = Int Int
               | String String
-              | Float Double
-             | Prim Primitive
+              | Prim Primitive
          deriving (Show, Eq)
 
--- TODO: add PrimShowInt, PrimShowFloat etc.
+-- TODO: add PrimShowInt etc.
 data Primitive = PrimStringAppend
                | PrimAdd
                | PrimSub

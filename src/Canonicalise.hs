@@ -62,7 +62,6 @@ canonicaliseType env = \case
   TyHole n -> TyHole n
   TyArr -> TyArr
   TyInt -> TyInt
-  TyFloat -> TyFloat
   TyString -> TyString
 
 canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
@@ -127,7 +126,6 @@ canonicaliseExp env = go
           StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
           Hole n -> Hole n
           IntLit i -> IntLit i
-          FloatLit f -> FloatLit f
           where
             canonicaliseLet :: ([(Syn.Name, Syn.Syn)], Syn.Syn) -> Can.Exp
             canonicaliseLet  (binds, e) =

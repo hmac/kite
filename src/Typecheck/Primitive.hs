@@ -108,8 +108,8 @@ primAppendString = TopLevel modPrim "appendString"
   :>: Forall [] ([] :=> (tString `fn` tString `fn` tString))
 
 -- This needs to change a bit.
--- We should have primitive show functions for each primitive type (Int, Float
--- etc.) and a standard Lam typeclass for Show.
+-- We should have primitive show functions for each primitive type (Int etc.)
+-- and a standard Lam typeclass for Show.
 -- The Show instances for the primitive types will then reference their
 -- corresponding primitive show functions.
 primShow :: Assump
@@ -118,9 +118,6 @@ primShow = TopLevel modPrim "show"
 primShowInt :: Assump
 primShowInt =
   TopLevel modPrim "showInt" :>: Forall [] ([] :=> (tInt `fn` tString))
-primShowFloat :: Assump
-primShowFloat =
-  TopLevel modPrim "showFloat" :>: Forall [] ([] :=> (tFloat `fn` tString))
 
 primNumPlus :: Assump
 primNumPlus = TopLevel modPrim "+" :>: Forall
@@ -142,10 +139,7 @@ primOrdLt = TopLevel modPrim "<"
 
 typeConstructors :: [(Id, Type)]
 typeConstructors =
-  [ (TopLevel modPrim "Int"   , tInt)
-  , (TopLevel modPrim "String", tString)
-  , (TopLevel modPrim "Float" , tFloat)
-  ]
+  [(TopLevel modPrim "Int", tInt), (TopLevel modPrim "String", tString)]
 
 constructors :: [(Id, Scheme)]
 constructors =
@@ -158,7 +152,6 @@ constructors =
         , false
         , primError
         , primShowInt
-        , primShowFloat
         , primConcatString
         , primAppendString
         , primNumPlus
@@ -194,7 +187,6 @@ addShowInstances :: EnvTransformer
 addShowInstances =
   addInst [] (IsIn showClass tString)
     >=> addInst [] (IsIn showClass tInt)
-    >=> addInst [] (IsIn showClass tFloat)
     >=> addInst [] (IsIn showClass tChar)
     >=> addInst [] (IsIn showClass tInteger)
     >=> addInst [] (IsIn showClass tBool)

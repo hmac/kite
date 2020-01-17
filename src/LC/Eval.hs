@@ -69,7 +69,6 @@ primShow (Bottom s) = Bottom s
 primShow e          = Const (String (go e)) []
  where
   go (Const (Int    i) _   ) = show i
-  go (Const (Float  f) _   ) = show f
   go (Const (String s) _   ) = s
   go (Const (Prim   _) _   ) = "<builtin>"
   go (Abs   _          _   ) = "<function>"

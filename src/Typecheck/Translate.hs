@@ -241,7 +241,6 @@ constraintToPreds env (Just (S.CTuple a b)) =
 tyToType :: Env -> Can.Type -> Type
 tyToType _env (S.TyVar n)  = TVar (Tyvar n Star)
 tyToType _env S.TyInt      = tInt
-tyToType _env S.TyFloat    = tFloat
 tyToType _env S.TyString   = tString
 tyToType env  (S.TyList t) = list (tyToType env t)
 tyToType env  (a S.:@: b ) = TAp (tyToType env a) (tyToType env b)
@@ -301,7 +300,6 @@ toExpr _env (D.Hole _      ) = error "cannot translate holes yet"
 toExpr env  (D.App a     b ) = Ap (toExpr env a) (toExpr env b)
 toExpr env  (D.Let binds e ) = Let (bindsToBindGroup env binds) (toExpr env e)
 toExpr _env (D.IntLit    i ) = Lit (LitInt (toInteger i))
-toExpr _env (D.FloatLit  f ) = Lit (LitFloat f)
 toExpr _env (D.StringLit s ) = Lit (LitStr s)
 toExpr env  (D.List      es) = foldr
   (\x acc -> Ap (Ap (Const Prim.listCons) (toExpr env x)) acc)
