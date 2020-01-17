@@ -2,6 +2,7 @@
 
 module Constraint.Generate where
 
+import           Util
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
 
@@ -24,6 +25,8 @@ data Exp = Var RawName
          | Hole RawName
          | TupleLit [Exp]
          | ListLit [Exp]
+         | IntLit Int
+         | StringLit String [(Exp, String)]
          deriving (Eq, Show)
 
 -- Exp with type annotation
@@ -37,6 +40,8 @@ data ExpT = VarT RawName Type
           | HoleT RawName Type
           | TupleLitT [ExpT] Type
           | ListLitT [ExpT] Type
+          | IntLitT Int Type
+          | StringLitT String [(ExpT, String)] Type
          deriving (Eq, Show)
 
 instance Sub ExpT where
@@ -50,6 +55,8 @@ instance Sub ExpT where
   sub s (HoleT     n  t   ) = HoleT n (sub s t)
   sub s (TupleLitT es t   ) = TupleLitT (map (sub s) es) (sub s t)
   sub s (ListLitT  es t   ) = ListLitT (map (sub s) es) (sub s t)
+  sub s (IntLitT   i  t   ) = IntLitT i (sub s t)
+  sub s (StringLitT p cs t) = StringLitT p (mapFst (sub s) cs) (sub s t)
 
 -- [RawName] are the variables bound by the case branch
 data Alt = Alt Pat Exp
@@ -175,6 +182,18 @@ generate env (ListLit elems) = do
   (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
   let sameTypeConstraint = mconcat $ map (beta :~:) elemTypes
   pure (ListLitT elems' t, t, mconcat constraints <> Simple sameTypeConstraint)
+generate env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
+generate env (StringLit p cs) = do
+  -- TODO: each expression's type should be in the Show typeclass
+  (cs', constraints) <- unzip <$> forM
+    cs
+    (\(e, s) -> do
+      (e', _, c) <- generate env e
+      pure ((e', s), c)
+    )
+  pure (StringLitT p cs' TString, TString, mconcat constraints)
+
+
 
 findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
 findConTypeInAlts _ [] = Nothing

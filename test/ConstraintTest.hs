@@ -263,6 +263,12 @@ test = do
       -- [True, False]
       let expr = ListLit [Con true, Con false]
       infersType env expr (list bool)
+    it "an integer literal" $ do
+      let expr = IntLit 6
+      infersType env expr TInt
+    it "a string literal" $ do
+      let expr = StringLit "Hello" [(Con true, " and "), (Con false, "")]
+      infersType env expr TString
   describe "typing top level function binds" $ do
     it "types a simple unannotated function bind" $ do
       -- f = \x -> case x of

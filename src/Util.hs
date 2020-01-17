@@ -7,9 +7,11 @@ module Util
   , Data.List.sort
   , Data.List.partition
   , Data.List.Extra.nubOn
+  , Control.Monad.forM
   )
 where
 
+import qualified Control.Monad
 import qualified Data.List.Extra
 import qualified Data.List
 import qualified Data.Maybe
