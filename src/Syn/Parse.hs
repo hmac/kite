@@ -338,6 +338,8 @@ pHole = do
   Hole <$> pHoleName
 
 -- "hello"
+-- "hello \"friend\""
+-- "hello backslash: \\"
 -- "hello #{name}"
 -- "hello #{name + "!"}"
 pStringLit :: Parser Syn
@@ -348,7 +350,16 @@ pStringLit = do
   pure $ StringLit prefix interps
  where
   pRawString :: Parser String
-  pRawString = takeWhileP Nothing (\c -> c /= '"' && c /= '#')
+  pRawString = do
+    beforeEscape <- takeWhileP Nothing (\c -> c /= '"' && c /= '#' && c /= '\\')
+    afterEscape  <- optional $ do
+      esc  <- pEscape
+      rest <- pRawString
+      pure (esc ++ rest)
+    pure $ beforeEscape ++ fromMaybe "" afterEscape
+  pEscape :: Parser String
+  pEscape =
+    string "\\" >> (string "\"" <|> string "\\" <|> (string "n" >> pure "\n"))
   pInterp :: Parser Syn
   pInterp = do
     void (string "#{")

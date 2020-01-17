@@ -52,7 +52,7 @@ roundtripModule :: H.Property
 roundtripModule = roundtrip genModule printModule pModule
 
 roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
-roundtrip gen printer parser = H.withTests 20 $ H.property $ do
+roundtrip gen printer parser = H.withTests 30 $ H.property $ do
   e <- H.forAll gen
   let printed  = show (printer e)
       reparsed = parse parser "" printed
@@ -148,7 +148,7 @@ genFun =
     <*> Gen.list (Range.linear 1 5) genDef
 
 genConstraint :: H.Gen (Maybe Constraint)
-genConstraint = Gen.recursive
+genConstraint = Gen.small $ Gen.recursive
   Gen.choice
   [ Just
       <$> (   CInst
@@ -191,11 +191,13 @@ genExpr = Gen.recursive
                   genExpr
                   genExpr
                   (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
-  , StringLit <$> genComment <*> Gen.list (Range.linear 0 2) genStringInterpPair
+  , StringLit
+  <$> genString (Range.linear 0 10)
+  <*> Gen.list (Range.linear 0 2) genStringInterpPair
   ]
 
 genStringInterpPair :: H.Gen (Syn, String)
-genStringInterpPair = (,) <$> genExpr <*> genComment
+genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)
 
 genBinOp :: H.Gen Syn
 genBinOp = Gen.element $ Var <$> binOps
@@ -238,7 +240,20 @@ genHoleName :: H.Gen Name
 genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
 
 genComment :: H.Gen String
-genComment = Gen.string (Range.linear 0 80) Gen.ascii
+genComment = Gen.string (Range.linear 1 80) Gen.ascii
+
+-- Generates a string with valid escape sequences - i.e. a backslash must be
+-- followed by another backslash or a double quote.
+genString :: Range.Range Int -> H.Gen String
+genString range = Gen.recursive
+  Gen.choice
+  [genEscape, genStringWithoutEscapes]
+  [Gen.subterm2 (genString range) (genString range) (<>)]
+ where
+  genStringWithoutEscapes :: H.Gen String
+  genStringWithoutEscapes = Gen.string range (Gen.filter (/= '\\') Gen.ascii)
+  genEscape :: H.Gen String
+  genEscape = Gen.choice [pure "\\\\", pure "\\\""]
 
 genLowerString :: H.Gen String
 genLowerString = do

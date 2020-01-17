@@ -31,7 +31,6 @@ hole = annotate HoleStyle
 
 type Document = Doc Style
 
--- TODO: we need to parse and then print comments, too
 printModule :: Module Syn -> Document
 printModule mod = vsep $ catMaybes
   [ printMetadata (moduleMetadata mod)
@@ -192,9 +191,11 @@ printInterpolatedString prefix interps = dquotes str
   printInterp e = "#{" <> printExpr e <> "}"
 
 escape :: String -> String
-escape ('"' : s) = '\\' : '"' : escape s
-escape (x   : s) = x : escape s
-escape []        = []
+escape ('"'  : s) = '\\' : '"' : escape s
+escape ('\\' : s) = '\\' : '\\' : escape s
+escape ('\n' : s) = '\\' : 'n' : escape s
+escape (x    : s) = x : escape s
+escape []         = []
 
 -- Can we simplify this by introducting printExpr' which behaves like printExpr
 -- but always parenthesises applications?

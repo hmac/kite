@@ -265,6 +265,11 @@ test = parallel $ do
     it "parses a tuple" $ do
       parse pExpr "" "(\"\", 0)"
         `shouldParse` TupleLit [StringLit "" [], IntLit 0]
+    it "parses a string literal" $ do
+      parse pExpr "" "\"hello \\\"friend\\\"\""
+        `shouldParse` StringLit "hello \"friend\"" []
+      parse pExpr "" "\"this is a backslash: \\\\ (#{0})\""
+        `shouldParse` StringLit "this is a backslash: \\ (" [(IntLit 0, ")")]
   describe "parsing types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")
