@@ -10,6 +10,7 @@ module Constraint
   , simple
   , implic
   , fn
+  , list
   , Sub(..)
   , flattenConstraint
   , partitionConstraint
@@ -81,7 +82,18 @@ instance Monoid CConstraint where
 
 data Type = TVar Var
           | TCon RawName [Type]
+          | TTuple [Type]
+          | THole RawName
+          | TInt
+          | TFloat
+          | TString
           deriving (Eq, Show, Ord)
+
+fn :: Type -> Type -> Type
+a `fn` b = TCon "->" [a, b]
+
+list :: Type -> Type
+list t = TCon "List" [t]
 
 data Var = R RawName
          | U RawName
@@ -97,6 +109,11 @@ class Sub a where
 instance Sub Type where
   sub s (TVar v   ) = fromMaybe (TVar v) (lookup v s)
   sub s (TCon n ts) = TCon n (map (sub s) ts)
+  sub s (TTuple ts) = TTuple (map (sub s) ts)
+  sub _ (THole  n ) = THole n
+  sub _ TInt        = TInt
+  sub _ TFloat      = TFloat
+  sub _ TString     = TString
 
 instance Sub Constraint where
   sub _ CNil      = CNil
@@ -120,6 +137,11 @@ instance Vars Type where
   fuv (TVar (U v)) = Set.singleton (U v)
   fuv (TVar _    ) = mempty
   fuv (TCon _ ts ) = Set.unions (map fuv ts)
+  fuv (TTuple ts ) = Set.unions (map fuv ts)
+  fuv (THole  _  ) = mempty
+  fuv TInt         = mempty
+  fuv TFloat       = mempty
+  fuv TString      = mempty
 
 instance Vars Constraint where
   fuv CNil      = mempty
@@ -133,9 +155,6 @@ instance Vars CConstraint where
 
 instance Vars b => Vars (Map a b) where
   fuv env = Set.unions (map fuv (Map.elems env))
-
-fn :: Type -> Type -> Type
-a `fn` b = TCon "->" [a, b]
 
 simple :: CConstraint -> Constraint
 simple E{}        = mempty

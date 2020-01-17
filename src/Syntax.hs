@@ -149,7 +149,7 @@ data Ty_ a = Ty_ a :@: Ty_ a
         | TyInt
         | TyFloat
         | TyString
-        deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord)
 
 infixr 4 `fn`
 fn :: Ty -> Ty -> Ty

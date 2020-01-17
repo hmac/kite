@@ -72,11 +72,11 @@ test = do
       ]
 
   describe "Constraint generation and solving combined" $ do
-    it "solves simple function applications" $ do
+    it "simple function applications" $ do
       -- (\x -> x) True
       let expr = App (Abs "x" (Var "x")) (Con true)
       infersType env expr bool
-    it "solves multi-arg function applications" $ do
+    it "multi-arg function applications" $ do
       -- (\x y -> x) True (Suc Zero)
       let constfun = Abs "x" (Abs "y" (Var "x"))
       let expr     = App (App constfun (Con true)) (App (Con suc) (Con zero))
@@ -85,7 +85,7 @@ test = do
             (AppT (AbsT "x" bool (AbsT "y" nat (VarT "x" bool))) (ConT true))
             (AppT (ConT (C "Suc")) (ConT (C "Zero")))
       inferAndZonk env expr annotatedExpr
-    it "solves compound lets" $ do
+    it "compound lets" $ do
       -- let x = True
       --     id y = y
       --  in id x
@@ -104,7 +104,7 @@ test = do
             bool
       infersType env expr (TCon "Bool" [])
       inferAndZonk env expr annotatedExpr
-    it "solves simple case expressions" $ do
+    it "simple case expressions" $ do
       -- case True of
       --   True -> False
       --   False -> True
@@ -119,7 +119,7 @@ test = do
             bool
       infersType env expr (TCon "Bool" [])
       inferAndZonk env expr annotatedExpr
-    it "solves combined case and let expressions" $ do
+    it "combined case and let expressions" $ do
       -- case True of
       --   True -> let id = \y -> y
       --            in id True
@@ -144,7 +144,7 @@ test = do
             bool
       infersType env expr (TCon "Bool" [])
       inferAndZonk env expr annotatedExpr
-    it "solves expressions with annotated lets" $ do
+    it "expressions with annotated lets" $ do
       -- let id : a -> a
       --     id = \x -> x
       --  in id True
@@ -159,7 +159,7 @@ test = do
             bool
       infersType env expr (TCon "Bool" [])
       inferAndZonk env expr annotatedExpr
-    it "solves case expressions with variable patterns" $ do
+    it "case expressions with variable patterns" $ do
       -- case True of
       --   x -> Zero
       let expr = Case (Con true) [Alt (VarPat "x") (Con (C "Zero"))]
@@ -167,7 +167,7 @@ test = do
             CaseT (ConT true) [AltT (VarPat "x") (ConT (C "Zero"))] nat
       infersType env expr (TCon "Nat" [])
       inferAndZonk env expr annotatedExpr
-    it "solves case expressions that use bound variables" $ do
+    it "case expressions that use bound variables" $ do
       -- case True of
       --   False -> False
       --   x -> x
@@ -182,14 +182,14 @@ test = do
             bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
-    it "solves case expressions with wildcard patterns" $ do
+    it "case expressions with wildcard patterns" $ do
       -- case True of
       --   _ -> False
       let expr          = Case (Con true) [Alt WildPat (Con false)]
       let annotatedExpr = CaseT (ConT true) [AltT WildPat (ConT false)] bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
-    it "solves case expressions with a mixture of patterns" $ do
+    it "case expressions with a mixture of patterns" $ do
       -- case True of
       --   True -> False
       --   x -> True
@@ -233,6 +233,36 @@ test = do
               ]
             )
       infersType env expr (wrap bool)
+    it "an expression hole" $ do
+      -- let x = ?foo
+      --  in True
+      let expr = Let "x" (Hole "foo") (Con true)
+      infersType env expr bool
+      -- let not b = case b of
+      --               True -> False
+      --               False -> True
+      --  in not ?foo
+      let expr' = Let
+            "not"
+            (Abs
+              "b"
+              (Case
+                (Var "b")
+                [ Alt (ConPat true [])  (Con false)
+                , Alt (ConPat false []) (Con true)
+                ]
+              )
+            )
+            (App (Var "not") (Hole "foo"))
+      infersType env expr' bool
+    it "a tuple" $ do
+      -- (True, False, Zero)
+      let expr = TupleLit [Con true, Con false, Con zero]
+      infersType env expr (TTuple [bool, bool, nat])
+    it "a list" $ do
+      -- [True, False]
+      let expr = ListLit [Con true, Con false]
+      infersType env expr (list bool)
   describe "typing top level function binds" $ do
     it "types a simple unannotated function bind" $ do
       -- f = \x -> case x of
@@ -300,12 +330,12 @@ test = do
 
 infersType :: Env -> Exp -> Type -> Expectation
 infersType env expr expectedType =
-  let ((_, TVar t, constraints), touchables) = run (generate env expr)
+  let ((_, t, constraints), touchables) = run (generate env expr)
   in  case solveC touchables constraints of
         Left  err     -> expectationFailure $ printError err
         Right (cs, s) -> do
-          lookup t s `shouldBe` Just expectedType
           cs `shouldBe` mempty
+          sub s t `shouldBe` expectedType
 
 inferAndZonk :: Env -> Exp -> ExpT -> Expectation
 inferAndZonk env expr expectedExpr =

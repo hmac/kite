@@ -21,6 +21,9 @@ data Exp = Var RawName
          | Case Exp [Alt]
          | Let RawName Exp Exp
          | LetA RawName Scheme Exp Exp
+         | Hole RawName
+         | TupleLit [Exp]
+         | ListLit [Exp]
          deriving (Eq, Show)
 
 -- Exp with type annotation
@@ -31,6 +34,9 @@ data ExpT = VarT RawName Type
           | CaseT ExpT [AltT] Type
           | LetT RawName ExpT ExpT Type
           | LetAT RawName Scheme ExpT ExpT Type
+          | HoleT RawName Type
+          | TupleLitT [ExpT] Type
+          | ListLitT [ExpT] Type
          deriving (Eq, Show)
 
 instance Sub ExpT where
@@ -41,6 +47,9 @@ instance Sub ExpT where
   sub s (CaseT e alts t   ) = CaseT (sub s e) (map (sub s) alts) (sub s t)
   sub s (LetT x e b t     ) = LetT x (sub s e) (sub s b) (sub s t)
   sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
+  sub s (HoleT     n  t   ) = HoleT n (sub s t)
+  sub s (TupleLitT es t   ) = TupleLitT (map (sub s) es) (sub s t)
+  sub s (ListLitT  es t   ) = ListLitT (map (sub s) es) (sub s t)
 
 -- [RawName] are the variables bound by the case branch
 data Alt = Alt Pat Exp
@@ -153,6 +162,19 @@ generate env (Case e alts) = do
       (alts, cis) <- unzip <$> mapM (genAlt env beta t []) alts
       let c' = c <> mconcat cis
       pure (CaseT e alts beta, beta, c')
+generate _ (Hole name) = do
+  a <- TVar <$> fresh
+  pure (HoleT name a, a, mempty)
+generate env (TupleLit elems) = do
+  (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
+  let t = TTuple elemTypes
+  pure (TupleLitT elems' t, t, mconcat constraints)
+generate env (ListLit elems) = do
+  beta <- TVar <$> fresh
+  let t = list beta
+  (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
+  let sameTypeConstraint = mconcat $ map (beta :~:) elemTypes
+  pure (ListLitT elems' t, t, mconcat constraints <> Simple sameTypeConstraint)
 
 findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
 findConTypeInAlts _ [] = Nothing
