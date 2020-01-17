@@ -240,7 +240,7 @@ genHoleName :: H.Gen Name
 genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
 
 genComment :: H.Gen String
-genComment = Gen.string (Range.linear 1 80) Gen.ascii
+genComment = Gen.string (Range.linear 1 80) (Gen.filter (/= '\n') Gen.ascii)
 
 -- Generates a string with valid escape sequences - i.e. a backslash must be
 -- followed by another backslash or a double quote.

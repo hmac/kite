@@ -36,9 +36,9 @@ printModule mod = vsep $ catMaybes
   [ printMetadata (moduleMetadata mod)
   , Just $ printModName (moduleName mod)
   , indent 2 <$> printModExports (moduleExports mod)
-  , Just mempty
-  , printImports (moduleImports mod)
-  , Just mempty
+  -- , Just mempty
+  , fmap (\is -> mempty <> is <> mempty) printImports (moduleImports mod)
+  -- , Just mempty
   , printModDecls (moduleDecls mod)
   ]
 

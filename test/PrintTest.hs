@@ -68,4 +68,4 @@ test = parallel $ do
                        , moduleMetadata = [("package", "text")]
                        , moduleDecls = []
                        }
-      show (printModule mod) `shouldBe` "---\npackage: text\n---\nmodule Data.Text\n  (Text)\n\nimport qualified Data.Text.Internal.Text as Internal (Text)\nimport           Data.Maybe  ()\n"
+      show (printModule mod) `shouldBe` "---\npackage: text\n---\nmodule Data.Text\n  (Text)\nimport qualified Data.Text.Internal.Text as Internal (Text)\nimport           Data.Maybe  ()"

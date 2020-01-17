@@ -439,7 +439,7 @@ pCase = do
 
 pComment :: Parser String
 pComment = do
-  void (symbol "--")
+  void (symbol "-- " <|> symbol "--")
   s <- takeWhileP (Just "comment") (/= '\n')
   spaceConsumerN
   pure s
