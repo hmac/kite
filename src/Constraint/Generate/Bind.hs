@@ -35,15 +35,14 @@ generateBind env (Bind name expr Nothing) = do
   case solveC touchables c of
     Left  err        -> pure $ Left err
     Right (q, subst) -> do
-      let q' = mconcat q
       let t' = sub subst t
       let e' = sub subst e
-      -- bind all the free unification vars in q' and t' as rigid vars in the
+      -- bind all the free unification vars in q and t' as rigid vars in the
       -- type of the function
       -- this is the reverse of the usual substitutions: uvar -> tvar
       tysubst <- mapM (\v -> (v, ) . TVar <$> freshR)
-                      (Set.toList (fuv t' <> fuv q'))
-      let ty = Forall (map fst tysubst) (sub tysubst q') (sub tysubst t')
+                      (Set.toList (fuv t' <> fuv q))
+      let ty = Forall (map fst tysubst) (sub tysubst q) (sub tysubst t')
       pure $ Right (BindT name (sub tysubst e') ty, Map.insert name ty env)
 
 -- Annotated bind
@@ -51,10 +50,9 @@ generateBind env (Bind name expr (Just (Forall tvars q t))) = do
   (e, v, c) <- generate env expr
   let touchables = fuv v <> fuv c
   case solveC touchables (c <> Simple (v :~: t)) of
-    Left  err         -> pure $ Left err
-    Right ([], subst) -> do
+    Left  err           -> pure $ Left err
+    Right (CNil, subst) -> do
       let e' = sub subst e
       let ty = Forall tvars q t
       pure $ Right (BindT name e' ty, Map.insert name ty env)
-    Right (residuals, _) ->
-      pure $ Left (UnsolvedConstraints (mconcat residuals))
+    Right (residual, _) -> pure $ Left (UnsolvedConstraints residual)

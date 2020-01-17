@@ -305,7 +305,7 @@ infersType env expr expectedType =
         Left  err     -> expectationFailure $ printError err
         Right (cs, s) -> do
           lookup t s `shouldBe` Just expectedType
-          cs `shouldBe` []
+          cs `shouldBe` mempty
 
 inferAndZonk :: Env -> Exp -> ExpT -> Expectation
 inferAndZonk env expr expectedExpr =
@@ -314,7 +314,7 @@ inferAndZonk env expr expectedExpr =
         Left err ->
           expectationFailure $ "Expected Right, found Left " <> show err
         Right (cs, s) -> do
-          cs `shouldBe` []
+          cs `shouldBe` mempty
           sub s expr' `shouldBe` expectedExpr
 
 isLawfulMonoid :: (Eq a, Show a, Monoid a) => H.Gen a -> H.Property

@@ -28,7 +28,7 @@ import           Prelude                 hiding ( interact )
 -- Missing:
 -- - given constraints
 -- - top level axiom scheme
-type Quad = (Set Var, [Constraint])
+type Quad = (Set Var, Constraint)
 type Solve = State Quad
 
 data Error = OccursCheckFailure Type Type
@@ -40,47 +40,48 @@ data Error = OccursCheckFailure Type Type
 -- TODO: solveC should take as arguments:
 -- - given constraints
 -- - top level axiom scheme
-solveC :: Set Var -> CConstraint -> Either Error ([Constraint], Subst)
-solveC touchables c = case solve (touchables, flattenConstraint (simple c)) of
+solveC :: Set Var -> CConstraint -> Either Error (Constraint, Subst)
+solveC touchables c = case solve (touchables, simple c) of
   Left err -> Left err
   Right (residual, subst) ->
     -- All implication constraints should be completely solvable
     let implications = implic (sub subst c)
     in  do
           results <- mapM (\(vars, q, cc) -> do (cs, s) <- solveC vars cc
-                                                pure (mconcat cs, s))
+                                                pure (cs, s))
                           implications
           case mconcat (map fst results) of
-            CNil  -> Right (residual, subst <> concatMap snd results)
+            CNil  -> Right (residual, subst <> mconcat (map snd results))
             impls -> Left (UnsolvedConstraints impls)
 
 -- This is the actual top level solver function
 -- Given a set of simple constraints it returns a substitution and any residual
 -- constraints
-solve :: Quad -> Either Error ([Constraint], Subst)
+solve :: Quad -> Either Error (Constraint, Subst)
 solve input = case rewriteAll input of
   Left err -> Left err
   -- See §7.5 for details
   Right (vars, cs) ->
-    let (epsilon, residual) = partition
+    let (epsilon, residual) = partitionConstraint
           (\case
             (TVar b :~: t) -> b `elem` vars && b `notElem` fuv t
             (t :~: TVar b) -> b `elem` vars && b `notElem` fuv t
             _         -> False
           )
           cs
-        subst  = nubOn fst $ map (\case
-                                  (TVar b :~: t) -> (b, t)
-                                  (t :~: TVar b) -> (b, t)) epsilon
-    in  Right (map (sub subst) residual, subst)
+        subst  = nubOn fst $ mapConstraint (\case
+                                              (TVar b :~: t) -> (b, t)
+                                              (t :~: TVar b) -> (b, t))
+                                           epsilon
+    in  Right (sub subst residual, subst)
 
 -- Solve a set of constraints
 -- Repeatedly applies rewrite rules until there's nothing left to do
 rewriteAll :: Quad -> Either Error Quad
-rewriteAll quad@(_, cs) = case applyRewrite quad of
+rewriteAll quad@(_, c) = case applyRewrite quad of
   Left err -> Left err
-  Right quad'@(_, cs') ->
-    if sort cs == sort cs' then Right quad' else rewriteAll quad'
+  Right quad'@(_, c') ->
+    if sortConstraint c == sortConstraint c' then Right quad' else rewriteAll quad'
 
 -- Like solve but shows the solving history
 solveDebug :: Quad -> Either Error [Quad]
@@ -88,7 +89,7 @@ solveDebug q = go [q] q
  where
   go hist quad@(_, d) = case applyRewrite quad of
     Left  err           -> Left err
-    Right quad'@(_, d') -> if sort d == sort d'
+    Right quad'@(_, d') -> if sortConstraint d == sortConstraint d'
       then Right (quad' : hist)
       else go (quad' : hist) quad'
 
@@ -105,10 +106,10 @@ applyRewrite quad = do
 
 interactM :: Solve (Either Error ())
 interactM = do
-  (vars, constraints) <- get
-  case firstJust (map interactEach (focusPairs constraints)) of
-    Just constraints' -> do
-      put (vars, constraints')
+  (vars, constraint) <- get
+  case firstJust (map interactEach (focusPairs (flattenConstraint constraint))) of
+    Just constraint' -> do
+      put (vars, mconcat constraint')
       pure $ Right ()
     Nothing -> pure $ Right ()
  where
@@ -122,11 +123,11 @@ interactM = do
 
 canonM :: Solve (Either Error ())
 canonM = do
-  (vars, constraints) <- get
-  case canonAll (concatMap flattenConstraint constraints) of
+  (vars, constraint) <- get
+  case canonAll (flattenConstraint constraint) of
     Left  err          -> pure $ Left err
-    Right constraints' -> do
-      put (vars, constraints')
+    Right constraint' -> do
+      put (vars, mconcat constraint')
       pure $ Right ()
 
 canonAll :: [Constraint] -> Either Error [Constraint]
