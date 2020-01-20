@@ -1,4 +1,4 @@
-module ParseTest
+module Test.Syn.Parse
   ( test
   )
 where

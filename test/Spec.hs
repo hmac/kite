@@ -1,14 +1,14 @@
 import           Test.Hspec
-import qualified ParseTest
-import qualified PrintTest
-import qualified RoundTrip
-import qualified ConstraintTest
+import qualified Test.Syn.Parse
+import qualified Test.Syn.Print
+import qualified Test.Syn.RoundTrip
 import qualified Test.Constraint.Pattern
+import qualified Test.Constraint
 
 main :: IO ()
 main = hspec $ do
-  ParseTest.test
-  PrintTest.test
-  RoundTrip.test
-  ConstraintTest.test
+  Test.Syn.Parse.test
+  Test.Syn.Print.test
+  Test.Syn.RoundTrip.test
+  Test.Constraint.test
   Test.Constraint.Pattern.test

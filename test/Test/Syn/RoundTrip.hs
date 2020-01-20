@@ -1,4 +1,4 @@
-module RoundTrip
+module Test.Syn.RoundTrip
   ( test
   )
 where

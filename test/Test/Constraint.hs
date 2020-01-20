@@ -1,4 +1,4 @@
-module ConstraintTest
+module Test.Constraint
   ( test
   )
 where

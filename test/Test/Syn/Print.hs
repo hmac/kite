@@ -1,4 +1,4 @@
-module PrintTest
+module Test.Syn.Print
   ( test
   )
 where
