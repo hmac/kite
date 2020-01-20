@@ -48,6 +48,7 @@ instance Monoid Constraint where
 
 flattenConstraint :: Constraint -> [Constraint]
 flattenConstraint (c :^: d) = flattenConstraint c <> flattenConstraint d
+flattenConstraint CNil      = []
 flattenConstraint c         = [c]
 
 -- Like partition but works on Constraints
@@ -99,6 +100,7 @@ data Var = R RawName
          deriving (Eq, Show, Ord)
 
 -- The type of substitutions
+-- TODO: use Map
 type Subst = [(Var, Type)]
 
 -- A typeclass for applying substitutions

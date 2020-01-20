@@ -3,6 +3,7 @@ import qualified ParseTest
 import qualified PrintTest
 import qualified RoundTrip
 import qualified ConstraintTest
+import qualified Test.Constraint.Pattern
 
 main :: IO ()
 main = hspec $ do
@@ -10,3 +11,4 @@ main = hspec $ do
   PrintTest.test
   RoundTrip.test
   ConstraintTest.test
+  Test.Constraint.Pattern.test

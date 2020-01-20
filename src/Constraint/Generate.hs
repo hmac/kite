@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 -- The constraint generator
 
 module Constraint.Generate where
@@ -87,10 +89,18 @@ newtype Con = C RawName
 data Scheme = Forall [Var] Constraint Type
   deriving (Eq, Show)
 
+instance Sub Scheme where
+  sub s (Forall vars c t) =
+    let s' = filter (\(v, _) -> v `notElem` vars) s
+    in  Forall vars (sub s' c) (sub s' t)
+
 instance Vars Scheme where
   fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
 
 type Env = Map RawName Scheme
+
+instance Sub Env where
+  sub s = fmap (sub s)
 
 generate :: Env -> Exp -> GenerateM (ExpT, Type, CConstraint)
 -- VARCON
