@@ -83,7 +83,6 @@ instance Monoid CConstraint where
 
 data Type = TVar Var
           | TCon RawName [Type]
-          | TTuple [Type]
           | THole RawName
           | TInt
           | TString
@@ -110,8 +109,7 @@ class Sub a where
 instance Sub Type where
   sub s (TVar v   ) = fromMaybe (TVar v) (lookup v s)
   sub s (TCon n ts) = TCon n (map (sub s) ts)
-  sub s (TTuple ts) = TTuple (map (sub s) ts)
-  sub _ (THole  n ) = THole n
+  sub _ (THole n  ) = THole n
   sub _ TInt        = TInt
   sub _ TString     = TString
 
@@ -137,8 +135,7 @@ instance Vars Type where
   fuv (TVar (U v)) = Set.singleton (U v)
   fuv (TVar _    ) = mempty
   fuv (TCon _ ts ) = Set.unions (map fuv ts)
-  fuv (TTuple ts ) = Set.unions (map fuv ts)
-  fuv (THole  _  ) = mempty
+  fuv (THole _   ) = mempty
   fuv TInt         = mempty
   fuv TString      = mempty
 

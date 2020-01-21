@@ -203,6 +203,7 @@ canonCompare (TVar (R _)) (TVar (U _)) = GT
 canonCompare (TVar a    ) (TVar b    ) = compare a b
 canonCompare _            (TCon _ _  ) = LT
 canonCompare (TCon _ _)   _            = GT
+canonCompare _ _ = EQ
 
 -- Calculate the free type variables of a type
 ftv :: Type -> [Var]

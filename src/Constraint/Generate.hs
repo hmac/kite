@@ -184,7 +184,7 @@ generate _ (Hole name) = do
   pure (HoleT name a, a, mempty)
 generate env (TupleLit elems) = do
   (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
-  let t = TTuple elemTypes
+  let t = mkTupleType elemTypes
   pure (TupleLitT elems' t, t, mconcat constraints)
 generate env (ListLit elems) = do
   beta <- TVar <$> fresh
@@ -202,8 +202,6 @@ generate env (StringLit p cs) = do
       pure ((e', s), c)
     )
   pure (StringLitT p cs' TString, TString, mconcat constraints)
-
-
 
 findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
 findConTypeInAlts _ [] = Nothing
@@ -251,3 +249,16 @@ genAlt env beta _ _ (Alt WildPat e) = do
 unfoldFnType :: Type -> [Type]
 unfoldFnType (TCon "->" [x, y]) = x : unfoldFnType y
 unfoldFnType t                  = [t]
+
+mkTupleType :: [Type] -> Type
+mkTupleType args = TCon name args
+ where
+  name = case length args of
+    0 -> "Unit"
+    2 -> "Tuple2"
+    3 -> "Tuple3"
+    4 -> "Tuple4"
+    5 -> "Tuple5"
+    6 -> "Tuple6"
+    7 -> "Tuple7"
+    n -> error $ "Unsupported tuple length: " <> show n

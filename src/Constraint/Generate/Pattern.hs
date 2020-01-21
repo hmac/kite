@@ -17,6 +17,7 @@ data Pattern = ConPat Con [Pattern]   -- T a b c
          | IntPat Int                 -- 5
          | TuplePat [Pattern]         -- (x, y)
          | ListPat [Pattern]          -- [x, y]
+         | StringPat String
         deriving (Eq, Show)
 
 -- Given an environment, the type of the scrutinee, and a pattern, generate a
@@ -33,6 +34,9 @@ data Pattern = ConPat Con [Pattern]   -- T a b c
 -- Note: this code isn't taken from the Modular Type Inference paper - it's
 -- written by me instead. Treat it with caution and assume it has bugs.
 generatePattern :: Env -> Type -> Pattern -> GenerateM (Type, CConstraint, Env)
+generatePattern env st (IntPat _) = do
+  let c = Simple (st :~: TInt)
+  pure (TInt, c, env)
 generatePattern env st (VarPat x) = do
   u <- TVar <$> fresh
   let env' = Map.insert x (Forall [] mempty u) env
@@ -43,17 +47,59 @@ generatePattern env st WildPat = do
   u <- TVar <$> fresh
   let c = Simple (u :~: st)
   pure (u, c, env)
+generatePattern env st (StringPat _) = do
+  let c = Simple (st :~: TString)
+  pure (TString, c, env)
+generatePattern env st (TuplePat pats) = do
+    -- generate each subpattern
+  (patTypes, patConstraints, patEnvs) <- do
+    freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
+    (tys, constraints, envs) <-
+      unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
+    pure (tys, mconcat constraints, mconcat envs)
+  -- generate a fresh variable for the type of the whole tuple pattern
+  beta <- TVar <$> fresh
+  let betaConstraints =
+        Simple $ mconcat [beta :~: st, beta :~: mkTupleType patTypes]
+  pure (beta, patConstraints <> betaConstraints, patEnvs)
+generatePattern env st (ListPat []) = do
+  -- generate a fresh variable for the (unknown) type of the list elements
+  elemType <- TVar <$> fresh
+  -- generate a fresh variable for the type of the whole list pattern
+  beta     <- TVar <$> fresh
+  let betaConstraints =
+        Simple $ mconcat [beta :~: st, beta :~: TCon "List" [elemType]]
+  pure (beta, betaConstraints, env)
+generatePattern env st (ListPat pats) = do
+    -- generate each subpattern
+  (patTypes, patConstraints, patEnvs) <- do
+    freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
+    (tys, constraints, envs) <-
+      unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
+    pure (tys, mconcat constraints, mconcat envs)
+  -- the type of each pattern must be the same
+  -- N.B. it's guaranteed that patTypes has at least one element
+  let (listConstraints, _) = foldl (\(c, t') t -> (c <> t' :~: t, t))
+                                   (mempty, head patTypes)
+                                   (tail patTypes)
+  -- generate a fresh variable for the type of the whole list pattern
+  beta <- TVar <$> fresh
+  let betaConstraints =
+        Simple $ mconcat [beta :~: st, beta :~: TCon "List" [head patTypes]]
+  pure
+    (beta, patConstraints <> betaConstraints <> Simple listConstraints, patEnvs)
 generatePattern env st (ConPat (C k) pats) = case Map.lookup k env of
   Nothing -> do
     u <- TVar <$> fresh
     pure (u, mempty, env)
-  Just (Forall as cs kt) -> do
+  Just (Forall as cs kt) -> do -- TODO: should we be using cs?
     -- generate new uvars for each a in as
     ys <- mapM (const fresh) as
     -- construct tyvar substitution
     let subst = zip as (map TVar ys)
-    let (TCon tyname _, tyconargs) =
-          let ts = unfoldFnType kt in (last ts, map (sub subst) (init ts))
+    let (TCon tyname tyargs, tyconargs) =
+          let ts = unfoldFnType kt
+          in  (sub subst (last ts), map (sub subst) (init ts))
     let scrutConstraint = Simple (TCon tyname (map TVar ys) :~: st)
     -- generate each subpattern and apply the substitution to each
     (patTypes, patConstraints, patEnvs) <- do
@@ -69,7 +115,7 @@ generatePattern env st (ConPat (C k) pats) = case Map.lookup k env of
           tyconargs
     -- generate a fresh variable for the type of the whole pattern
     beta <- TVar <$> fresh
-    let betaConstraint = Simple (beta :~: st)
+    let betaConstraint = Simple $ beta :~: st <> beta :~: TCon tyname tyargs
     pure
       ( beta
       , patEqualityConstraints

@@ -19,6 +19,7 @@ import           Constraint.Solve               ( solveC
                                                 )
 import           Constraint.Generate.M          ( run )
 import           Constraint.Generate            ( generate
+                                                , mkTupleType
                                                 , Exp(..)
                                                 , ExpT(..)
                                                 , Alt(..)
@@ -258,7 +259,7 @@ test = do
     it "a tuple" $ do
       -- (True, False, Zero)
       let expr = TupleLit [Con true, Con false, Con zero]
-      infersType env expr (TTuple [bool, bool, nat])
+      infersType env expr (mkTupleType [bool, bool, nat])
     it "a list" $ do
       -- [True, False]
       let expr = ListLit [Con true, Con false]
