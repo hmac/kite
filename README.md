@@ -39,6 +39,38 @@ A few things immediately jump out:
 - There are small differences, such as a single colon for type annotations
 - Lam has Ruby-esque string interpolation
 
+Lam has many other features which are described below.
+
+## Status
+
+Lam is in early development and most of the its features don't exist yet. Here's
+the current state of progress:
+
+- [x] Basic Haskell-style syntax
+- [x] Pattern matching in functions and case expressions
+- [x] String interpolation
+- [x] Source code formatting
+- [ ] Typeclasses
+- [ ] Typed holes
+- [ ] Totality checker
+- [ ] Safety checker
+- [ ] Errors & warnings
+- [ ] Automatic typeclass deriving
+- [ ] Generics
+- [ ] Ergonomic records
+- [ ] Markdown support in comments
+- [ ] Multiline strings
+- [ ] Overloaded string literals
+- [ ] Doctests
+- [ ] Automatic test discovery
+- [ ] Interpreter
+- [ ] REPL
+- [ ] Go backend
+- [ ] JS backend
+- [ ] Standard library
+- [ ] Packaging
+- [ ] IO and runtime support
+
 ## Type system
 
 Lam's type system is Hindley-Milner plus typeclasses. It should be entirely
@@ -236,6 +268,12 @@ whale = Animal { age = 60, mammal = True }
 -- age is resolved to Animal.age because whale : Animal
 whaleAge = age whale
 ```
+
+### Solution 3. First class extensible records
+Instead of following Haskell's lead, we can make a cleaner break and replace
+Haskell style records with anonymous extensible records similar to Elm. This
+is likely to closely follow the approach described in "Lightweight Extensible
+Records for Haskell" by Mark P. Jones and Simon Peyton-Jones.
 
 ### Other language features
 
