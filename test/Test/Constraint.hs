@@ -14,21 +14,16 @@ import qualified Data.Map.Strict               as Map
 import           Util
 import           Data.Name                      ( RawName(..) )
 import           Constraint
+import           Constraint.Expr
 import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
 import           Constraint.Generate.M          ( run )
 import           Constraint.Generate            ( generate
                                                 , mkTupleType
-                                                , Exp(..)
-                                                , ExpT(..)
-                                                , Alt(..)
-                                                , AltT(..)
-                                                , Pat(..)
-                                                , Con(..)
-                                                , Scheme(..)
                                                 , Env
                                                 )
+import qualified Constraint.Generate.Pattern   as Pattern
 import           Constraint.Generate.Bind
 import           Constraint.Print
 
@@ -44,6 +39,7 @@ test = do
   let
     bool = TCon "Bool" []
     nat  = TCon "Nat" []
+    list a = TCon "List" [a]
     pair a b = TCon "Pair" [a, b]
     wrap a = TCon "Wrap" [a]
 
@@ -51,6 +47,7 @@ test = do
     false  = C "False"
     zero   = C "Zero"
     suc    = C "Suc"
+    cons   = C "::"
     mkpair = C "MkPair"
     mkwrap = C "MkWrap"
 
@@ -59,6 +56,15 @@ test = do
       , ("False", Forall [] CNil (TCon "Bool" []))
       , ("Zero" , Forall [] CNil (TCon "Nat" []))
       , ("Suc"  , Forall [] CNil (TCon "Nat" [] `fn` TCon "Nat" []))
+      , ( "::"
+        , Forall
+          [R "a"]
+          CNil
+          (TVar (R "a") `fn` TCon "List" [TVar (R "a")] `fn` TCon
+            "List"
+            [TVar (R "a")]
+          )
+        )
       , ( "MkWrap"
         , Forall [R "a"] CNil (TVar (R "a") `fn` TCon "Wrap" [TVar (R "a")])
         )
@@ -73,6 +79,9 @@ test = do
       ]
 
   describe "Constraint generation and solving combined" $ do
+    it "True" $ do
+      let expr = Con true
+      infersType env expr bool
     it "simple function applications" $ do
       -- (\x -> x) True
       let expr = App (Abs "x" (Var "x")) (Con true)
@@ -111,11 +120,13 @@ test = do
       --   False -> True
       let expr = Case
             (Con true)
-            [Alt (ConPat true []) (Con false), Alt (ConPat false []) (Con true)]
+            [ Alt (SConPat true [])  (Con false)
+            , Alt (SConPat false []) (Con true)
+            ]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (ConPat true [])  (ConT false)
-            , AltT (ConPat false []) (ConT true)
+            [ AltT (SConPat true [])  (ConT false)
+            , AltT (SConPat false []) (ConT true)
             ]
             bool
       infersType env expr (TCon "Bool" [])
@@ -128,19 +139,19 @@ test = do
       let idfun = Abs "y" (Var "y")
       let expr = Case
             (Con true)
-            [ Alt (ConPat true []) (Let "id" idfun (App (Var "id") (Con true)))
-            , Alt (ConPat false []) (Con true)
+            [ Alt (SConPat true []) (Let "id" idfun (App (Var "id") (Con true)))
+            , Alt (SConPat false []) (Con true)
             ]
       let annotatedExpr = CaseT
             (ConT true)
             [ AltT
-              (ConPat true [])
+              (SConPat true [])
               (LetT "id"
                     (AbsT "y" bool (VarT "y" bool))
                     (AppT (VarT "id" (bool `fn` bool)) (ConT true))
                     bool
               )
-            , AltT (ConPat false []) (ConT true)
+            , AltT (SConPat false []) (ConT true)
             ]
             bool
       infersType env expr (TCon "Bool" [])
@@ -163,9 +174,9 @@ test = do
     it "case expressions with variable patterns" $ do
       -- case True of
       --   x -> Zero
-      let expr = Case (Con true) [Alt (VarPat "x") (Con (C "Zero"))]
+      let expr = Case (Con true) [Alt (SVarPat "x") (Con (C "Zero"))]
       let annotatedExpr =
-            CaseT (ConT true) [AltT (VarPat "x") (ConT (C "Zero"))] nat
+            CaseT (ConT true) [AltT (SVarPat "x") (ConT (C "Zero"))] nat
       infersType env expr (TCon "Nat" [])
       inferAndZonk env expr annotatedExpr
     it "case expressions that use bound variables" $ do
@@ -174,11 +185,11 @@ test = do
       --   x -> x
       let expr = Case
             (Con true)
-            [Alt (ConPat false []) (Con false), Alt (VarPat "x") (Var "x")]
+            [Alt (SConPat false []) (Con false), Alt (SVarPat "x") (Var "x")]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (ConPat false []) (ConT false)
-            , AltT (VarPat "x")      (VarT "x" bool)
+            [ AltT (SConPat false []) (ConT false)
+            , AltT (SVarPat "x")      (VarT "x" bool)
             ]
             bool
       infersType env expr bool
@@ -186,8 +197,8 @@ test = do
     it "case expressions with wildcard patterns" $ do
       -- case True of
       --   _ -> False
-      let expr          = Case (Con true) [Alt WildPat (Con false)]
-      let annotatedExpr = CaseT (ConT true) [AltT WildPat (ConT false)] bool
+      let expr          = Case (Con true) [Alt SWildPat (Con false)]
+      let annotatedExpr = CaseT (ConT true) [AltT SWildPat (ConT false)] bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
     it "case expressions with a mixture of patterns" $ do
@@ -196,10 +207,12 @@ test = do
       --   x -> True
       let expr = Case
             (Con true)
-            [Alt (ConPat true []) (Con false), Alt (VarPat "x") (Con true)]
+            [Alt (SConPat true []) (Con false), Alt (SVarPat "x") (Con true)]
       let annotatedExpr = CaseT
             (ConT true)
-            [AltT (ConPat true []) (ConT false), AltT (VarPat "x") (ConT true)]
+            [ AltT (SConPat true []) (ConT false)
+            , AltT (SVarPat "x")     (ConT true)
+            ]
             bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
@@ -215,7 +228,7 @@ test = do
       --       MkWrap y -> y
       let x = App (Var "MkWrap") (Con true)
       let expr =
-            Let "x" x (Case (Var "x") [Alt (ConPat mkwrap ["y"]) (Var "y")])
+            Let "x" x (Case (Var "x") [Alt (SConPat mkwrap ["y"]) (Var "y")])
       infersType env expr bool
     it "deconstructing a parameterised type with a case expression (Pair)" $ do
       -- data Pair a b = MkPair a b
@@ -229,8 +242,8 @@ test = do
             x
             (Case
               (Var "x")
-              [ Alt (ConPat mkpair ["y", "z"]) (App (Var "MkWrap") (Var "y"))
-              , Alt (VarPat "w")               (App (Var "MkWrap") (Con false))
+              [ Alt (SConPat mkpair ["y", "z"]) (App (Var "MkWrap") (Var "y"))
+              , Alt (SVarPat "w")               (App (Var "MkWrap") (Con false))
               ]
             )
       infersType env expr (wrap bool)
@@ -249,8 +262,8 @@ test = do
               "b"
               (Case
                 (Var "b")
-                [ Alt (ConPat true [])  (Con false)
-                , Alt (ConPat false []) (Con true)
+                [ Alt (SConPat true [])  (Con false)
+                , Alt (SConPat false []) (Con true)
                 ]
               )
             )
@@ -270,70 +283,6 @@ test = do
     it "a string literal" $ do
       let expr = StringLit "Hello" [(Con true, " and "), (Con false, "")]
       infersType env expr TString
-  describe "typing top level function binds" $ do
-    it "types a simple unannotated function bind" $ do
-      -- f = \x -> case x of
-      --             True -> True
-      --             False -> False
-      let expr = Abs
-            "x"
-            (Case
-              (Var "x")
-              [ Alt (ConPat true [])  (Con true)
-              , Alt (ConPat false []) (Con false)
-              ]
-            )
-      let bind = Bind "f" expr Nothing
-      let bindT = BindT
-            (Name "f")
-            (AbsT
-              (Name "x")
-              bool
-              (CaseT
-                (VarT (Name "x") bool)
-                [ AltT (ConPat true [])  (ConT true)
-                , AltT (ConPat false []) (ConT false)
-                ]
-                bool
-              )
-            )
-            (Forall [] CNil (TCon (Name "->") [bool, bool]))
-      let (res, _) = run (generateBind env bind)
-      case res of
-        Left  err        -> expectationFailure (show err)
-        Right (bind', _) -> bind' `shouldBe` bindT
-    it "types a simple annotated function bind" $ do
-      -- f : Bool -> Bool
-      -- f = \x -> case x of
-      --             True -> True
-      --             False -> False
-      let expr = Abs
-            "x"
-            (Case
-              (Var "x")
-              [ Alt (ConPat true [])  (Con true)
-              , Alt (ConPat false []) (Con false)
-              ]
-            )
-      let bind = Bind "f" expr (Just (Forall [] CNil (bool `fn` bool)))
-      let bindT = BindT
-            (Name "f")
-            (AbsT
-              (Name "x")
-              bool
-              (CaseT
-                (VarT (Name "x") bool)
-                [ AltT (ConPat true [])  (ConT true)
-                , AltT (ConPat false []) (ConT false)
-                ]
-                bool
-              )
-            )
-            (Forall [] CNil (TCon (Name "->") [bool, bool]))
-      let (res, _) = run (generateBind env bind)
-      case res of
-        Left  err        -> expectationFailure (show err)
-        Right (bind', _) -> bind' `shouldBe` bindT
 
 infersType :: Env -> Exp -> Type -> Expectation
 infersType env expr expectedType =
@@ -343,6 +292,14 @@ infersType env expr expectedType =
         Right (cs, s) -> do
           cs `shouldBe` mempty
           sub s t `shouldBe` expectedType
+
+-- TODO: use this
+infersError :: Env -> Exp -> Expectation
+infersError env expr =
+  let ((_, _, constraints), touchables) = run (generate env expr)
+  in  case solveC touchables constraints of
+        Left  _ -> pure ()
+        Right _ -> expectationFailure "Expected type error but was successful"
 
 inferAndZonk :: Env -> Exp -> ExpT -> Expectation
 inferAndZonk env expr expectedExpr =

@@ -5,20 +5,12 @@ module Constraint.Generate.Pattern where
 -- definitions and other fun stuff.
 
 import           Constraint
+import           Constraint.Expr
 import           Constraint.Generate     hiding ( Pat(..) )
 import           Constraint.Generate.M
 import           Data.Name
 
 import qualified Data.Map.Strict               as Map
-
-data Pattern = ConPat Con [Pattern]   -- T a b c
-         | VarPat RawName             -- a
-         | WildPat                    -- _
-         | IntPat Int                 -- 5
-         | TuplePat [Pattern]         -- (x, y)
-         | ListPat [Pattern]          -- [x, y]
-         | StringPat String
-        deriving (Eq, Show)
 
 -- Given an environment, the type of the scrutinee, and a pattern, generate a
 -- type for the pattern, a set of constraints, and a new environment in which to
@@ -33,7 +25,7 @@ data Pattern = ConPat Con [Pattern]   -- T a b c
 --
 -- Note: this code isn't taken from the Modular Type Inference paper - it's
 -- written by me instead. Treat it with caution and assume it has bugs.
-generatePattern :: Env -> Type -> Pattern -> GenerateM (Type, CConstraint, Env)
+generatePattern :: Env -> Type -> Pat -> GenerateM (Type, CConstraint, Env)
 generatePattern env st (IntPat _) = do
   let c = Simple (st :~: TInt)
   pure (TInt, c, env)
@@ -61,7 +53,7 @@ generatePattern env st (TuplePat pats) = do
   beta <- TVar <$> fresh
   let betaConstraints =
         Simple $ mconcat [beta :~: st, beta :~: mkTupleType patTypes]
-  pure (beta, patConstraints <> betaConstraints, patEnvs)
+  pure (beta, patConstraints <> betaConstraints, patEnvs <> env)
 generatePattern env st (ListPat []) = do
   -- generate a fresh variable for the (unknown) type of the list elements
   elemType <- TVar <$> fresh
@@ -87,7 +79,10 @@ generatePattern env st (ListPat pats) = do
   let betaConstraints =
         Simple $ mconcat [beta :~: st, beta :~: TCon "List" [head patTypes]]
   pure
-    (beta, patConstraints <> betaConstraints <> Simple listConstraints, patEnvs)
+    ( beta
+    , patConstraints <> betaConstraints <> Simple listConstraints
+    , patEnvs <> env
+    )
 generatePattern env st (ConPat (C k) pats) = case Map.lookup k env of
   Nothing -> do
     u <- TVar <$> fresh
@@ -122,5 +117,5 @@ generatePattern env st (ConPat (C k) pats) = case Map.lookup k env of
       <> scrutConstraint
       <> patConstraints
       <> betaConstraint
-      , patEnvs
+      , patEnvs <> env
       )

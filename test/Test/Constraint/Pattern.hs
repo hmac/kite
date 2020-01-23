@@ -12,10 +12,9 @@ import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
 import           Constraint.Generate.M
+import           Constraint.Expr
 import           Constraint.Generate            ( generate
                                                 , mkTupleType
-                                                , Con(..)
-                                                , Scheme(..)
                                                 , Env
                                                 )
 import           Constraint.Generate.Pattern
@@ -55,7 +54,7 @@ test = do
       ]
 
     -- Check that a type is inferred for a pattern with no annotation
-    infersType :: Pattern -> Type -> Expectation
+    infersType :: Pat -> Type -> Expectation
     infersType pat ty =
       let gen = fresh >>= \u -> generatePattern env (TVar u) pat
       in  case runGenerate gen of
@@ -64,12 +63,22 @@ test = do
               constraint `shouldBe` mempty
               t `shouldBe` ty
     -- Check that a type is inferred for a pattern with an annotation
-    infersTypeA :: Pattern -> Type -> Expectation
+    infersTypeA :: Pat -> Type -> Expectation
     infersTypeA pat ty = case runGenerate (generatePattern env ty pat) of
       Left  err                -> expectationFailure (printError err)
       Right (t, constraint, _) -> do
         constraint `shouldBe` mempty
         t `shouldBe` ty
+    infersError :: Pat -> Maybe Type -> Expectation
+    infersError pat Nothing =
+      let gen = fresh >>= \u -> generatePattern env (TVar u) pat
+      in  case runGenerate gen of
+            Left _ -> pure ()
+            Right _ ->
+              expectationFailure "Expected type error but was successful"
+    infersError pat (Just t) = case runGenerate (generatePattern env t pat) of
+      Left  _ -> pure ()
+      Right _ -> expectationFailure "Expected type error but was successful"
     generatesEnv
       :: GenerateM (Type, CConstraint, Env)
       -> (Env -> Expectation)
@@ -80,12 +89,12 @@ test = do
 
   describe "Constraint solving for patterns" $ do
     it "x : Bool" $ do
-      case runGenerate (generatePattern mempty bool (VarPat "x")) of
-        Left  err                    -> expectationFailure (printError err)
-        Right (ty, constraint, env') -> do
-          ty `shouldBe` bool
-          constraint `shouldBe` mempty
-          Map.lookup "x" env' `shouldBe` Just (Forall [] mempty bool)
+      let pat = VarPat "x"
+      pat `infersTypeA` bool
+      generatePattern mempty bool pat
+        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just
+                         (Forall [] mempty bool)
+                       )
     it "x" $ do
       let gen = do
             u <- TVar <$> fresh
@@ -177,17 +186,11 @@ test = do
       pat `infersType` expectedType
     describe "expected type failures" $ do
       it "[] : Bool" $ do
-        let pat          = ListPat []
-        let expectedType = bool
-        case runGenerate (generatePattern env expectedType pat) of
-          Left  _                  -> pure ()
-          Right (_, constraint, _) -> constraint `shouldNotBe` mempty
+        let pat = ListPat []
+        pat `infersError` Just bool
       it "[True, Zero]" $ do
-        let pat          = ListPat [ConPat true [], ConPat zero []]
-        let expectedType = TCon "List" [bool]
-        case runGenerate (generatePattern env expectedType pat) of
-          Left  _                  -> pure ()
-          Right (_, constraint, _) -> constraint `shouldNotBe` mempty
+        let pat = ListPat [ConPat true [], ConPat zero []]
+        pat `infersError` Nothing
 
 runGenerate
   :: GenerateM (Type, CConstraint, Env) -> Either Error (Type, Constraint, Env)

@@ -152,6 +152,9 @@ instance Vars CConstraint where
 instance Vars b => Vars (Map a b) where
   fuv env = Set.unions (map fuv (Map.elems env))
 
+instance Vars a => Vars [a] where
+  fuv = mconcat . map fuv
+
 simple :: CConstraint -> Constraint
 simple E{}        = mempty
 simple (Simple c) = c

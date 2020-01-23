@@ -14,88 +14,7 @@ import qualified Data.Map.Strict               as Map
 import           Data.Name
 import           Constraint.Generate.M
 import           Constraint
-
--- An example syntax type that we'll eventually replace with something linked to
--- Syn.
-data Exp = Var RawName
-         | Con Con
-         | App Exp Exp
-         | Abs RawName Exp
-         | Case Exp [Alt]
-         | Let RawName Exp Exp
-         | LetA RawName Scheme Exp Exp
-         | Hole RawName
-         | TupleLit [Exp]
-         | ListLit [Exp]
-         | IntLit Int
-         | StringLit String [(Exp, String)]
-         deriving (Eq, Show)
-
--- Exp with type annotation
-data ExpT = VarT RawName Type
-          | ConT Con
-          | AppT ExpT ExpT
-          | AbsT RawName Type ExpT
-          | CaseT ExpT [AltT] Type
-          | LetT RawName ExpT ExpT Type
-          | LetAT RawName Scheme ExpT ExpT Type
-          | HoleT RawName Type
-          | TupleLitT [ExpT] Type
-          | ListLitT [ExpT] Type
-          | IntLitT Int Type
-          | StringLitT String [(ExpT, String)] Type
-         deriving (Eq, Show)
-
-instance Sub ExpT where
-  sub s (VarT n v         ) = VarT n (sub s v)
-  sub _ (ConT c           ) = ConT c
-  sub s (AppT a b         ) = AppT (sub s a) (sub s b)
-  sub s (AbsT  x t    e   ) = AbsT x (sub s t) (sub s e)
-  sub s (CaseT e alts t   ) = CaseT (sub s e) (map (sub s) alts) (sub s t)
-  sub s (LetT x e b t     ) = LetT x (sub s e) (sub s b) (sub s t)
-  sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
-  sub s (HoleT     n  t   ) = HoleT n (sub s t)
-  sub s (TupleLitT es t   ) = TupleLitT (map (sub s) es) (sub s t)
-  sub s (ListLitT  es t   ) = ListLitT (map (sub s) es) (sub s t)
-  sub s (IntLitT   i  t   ) = IntLitT i (sub s t)
-  sub s (StringLitT p cs t) = StringLitT p (mapFst (sub s) cs) (sub s t)
-
--- [RawName] are the variables bound by the case branch
-data Alt = Alt Pat Exp
-  deriving (Eq, Show)
-
-data AltT = AltT Pat ExpT
-  deriving (Eq, Show)
-
-instance Sub AltT where
-  sub s (AltT p e) = AltT p (sub s e)
-
--- Notice that patterns aren't inductive: this simplifies constraint generation.
--- The current plan is to desugar surface pattern syntax to nested case
--- expressions prior to type checking.
-data Pat = ConPat Con [RawName] -- T a b c
-         | VarPat RawName             -- a
-         | WildPat
-        deriving (Eq, Show)
-
--- Note: raw data constructors have the following type (a Scheme):
--- Forall [a, b, ..] [] t
--- where t has the form m -> n -> ... -> T a b ..
-
-newtype Con = C RawName
-  deriving (Eq, Show)
-
--- The Var will always be rigid type variables (I think)
-data Scheme = Forall [Var] Constraint Type
-  deriving (Eq, Show)
-
-instance Sub Scheme where
-  sub s (Forall vars c t) =
-    let s' = filter (\(v, _) -> v `notElem` vars) s
-    in  Forall vars (sub s' c) (sub s' t)
-
-instance Vars Scheme where
-  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
+import           Constraint.Expr
 
 type Env = Map RawName Scheme
 
@@ -205,7 +124,7 @@ generate env (StringLit p cs) = do
 
 findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
 findConTypeInAlts _ [] = Nothing
-findConTypeInAlts env (Alt (ConPat (C name) _) _ : alts) =
+findConTypeInAlts env (Alt (SConPat (C name) _) _ : alts) =
   case Map.lookup name env of
     Just t  -> Just t
     Nothing -> findConTypeInAlts env alts
@@ -214,11 +133,11 @@ findConTypeInAlts env (_ : alts) = findConTypeInAlts env alts
 -- beta: a uvar representing the type of the whole case expression
 -- ys:   uvars for each argument to the type constructor of the scrutinee
 genAlt :: Env -> Type -> Type -> [Var] -> Alt -> GenerateM (AltT, CConstraint)
-genAlt env beta _ ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
+genAlt env beta _ ys (Alt (SConPat (C k) xi) e) = case Map.lookup k env of
   Nothing -> do
     a         <- TVar <$> fresh
     (e, _, _) <- generate env e
-    pure (AltT (ConPat (C k) xi) e, Simple (a :~: TCon k []))
+    pure (AltT (SConPat (C k) xi) e, Simple (a :~: TCon k []))
   Just (Forall as _ kt) -> do
     -- construct substitution
     let subst = zip as (map TVar ys)
@@ -228,22 +147,22 @@ genAlt env beta _ ys (Alt (ConPat (C k) xi) e) = case Map.lookup k env of
     -- check ei under assumption that all xi have type [ys/as]t
     (e, ti, ci) <- generate env' e
     let c' = ci <> Simple (ti :~: beta)
-    pure (AltT (ConPat (C k) xi) e, c')
+    pure (AltT (SConPat (C k) xi) e, c')
 
-genAlt env beta scrutTy _ (Alt (VarPat x) e) = do
+genAlt env beta scrutTy _ (Alt (SVarPat x) e) = do
   u <- TVar <$> fresh
   -- check e under the assumption that x has type u
   let env' = Map.insert x (Forall [] CNil u) env
   (e, t, c) <- generate env' e
   -- require u ~ the type of the scrutinee
   let c' = Simple (u :~: scrutTy)
-  pure (AltT (VarPat x) e, c <> c' <> Simple (t :~: beta))
+  pure (AltT (SVarPat x) e, c <> c' <> Simple (t :~: beta))
 
-genAlt env beta _ _ (Alt WildPat e) = do
+genAlt env beta _ _ (Alt SWildPat e) = do
   -- The wildcard can't be used inside e, so we don't need to extend the
   -- environment.
   (e, t, c) <- generate env e
-  pure (AltT WildPat e, c <> Simple (t :~: beta))
+  pure (AltT SWildPat e, c <> Simple (t :~: beta))
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]
@@ -262,3 +181,9 @@ mkTupleType args = TCon name args
     6 -> "Tuple6"
     7 -> "Tuple7"
     n -> error $ "Unsupported tuple length: " <> show n
+
+-- Generates a constraint requiring all the given types to be equal to each
+-- other
+generateAllEqualConstraint :: Type -> [Type] -> Constraint
+generateAllEqualConstraint t ts =
+  fst $ foldl (\(c, t') u -> (c <> t' :~: u, t)) (mempty, t) ts

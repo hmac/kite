@@ -6,11 +6,16 @@ module Util
   , Data.List.nub
   , Data.List.sort
   , Data.List.partition
+  , Data.List.unzip3
+  , Data.List.unzip4
+  , Data.List.unzip5
   , Data.List.Extra.nubOn
   , Control.Monad.forM
+  , Debug.Trace.trace
   )
 where
 
+import qualified Debug.Trace
 import qualified Control.Monad
 import qualified Data.List.Extra
 import qualified Data.List
