@@ -209,6 +209,9 @@ canonCompare _ _ = EQ
 ftv :: Type -> [Var]
 ftv (TVar v   ) = [v]
 ftv (TCon _ ts) = concatMap ftv ts
+ftv (THole _) = []
+ftv TInt = []
+ftv TString = []
 
 -- A list of each element in the given list paired with the remaining elements
 focus :: [a] -> [(a, [a])]

@@ -14,7 +14,7 @@ data Exp = Var RawName
          | App Exp Exp
          | Abs RawName Exp
          | Case Exp [Alt]
-         | Let RawName Exp Exp
+         | Let [(RawName, Exp)] Exp
          | LetA RawName Scheme Exp Exp
          | Hole RawName
          | TupleLit [Exp]
@@ -29,7 +29,7 @@ data ExpT = VarT RawName Type
           | AppT ExpT ExpT
           | AbsT RawName Type ExpT
           | CaseT ExpT [AltT] Type
-          | LetT RawName ExpT ExpT Type
+          | LetT [(RawName, ExpT)] ExpT Type
           | LetAT RawName Scheme ExpT ExpT Type
           | HoleT RawName Type
           | TupleLitT [ExpT] Type
@@ -39,12 +39,13 @@ data ExpT = VarT RawName Type
          deriving (Eq, Show)
 
 instance Sub ExpT where
-  sub s (VarT n v         ) = VarT n (sub s v)
-  sub _ (ConT c           ) = ConT c
-  sub s (AppT a b         ) = AppT (sub s a) (sub s b)
-  sub s (AbsT  x t    e   ) = AbsT x (sub s t) (sub s e)
-  sub s (CaseT e alts t   ) = CaseT (sub s e) (map (sub s) alts) (sub s t)
-  sub s (LetT x e b t     ) = LetT x (sub s e) (sub s b) (sub s t)
+  sub s (VarT n v      ) = VarT n (sub s v)
+  sub _ (ConT c        ) = ConT c
+  sub s (AppT a b      ) = AppT (sub s a) (sub s b)
+  sub s (AbsT  x t    e) = AbsT x (sub s t) (sub s e)
+  sub s (CaseT e alts t) = CaseT (sub s e) (map (sub s) alts) (sub s t)
+  sub s (LetT binds body t) =
+    LetT (mapSnd (sub s) binds) (sub s body) (sub s t)
   sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
   sub s (HoleT     n  t   ) = HoleT n (sub s t)
   sub s (TupleLitT es t   ) = TupleLitT (map (sub s) es) (sub s t)

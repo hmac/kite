@@ -41,10 +41,24 @@ generate env (Abs x e) = do
   (e, t, c) <- generate (Map.insert x (Forall [] CNil a) env) e
   pure (AbsT x a e, a `fn` t, c)
 -- LET: let with no annotation
-generate env (Let x e1 e2) = do
-  (e1, t1, c1) <- generate env e1
-  (e2, t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
-  pure (LetT x e1 e2 t2, t2, c1 <> c2)
+generate env (Let binds body) = do
+  -- extend the environment simultaneously with all variables
+  binds <- mapM (\(x, e) -> (x, , e) . TVar <$> fresh) binds
+  let env' =
+        foldl (\e (x, t, _) -> Map.insert x (Forall [] CNil t) e) env binds
+  -- infer each bound expression with the extended environment
+  (xs, ts, es, cs) <-
+    unzip4
+      <$> mapM
+            (\(x, t, e) -> do
+              (e', t', c) <- generate env' e
+              let c' = Simple (t :~: t')
+              pure (x, t, e', c <> c')
+            )
+            binds
+  -- infer the body with the extended environment
+  (body, bodyT, bodyC) <- generate env' body
+  pure (LetT (zip xs es) body bodyT, bodyT, bodyC <> mconcat cs)
 -- LETA: let with a monomorphic annotation
 generate env (LetA x (Forall [] CNil t1) e1 e2) = do
   (e1, t , c1) <- generate env e1
