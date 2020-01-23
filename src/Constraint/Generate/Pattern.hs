@@ -1,4 +1,7 @@
-module Constraint.Generate.Pattern where
+module Constraint.Generate.Pattern
+  ( generatePattern
+  )
+where
 
 -- Constraint generation for nested patterns
 -- If we can do this, we can generate constraints for pattern matching function
@@ -6,9 +9,7 @@ module Constraint.Generate.Pattern where
 
 import           Constraint
 import           Constraint.Expr
-import           Constraint.Generate     hiding ( Pat(..) )
 import           Constraint.Generate.M
-import           Data.Name
 
 import qualified Data.Map.Strict               as Map
 

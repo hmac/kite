@@ -13,10 +13,7 @@ import           Constraint.Solve               ( solveC
                                                 )
 import           Constraint.Generate.M
 import           Constraint.Expr
-import           Constraint.Generate            ( generate
-                                                , mkTupleType
-                                                , Env
-                                                )
+import           Constraint.Generate            ( generate )
 import           Constraint.Generate.Pattern
 import           Constraint.Print
 

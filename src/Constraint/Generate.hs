@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 -- The constraint generator
 
 module Constraint.Generate where
@@ -8,18 +6,12 @@ import           Util
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
 
-import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 
-import           Data.Name
 import           Constraint.Generate.M
 import           Constraint
 import           Constraint.Expr
-
-type Env = Map RawName Scheme
-
-instance Sub Env where
-  sub s = fmap (sub s)
+import           Constraint.Generate.Pattern
 
 generate :: Env -> Exp -> GenerateM (ExpT, Type, CConstraint)
 -- VARCON
@@ -65,53 +57,27 @@ generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
   let c1    = E betas q1 (c :^^: Simple (t :~: t1))
   (e2, t2, c2) <- generate (Map.insert x s1 env) e2
   pure (LetAT x s1 e1 e2 t2, t2, c1 <> c2)
-
--- CASE
--- We use the simplified version from Fig 6 because Lam doesn't have GADTs. If
--- it turns out that typeclasses need the more complex version, this will need
--- to be changed.
-
--- Lam doesn't support empty cases. If there are no cases, just return a new
--- unification variable, which will cause a type error
-generate env (Case e []) = do
-  (e, _, _) <- generate env e
-  a         <- TVar <$> fresh
-  pure (CaseT e [] a, a, mempty)
-generate env (Case e alts) = do
-  (e, t, c) <- generate env e
-  beta      <- TVar <$> fresh
-  -- if any of the alts contain a simple constructor pattern, use this to find
-  -- the relevant type constructor
-  case findConTypeInAlts env alts of
-    -- If one of the alts is a constructor pattern, generate uvars for the type
-    -- variables
-    Just (Forall tvars _ tk) -> do
-      let (TCon tyname _) = last (unfoldFnType tk)
-      ys <- mapM (const fresh) tvars
-      let c' = Simple (TCon tyname (map TVar ys) :~: t) <> c
-      (alts, cis) <- unzip <$> mapM (genAlt env beta t ys) alts
-      let c'' = c' <> mconcat cis
-      pure (CaseT e alts beta, beta, c'')
-    -- otherwise, the patterns must all be VarPats, so we just need a single
-    -- uvar for the scrutinee type
-    Nothing -> do
-      (alts, cis) <- unzip <$> mapM (genAlt env beta t []) alts
-      let c' = c <> mconcat cis
-      pure (CaseT e alts beta, beta, c')
-generate _ (Hole name) = do
+-- CASE: case expression
+generate env (Case e alts) = generateCase env e alts
+-- Expression hole
+generate _   (Hole name  ) = do
   a <- TVar <$> fresh
   pure (HoleT name a, a, mempty)
+-- Tuple literal
 generate env (TupleLit elems) = do
   (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
   let t = mkTupleType elemTypes
   pure (TupleLitT elems' t, t, mconcat constraints)
+-- List literal
 generate env (ListLit elems) = do
   beta <- TVar <$> fresh
   let t = list beta
   (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
   let sameTypeConstraint = mconcat $ map (beta :~:) elemTypes
   pure (ListLitT elems' t, t, mconcat constraints <> Simple sameTypeConstraint)
+-- Int literal
 generate env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
+-- String literal
 generate env (StringLit p cs) = do
   -- TODO: each expression's type should be in the Show typeclass
   (cs', constraints) <- unzip <$> forM
@@ -122,65 +88,51 @@ generate env (StringLit p cs) = do
     )
   pure (StringLitT p cs' TString, TString, mconcat constraints)
 
-findConTypeInAlts :: Env -> [Alt] -> Maybe Scheme
-findConTypeInAlts _ [] = Nothing
-findConTypeInAlts env (Alt (SConPat (C name) _) _ : alts) =
-  case Map.lookup name env of
-    Just t  -> Just t
-    Nothing -> findConTypeInAlts env alts
-findConTypeInAlts env (_ : alts) = findConTypeInAlts env alts
+-- Case expressions
+-------------------
+-- We use the simplified version from Fig 6 because Lam doesn't have GADTs. If
+-- it turns out that typeclasses need the more complex version, this will need
+-- to be changed.
+generateCase :: Env -> Exp -> [Alt] -> GenerateM (ExpT, Type, CConstraint)
 
--- beta: a uvar representing the type of the whole case expression
--- ys:   uvars for each argument to the type constructor of the scrutinee
-genAlt :: Env -> Type -> Type -> [Var] -> Alt -> GenerateM (AltT, CConstraint)
-genAlt env beta _ ys (Alt (SConPat (C k) xi) e) = case Map.lookup k env of
-  Nothing -> do
-    a         <- TVar <$> fresh
-    (e, _, _) <- generate env e
-    pure (AltT (SConPat (C k) xi) e, Simple (a :~: TCon k []))
-  Just (Forall as _ kt) -> do
-    -- construct substitution
-    let subst = zip as (map TVar ys)
-    let us    = init (unfoldFnType kt)
-    let us'   = map (Forall [] CNil . sub subst) us
-    let env'  = Map.fromList (zip xi us') <> env
-    -- check ei under assumption that all xi have type [ys/as]t
-    (e, ti, ci) <- generate env' e
-    let c' = ci <> Simple (ti :~: beta)
-    pure (AltT (SConPat (C k) xi) e, c')
+-- Lam doesn't support empty cases. If there are no cases, just return a new
+-- unification variable, which will cause a type error
+generateCase env e [] = do
+  (e, _, _) <- generate env e
+  a         <- TVar <$> fresh
+  pure (CaseT e [] a, a, mempty)
 
-genAlt env beta scrutTy _ (Alt (SVarPat x) e) = do
-  u <- TVar <$> fresh
-  -- check e under the assumption that x has type u
-  let env' = Map.insert x (Forall [] CNil u) env
-  (e, t, c) <- generate env' e
-  -- require u ~ the type of the scrutinee
-  let c' = Simple (u :~: scrutTy)
-  pure (AltT (SVarPat x) e, c <> c' <> Simple (t :~: beta))
+generateCase env scrutinee alts = do
+  -- infer the scrutinee
+  (scrutineeT, scrutTy, scrutC) <- generate env scrutinee
+  -- infer each case alternative
+  (es, patTys, expTys, cs)      <-
+    unzip4 <$> mapM (\(Alt p e) -> generateEquation env (p, e)) alts
+  -- all top level patterns must have the same type, equal to the scrutinee type
+  let allPatsEq = generateAllEqualConstraint scrutTy patTys
+  -- all corresponding branches must have the same type
+  (beta2, allExpsEq) <- do
+    beta <- TVar <$> fresh
+    pure (beta, generateAllEqualConstraint beta expTys)
+  -- TODO: is it ok for all of these to be touchables?
+  let allConstraints = scrutC <> mconcat cs <> Simple (allPatsEq <> allExpsEq)
+  let caseTy         = head expTys
+  let altsT = zipWith (\e' (Alt p _) -> AltT p e') es alts
+  let caseT          = CaseT scrutineeT altsT caseTy
+  pure (caseT, caseTy, allConstraints)
 
-genAlt env beta _ _ (Alt SWildPat e) = do
-  -- The wildcard can't be used inside e, so we don't need to extend the
-  -- environment.
-  (e, t, c) <- generate env e
-  pure (AltT SWildPat e, c <> Simple (t :~: beta))
-
--- Converts a -> b -> c into [a, b, c]
-unfoldFnType :: Type -> [Type]
-unfoldFnType (TCon "->" [x, y]) = x : unfoldFnType y
-unfoldFnType t                  = [t]
-
-mkTupleType :: [Type] -> Type
-mkTupleType args = TCon name args
- where
-  name = case length args of
-    0 -> "Unit"
-    2 -> "Tuple2"
-    3 -> "Tuple3"
-    4 -> "Tuple4"
-    5 -> "Tuple5"
-    6 -> "Tuple6"
-    7 -> "Tuple7"
-    n -> error $ "Unsupported tuple length: " <> show n
+-- Generates constraints for a single branch of a multi-equation case expression
+-- e.g. case l of
+--        []       -> Nothing
+--        (x :: _) -> Just x
+-- generateEquation ([], Nothing)
+-- generateEquation ((x :: _), Just x)
+generateEquation
+  :: Env -> (Pat, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
+generateEquation env (pat, expr) = do
+  (patTy, patC , env') <- fresh >>= \t -> generatePattern env (TVar t) pat
+  (e    , expTy, expC) <- generate env' expr
+  pure (e, patTy, expTy, patC <> expC)
 
 -- Generates a constraint requiring all the given types to be equal to each
 -- other

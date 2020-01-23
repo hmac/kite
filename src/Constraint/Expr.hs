@@ -53,10 +53,10 @@ instance Sub ExpT where
   sub s (StringLitT p cs t) = StringLitT p (mapFst (sub s) cs) (sub s t)
 
 -- [RawName] are the variables bound by the case branch
-data Alt = Alt SimplePat Exp
+data Alt = Alt Pat Exp
   deriving (Eq, Show)
 
-data AltT = AltT SimplePat ExpT
+data AltT = AltT Pat ExpT
   deriving (Eq, Show)
 
 instance Sub AltT where

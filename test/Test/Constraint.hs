@@ -18,11 +18,11 @@ import           Constraint.Expr
 import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
-import           Constraint.Generate.M          ( run )
-import           Constraint.Generate            ( generate
+import           Constraint.Generate.M          ( run
                                                 , mkTupleType
                                                 , Env
                                                 )
+import           Constraint.Generate            ( generate )
 import qualified Constraint.Generate.Pattern   as Pattern
 import           Constraint.Generate.Bind
 import           Constraint.Print
@@ -120,13 +120,11 @@ test = do
       --   False -> True
       let expr = Case
             (Con true)
-            [ Alt (SConPat true [])  (Con false)
-            , Alt (SConPat false []) (Con true)
-            ]
+            [Alt (ConPat true []) (Con false), Alt (ConPat false []) (Con true)]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (SConPat true [])  (ConT false)
-            , AltT (SConPat false []) (ConT true)
+            [ AltT (ConPat true [])  (ConT false)
+            , AltT (ConPat false []) (ConT true)
             ]
             bool
       infersType env expr (TCon "Bool" [])
@@ -139,19 +137,19 @@ test = do
       let idfun = Abs "y" (Var "y")
       let expr = Case
             (Con true)
-            [ Alt (SConPat true []) (Let "id" idfun (App (Var "id") (Con true)))
-            , Alt (SConPat false []) (Con true)
+            [ Alt (ConPat true []) (Let "id" idfun (App (Var "id") (Con true)))
+            , Alt (ConPat false []) (Con true)
             ]
       let annotatedExpr = CaseT
             (ConT true)
             [ AltT
-              (SConPat true [])
+              (ConPat true [])
               (LetT "id"
                     (AbsT "y" bool (VarT "y" bool))
                     (AppT (VarT "id" (bool `fn` bool)) (ConT true))
                     bool
               )
-            , AltT (SConPat false []) (ConT true)
+            , AltT (ConPat false []) (ConT true)
             ]
             bool
       infersType env expr (TCon "Bool" [])
@@ -174,9 +172,9 @@ test = do
     it "case expressions with variable patterns" $ do
       -- case True of
       --   x -> Zero
-      let expr = Case (Con true) [Alt (SVarPat "x") (Con (C "Zero"))]
+      let expr = Case (Con true) [Alt (VarPat "x") (Con (C "Zero"))]
       let annotatedExpr =
-            CaseT (ConT true) [AltT (SVarPat "x") (ConT (C "Zero"))] nat
+            CaseT (ConT true) [AltT (VarPat "x") (ConT (C "Zero"))] nat
       infersType env expr (TCon "Nat" [])
       inferAndZonk env expr annotatedExpr
     it "case expressions that use bound variables" $ do
@@ -185,11 +183,11 @@ test = do
       --   x -> x
       let expr = Case
             (Con true)
-            [Alt (SConPat false []) (Con false), Alt (SVarPat "x") (Var "x")]
+            [Alt (ConPat false []) (Con false), Alt (VarPat "x") (Var "x")]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (SConPat false []) (ConT false)
-            , AltT (SVarPat "x")      (VarT "x" bool)
+            [ AltT (ConPat false []) (ConT false)
+            , AltT (VarPat "x")      (VarT "x" bool)
             ]
             bool
       infersType env expr bool
@@ -197,8 +195,8 @@ test = do
     it "case expressions with wildcard patterns" $ do
       -- case True of
       --   _ -> False
-      let expr          = Case (Con true) [Alt SWildPat (Con false)]
-      let annotatedExpr = CaseT (ConT true) [AltT SWildPat (ConT false)] bool
+      let expr          = Case (Con true) [Alt WildPat (Con false)]
+      let annotatedExpr = CaseT (ConT true) [AltT WildPat (ConT false)] bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
     it "case expressions with a mixture of patterns" $ do
@@ -207,12 +205,10 @@ test = do
       --   x -> True
       let expr = Case
             (Con true)
-            [Alt (SConPat true []) (Con false), Alt (SVarPat "x") (Con true)]
+            [Alt (ConPat true []) (Con false), Alt (VarPat "x") (Con true)]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (SConPat true []) (ConT false)
-            , AltT (SVarPat "x")     (ConT true)
-            ]
+            [AltT (ConPat true []) (ConT false), AltT (VarPat "x") (ConT true)]
             bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
@@ -227,8 +223,11 @@ test = do
       --  in case x of
       --       MkWrap y -> y
       let x = App (Var "MkWrap") (Con true)
-      let expr =
-            Let "x" x (Case (Var "x") [Alt (SConPat mkwrap ["y"]) (Var "y")])
+      let
+        expr = Let
+          "x"
+          x
+          (Case (Var "x") [Alt (ConPat mkwrap [VarPat "y"]) (Var "y")])
       infersType env expr bool
     it "deconstructing a parameterised type with a case expression (Pair)" $ do
       -- data Pair a b = MkPair a b
@@ -242,8 +241,9 @@ test = do
             x
             (Case
               (Var "x")
-              [ Alt (SConPat mkpair ["y", "z"]) (App (Var "MkWrap") (Var "y"))
-              , Alt (SVarPat "w")               (App (Var "MkWrap") (Con false))
+              [ Alt (ConPat mkpair [VarPat "y", VarPat "z"])
+                    (App (Var "MkWrap") (Var "y"))
+              , Alt (VarPat "w") (App (Var "MkWrap") (Con false))
               ]
             )
       infersType env expr (wrap bool)
@@ -262,8 +262,8 @@ test = do
               "b"
               (Case
                 (Var "b")
-                [ Alt (SConPat true [])  (Con false)
-                , Alt (SConPat false []) (Con true)
+                [ Alt (ConPat true [])  (Con false)
+                , Alt (ConPat false []) (Con true)
                 ]
               )
             )

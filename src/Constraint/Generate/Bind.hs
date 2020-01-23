@@ -4,7 +4,6 @@ import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate
 import           Constraint.Generate.M
-import           Constraint.Generate.Pattern
 import           Constraint.Solve
 import           Data.Name
 import           Util
@@ -41,7 +40,7 @@ generateBind env (Bind name annotation equations) = do
   let annotationConstraint = case annotation of
         (Just (Forall tvars q t)) -> q <> beta1 `fn` beta2 :~: t
         Nothing                   -> CNil
-  -- TODO: is it ok for all of these to be touchables?
+  -- TODO: is it ok for all of these to be touchable?
   let touchables = fuv [patTys, expTys] <> fuv [beta1, beta2] <> fuv cs
   case
       solveC
@@ -83,16 +82,3 @@ generateBind env (Bind name annotation equations) = do
                            (zipWith (\e' (p, _) -> (p, e')) exps'' equations)
                            bindTy
             pure $ Right (bind, Map.insert name bindTy env)
-
--- Generates constraints for a single branch of a multi-equation function
--- e.g. head : [a] -> Maybe a
---      head [] = Nothing
---      head (x :: _) = Just x
--- generateEquation ([], Nothing)
--- generateEquation ((x :: _), Just x)
-generateEquation
-  :: Env -> (Pat, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
-generateEquation env (pat, expr) = do
-  (patTy, patC , env') <- fresh >>= \t -> generatePattern env (TVar t) pat
-  (e    , expTy, expC) <- generate env' expr
-  pure (e, patTy, expTy, patC <> expC)

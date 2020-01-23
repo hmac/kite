@@ -14,11 +14,11 @@ import           Constraint.Expr
 import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
-import           Constraint.Generate.M          ( run )
-import           Constraint.Generate            ( generate
+import           Constraint.Generate.M          ( run
                                                 , mkTupleType
                                                 , Env
                                                 )
+import           Constraint.Generate            ( generate )
 import           Constraint.Generate.Pattern
 import           Constraint.Generate.Bind
 import           Constraint.Print
@@ -91,9 +91,7 @@ test = do
       let pat = VarPat "x"
       let expr = Case
             (Var "x")
-            [ Alt (SConPat true [])  (Con true)
-            , Alt (SConPat false []) (Con false)
-            ]
+            [Alt (ConPat true []) (Con true), Alt (ConPat false []) (Con false)]
 
       let bind = Bind "f" Nothing [(pat, expr)]
       let bindT = BindT
@@ -101,8 +99,8 @@ test = do
             [ ( pat
               , CaseT
                 (VarT (Name "x") bool)
-                [ AltT (SConPat true [])  (ConT true)
-                , AltT (SConPat false []) (ConT false)
+                [ AltT (ConPat true [])  (ConT true)
+                , AltT (ConPat false []) (ConT false)
                 ]
                 bool
               )
@@ -111,8 +109,7 @@ test = do
       let (res, _) = run (generateBind env bind)
       case res of
         Left  err        -> expectationFailure (show err)
-        Right (bind', _) -> do
-          bind' `shouldBe` bindT
+        Right (bind', _) -> bind' `shouldBe` bindT
     it "a bind with pattern matching" $ do
       -- f True = True
       -- f False = False
@@ -174,9 +171,7 @@ test = do
       let pat = VarPat "x"
       let expr = Case
             (Var "x")
-            [ Alt (SConPat true [])  (Con true)
-            , Alt (SConPat false []) (Con false)
-            ]
+            [Alt (ConPat true []) (Con true), Alt (ConPat false []) (Con false)]
 
       let bind =
             Bind "f" (Just (Forall [] CNil (bool `fn` bool))) [(pat, expr)]
@@ -185,8 +180,8 @@ test = do
             [ ( VarPat "x"
               , CaseT
                 (VarT (Name "x") bool)
-                [ AltT (SConPat true [])  (ConT true)
-                , AltT (SConPat false []) (ConT false)
+                [ AltT (ConPat true [])  (ConT true)
+                , AltT (ConPat false []) (ConT false)
                 ]
                 bool
               )
