@@ -36,10 +36,12 @@ generate env (App e1 e2) = do
   let funcConstraint = Simple $ t1 :~: (t2 `fn` a)
   pure (AppT e1 e2, a, c1 <> (c2 <> funcConstraint))
 -- ABS
-generate env (Abs x e) = do
-  a         <- TVar <$> fresh
-  (e, t, c) <- generate (Map.insert x (Forall [] CNil a) env) e
-  pure (AbsT x a e, a `fn` t, c)
+generate env (Abs xs e) = do
+  binds <- mapM (\x -> (x, ) . TVar <$> fresh) xs
+  let env' = foldl (\e (x, t) -> Map.insert x (Forall [] CNil t) e) env binds
+  (e, t, c) <- generate env' e
+  let ty = foldr (\(_, a) b -> a `fn` b) t binds
+  pure (AbsT binds e, ty, c)
 -- LET: let with no annotation
 generate env (Let binds body) = do
   -- extend the environment simultaneously with all variables

@@ -11,7 +11,6 @@ import           HaskellWorks.Hspec.Hedgehog
 
 import qualified Data.Map.Strict               as Map
 
-import           Util
 import           Data.Name                      ( RawName(..) )
 import           Constraint
 import           Constraint.Expr
@@ -23,8 +22,6 @@ import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )
 import           Constraint.Generate            ( generate )
-import qualified Constraint.Generate.Pattern   as Pattern
-import           Constraint.Generate.Bind
 import           Constraint.Print
 
 -- Tests the constraint solver
@@ -39,7 +36,6 @@ test = do
   let
     bool = TCon "Bool" []
     nat  = TCon "Nat" []
-    list a = TCon "List" [a]
     pair a b = TCon "Pair" [a, b]
     wrap a = TCon "Wrap" [a]
 
@@ -84,25 +80,25 @@ test = do
       infersType env expr bool
     it "simple function applications" $ do
       -- (\x -> x) True
-      let expr = App (Abs "x" (Var "x")) (Con true)
+      let expr = App (Abs ["x"] (Var "x")) (Con true)
       infersType env expr bool
     it "multi-arg function applications" $ do
       -- (\x y -> x) True (Suc Zero)
-      let constfun = Abs "x" (Abs "y" (Var "x"))
-      let expr     = App (App constfun (Con true)) (App (Con suc) (Con zero))
+      let constfun = Abs ["x", "y"] (Var "x")
+      let expr = App (App constfun (Con true)) (App (Con suc) (Con zero))
       infersType env expr bool
       let annotatedExpr = AppT
-            (AppT (AbsT "x" bool (AbsT "y" nat (VarT "x" bool))) (ConT true))
+            (AppT (AbsT [("x", bool), ("y", nat)] (VarT "x" bool)) (ConT true))
             (AppT (ConT (C "Suc")) (ConT (C "Zero")))
       inferAndZonk env expr annotatedExpr
     it "compound lets" $ do
       -- let x = True
       --     id y = y
       --  in id x
-      let expr = Let [("x", Con true), ("id", Abs "y" (Var "y"))]
+      let expr = Let [("x", Con true), ("id", Abs ["y"] (Var "y"))]
                      (App (Var "id") (Var "x"))
       let annotatedExpr = LetT
-            [("x", ConT true), ("id", AbsT "y" bool (VarT "y" bool))]
+            [("x", ConT true), ("id", AbsT [("y", bool)] (VarT "y" bool))]
             (AppT (VarT "id" (bool `fn` bool)) (VarT "x" bool))
             bool
       infersType env expr (TCon "Bool" [])
@@ -127,7 +123,7 @@ test = do
       --   True -> let id = \y -> y
       --            in id True
       --   False -> True
-      let idfun = Abs "y" (Var "y")
+      let idfun = Abs ["y"] (Var "y")
       let expr = Case
             (Con true)
             [ Alt (ConPat true [])
@@ -138,7 +134,7 @@ test = do
             (ConT true)
             [ AltT
               (ConPat true [])
-              (LetT [("id", AbsT "y" bool (VarT "y" bool))]
+              (LetT [("id", AbsT [("y", bool)] (VarT "y" bool))]
                     (AppT (VarT "id" (bool `fn` bool)) (ConT true))
                     bool
               )
@@ -153,11 +149,11 @@ test = do
       --  in id True
       let idType = Forall [R "a"] CNil (TVar (R "a") `fn` TVar (R "a"))
       let expr =
-            LetA "id" idType (Abs "x" (Var "x")) (App (Var "id") (Con true))
+            LetA "id" idType (Abs ["x"] (Var "x")) (App (Var "id") (Con true))
       let annotatedExpr = LetAT
             "id"
             idType
-            (AbsT "x" (TVar (R "a")) (VarT "x" (TVar (R "a"))))
+            (AbsT [("x", TVar (R "a"))] (VarT "x" (TVar (R "a"))))
             (AppT (VarT "id" (bool `fn` bool)) (ConT true))
             bool
       infersType env expr (TCon "Bool" [])
@@ -258,7 +254,7 @@ test = do
       let expr' = Let
             [ ( "not"
               , Abs
-                "b"
+                ["b"]
                 (Case
                   (Var "b")
                   [ Alt (ConPat true [])  (Con false)

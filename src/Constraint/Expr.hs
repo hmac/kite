@@ -12,7 +12,7 @@ import           Util
 data Exp = Var RawName
          | Con Con
          | App Exp Exp
-         | Abs RawName Exp
+         | Abs [RawName] Exp
          | Case Exp [Alt]
          | Let [(RawName, Exp)] Exp
          | LetA RawName Scheme Exp Exp
@@ -27,7 +27,7 @@ data Exp = Var RawName
 data ExpT = VarT RawName Type
           | ConT Con
           | AppT ExpT ExpT
-          | AbsT RawName Type ExpT
+          | AbsT [(RawName, Type)] ExpT
           | CaseT ExpT [AltT] Type
           | LetT [(RawName, ExpT)] ExpT Type
           | LetAT RawName Scheme ExpT ExpT Type
@@ -41,8 +41,8 @@ data ExpT = VarT RawName Type
 instance Sub ExpT where
   sub s (VarT n v      ) = VarT n (sub s v)
   sub _ (ConT c        ) = ConT c
-  sub s (AppT a b      ) = AppT (sub s a) (sub s b)
-  sub s (AbsT  x t    e) = AbsT x (sub s t) (sub s e)
+  sub s (AppT a     b  ) = AppT (sub s a) (sub s b)
+  sub s (AbsT binds e  ) = AbsT (mapSnd (sub s) binds) (sub s e)
   sub s (CaseT e alts t) = CaseT (sub s e) (map (sub s) alts) (sub s t)
   sub s (LetT binds body t) =
     LetT (mapSnd (sub s) binds) (sub s body) (sub s t)
