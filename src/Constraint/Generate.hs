@@ -25,9 +25,9 @@ generate env (Var name) = case Map.lookup name env of
     a <- TVar <$> fresh
     pure (VarT name a, a, mempty)
 -- Data constructors are treated identically to variables
-generate env (Con (C n)) = do
+generate env (Con n) = do
   (_, t, c) <- generate env (Var n)
-  pure (ConT (C n), t, c)
+  pure (ConT n, t, c)
 -- APP
 generate env (App e1 e2) = do
   (e1, t1, c1) <- generate env e1
@@ -144,7 +144,7 @@ generateCase env scrutinee alts = do
 -- generateEquation ([], Nothing)
 -- generateEquation ((x :: _), Just x)
 generateEquation
-  :: Env -> (Pat, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
+  :: Env -> (Pattern, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
 generateEquation env (pat, expr) = do
   (patTy, patC , env') <- fresh >>= \t -> generatePattern env (TVar t) pat
   (e    , expTy, expC) <- generate env' expr

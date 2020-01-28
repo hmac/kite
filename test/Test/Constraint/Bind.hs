@@ -22,6 +22,9 @@ import           Constraint.Generate            ( generate )
 import           Constraint.Generate.Pattern
 import           Constraint.Generate.Bind
 import           Constraint.Print
+import           Syntax                         ( Pattern
+                                                , Pattern_(..)
+                                                )
 
 -- Tests the constraint solver
 
@@ -30,21 +33,20 @@ test = do
   let
     bool = TCon "Bool" []
     nat  = TCon "Nat" []
-    list a = TCon "List" [a]
-    tuple2 a b = TCon "Tuple2" [a, b]
+    tuple2 a b = mkTupleType [a, b]
     pair a b = TCon "Pair" [a, b]
     wrap a = TCon "Wrap" [a]
     either a b = TCon "Either" [a, b]
 
-    true   = C "True"
-    false  = C "False"
-    zero   = C "Zero"
-    suc    = C "Suc"
-    cons   = C "::"
-    mkpair = C "MkPair"
-    mkwrap = C "MkWrap"
-    left   = C "Left"
-    right  = C "Right"
+    true   = "True"
+    false  = "False"
+    zero   = "Zero"
+    suc    = "Suc"
+    cons   = "::"
+    mkpair = "MkPair"
+    mkwrap = "MkWrap"
+    left   = "Left"
+    right  = "Right"
 
     env    = Map.fromList
       [ ("True" , Forall [] CNil (TCon "Bool" []))
@@ -55,10 +57,7 @@ test = do
         , Forall
           [R "a"]
           CNil
-          (TVar (R "a") `fn` TCon "List" [TVar (R "a")] `fn` TCon
-            "List"
-            [TVar (R "a")]
-          )
+          (TVar (R "a") `fn` list (TVar (R "a")) `fn` list (TVar (R "a")))
         )
       , ( "MkWrap"
         , Forall [R "a"] CNil (TVar (R "a") `fn` TCon "Wrap" [TVar (R "a")])
@@ -91,21 +90,23 @@ test = do
       let pat = VarPat "x"
       let expr = Case
             (Var "x")
-            [Alt (ConPat true []) (Con true), Alt (ConPat false []) (Con false)]
+            [ Alt (ConsPat true [])  (Con true)
+            , Alt (ConsPat false []) (Con false)
+            ]
 
       let bind = Bind "f" Nothing [(pat, expr)]
       let bindT = BindT
-            (Name "f")
+            "f"
             [ ( pat
               , CaseT
-                (VarT (Name "x") bool)
-                [ AltT (ConPat true [])  (ConT true)
-                , AltT (ConPat false []) (ConT false)
+                (VarT "x" bool)
+                [ AltT (ConsPat true [])  (ConT true)
+                , AltT (ConsPat false []) (ConT false)
                 ]
                 bool
               )
             ]
-            (Forall [] CNil (TCon (Name "->") [bool, bool]))
+            (Forall [] CNil (bool `fn` bool))
       let (res, _) = run (generateBind env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -113,12 +114,12 @@ test = do
     it "a bind with pattern matching" $ do
       -- f True = True
       -- f False = False
-      let body = [(ConPat true [], Con true), (ConPat false [], Con false)]
+      let body = [(ConsPat true [], Con true), (ConsPat false [], Con false)]
       let bind = Bind "f" Nothing body
       let bindT = BindT
-            (Name "f")
-            [(ConPat true [], ConT true), (ConPat false [], ConT false)]
-            (Forall [] CNil (TCon (Name "->") [bool, bool]))
+            "f"
+            [(ConsPat true [], ConT true), (ConsPat false [], ConT false)]
+            (Forall [] CNil (bool `fn` bool))
       let (res, _) = run (generateBind env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -127,20 +128,16 @@ test = do
       -- f [] = False
       -- f (x :: xs) = True
       let body =
-            [ (ListPat []                           , Con false)
-            , (ConPat cons [VarPat "x", VarPat "xs"], Con true)
+            [ (ListPat []                            , Con false)
+            , (ConsPat cons [VarPat "x", VarPat "xs"], Con true)
             ]
       let bind = Bind "f" Nothing body
-      let
-        bindT = BindT
-          (Name "f")
-          [ (ListPat []                           , ConT false)
-          , (ConPat cons [VarPat "x", VarPat "xs"], ConT true)
-          ]
-          (Forall [R "$R12"]
-                  CNil
-                  (TCon (Name "->") [list (TVar (R "$R12")), bool])
-          )
+      let bindT = BindT
+            "f"
+            [ (ListPat []                            , ConT false)
+            , (ConsPat cons [VarPat "x", VarPat "xs"], ConT true)
+            ]
+            (Forall [R "$R12"] CNil ((list (TVar (R "$R12"))) `fn` bool))
       let (res, _) = run (generateBind env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -149,14 +146,14 @@ test = do
       -- f (True, y) = y
       -- f (x, Zero) = Zero
       let body =
-            [ (TuplePat [ConPat true [], VarPat "y"], Var "y")
-            , (TuplePat [VarPat "x", ConPat zero []], Con zero)
+            [ (TuplePat [ConsPat true [], VarPat "y"], Var "y")
+            , (TuplePat [VarPat "x", ConsPat zero []], Con zero)
             ]
       let bind = Bind "f" Nothing body
       let bindT = BindT
             "f"
-            [ (TuplePat [ConPat true [], VarPat "y"], VarT "y" nat)
-            , (TuplePat [VarPat "x", ConPat zero []], ConT zero)
+            [ (TuplePat [ConsPat true [], VarPat "y"], VarT "y" nat)
+            , (TuplePat [VarPat "x", ConsPat zero []], ConT zero)
             ]
             (Forall [] CNil (tuple2 bool nat `fn` nat))
       let (res, _) = run (generateBind env bind)
@@ -171,22 +168,24 @@ test = do
       let pat = VarPat "x"
       let expr = Case
             (Var "x")
-            [Alt (ConPat true []) (Con true), Alt (ConPat false []) (Con false)]
+            [ Alt (ConsPat true [])  (Con true)
+            , Alt (ConsPat false []) (Con false)
+            ]
 
       let bind =
             Bind "f" (Just (Forall [] CNil (bool `fn` bool))) [(pat, expr)]
       let bindT = BindT
-            (Name "f")
+            "f"
             [ ( VarPat "x"
               , CaseT
-                (VarT (Name "x") bool)
-                [ AltT (ConPat true [])  (ConT true)
-                , AltT (ConPat false []) (ConT false)
+                (VarT "x" bool)
+                [ AltT (ConsPat true [])  (ConT true)
+                , AltT (ConsPat false []) (ConT false)
                 ]
                 bool
               )
             ]
-            (Forall [] CNil (TCon (Name "->") [bool, bool]))
+            (Forall [] CNil (bool `fn` bool))
       let (res, _) = run (generateBind env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -195,13 +194,13 @@ test = do
       -- f (MkPair x Zero) = x
       -- f _ = False
       let body =
-            [ (ConPat mkpair [VarPat "x", ConPat zero []], Var "x")
+            [ (ConsPat mkpair [VarPat "x", ConsPat zero []], Var "x")
             , (WildPat, Con false)
             ]
       let bind = Bind "f" Nothing body
       let bindT = BindT
             "f"
-            [ (ConPat mkpair [VarPat "x", ConPat zero []], VarT "x" bool)
+            [ (ConsPat mkpair [VarPat "x", ConsPat zero []], VarT "x" bool)
             , (WildPat, ConT false)
             ]
             (Forall [] CNil (pair bool nat `fn` bool))
@@ -214,16 +213,16 @@ test = do
       -- f (Left _)     = Suc Zero
       -- f (Right n)    = n
       let body =
-            [ (ConPat left [ConPat false []], Con zero)
-            , (ConPat left [WildPat]        , App (Con suc) (Con zero))
-            , (ConPat right [VarPat "n"]    , Var "n")
+            [ (ConsPat left [ConsPat false []], Con zero)
+            , (ConsPat left [WildPat]         , App (Con suc) (Con zero))
+            , (ConsPat right [VarPat "n"]     , Var "n")
             ]
       let bind = Bind "f" Nothing body
       let bindT = BindT
             "f"
-            [ (ConPat left [ConPat false []], ConT zero)
-            , (ConPat left [WildPat]        , AppT (ConT suc) (ConT zero))
-            , (ConPat right [VarPat "n"]    , VarT "n" nat)
+            [ (ConsPat left [ConsPat false []], ConT zero)
+            , (ConsPat left [WildPat]         , AppT (ConT suc) (ConT zero))
+            , (ConsPat right [VarPat "n"]     , VarT "n" nat)
             ]
             (Forall [] CNil (either bool nat `fn` nat))
       let (res, _) = run (generateBind env bind)
@@ -234,7 +233,7 @@ test = do
       it "mismatched constructors in pattern" $ do
         -- f True = True
         -- f Zero = False
-        let body = [(ConPat true [], Con true), (ConPat zero [], Con false)]
+        let body = [(ConsPat true [], Con true), (ConsPat zero [], Con false)]
         let bind = Bind "f" Nothing body
         infersError env bind
       it "type mismatch between list pattern and boolean" $ do
@@ -247,8 +246,8 @@ test = do
         -- f (True, y) = y
         -- f (Zero, x) = x
         let body =
-              [ (TuplePat [ConPat true [], VarPat "y"], Var "y")
-              , (TuplePat [ConPat zero [], VarPat "x"], Var "x")
+              [ (TuplePat [ConsPat true [], VarPat "y"], Var "y")
+              , (TuplePat [ConsPat zero [], VarPat "x"], Var "x")
               ]
         let bind = Bind "f" Nothing body
         infersError env bind

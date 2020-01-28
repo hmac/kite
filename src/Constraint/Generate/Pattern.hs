@@ -10,6 +10,7 @@ where
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.M
+import           Syntax                         ( Pattern_(..) )
 
 import qualified Data.Map.Strict               as Map
 
@@ -26,7 +27,7 @@ import qualified Data.Map.Strict               as Map
 --
 -- Note: this code isn't taken from the Modular Type Inference paper - it's
 -- written by me instead. Treat it with caution and assume it has bugs.
-generatePattern :: Env -> Type -> Pat -> GenerateM (Type, CConstraint, Env)
+generatePattern :: Env -> Type -> Pattern -> GenerateM (Type, CConstraint, Env)
 generatePattern env st (IntPat _) = do
   let c = Simple (st :~: TInt)
   pure (TInt, c, env)
@@ -60,8 +61,7 @@ generatePattern env st (ListPat []) = do
   elemType <- TVar <$> fresh
   -- generate a fresh variable for the type of the whole list pattern
   beta     <- TVar <$> fresh
-  let betaConstraints =
-        Simple $ mconcat [beta :~: st, beta :~: TCon "List" [elemType]]
+  let betaConstraints = Simple $ mconcat [beta :~: st, beta :~: list elemType]
   pure (beta, betaConstraints, env)
 generatePattern env st (ListPat pats) = do
     -- generate each subpattern
@@ -78,13 +78,13 @@ generatePattern env st (ListPat pats) = do
   -- generate a fresh variable for the type of the whole list pattern
   beta <- TVar <$> fresh
   let betaConstraints =
-        Simple $ mconcat [beta :~: st, beta :~: TCon "List" [head patTypes]]
+        Simple $ mconcat [beta :~: st, beta :~: list (head patTypes)]
   pure
     ( beta
     , patConstraints <> betaConstraints <> Simple listConstraints
     , patEnvs <> env
     )
-generatePattern env st (ConPat (C k) pats) = case Map.lookup k env of
+generatePattern env st (ConsPat k pats) = case Map.lookup k env of
   Nothing -> do
     u <- TVar <$> fresh
     pure (u, mempty, env)

@@ -5,6 +5,8 @@ module Constraint.Print where
 import           Constraint
 import           Data.Text.Prettyprint.Doc
 import           Data.Name
+import           Canonical                      ( Name(..) )
+import           Data.List                      ( intersperse )
 
 printCConstraint :: CConstraint -> Doc a
 printCConstraint (Simple c) = printConstraint c
@@ -26,15 +28,22 @@ printVar (U n) = "U" <> printName n
 printVar (R n) = "R" <> printName n
 
 printType :: Type -> Doc a
-printType (TCon "->" [a, b]) = printType' a <+> "->" <+> printType' b
-printType (TVar v          ) = printVar v
-printType (TCon c args     ) = hsep (printName c : map printType' args)
+printType (TCon t [a, b]) | t == TopLevel modPrim "->" =
+  printType' a <+> "->" <+> printType' b
+printType (TVar v     ) = printVar v
+printType (TCon c args) = hsep (printName c : map printType' args)
 
 -- like printType but assume we're in a nested context, so add parentheses
 printType' :: Type -> Doc a
-printType' (TCon "->" [a, b]) = parens $ printType a <+> "->" <+> printType b
-printType' (TVar v          ) = printVar v
-printType' (TCon c args     ) = parens $ hsep (printName c : map printType args)
+printType' (TCon t [a, b]) | t == TopLevel modPrim "->" =
+  parens $ printType a <+> "->" <+> printType b
+printType' (TVar v     ) = printVar v
+printType' (TCon c args) = parens $ hsep (printName c : map printType args)
 
-printName :: RawName -> Doc a
-printName (Name n) = pretty n
+printName :: Name -> Doc a
+printName (Local (Name n)) = pretty n
+printName (TopLevel moduleName (Name n)) =
+  printModuleName moduleName <> "." <> pretty n
+
+printModuleName :: ModuleName -> Doc a
+printModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))

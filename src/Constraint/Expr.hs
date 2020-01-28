@@ -4,19 +4,21 @@ import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
 
 import           Constraint
-import           Data.Name
+import           Canonical                      ( Name(..) )
 import           Util
+
+import           Syntax                         ( Pattern_ )
 
 -- An example syntax type that we'll eventually replace with something linked to
 -- Syn.
-data Exp = Var RawName
+data Exp = Var Name
          | Con Con
          | App Exp Exp
-         | Abs [RawName] Exp
+         | Abs [Name] Exp
          | Case Exp [Alt]
-         | Let [(RawName, Exp)] Exp
-         | LetA RawName Scheme Exp Exp
-         | Hole RawName
+         | Let [(Name, Exp)] Exp
+         | LetA Name Scheme Exp Exp
+         | Hole Name
          | TupleLit [Exp]
          | ListLit [Exp]
          | IntLit Int
@@ -24,14 +26,14 @@ data Exp = Var RawName
          deriving (Eq, Show)
 
 -- Exp with type annotation
-data ExpT = VarT RawName Type
+data ExpT = VarT Name Type
           | ConT Con
           | AppT ExpT ExpT
-          | AbsT [(RawName, Type)] ExpT
+          | AbsT [(Name, Type)] ExpT
           | CaseT ExpT [AltT] Type
-          | LetT [(RawName, ExpT)] ExpT Type
-          | LetAT RawName Scheme ExpT ExpT Type
-          | HoleT RawName Type
+          | LetT [(Name, ExpT)] ExpT Type
+          | LetAT Name Scheme ExpT ExpT Type
+          | HoleT Name Type
           | TupleLitT [ExpT] Type
           | ListLitT [ExpT] Type
           | IntLitT Int Type
@@ -53,39 +55,22 @@ instance Sub ExpT where
   sub s (IntLitT   i  t   ) = IntLitT i (sub s t)
   sub s (StringLitT p cs t) = StringLitT p (mapFst (sub s) cs) (sub s t)
 
--- [RawName] are the variables bound by the case branch
-data Alt = Alt Pat Exp
+data Alt = Alt Pattern Exp
   deriving (Eq, Show)
 
-data AltT = AltT Pat ExpT
+data AltT = AltT Pattern ExpT
   deriving (Eq, Show)
+
+type Pattern = Pattern_ Name
 
 instance Sub AltT where
   sub s (AltT p e) = AltT p (sub s e)
-
-data Pat = ConPat Con [Pat]   -- T a b c
-         | VarPat RawName     -- a
-         | WildPat            -- _
-         | IntPat Int         -- 5
-         | TuplePat [Pat]     -- (x, y)
-         | ListPat [Pat]      -- [x, y]
-         | StringPat String   -- "hi"
-        deriving (Eq, Show)
-
--- A subset of patterns which are not inductive.
--- Currently used in case alternatives but we'll replace them with full patterns
--- soon.
-data SimplePat = SConPat Con [RawName]   -- T a b c
-               | SVarPat RawName         -- a
-               | SWildPat                -- _
-               deriving (Eq, Show)
 
 -- Note: raw data constructors have the following type (a Scheme):
 -- Forall [a, b, ..] [] t
 -- where t has the form m -> n -> ... -> T a b ..
 
-newtype Con = C RawName
-  deriving (Eq, Show)
+type Con = Name
 
 -- The Var will always be rigid type variables (I think)
 data Scheme = Forall [Var] Constraint Type

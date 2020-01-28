@@ -16,6 +16,7 @@ module Constraint
   , partitionConstraint
   , mapConstraint
   , sortConstraint
+  , modPrim
   )
 where
 
@@ -27,6 +28,7 @@ import           Data.Set                       ( Set
                                                 )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
+import           Canonical                      ( Name(..) )
 
 -- Simple constraints
 -- Created by the user via type annotations
@@ -82,20 +84,23 @@ instance Monoid CConstraint where
   mempty = Simple mempty
 
 data Type = TVar Var
-          | TCon RawName [Type]
-          | THole RawName
+          | TCon Name [Type]
+          | THole Name
           | TInt
           | TString
           deriving (Eq, Show, Ord)
 
+modPrim :: ModuleName
+modPrim = ModuleName ["Lam", "Primitive"]
+
 fn :: Type -> Type -> Type
-a `fn` b = TCon "->" [a, b]
+a `fn` b = TCon (TopLevel modPrim "->") [a, b]
 
 list :: Type -> Type
-list t = TCon "List" [t]
+list t = TCon (TopLevel modPrim "List") [t]
 
-data Var = R RawName
-         | U RawName
+data Var = R Name
+         | U Name
          deriving (Eq, Show, Ord)
 
 -- The type of substitutions

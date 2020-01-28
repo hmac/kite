@@ -1,5 +1,6 @@
 module Constraint.Generate.Bind where
 
+import           Canonical                      ( Name )
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate
@@ -21,10 +22,10 @@ import qualified Data.Set                      as Set
 -- is represented as  f l = case l of
 --                            [] -> 0
 --                            (_ : xs) = 1 + f xs
-data Bind = Bind RawName (Maybe Scheme) [(Pat, Exp)]
+data Bind = Bind Name (Maybe Scheme) [(Pattern, Exp)]
   deriving (Show, Eq)
 
-data BindT = BindT RawName [(Pat, ExpT)] Scheme
+data BindT = BindT Name [(Pattern, ExpT)] Scheme
   deriving (Show, Eq)
 
 -- Fig. 12

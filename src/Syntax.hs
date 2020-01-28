@@ -129,6 +129,7 @@ data Pattern_ a = VarPat a
              | TuplePat [Pattern_ a]
              | ListPat [Pattern_ a]
              | ConsPat a [Pattern_ a]
+             | StringPat String
              deriving (Eq, Show)
 
 -- Int

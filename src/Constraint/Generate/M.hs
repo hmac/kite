@@ -13,8 +13,9 @@ import           Control.Monad.Writer.Strict
 import           Constraint
 import           Constraint.Expr                ( Scheme )
 import           Data.Name
+import           Canonical                      ( Name(..) )
 
-type Env = Map RawName Scheme
+type Env = Map Name Scheme
 
 instance Sub Env where
   sub s = fmap (sub s)
@@ -26,7 +27,7 @@ freshR :: GenerateM Var
 freshR = do
   k <- get
   put (k + 1)
-  let var = R (Name ("$R" <> show k))
+  let var = R (Local (Name ("$R" <> show k)))
   tell (Set.singleton var)
   pure var
 
@@ -35,7 +36,7 @@ fresh :: GenerateM Var
 fresh = do
   k <- get
   put (k + 1)
-  let var = U (Name (show k))
+  let var = U (Local (Name (show k)))
   tell (Set.singleton var)
   pure var
 
@@ -44,11 +45,11 @@ run m = evalState (runWriterT m) 0
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]
-unfoldFnType (TCon "->" [x, y]) = x : unfoldFnType y
-unfoldFnType t                  = [t]
+unfoldFnType (TCon t [x, y]) | t == TopLevel modPrim "->" = x : unfoldFnType y
+unfoldFnType t = [t]
 
 mkTupleType :: [Type] -> Type
-mkTupleType args = TCon name args
+mkTupleType args = TCon (TopLevel modPrim name) args
  where
   name = case length args of
     0 -> "Unit"

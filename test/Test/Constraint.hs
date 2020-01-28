@@ -11,7 +11,10 @@ import           HaskellWorks.Hspec.Hedgehog
 
 import qualified Data.Map.Strict               as Map
 
-import           Data.Name                      ( RawName(..) )
+import           Data.Name                      ( RawName(..)
+                                                , ModuleName(..)
+                                                )
+import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Solve               ( solveC
@@ -23,6 +26,9 @@ import           Constraint.Generate.M          ( run
                                                 )
 import           Constraint.Generate            ( generate )
 import           Constraint.Print
+import           Syntax                         ( Pattern
+                                                , Pattern_(..)
+                                                )
 
 -- Tests the constraint solver
 
@@ -39,13 +45,13 @@ test = do
     pair a b = TCon "Pair" [a, b]
     wrap a = TCon "Wrap" [a]
 
-    true   = C "True"
-    false  = C "False"
-    zero   = C "Zero"
-    suc    = C "Suc"
-    cons   = C "::"
-    mkpair = C "MkPair"
-    mkwrap = C "MkWrap"
+    true   = "True"
+    false  = "False"
+    zero   = "Zero"
+    suc    = "Suc"
+    cons   = "::"
+    mkpair = "MkPair"
+    mkwrap = "MkWrap"
 
     env    = Map.fromList
       [ ("True" , Forall [] CNil (TCon "Bool" []))
@@ -89,7 +95,7 @@ test = do
       infersType env expr bool
       let annotatedExpr = AppT
             (AppT (AbsT [("x", bool), ("y", nat)] (VarT "x" bool)) (ConT true))
-            (AppT (ConT (C "Suc")) (ConT (C "Zero")))
+            (AppT (ConT suc) (ConT zero))
       inferAndZonk env expr annotatedExpr
     it "compound lets" $ do
       -- let x = True
@@ -109,11 +115,13 @@ test = do
       --   False -> True
       let expr = Case
             (Con true)
-            [Alt (ConPat true []) (Con false), Alt (ConPat false []) (Con true)]
+            [ Alt (ConsPat true [])  (Con false)
+            , Alt (ConsPat false []) (Con true)
+            ]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (ConPat true [])  (ConT false)
-            , AltT (ConPat false []) (ConT true)
+            [ AltT (ConsPat true [])  (ConT false)
+            , AltT (ConsPat false []) (ConT true)
             ]
             bool
       infersType env expr (TCon "Bool" [])
@@ -126,19 +134,19 @@ test = do
       let idfun = Abs ["y"] (Var "y")
       let expr = Case
             (Con true)
-            [ Alt (ConPat true [])
+            [ Alt (ConsPat true [])
                   (Let [("id", idfun)] (App (Var "id") (Con true)))
-            , Alt (ConPat false []) (Con true)
+            , Alt (ConsPat false []) (Con true)
             ]
       let annotatedExpr = CaseT
             (ConT true)
             [ AltT
-              (ConPat true [])
+              (ConsPat true [])
               (LetT [("id", AbsT [("y", bool)] (VarT "y" bool))]
                     (AppT (VarT "id" (bool `fn` bool)) (ConT true))
                     bool
               )
-            , AltT (ConPat false []) (ConT true)
+            , AltT (ConsPat false []) (ConT true)
             ]
             bool
       infersType env expr (TCon "Bool" [])
@@ -170,9 +178,8 @@ test = do
     it "case expressions with variable patterns" $ do
       -- case True of
       --   x -> Zero
-      let expr = Case (Con true) [Alt (VarPat "x") (Con (C "Zero"))]
-      let annotatedExpr =
-            CaseT (ConT true) [AltT (VarPat "x") (ConT (C "Zero"))] nat
+      let expr          = Case (Con true) [Alt (VarPat "x") (Con zero)]
+      let annotatedExpr = CaseT (ConT true) [AltT (VarPat "x") (ConT zero)] nat
       infersType env expr (TCon "Nat" [])
       inferAndZonk env expr annotatedExpr
     it "case expressions that use bound variables" $ do
@@ -181,11 +188,11 @@ test = do
       --   x -> x
       let expr = Case
             (Con true)
-            [Alt (ConPat false []) (Con false), Alt (VarPat "x") (Var "x")]
+            [Alt (ConsPat false []) (Con false), Alt (VarPat "x") (Var "x")]
       let annotatedExpr = CaseT
             (ConT true)
-            [ AltT (ConPat false []) (ConT false)
-            , AltT (VarPat "x")      (VarT "x" bool)
+            [ AltT (ConsPat false []) (ConT false)
+            , AltT (VarPat "x")       (VarT "x" bool)
             ]
             bool
       infersType env expr bool
@@ -203,10 +210,10 @@ test = do
       --   x -> True
       let expr = Case
             (Con true)
-            [Alt (ConPat true []) (Con false), Alt (VarPat "x") (Con true)]
+            [Alt (ConsPat true []) (Con false), Alt (VarPat "x") (Con true)]
       let annotatedExpr = CaseT
             (ConT true)
-            [AltT (ConPat true []) (ConT false), AltT (VarPat "x") (ConT true)]
+            [AltT (ConsPat true []) (ConT false), AltT (VarPat "x") (ConT true)]
             bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
@@ -223,7 +230,7 @@ test = do
       let x = App (Var "MkWrap") (Con true)
       let expr = Let
             [("x", x)]
-            (Case (Var "x") [Alt (ConPat mkwrap [VarPat "y"]) (Var "y")])
+            (Case (Var "x") [Alt (ConsPat mkwrap [VarPat "y"]) (Var "y")])
       infersType env expr bool
     it "deconstructing a parameterised type with a case expression (Pair)" $ do
       -- data Pair a b = MkPair a b
@@ -236,7 +243,7 @@ test = do
             [("x", x)]
             (Case
               (Var "x")
-              [ Alt (ConPat mkpair [VarPat "y", VarPat "z"])
+              [ Alt (ConsPat mkpair [VarPat "y", VarPat "z"])
                     (App (Var "MkWrap") (Var "y"))
               , Alt (VarPat "w") (App (Var "MkWrap") (Con false))
               ]
@@ -257,8 +264,8 @@ test = do
                 ["b"]
                 (Case
                   (Var "b")
-                  [ Alt (ConPat true [])  (Con false)
-                  , Alt (ConPat false []) (Con true)
+                  [ Alt (ConsPat true [])  (Con false)
+                  , Alt (ConsPat false []) (Con true)
                   ]
                 )
               )
@@ -344,11 +351,23 @@ genType = Gen.recursive
 genVar :: H.Gen Var
 genVar = Gen.choice [R <$> genName, U <$> genUVarName]
 
-genName :: H.Gen RawName
-genName = Name <$> Gen.list (Range.linear 1 5) Gen.alphaNum
+genUpperString :: H.Gen String
+genUpperString = do
+  c  <- Gen.upper
+  cs <- Gen.list (Range.linear 0 10) Gen.alphaNum
+  pure (c : cs)
 
-genUVarName :: H.Gen RawName
-genUVarName = Name <$> Gen.list (Range.linear 1 5) Gen.digit
+genName :: H.Gen Name
+genName = Gen.choice [Local <$> genRawName]
+
+genModuleName :: H.Gen ModuleName
+genModuleName = ModuleName <$> Gen.list (Range.linear 1 3) genUpperString
+
+genRawName :: H.Gen RawName
+genRawName = Name <$> Gen.list (Range.linear 1 5) Gen.alphaNum
+
+genUVarName :: H.Gen Name
+genUVarName = Local . Name <$> Gen.list (Range.linear 1 5) Gen.digit
 
 printError :: Error -> String
 printError (OccursCheckFailure t v) =

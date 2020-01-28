@@ -4,6 +4,7 @@ module Canonical where
 -- This means all names are resolved to a specific scope, i.e. local or from a
 -- particular named module.
 
+import           Data.String                    ( IsString(fromString) )
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
                                                 )
@@ -17,6 +18,9 @@ data Name
 fromLocal :: Name -> RawName
 fromLocal (Local n) = n
 fromLocal n         = error $ "Expected Local name, found " <> show n
+
+instance IsString Name where
+  fromString = Local . Name
 
 type Exp = Syn_ Name
 type Type = Ty_ Name

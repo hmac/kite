@@ -6,16 +6,15 @@ where
 import           Test.Hspec
 import qualified Data.Map.Strict               as Map
 
-import           Util
 import           Constraint
 import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
 import           Constraint.Generate.M
 import           Constraint.Expr
-import           Constraint.Generate            ( generate )
 import           Constraint.Generate.Pattern
 import           Constraint.Print
+import           Syntax                         ( Pattern_(..) )
 
 test :: Spec
 test = do
@@ -25,12 +24,12 @@ test = do
     pair a b = TCon "Pair" [a, b]
     wrap a = TCon "Wrap" [a]
 
-    true   = C "True"
-    false  = C "False"
-    zero   = C "Zero"
-    suc    = C "Suc"
-    mkpair = C "MkPair"
-    mkwrap = C "MkWrap"
+    true   = "True"
+    false  = "False"
+    zero   = "Zero"
+    suc    = "Suc"
+    mkpair = "MkPair"
+    mkwrap = "MkWrap"
 
     env    = Map.fromList
       [ ("True" , Forall [] CNil (TCon "Bool" []))
@@ -51,7 +50,7 @@ test = do
       ]
 
     -- Check that a type is inferred for a pattern with no annotation
-    infersType :: Pat -> Type -> Expectation
+    infersType :: Pattern -> Type -> Expectation
     infersType pat ty =
       let gen = fresh >>= \u -> generatePattern env (TVar u) pat
       in  case runGenerate gen of
@@ -60,13 +59,13 @@ test = do
               constraint `shouldBe` mempty
               t `shouldBe` ty
     -- Check that a type is inferred for a pattern with an annotation
-    infersTypeA :: Pat -> Type -> Expectation
+    infersTypeA :: Pattern -> Type -> Expectation
     infersTypeA pat ty = case runGenerate (generatePattern env ty pat) of
       Left  err                -> expectationFailure (printError err)
       Right (t, constraint, _) -> do
         constraint `shouldBe` mempty
         t `shouldBe` ty
-    infersError :: Pat -> Maybe Type -> Expectation
+    infersError :: Pattern -> Maybe Type -> Expectation
     infersError pat Nothing =
       let gen = fresh >>= \u -> generatePattern env (TVar u) pat
       in  case runGenerate gen of
@@ -104,35 +103,35 @@ test = do
           Map.lookup "x" env' `shouldBe` Just (Forall [] mempty ty)
     it "5" $ IntPat 5 `infersType` TInt
     it "_ : Bool" $ infersTypeA WildPat bool
-    it "True : Bool" $ ConPat true [] `infersTypeA` bool
-    it "True" $ ConPat true [] `infersType` bool
+    it "True : Bool" $ ConsPat true [] `infersTypeA` bool
+    it "True" $ ConsPat true [] `infersType` bool
     it "MkWrap x : Wrap Bool" $ do
-      let pat = ConPat mkwrap [VarPat "x"]
+      let pat = ConsPat mkwrap [VarPat "x"]
       pat `infersTypeA` wrap bool
       generatePattern env (wrap bool) pat
         `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just
                          (Forall [] mempty bool)
                        )
     it "MkWrap True : Wrap Bool" $ do
-      let pat = ConPat mkwrap [ConPat true []]
+      let pat = ConsPat mkwrap [ConsPat true []]
       pat `infersTypeA` wrap bool
     it "Suc n : Nat" $ do
-      let pat = ConPat suc [VarPat "n"]
+      let pat = ConsPat suc [VarPat "n"]
       pat `infersTypeA` nat
       generatePattern env nat pat
         `generatesEnv` (\e -> Map.lookup "n" e `shouldBe` Just
                          (Forall [] mempty nat)
                        )
     it "MkPair x Zero : Pair Bool Nat" $ do
-      let pat = ConPat mkpair [VarPat "x", ConPat zero []]
+      let pat = ConsPat mkpair [VarPat "x", ConsPat zero []]
       pat `infersTypeA` pair bool nat
       generatePattern env (pair bool nat) pat
         `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just
                          (Forall [] mempty bool)
                        )
     it "MkPair x Zero; MkPair True y" $ do
-      let pat1 = ConPat mkpair [VarPat "x", ConPat zero []]
-      let pat2 = ConPat mkpair [ConPat true [], VarPat "y"]
+      let pat1 = ConsPat mkpair [VarPat "x", ConsPat zero []]
+      let pat2 = ConsPat mkpair [ConsPat true [], VarPat "y"]
       let gen = do
             u <- TVar <$> fresh
             (pat1Type, pat1Constraints, pat1Env) <- generatePattern env u pat1
@@ -166,16 +165,16 @@ test = do
                            `shouldBe` Just (Forall [] mempty bool)
                        )
     it "(Zero, False)" $ do
-      let pat          = TuplePat [ConPat zero [], ConPat false []]
+      let pat          = TuplePat [ConsPat zero [], ConsPat false []]
       let expectedType = mkTupleType [nat, bool]
       pat `infersType` expectedType
     it "[] : List Bool" $ do
       let pat          = ListPat []
-      let expectedType = TCon "List" [bool]
+      let expectedType = list bool
       pat `infersTypeA` expectedType
     it "[True, False]" $ do
-      let pat          = ListPat [ConPat true [], ConPat false []]
-      let expectedType = TCon "List" [bool]
+      let pat = ListPat [ConsPat true [], ConsPat false []]
+      let expectedType = list bool
       pat `infersType` expectedType
     it "\"hello\"" $ do
       let pat          = StringPat "hello"
@@ -186,7 +185,7 @@ test = do
         let pat = ListPat []
         pat `infersError` Just bool
       it "[True, Zero]" $ do
-        let pat = ListPat [ConPat true [], ConPat zero []]
+        let pat = ListPat [ConsPat true [], ConsPat zero []]
         pat `infersError` Nothing
 
 runGenerate
