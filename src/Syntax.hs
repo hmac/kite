@@ -176,6 +176,7 @@ data Syn_ name = Var name
          -- TODO: type sigs in let bindinds
          -- TODO: multi-definition functions in let bindings
          --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
+         | LetA name (Ty_ name) (Syn_ name) (Syn_ name)
          | Let [(name, Syn_ name)] (Syn_ name)
          | Case (Syn_ name) [(Pattern_ name, Syn_ name)]
          -- more exotic syntactic structures
