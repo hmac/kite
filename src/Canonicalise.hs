@@ -124,7 +124,7 @@ canonicaliseExp env = go
           TupleLit es -> TupleLit $ fmap (go locals) es
           ListLit es -> ListLit $ fmap (go locals) es
           StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
-          Hole n -> Hole n
+          Hole n -> Hole (canonicaliseName env n)
           IntLit i -> IntLit i
           where
             canonicaliseLet :: ([(Syn.Name, Syn.Syn)], Syn.Syn) -> Can.Exp

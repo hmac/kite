@@ -16,6 +16,7 @@ module Constraint.Solve where
 
 import           Util
 
+import qualified Data.Set as Set
 import           Data.Set                       (Set )
 
 import           Control.Monad.State.Strict
@@ -176,7 +177,7 @@ interact (TVar a :~: b) (TVar a' :~: c) | a == a' =
 
 -- EQDIFF: One equality can be substituted into the other. We rely the ORIENT
 -- rule in on prior canonicalisation to ensure this makes progress.
-interact (TVar v1 :~: t1) (TVar v2 :~: t2) | v1 `elem` ftv t2 =
+interact (TVar v1 :~: t1) (TVar v2 :~: t2) | v1 `Set.member` ftv t2 =
   Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: sub [(v1, t1)] t2)
 
 -- Redundant cases: drop CNil
@@ -204,14 +205,6 @@ canonCompare (TVar a    ) (TVar b    ) = compare a b
 canonCompare _            (TCon _ _  ) = LT
 canonCompare (TCon _ _)   _            = GT
 canonCompare _ _ = EQ
-
--- Calculate the free type variables of a type
-ftv :: Type -> [Var]
-ftv (TVar v   ) = [v]
-ftv (TCon _ ts) = concatMap ftv ts
-ftv (THole _) = []
-ftv TInt = []
-ftv TString = []
 
 -- A list of each element in the given list paired with the remaining elements
 focus :: [a] -> [(a, [a])]

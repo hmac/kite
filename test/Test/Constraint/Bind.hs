@@ -7,24 +7,18 @@ import           Test.Hspec
 
 import qualified Data.Map.Strict               as Map
 
-import           Util
-import           Data.Name                      ( RawName(..) )
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
 import           Constraint.Generate.M          ( run
-                                                , mkTupleType
                                                 , Env
                                                 )
 import           Constraint.Generate            ( generate )
-import           Constraint.Generate.Pattern
 import           Constraint.Generate.Bind
 import           Constraint.Print
-import           Syntax                         ( Pattern
-                                                , Pattern_(..)
-                                                )
+import           Syntax                         ( Pattern_(..) )
 
 -- Tests the constraint solver
 
@@ -35,7 +29,6 @@ test = do
     nat  = TCon "Nat" []
     tuple2 a b = mkTupleType [a, b]
     pair a b = TCon "Pair" [a, b]
-    wrap a = TCon "Wrap" [a]
     either a b = TCon "Either" [a, b]
 
     true   = "True"
@@ -44,7 +37,6 @@ test = do
     suc    = "Suc"
     cons   = "::"
     mkpair = "MkPair"
-    mkwrap = "MkWrap"
     left   = "Left"
     right  = "Right"
 
@@ -58,9 +50,6 @@ test = do
           [R "a"]
           CNil
           (TVar (R "a") `fn` list (TVar (R "a")) `fn` list (TVar (R "a")))
-        )
-      , ( "MkWrap"
-        , Forall [R "a"] CNil (TVar (R "a") `fn` TCon "Wrap" [TVar (R "a")])
         )
       , ( "MkPair"
         , Forall

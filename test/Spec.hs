@@ -5,6 +5,7 @@ import qualified Test.Syn.RoundTrip
 import qualified Test.Constraint
 import qualified Test.Constraint.Pattern
 import qualified Test.Constraint.Bind
+import qualified Test.Constraint.FromSyn
 
 main :: IO ()
 main = hspec $ do
@@ -14,3 +15,4 @@ main = hspec $ do
   Test.Constraint.test
   Test.Constraint.Pattern.test
   Test.Constraint.Bind.test
+  Test.Constraint.FromSyn.test

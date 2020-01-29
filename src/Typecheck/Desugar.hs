@@ -16,7 +16,7 @@ import           Syntax                         ( Name )
 
 data Core = Var Can.Name
           | Cons Can.Name
-          | Hole Name
+          | Hole Can.Name
           | App Core Core
           | Let [(Can.Name, [([Can.Pattern], Core)])] Core
           | Tuple [Core]

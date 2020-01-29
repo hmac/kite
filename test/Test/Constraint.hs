@@ -21,7 +21,6 @@ import           Constraint.Solve               ( solveC
                                                 , Error(..)
                                                 )
 import           Constraint.Generate.M          ( run
-                                                , mkTupleType
                                                 , Env
                                                 )
 import           Constraint.Generate            ( generate )

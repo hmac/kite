@@ -10,6 +10,7 @@ module Util
   , Data.List.unzip4
   , Data.List.unzip5
   , Data.List.Extra.nubOn
+  , Data.List.Extra.snoc
   , Control.Monad.forM
   , Debug.Trace.trace
   )

@@ -139,6 +139,8 @@ data Pattern_ a = VarPat a
 -- a -> b
 -- f a
 -- TODO: rename to Type?
+-- TODO: I think this is a shitty way to structure type application - hard to
+-- use in practice. The approach in Constraint.Expr.Type is a lot better.
 type Ty = Ty_ Name
 data Ty_ a = Ty_ a :@: Ty_ a
         | TyArr
@@ -152,7 +154,7 @@ data Ty_ a = Ty_ a :@: Ty_ a
   deriving (Eq, Show, Ord)
 
 infixr 4 `fn`
-fn :: Ty -> Ty -> Ty
+fn :: Ty_ name -> Ty_ name -> Ty_ name
 a `fn` b = (TyArr :@: a) :@: b
 
 -- Syn: the surface syntax
@@ -169,7 +171,7 @@ a `fn` b = (TyArr :@: a) :@: b
 type Syn = Syn_ Name
 data Syn_ name = Var name
          | Cons name
-         | Hole Name
+         | Hole name
          | Abs [name] (Syn_ name)
          | App (Syn_ name) (Syn_ name)
          -- TODO: patterns in let bindings

@@ -47,16 +47,3 @@ run m = evalState (runWriterT m) 0
 unfoldFnType :: Type -> [Type]
 unfoldFnType (TCon t [x, y]) | t == TopLevel modPrim "->" = x : unfoldFnType y
 unfoldFnType t = [t]
-
-mkTupleType :: [Type] -> Type
-mkTupleType args = TCon (TopLevel modPrim name) args
- where
-  name = case length args of
-    0 -> "Unit"
-    2 -> "Tuple2"
-    3 -> "Tuple3"
-    4 -> "Tuple4"
-    5 -> "Tuple5"
-    6 -> "Tuple6"
-    7 -> "Tuple7"
-    n -> error $ "Unsupported tuple length: " <> show n

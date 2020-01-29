@@ -17,6 +17,7 @@ module Constraint
   , mapConstraint
   , sortConstraint
   , modPrim
+  , mkTupleType
   )
 where
 
@@ -99,6 +100,19 @@ a `fn` b = TCon (TopLevel modPrim "->") [a, b]
 list :: Type -> Type
 list t = TCon (TopLevel modPrim "List") [t]
 
+mkTupleType :: [Type] -> Type
+mkTupleType args = TCon (TopLevel modPrim name) args
+ where
+  name = case length args of
+    0 -> "Unit"
+    2 -> "Tuple2"
+    3 -> "Tuple3"
+    4 -> "Tuple4"
+    5 -> "Tuple5"
+    6 -> "Tuple6"
+    7 -> "Tuple7"
+    n -> error $ "Unsupported tuple length: " <> show n
+
 data Var = R Name
          | U Name
          deriving (Eq, Show, Ord)
@@ -135,6 +149,8 @@ instance Sub CConstraint where
 class Vars a where
   -- Get the free unification variables from `a`
   fuv  :: a -> Set Var
+  -- Get all free variables from `a` (rigid and unification)
+  ftv  :: a -> Set Var
 
 instance Vars Type where
   fuv (TVar (U v)) = Set.singleton (U v)
@@ -144,21 +160,37 @@ instance Vars Type where
   fuv TInt         = mempty
   fuv TString      = mempty
 
+  ftv (TVar v   ) = Set.singleton v
+  ftv (TCon _ ts) = Set.unions (map ftv ts)
+  ftv (THole _  ) = mempty
+  ftv TInt        = mempty
+  ftv TString     = mempty
+
 instance Vars Constraint where
   fuv CNil      = mempty
   fuv (a :^: b) = fuv a <> fuv b
   fuv (t :~: v) = fuv t <> fuv v
+
+  ftv CNil      = mempty
+  ftv (a :^: b) = ftv a <> ftv b
+  ftv (t :~: v) = ftv t <> ftv v
 
 instance Vars CConstraint where
   fuv (Simple c   ) = fuv c
   fuv (a :^^: b   ) = fuv a <> fuv b
   fuv (E vars c cc) = fuv c <> fuv cc \\ Set.fromList vars
 
+  ftv (Simple c   ) = ftv c
+  ftv (a :^^: b   ) = ftv a <> ftv b
+  ftv (E vars c cc) = ftv c <> ftv cc \\ Set.fromList vars
+
 instance Vars b => Vars (Map a b) where
   fuv env = Set.unions (map fuv (Map.elems env))
+  ftv env = Set.unions (map ftv (Map.elems env))
 
 instance Vars a => Vars [a] where
   fuv = mconcat . map fuv
+  ftv = mconcat . map ftv
 
 simple :: CConstraint -> Constraint
 simple E{}        = mempty

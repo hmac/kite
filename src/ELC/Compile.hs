@@ -282,8 +282,8 @@ translateExpr env (S.Cons n) = do
       a   = arity con
   newVars <- replicateM a fresh
   pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
-translateExpr _   (S.Hole (Name n)) = pure $ Bottom ("Hole encountered: " <> n)
-translateExpr env (S.Abs vars e   ) = do
+translateExpr _ (S.Hole n) = pure $ Bottom ("Hole encountered: " <> show n)
+translateExpr env (S.Abs vars e) = do
   body <- translateExpr env e
   pure $ buildAbs body (map VarPat vars)
 translateExpr env (S.Let alts expr) = do
