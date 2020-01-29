@@ -24,20 +24,28 @@ description: A hello program
 ---
 module Main
 
+from std import Data.String (toUpper)
+
+type User = User { name : String, age : Int }
+
 main : IO ()
 main = do
   name <- readLine
+  age <- fmap read readLine
+  let user = User { name, age }
   greet name
 
-greet : String -> IO ()
-greet name = putLine "Hello #{name}!"
+greet : User -> IO ()
+greet User { name } = putLine "Hello #{toUpper name}!"
 ```
 
 A few things immediately jump out:
 - Lam files support arbitrary YAML frontmatter that you can use for metadata
-- Lam syntax is very close to Haskell
-- There are small differences, such as a single colon for type annotations
-- Lam has Ruby-esque string interpolation
+- Lam syntax is similar to Haskell, with some minor differences
+  - single colons for type annotations
+  - `type` instead of `data` for declaring new data types
+  - Ruby-esque string interpolation
+- Lam has more sophisticated record support built-in (more on that later)
 
 Lam has many other features which are described below.
 
