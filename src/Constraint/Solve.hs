@@ -35,6 +35,7 @@ type Solve = State Quad
 data Error = OccursCheckFailure Type Type
            | ConstructorMismatch Type Type
            | UnsolvedConstraints Constraint
+           | EquationsHaveDifferentNumberOfPatterns
   deriving (Show, Eq)
 
 -- See fig. 14

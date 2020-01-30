@@ -9,15 +9,13 @@ import qualified Constraint.Expr               as E
 import qualified Syntax                        as S
 import           Canonical                      ( Name(..) )
 import           Constraint.FromSyn
-import           Data.Name                      ( ModuleName(..) )
-import           Util
 
 test :: Spec
 test = do
-  let mx     = TopLevel (ModuleName ["SomeModule"]) "x"
-      left   = TopLevel (ModuleName ["Data.Either"]) "Left"
-      either = TopLevel (ModuleName ["Data.Either"]) "Either"
-      maybe  = TopLevel (ModuleName ["Data.Maybe"]) "Maybe"
+  let mx     = TopLevel "SomeModule" "x"
+      left   = TopLevel "Data.Either" "Left"
+      either = TopLevel "Data.Either" "Either"
+      maybe  = TopLevel "Data.Maybe" "Maybe"
   describe "Converting Syn to Constraint.Expr" $ do
     it "x" $ do
       fromSyn (S.Var "x") `shouldBe` E.Var "x"

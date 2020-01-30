@@ -94,6 +94,7 @@ data Type = TVar Var
 modPrim :: ModuleName
 modPrim = ModuleName ["Lam", "Primitive"]
 
+infixr 4 `fn`
 fn :: Type -> Type -> Type
 a `fn` b = TCon (TopLevel modPrim "->") [a, b]
 

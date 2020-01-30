@@ -143,6 +143,7 @@ generateCase env scrutinee alts = do
 --        (x :: _) -> Just x
 -- generateEquation ([], Nothing)
 -- generateEquation ((x :: _), Just x)
+-- TODO: consider merging with Constraint.Generate.Bind.generateMultiEquation
 generateEquation
   :: Env -> (Pattern, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
 generateEquation env (pat, expr) = do

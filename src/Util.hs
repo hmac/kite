@@ -11,7 +11,10 @@ module Util
   , Data.List.unzip5
   , Data.List.Extra.nubOn
   , Data.List.Extra.snoc
+  , Data.Either.lefts
+  , Data.Either.rights
   , Control.Monad.forM
+  , Control.Monad.foldM
   , Debug.Trace.trace
   )
 where
@@ -20,6 +23,7 @@ import qualified Debug.Trace
 import qualified Control.Monad
 import qualified Data.List.Extra
 import qualified Data.List
+import qualified Data.Either
 import qualified Data.Maybe
 import           Data.Text.Lazy                 ( unpack )
 import qualified Text.Pretty.Simple

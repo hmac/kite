@@ -5,6 +5,10 @@ import           Util
 
 -- Shared types of name
 
+-- TODO: move Canonical.Name to here
+-- TODO: Rename RawName.Name constructor to Name, and prefer to construct literal
+--       elements of this type using the IsString instance.
+
 newtype RawName = Name String
   deriving (Eq, Show, Ord)
 

@@ -6,6 +6,8 @@ import qualified Test.Constraint
 import qualified Test.Constraint.Pattern
 import qualified Test.Constraint.Bind
 import qualified Test.Constraint.FromSyn
+import qualified Test.Constraint.Integration
+import qualified Test.Constraint.Module
 
 main :: IO ()
 main = hspec $ do
@@ -16,3 +18,5 @@ main = hspec $ do
   Test.Constraint.Pattern.test
   Test.Constraint.Bind.test
   Test.Constraint.FromSyn.test
+  Test.Constraint.Integration.test
+  Test.Constraint.Module.test

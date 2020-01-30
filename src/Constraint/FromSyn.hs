@@ -1,4 +1,4 @@
-module Constraint.FromSyn where
+module Constraint.FromSyn (fromSyn, tyToType, tyToScheme) where
 
 -- Converts a Syn AST to a Constraint.Expr AST
 

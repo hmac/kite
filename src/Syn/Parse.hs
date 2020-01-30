@@ -26,6 +26,8 @@ type Parser = Parsec Void String
 -- TODO: typeclass constraints
 -- TODO: infix constructors (like List ::)
 -- TODO: empty data types (e.g. Void)
+-- TODO: rename data to type, type to alias?
+-- TODO: include package in imports: from std import Data.Either
 
 parseLamFile :: String -> Either String (Module Syn)
 parseLamFile input = case parse (pModule <* eof) "" input of
@@ -478,6 +480,9 @@ lowercaseString = lexeme . try $ do
 keywords :: [String]
 keywords =
   [ "data"
+  , "type"
+  , "alias"
+  , "from"
   , "qualified"
   , "as"
   , "let"
