@@ -63,7 +63,7 @@ test = describe "typing simple modules" $ do
               }
             fromMaybe = mkDecl
               ( "fromMaybe"
-              , (TyCon "Maybe" :@: TyVar "a") `fn` (TyVar "a" `fn` TyVar "a")
+              , TyCon "Maybe" [TyVar "a"] `fn` (TyVar "a" `fn` TyVar "a")
               , [ ([ConsPat "Just" [VarPat "x"], WildPat], Var "x")
                 , ([WildPat, VarPat "y"]                 , Var "y")
                 ]
@@ -107,7 +107,8 @@ infersType :: Env -> Module_ Name (Syn_ Name) -> [BindT] -> Expectation
 infersType env input output =
   let (res, _) = run (generateModule env input) in res `shouldBe` Right output
 
-infersError :: [(Name, Ty_ Name, [([Pattern_ Name], Syn_ Name)])] -> Expectation
+infersError
+  :: [(Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])] -> Expectation
 infersError input =
   let (res, _) = run (generateModule mempty (mkModule input))
   in  case res of
@@ -116,7 +117,7 @@ infersError input =
           expectationFailure $ "Expected type error, but succeeded: " <> show t
 
 mkModule
-  :: [(Name, Ty_ Name, [([Pattern_ Name], Syn_ Name)])]
+  :: [(Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])]
   -> Module_ Name (Syn_ Name)
 mkModule decls = Module { moduleName     = "Test"
                         , moduleMetadata = []
@@ -126,7 +127,8 @@ mkModule decls = Module { moduleName     = "Test"
                         }
 
 mkDecl
-  :: (Name, Ty_ Name, [([Pattern_ Name], Syn_ Name)]) -> Decl_ Name (Syn_ Name)
+  :: (Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])
+  -> Decl_ Name (Syn_ Name)
 mkDecl (name, ty, equations) = FunDecl $ Fun
   { funComments   = []
   , funName       = name

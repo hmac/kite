@@ -23,7 +23,7 @@ instance IsString Name where
   fromString = Local . Name
 
 type Exp = Syn_ Name
-type Type = Ty_ Name
+type Type = Type_ Name
 type Pattern = Pattern_ Name
 type DataCon = DataCon_ Name
 type Instance = Instance_ Name

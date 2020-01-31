@@ -45,8 +45,8 @@ test = parallel $ do
                         { funComments   = []
                         , funName       = "map"
                         , funType       = (TyVar "a" `fn` TyVar "b")
-                                          `fn` ((TyVar "f") :@: (TyVar "a"))
-                                          `fn` ((TyVar "f") :@: (TyVar "b"))
+                                          `fn` (TyCon "f" [TyVar "a"])
+                                          `fn` (TyCon "f" [TyVar "b"])
                         , funConstraint = Nothing
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
@@ -93,7 +93,7 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "foo"
-                        , funType       = (TyVar "a") `fn` TyCon "String"
+                        , funType       = TyVar "a" `fn` TyCon "String" []
                         , funConstraint =
                           Just
                             (CTuple (CInst "Eq" [TyVar "a"])
@@ -112,8 +112,8 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "fromLeft"
-                        , funType = (TyCon "Either" :@: TyVar "a" :@: TyVar "b")
-                                      `fn` (TyCon "Maybe" :@: TyVar "a")
+                        , funType = (TyCon "Either" [TyVar "a", TyVar "b"])
+                                      `fn` (TyCon "Maybe" [TyVar "a"])
                         , funConstraint = Nothing
                         , funDefs       =
                           [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
@@ -141,7 +141,7 @@ test = parallel $ do
                               { conName   = "Foo"
                               , conFields = [ ("unFoo", TyVar "a")
                                             , ("label", TyHole "b")
-                                            , ("c"    , TyCon "A" :@: TyCon "A")
+                                            , ("c", TyCon "A" [TyCon "A" []])
                                             ]
                               }
                           ]
@@ -149,17 +149,15 @@ test = parallel $ do
     it "parses the definition of List" $ do
       parse pDecl "" "data List a = Nil | Cons a (List a)"
         `shouldParse` DataDecl Data
-                        { dataName = "List"
+                        { dataName   = "List"
                         , dataTyVars = ["a"]
-                        , dataCons = [ DataCon { conName = "Nil", conArgs = [] }
-                                     , DataCon
-                                       { conName = "Cons"
-                                       , conArgs = [ TyVar "a"
-                                                   , (TyCon "List")
-                                                     :@: (TyVar "a")
-                                                   ]
-                                       }
-                                     ]
+                        , dataCons   =
+                          [ DataCon { conName = "Nil", conArgs = [] }
+                          , DataCon
+                            { conName = "Cons"
+                            , conArgs = [TyVar "a", TyCon "List" [TyVar "a"]]
+                            }
+                          ]
                         }
     it "parses a simple typeclass definition" $ do
       parse pDecl "" "class Functor f where\n  map : (a -> b) -> f a -> f b\n"
@@ -168,8 +166,8 @@ test = parallel $ do
                         , typeclassTyVars = ["f"]
                         , typeclassDefs   = [ ( "map"
                                               , (TyVar "a" `fn` TyVar "b")
-                                              `fn` ((TyVar "f") :@: (TyVar "a"))
-                                              `fn` ((TyVar "f") :@: (TyVar "b"))
+                                              `fn` (TyCon "f" [TyVar "a"])
+                                              `fn` (TyCon "f" [TyVar "b"])
                                               )
                                             ]
                         }
@@ -180,7 +178,7 @@ test = parallel $ do
           "instance Functor Maybe where\n  map _ Nothing = Nothing\n  map f (Just x) = Just (f x)\n"
         `shouldParse` TypeclassInst Instance
                         { instanceName  = "Functor"
-                        , instanceTypes = [TyCon "Maybe"]
+                        , instanceTypes = [TyCon "Maybe" []]
                         , instanceDefs  =
                           [ ( "map"
                             , [ Def { defArgs = [WildPat, ConsPat "Nothing" []]
@@ -208,7 +206,7 @@ test = parallel $ do
                           [ FunDecl Fun
                               { funName       = "one"
                               , funComments   = []
-                              , funType       = TyCon "Int"
+                              , funType       = TyCon "Int" []
                               , funConstraint = Nothing
                               , funDefs       = [ Def { defArgs = []
                                                       , defExpr = IntLit 1
@@ -281,9 +279,11 @@ test = parallel $ do
         `shouldParse` ((TyVar "a" `fn` TyVar "b") `fn` TyVar "a" `fn` TyVar "b")
     it "parses multi parameter type constructors" $ do
       parse pType "" "Either a b -> Maybe a"
-        `shouldParse` (    (TyCon "Either" :@: TyVar "a" :@: TyVar "b")
-                      `fn` (TyCon "Maybe" :@: TyVar "a")
+        `shouldParse` (    (TyCon "Either" [TyVar "a", TyVar "b"])
+                      `fn` (TyCon "Maybe" [TyVar "a"])
                       )
     it "parses parameterised constructors inside lists" $ do
       parse pType "" "[Maybe a]"
-        `shouldParse` TyList (TyCon "Maybe" :@: TyVar "a")
+        `shouldParse` TyList (TyCon "Maybe" [TyVar "a"])
+    it "parses nested type constructors" $ do
+      parse pType "" "A B" `shouldParse` TyCon "A" [TyCon "B" []]

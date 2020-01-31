@@ -25,28 +25,18 @@ fromSyn = \case
   S.IntLit i -> E.IntLit i
 
 -- Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
-tyToScheme :: S.Ty_ Name -> E.Scheme
+tyToScheme :: S.Type_ Name -> E.Scheme
 tyToScheme t = let t' = tyToType t
                    vars = Set.toList (ftv t')
                 in E.Forall vars mempty t'
 
-tyToType :: S.Ty_ Name -> Type
+tyToType :: S.Type_ Name -> Type
 tyToType = \case
-  S.TyArr -> TCon (TopLevel modPrim "->") []
-  S.TyCon n -> TCon n []
+  S.TyCon n ts -> TCon n (map tyToType ts)
   S.TyVar n -> TVar (R n)
   S.TyList t -> list (tyToType t)
   S.TyTuple ts -> mkTupleType (map tyToType ts)
   S.TyHole n -> THole (Local n)
   S.TyInt -> TInt
   S.TyString -> TString
-  t S.:@: v -> let (conName, args) = flatten t
-                in TCon conName (map tyToType (snoc args v))
-
-flatten :: S.Ty_ Name -> (Name, [S.Ty_ Name])
-flatten = \case
-  t S.:@: v -> let (conName, args) = flatten t
-                in (conName, snoc args v)
-  S.TyCon n -> (n, [])
-  S.TyArr   -> (TopLevel modPrim "->", [])
-  t -> error $ "Unexpected type " <> show t
+  S.TyFun a b -> TCon (TopLevel modPrim "->") [tyToType a, tyToType b]

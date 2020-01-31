@@ -135,7 +135,7 @@ pFun = do
            }
 
 -- Monoid a => [a] -> a
-pFunSig :: Parser (Maybe Constraint, Ty)
+pFunSig :: Parser (Maybe Constraint, Type)
 pFunSig = do
   constraint <- optional (try (pConstraint <* lexeme "=>"))
   ty         <- pType
@@ -165,7 +165,7 @@ pTypeclass = do
                  , typeclassDefs   = first : rest
                  }
  where
-  pTypeclassDef :: Parser (Name, Ty)
+  pTypeclassDef :: Parser (Name, Type)
   pTypeclassDef = do
     name       <- lowercaseName
     annotation <- symbol ":" >> lexeme pType
@@ -210,21 +210,23 @@ pDef' = do
 -- Maybe Int
 -- a
 -- a -> b
-pType :: Parser Ty
+pType :: Parser Type
 pType = try arr <|> try app <|> pType'
  where
   arr = do
-    left <- lexemeN (try app <|> pType')
+    a <- lexemeN (try app <|> pType')
     void $ symbolN "->"
-    right <- lexeme pType
-    pure $ left `fn` right
-  app = do
-    first <- lexeme pType'
-    rest  <- some (lexeme pType')
-    pure $ foldl1 (:@:) (first : rest)
-  pType' = hole <|> try tuple <|> parens pType <|> var <|> con <|> list
-  con    = TyCon <$> uppercaseName
+    TyFun a <$> pType
+  app = (lowercaseName >>= varApp) <|> (uppercaseName >>= conApp)
+  conApp name = do
+    rest <- many (lexeme pType')
+    pure $ TyCon name rest
+  varApp name = do
+    rest <- many (lexeme pType')
+    pure $ if null rest then TyVar name else TyCon name rest
+  pType' = con <|> var <|> hole <|> list <|> try tuple <|> parens pType
   var    = TyVar <$> lowercaseName
+  con    = (`TyCon` []) <$> uppercaseName
   hole   = TyHole <$> (string "?" >> pHoleName)
   list   = TyList <$> brackets pType
   tuple  = TyTuple <$> parens (lexemeN pType `sepBy2` comma)
@@ -234,13 +236,22 @@ pType = try arr <|> try app <|> pType'
 -- application must be inside parentheses
 -- i.e. MyCon f a   -> name = MyCon, args = [f, a]
 -- vs.  func : f a  -> name = func, type = f :@: a
-pConType :: Parser Ty
+pConType :: Parser Type
 pConType = ty
  where
-  ty = hole <|> var <|> con <|> list <|> parens (try arr <|> try tuple <|> app)
-  app   = (:@:) <$> ty <*> ty
-  arr   = TyArr <$ symbol "->"
-  con   = TyCon <$> uppercaseName
+  ty  = hole <|> var <|> con <|> list <|> parens (try arr <|> try tuple <|> app)
+  app = (lowercaseName >>= varApp) <|> (uppercaseName >>= conApp)
+  conApp name = do
+    rest <- many ty
+    pure $ TyCon name rest
+  varApp name = do
+    rest <- many ty
+    pure $ if null rest then TyVar name else TyCon name rest
+  arr = do
+    a <- lexemeN ty
+    void $ symbolN "->"
+    TyFun a <$> ty
+  con   = TyCon <$> uppercaseName <*> pure []
   var   = TyVar <$> lowercaseName
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma

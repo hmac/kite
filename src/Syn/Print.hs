@@ -109,44 +109,42 @@ printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
 -- f a -> f b
 -- a -> b -> c
 -- (a -> b) -> c
-printType :: Ty -> Document
+printType :: Type -> Document
 printType = printType' Root
 
 data Context = Root | AppL | AppR  | ArrL | ArrR
 
-printType' :: Context -> Ty -> Document
+printType' :: Context -> Type -> Document
 printType' ctx ty = case (ctx, ty) of
   -- top level arrows don't get parenthesised
-  (Root, (TyArr :@: a) :@: b) ->
-    printType' ArrL a <+> "->" <+> printType' ArrR b
+  (Root, TyFun a b ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
   -- top level applications don't get parenthesised either
-  (Root, a :@: b            ) -> printType' AppL a <+> printType' AppR b
+  (Root, TyCon n []) -> printName n
+  (Root, TyCon n ts) -> printName n <+> hsep (map (printType' AppR) ts)
 
   -- arrows on the left of arrows get parenthesised
-  (ArrL, (TyArr :@: a) :@: b) -> parens $ printType' Root (a `fn` b)
+  (ArrL, TyFun a b ) -> parens $ printType' Root (a `fn` b)
   -- arrows on the right of arrows don't
-  (ArrR, (TyArr :@: a) :@: b) -> printType' Root (a `fn` b)
+  (ArrR, TyFun a b ) -> printType' Root (a `fn` b)
   -- arrows on either side of applications get parenthesised
-  (AppR, (TyArr :@: a) :@: b) -> parens $ printType' Root (a `fn` b)
-  (AppL, (TyArr :@: a) :@: b) -> parens $ printType' Root (a `fn` b)
+  (AppR, TyFun a b ) -> parens $ printType' Root (a `fn` b)
+  (AppL, TyFun a b ) -> parens $ printType' Root (a `fn` b)
 
   -- applications on the left of applications don't get parenthesised
-  (AppL, a :@: b            ) -> printType' Root (a :@: b)
+  (AppL, TyCon n ts) -> printType' Root (TyCon n ts)
   -- applications on the right of applications get parenthesised
-  (AppR, a :@: b            ) -> parens $ printType' Root (a :@: b)
+  (AppR, TyCon n ts) -> parens $ printType' Root (TyCon n ts)
   -- applications on either side of arrows don't
-  (ArrL, a :@: b            ) -> printType' Root (a :@: b)
-  (ArrR, a :@: b            ) -> printType' Root (a :@: b)
+  (ArrL, TyCon n ts) -> printType' Root (TyCon n ts)
+  (ArrR, TyCon n ts) -> printType' Root (TyCon n ts)
 
   -- Basic cases
-  (_   , TyHole n           ) -> hole ("?" <> printName n)
-  (_   , TyCon n            ) -> printName n
-  (_   , TyVar n            ) -> printName n
-  (_   , TyList ts          ) -> brackets (printType' Root ts)
-  (_   , TyTuple ts         ) -> tupled (map (printType' Root) ts)
-  (_   , TyInt              ) -> "Int"
-  (_   , TyString           ) -> "String"
-  (_   , _                  ) -> "nope"
+  (_   , TyHole n  ) -> hole ("?" <> printName n)
+  (_   , TyVar n   ) -> printName n
+  (_   , TyList ts ) -> brackets (printType' Root ts)
+  (_   , TyTuple ts) -> tupled (map (printType' Root) ts)
+  (_   , TyInt     ) -> "Int"
+  (_   , TyString  ) -> "String"
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line

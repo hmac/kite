@@ -20,18 +20,17 @@ test = parallel $ do
     it "prints simple types" $ do
       show (printType (TyVar "a" `fn` TyVar "b")) `shouldBe` "a -> b"
     it "prints type applications" $ do
-      show (printType (TyVar "f" :@: TyVar "a" :@: TyVar "b")) `shouldBe` "f a b"
+      show (printType (TyCon "f" [TyVar "a", TyVar "b"])) `shouldBe` "f a b"
     it "prints nested type applications" $ do
-      show (printType (TyVar "t" :@: (TyVar "m" :@: TyVar "a"))) `shouldBe` "t (m a)"
-      show (printType (TyCon "Reader" :@: TyVar "m" :@: TyVar "a")) `shouldBe` "Reader m a"
-      show (printType (TyVar "a" :@: (TyVar "b" :@: (TyVar "c" :@: TyVar "d")))) `shouldBe` "a (b (c d))"
-      show (printType ((TyVar "a" `fn` TyVar "b") :@: TyVar "c")) `shouldBe` "(a -> b) c"
+      show (printType (TyCon "t" [TyCon "m" [TyVar "a"]])) `shouldBe` "t (m a)"
+      show (printType (TyCon "Reader" [TyVar "m", TyVar "a"])) `shouldBe` "Reader m a"
+      show (printType (TyCon "a" [TyCon "b" [TyCon "c" [TyVar "d"]]])) `shouldBe` "a (b (c d))"
     it "prints type applications with arrows (1)" $ do
-      show (printType (TyVar "a" `fn` ((TyVar "f") :@: (TyVar "a")))) `shouldBe` "a -> f a"
+      show (printType (TyVar "a" `fn` TyCon "f" [TyVar "a"])) `shouldBe` "a -> f a"
     it "prints type applications with arrows (2)" $ do
-      show (printType ((TyCon "A" :@: TyVar "a") `fn` ((TyCon "f") :@: (TyCon "a")))) `shouldBe` "A a -> f a"
+      show (printType ((TyCon "A" [TyVar "a"]) `fn` ((TyCon "f" [TyVar "a"])))) `shouldBe` "A a -> f a"
     it "prints type applications with arrows (3)" $ do
-      show (printType ((TyArr :@: ((TyArr :@: TyCon (Name "A")) :@: TyCon (Name "A"))) :@: TyCon (Name "A"))) `shouldBe` "(A -> A) -> A"
+      show (printType ((TyCon "A" [] `fn` TyCon "A" []) `fn` TyCon "A" [])) `shouldBe` "(A -> A) -> A"
     it "prints tuple types" $ do
       show (printType (TyTuple [TyVar "a", TyVar "b"])) `shouldBe` "(a, b)"
     it "prints large tuple types on multiple lines" $ do

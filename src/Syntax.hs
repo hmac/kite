@@ -63,7 +63,7 @@ data Decl_ name exp = FunDecl (Fun_ name exp)
 type Fun exp = Fun_ Name exp
 data Fun_ name exp = Fun { funComments :: [String]
                          , funName :: name
-                         , funType :: Ty_ name
+                         , funType :: Type_ name
                          , funConstraint :: Maybe (Constraint_ name)
                          , funDefs :: [Def_ name exp]
                          }
@@ -73,7 +73,7 @@ data Fun_ name exp = Fun { funComments :: [String]
 -- Monoid a => ...
 -- (Applicative a, Alternative b) => ...
 type Constraint = Constraint_ Name
-data Constraint_ name = CInst name [Ty_ name]
+data Constraint_ name = CInst name [Type_ name]
                 | CTuple (Constraint_ name) (Constraint_ name)
                 deriving (Show, Eq)
 
@@ -90,7 +90,7 @@ data Data_ name = Data { dataName :: name
 type Typeclass = Typeclass_ Name
 data Typeclass_ name = Typeclass { typeclassName :: name
                                  , typeclassTyVars :: [name] -- should this be [Name]?
-                                 , typeclassDefs :: [(name, Ty_ name)]
+                                 , typeclassDefs :: [(name, Type_ name)]
                                  }
                                  deriving (Eq, Show)
 
@@ -99,7 +99,7 @@ data Typeclass_ name = Typeclass { typeclassName :: name
 --               ^^^^^^^^^^^^^^^
 type Instance exp = Instance_ Name exp
 data Instance_ name exp = Instance { instanceName :: name
-                                   , instanceTypes :: [Ty_ name]
+                                   , instanceTypes :: [Type_ name]
                                    , instanceDefs :: [(name, [Def_ name exp])]
                                    }
                                    deriving (Eq, Show)
@@ -108,10 +108,10 @@ type DataCon = DataCon_ Name
 -- Left a
 -- Foo { unFoo : a, label : String }
 data DataCon_ name = DataCon { conName :: name
-                             , conArgs :: [Ty_ name]
+                             , conArgs :: [Type_ name]
                              }
                    | RecordCon { conName :: name
-                               , conFields :: [(name, Ty_ name)]
+                               , conFields :: [(name, Type_ name)]
                                } 
                              deriving (Eq, Show)
 
@@ -138,24 +138,21 @@ data Pattern_ a = VarPat a
 -- Int -> String
 -- a -> b
 -- f a
--- TODO: rename to Type?
--- TODO: I think this is a shitty way to structure type application - hard to
--- use in practice. The approach in Constraint.Expr.Type is a lot better.
-type Ty = Ty_ Name
-data Ty_ a = Ty_ a :@: Ty_ a
-        | TyArr
-        | TyCon a
+type Type = Type_ Name
+data Type_ a =
+          TyCon a [Type_ a]
         | TyVar a
-        | TyList (Ty_ a)
-        | TyTuple [Ty_ a]
+        | TyList (Type_ a)
+        | TyTuple [Type_ a]
         | TyHole Name
         | TyInt
         | TyString
+        | TyFun (Type_ a) (Type_ a)
   deriving (Eq, Show, Ord)
 
 infixr 4 `fn`
-fn :: Ty_ name -> Ty_ name -> Ty_ name
-a `fn` b = (TyArr :@: a) :@: b
+fn :: Type_ name -> Type_ name -> Type_ name
+fn = TyFun
 
 -- Syn: the surface syntax
 -- Syn represents the code that users write. It goes through several
@@ -178,7 +175,7 @@ data Syn_ name = Var name
          -- TODO: type sigs in let bindinds
          -- TODO: multi-definition functions in let bindings
          --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
-         | LetA name (Ty_ name) (Syn_ name) (Syn_ name)
+         | LetA name (Type_ name) (Syn_ name) (Syn_ name)
          | Let [(name, Syn_ name)] (Syn_ name)
          | Case (Syn_ name) [(Pattern_ name, Syn_ name)]
          -- more exotic syntactic structures

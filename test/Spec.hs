@@ -14,7 +14,7 @@ main :: IO ()
 main = hspec $ do
   Test.Syn.Parse.test
   Test.Syn.Print.test
-  -- Test.Syn.RoundTrip.test
+  Test.Syn.RoundTrip.test
   Test.Constraint.test
   Test.Constraint.Pattern.test
   Test.Constraint.Bind.test

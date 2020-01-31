@@ -119,7 +119,7 @@ genTypeclass =
     <*> Gen.list (Range.linear 1 3) genLowerName
     <*> Gen.list (Range.linear 1 3) typeclassdef
  where
-  typeclassdef :: H.Gen (Name, Ty)
+  typeclassdef :: H.Gen (Name, Type)
   typeclassdef = (,) <$> genLowerName <*> genType
 
 genData :: H.Gen Data
@@ -158,13 +158,25 @@ genConstraint = Gen.small $ Gen.recursive
   ]
   [Gen.subterm2 genConstraint genConstraint (liftA2 CTuple)]
 
-genType :: H.Gen Ty
+-- TyInt and TyString are omitted here because without parsing the whole module
+-- we can't distinguish between a locally defined Int type and the builtin Int
+-- type - therefore the roundtrip property can't straightforwardly hold for
+-- these types.
+genType :: H.Gen Type
 genType = Gen.recursive
   Gen.choice
-  [TyCon <$> genUpperName, TyVar <$> genLowerName, TyHole <$> genHoleName]
-  [ Gen.subterm2 genType genType (:@:)
+  [ TyCon <$> genUpperName <*> pure []
+  , TyVar <$> genLowerName
+  , TyHole <$> genHoleName
+  ]
+  [ Gen.subterm genType TyList
   , Gen.subterm2 genType genType fn
-  , Gen.subterm genType TyList
+  , Gen.subtermM2
+    genType
+    genType
+    (\ty1 ty2 ->
+      TyCon <$> Gen.choice [genUpperName, genLowerName] <*> pure [ty1, ty2]
+    )
   , Gen.subterm2 genType genType (\ty1 ty2 -> TyTuple [ty1, ty2])
   ]
 

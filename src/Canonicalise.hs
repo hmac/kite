@@ -50,19 +50,18 @@ canonicaliseFun (mod, imps) f =
     , funType = canonicaliseType (mod, imps) (funType f)
     }
 
-canonicaliseType :: Env -> Syn.Ty -> Can.Type
+canonicaliseType :: Env -> Syn.Type -> Can.Type
 canonicaliseType env = \case
   -- Note: type variables are assumed to be local to the type
   -- this may need rethinking when we support type aliases
+  TyCon n ts -> TyCon (canonicaliseName env n) (map (canonicaliseType env) ts)
   TyVar v -> TyVar (Local v)
-  TyCon n -> TyCon (canonicaliseName env n)
-  a :@: b -> canonicaliseType env a :@: canonicaliseType env b
   TyList a -> TyList (canonicaliseType env a)
   TyTuple as -> TyTuple $ fmap (canonicaliseType env) as
   TyHole n -> TyHole n
-  TyArr -> TyArr
   TyInt -> TyInt
   TyString -> TyString
+  TyFun a b -> TyFun (canonicaliseType env a) (canonicaliseType env b)
 
 canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
 canonicaliseConstraint env = \case
