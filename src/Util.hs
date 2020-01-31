@@ -100,3 +100,6 @@ splitOn x xs = go xs []
 -- Pretty printing
 pShow :: Show a => a -> String
 pShow = unpack . Text.Pretty.Simple.pShow
+
+hasDuplicates :: Eq a => [a] -> Bool
+hasDuplicates xs = Data.List.nub xs /= xs

@@ -55,6 +55,33 @@ instance Sub ExpT where
   sub s (IntLitT   i  t   ) = IntLitT i (sub s t)
   sub s (StringLitT p cs t) = StringLitT p (mapFst (sub s) cs) (sub s t)
 
+instance Vars ExpT where
+  fuv (VarT _ t          ) = fuv t
+  fuv (ConT _            ) = mempty
+  fuv (AppT a     b      ) = fuv a <> fuv b
+  fuv (AbsT binds e      ) = fuv (map snd binds) <> fuv e
+  fuv (CaseT s     alts t) = fuv s <> fuv (map (\(AltT _ e) -> e) alts) <> fuv t
+  fuv (LetT  binds body t) = fuv (map snd binds) <> fuv body <> fuv t
+  fuv (LetAT _ sch e b t ) = fuv sch <> fuv e <> fuv b <> fuv t
+  fuv (HoleT     _  t    ) = fuv t
+  fuv (TupleLitT es t    ) = fuv es <> fuv t
+  fuv (ListLitT  es t    ) = fuv es <> fuv t
+  fuv (IntLitT   _  t    ) = fuv t
+  fuv (StringLitT _ cs t ) = fuv (map fst cs) <> fuv t
+
+  ftv (VarT _ t          ) = ftv t
+  ftv (ConT _            ) = mempty
+  ftv (AppT a     b      ) = ftv a <> ftv b
+  ftv (AbsT binds e      ) = ftv (map snd binds) <> ftv e
+  ftv (CaseT s     alts t) = ftv s <> ftv (map (\(AltT _ e) -> e) alts) <> ftv t
+  ftv (LetT  binds body t) = ftv (map snd binds) <> ftv body <> ftv t
+  ftv (LetAT _ sch e b t ) = ftv sch <> ftv e <> ftv b <> ftv t
+  ftv (HoleT     _  t    ) = ftv t
+  ftv (TupleLitT es t    ) = ftv es <> ftv t
+  ftv (ListLitT  es t    ) = ftv es <> ftv t
+  ftv (IntLitT   _  t    ) = ftv t
+  ftv (StringLitT _ cs t ) = ftv (map fst cs) <> ftv t
+
 data Alt = Alt Pattern Exp
   deriving (Eq, Show)
 
@@ -83,3 +110,4 @@ instance Sub Scheme where
 
 instance Vars Scheme where
   fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
+  ftv (Forall tvars c t) = ftv c <> ftv t \\ Set.fromList tvars

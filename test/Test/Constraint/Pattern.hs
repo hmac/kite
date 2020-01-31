@@ -7,9 +7,7 @@ import           Test.Hspec
 import qualified Data.Map.Strict               as Map
 
 import           Constraint
-import           Constraint.Solve               ( solveC
-                                                , Error(..)
-                                                )
+import           Constraint.Solve               ( solveC )
 import           Constraint.Generate.M
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
@@ -191,19 +189,21 @@ test = do
 runGenerate
   :: GenerateM (Type, CConstraint, Env) -> Either Error (Type, Constraint, Env)
 runGenerate g =
-  let ((t, constraints, env'), touchables) = run g
-  in  case solveC touchables constraints of
-        Left  err     -> Left err
-        Right (cs, s) -> Right (sub s t, cs, sub s env')
+  let (res, touchables) = run g
+  in  do
+        (t, constraints, env') <- res
+        (cs, s)                <- solveC touchables constraints
+        pure (sub s t, cs, sub s env')
 
 runGenerateMulti
   :: GenerateM ([Type], CConstraint, Env)
   -> Either Error ([Type], Constraint, Env)
 runGenerateMulti g =
-  let ((ts, constraints, env'), touchables) = run g
-  in  case solveC touchables constraints of
-        Left  err     -> Left err
-        Right (cs, s) -> Right (map (sub s) ts, cs, sub s env')
+  let (res, touchables) = run g
+  in  do
+        (ts, constraints, env') <- res
+        (cs, s)                 <- solveC touchables constraints
+        pure (map (sub s) ts, cs, sub s env')
 
 printError :: Error -> String
 printError (OccursCheckFailure t v) =

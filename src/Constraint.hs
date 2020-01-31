@@ -18,6 +18,7 @@ module Constraint
   , sortConstraint
   , modPrim
   , mkTupleType
+  , Error(..)
   )
 where
 
@@ -92,7 +93,7 @@ data Type = TVar Var
           deriving (Eq, Show, Ord)
 
 modPrim :: ModuleName
-modPrim = ModuleName ["Lam", "Primitive"]
+modPrim = "Lam.Primitive"
 
 infixr 4 `fn`
 fn :: Type -> Type -> Type
@@ -202,3 +203,13 @@ implic :: CConstraint -> [(Set Var, Constraint, CConstraint)]
 implic (Simple _  ) = mempty
 implic (E vars q c) = [(Set.fromList vars, q, c)]
 implic (c :^^: d  ) = implic c <> implic d
+
+data Error = OccursCheckFailure Type Type
+           | ConstructorMismatch Type Type
+           | UnsolvedConstraints Constraint
+           | EquationsHaveDifferentNumberOfPatterns
+           | UnsolvedUnificationVariables (Set Var)
+           | UnknownVariable Name
+           | EmptyCase
+           | DuplicatePatternVariables
+  deriving (Show, Eq)

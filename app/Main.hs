@@ -20,6 +20,8 @@ import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
 import           Options.Generic
 
+import           Typecheck                      ( inferModule )
+
 data Config =
       Repl
     | Run FilePath
@@ -53,10 +55,11 @@ dumpTypeEnv :: FilePath -> IO ()
 dumpTypeEnv = withParsedFile (pPrint . ModuleGroupTypechecker.dumpEnv)
 
 typecheck :: FilePath -> IO ()
-typecheck = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModule g of
-    Left  err -> putStrLn (printError err)
-    Right _   -> putStrLn "Success."
+typecheck = withParsedFile $ \(ModuleGroup m deps) ->
+  let modules = deps ++ [m]
+  in  case mapM_ inferModule modules of
+        Left  err -> print err
+        Right _   -> putStrLn "Success."
 
 run :: FilePath -> IO ()
 run = withParsedFile $ \g -> case ModuleGroupTypechecker.typecheckModule g of

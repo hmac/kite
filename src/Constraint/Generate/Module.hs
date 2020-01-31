@@ -15,7 +15,6 @@ import           Syntax                  hiding ( Name
                                                 )
 import           Canonical                      ( Name(..) )
 import           Constraint
-import           Constraint.Solve               ( Error )
 import           Constraint.Expr                ( Exp
                                                 , Scheme(..)
                                                 )
@@ -26,8 +25,7 @@ import           Constraint.FromSyn             ( fromSyn
 import           Constraint.Generate.Bind
 import           Util
 
-generateModule
-  :: Env -> Module_ Name (Syn_ Name) -> GenerateM (Either Error [BindT])
+generateModule :: Env -> Module_ Name (Syn_ Name) -> GenerateM [BindT]
 generateModule env modul = do
   -- Extract data declarations
   let datas = getDataDecls (moduleDecls modul)
@@ -37,18 +35,20 @@ generateModule env modul = do
   --       instance declarations
 
   -- Extract function declarations
-  -- TODO: generate uvars for all binds upfront so they can be typechecked in
-  --       any order
   let funs  = getFunDecls (moduleDecls modul)
   let binds = map funToBind funs
+
+  -- Generate uvars for each bind upfront so they can be typechecked in any order
+  bindEnv <- mapM (\(Bind n _ _) -> (n, ) . Forall [] mempty . TVar <$> fresh)
+                  binds
+  let env'' = Map.fromList bindEnv <> env'
+
   res <- forM binds $ \bind -> do
-    r <- generateBind env' bind
-    case r of
-      Left  err       -> pure $ Left err
-      Right (_env, b) -> pure $ Right b
+    (_env, b) <- generateBind env'' bind
+    pure (Right b)
   case lefts res of
-    []        -> pure (Right (rights res))
-    (err : _) -> pure (Left err)
+    []        -> pure (rights res)
+    (err : _) -> throwError err
 
 getFunDecls :: [Decl_ n e] -> [Fun_ n e]
 getFunDecls (FunDecl f : rest) = f : getFunDecls rest

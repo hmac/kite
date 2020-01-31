@@ -1,5 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
-module Constraint.Generate.M where
+module Constraint.Generate.M
+  ( module Constraint.Generate.M
+  , throwError
+  )
+where
 
 -- The constraint generation monad, consisting of:
 -- - A State part, generate fresh variables (like NameGen)
@@ -9,6 +13,7 @@ import qualified Data.Set                      as Set
 import           Data.Map.Strict                ( Map )
 import           Control.Monad.State.Strict
 import           Control.Monad.Writer.Strict
+import           Control.Monad.Except
 
 import           Constraint
 import           Constraint.Expr                ( Scheme )
@@ -20,7 +25,7 @@ type Env = Map Name Scheme
 instance Sub Env where
   sub s = fmap (sub s)
 
-type GenerateM = WriterT (Set.Set Var) (State Int)
+type GenerateM = ExceptT Error (WriterT (Set.Set Var) (State Int))
 
 -- Generate a fresh rigid type variable
 freshR :: GenerateM Var
@@ -40,8 +45,8 @@ fresh = do
   tell (Set.singleton var)
   pure var
 
-run :: GenerateM a -> (a, Set.Set Var)
-run m = evalState (runWriterT m) 0
+run :: GenerateM a -> (Either Error a, Set.Set Var)
+run m = evalState (runWriterT (runExceptT m)) 0
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]

@@ -21,9 +21,7 @@ generate env (Var name) = case Map.lookup name env of
     let t' = sub subst t
     let q' = sub subst c
     pure (VarT name t', t', Simple q')
-  Nothing -> do
-    a <- TVar <$> fresh
-    pure (VarT name a, a, mempty)
+  Nothing -> throwError (UnknownVariable name)
 -- Data constructors are treated identically to variables
 generate env (Con n) = do
   (_, t, c) <- generate env (Var n)
@@ -111,14 +109,10 @@ generate env (StringLit p cs) = do
 -- to be changed.
 generateCase :: Env -> Exp -> [Alt] -> GenerateM (ExpT, Type, CConstraint)
 
--- Lam doesn't support empty cases. If there are no cases, just return a new
--- unification variable, which will cause a type error
-generateCase env e [] = do
-  (e, _, _) <- generate env e
-  a         <- TVar <$> fresh
-  pure (CaseT e [] a, a, mempty)
+-- Lam doesn't support empty case expressions.
+generateCase _env _e        []   = throwError EmptyCase
 
-generateCase env scrutinee alts = do
+generateCase env  scrutinee alts = do
   -- infer the scrutinee
   (scrutineeT, scrutTy, scrutC) <- generate env scrutinee
   -- infer each case alternative

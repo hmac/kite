@@ -8,6 +8,7 @@ import           Constraint.Generate.Pattern
 import           Constraint.Generate.M
 import           Constraint.Solve
 import           Util
+import           Syntax                         ( Pattern_(..) )
 
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
@@ -21,9 +22,9 @@ data BindT = BindT Name [([Pattern], ExpT)] Scheme
   deriving (Show, Eq)
 
 -- Fig. 12
-generateBind :: Env -> Bind -> GenerateM (Either Error (Env, BindT))
+generateBind :: Env -> Bind -> GenerateM (Env, BindT)
 generateBind _ (Bind _ _ equations) | not (sameNumberOfPatterns equations) =
-  pure $ Left EquationsHaveDifferentNumberOfPatterns
+  throwError EquationsHaveDifferentNumberOfPatterns
 generateBind env (Bind name annotation equations) = do
   (es, eqTypes, cs) <- unzip3 <$> mapM (generateMultiEquation env) equations
   (beta, allEqsEq)  <- do
@@ -36,31 +37,38 @@ generateBind env (Bind name annotation equations) = do
   let touchables  = fuv eqTypes <> fuv beta <> fuv cs
   let constraints = mconcat cs <> Simple (allEqsEq <> annotationConstraint)
   case solveC touchables constraints of
-    Left  err        -> pure $ Left err
+    Left  err        -> throwError err
     Right (q, subst) -> do
       -- At this point, q should only contain typeclass constraints.
       -- We should have solved all the equality constraints.
       if q /= mempty
-        then pure (Left (UnsolvedConstraints q))
+        then throwError (UnsolvedConstraints q)
         else do
 
           -- apply the substitution to remove all resolved unification vars
           let eqTypes' = map (sub subst) eqTypes
           let exps'    = map (sub subst) es
+
           case annotation of
-            Just bindTy ->
-              let
-                bind = BindT
-                  name
-                  (zipWith (\e' (p, _) -> (p, e')) exps' equations)
-                  bindTy
-              in  pure $ Right (Map.insert name bindTy env, bind)
+            Just bindTy -> do
+              -- We should now have no remaining unification variables.
+              let remainingUVars = fuv eqTypes' <> fuv exps'
+              if remainingUVars /= mempty
+                then throwError (UnsolvedUnificationVariables remainingUVars)
+                else
+                  let
+                    bind = BindT
+                      name
+                      (zipWith (\e' (p, _) -> (p, e')) exps' equations)
+                      bindTy
+                  in  pure (Map.insert name bindTy env, bind)
             Nothing -> do
               -- bind all the free unification vars in the types and residual as
               -- rigid vars in the type of the function
               -- this is the reverse of the usual substitutions: uvar -> tvar
-              tysubst <- mapM (\v -> (v, ) . TVar <$> freshR)
-                              (Set.toList (fuv eqTypes' <> fuv q))
+              tysubst <- mapM
+                (\v -> (v, ) . TVar <$> freshR)
+                (Set.toList (fuv eqTypes' <> fuv exps' <> fuv q))
               -- Since everything is solved, we can take the first equation type
               -- and use that
               let eqType = head eqTypes'
@@ -73,7 +81,7 @@ generateBind env (Bind name annotation equations) = do
                   name
                   (zipWith (\e' (p, _) -> (p, e')) exps'' equations)
                   bindTy
-              pure $ Right (Map.insert name bindTy env, bind)
+              pure (Map.insert name bindTy env, bind)
 
 -- Generate constraints for a single branch of a multi-equation function
 -- definition. Branches can have 0+ patterns.
@@ -88,6 +96,8 @@ generateBind env (Bind name annotation equations) = do
 --   and _    _    = False
 generateMultiEquation
   :: Env -> ([Pattern], Exp) -> GenerateM (ExpT, Type, CConstraint)
+generateMultiEquation _ (pats, _) | hasDuplicates (patternVariables pats) =
+  throwError DuplicatePatternVariables
 generateMultiEquation env (pats, expr) = do
   (patTypes, patCs, envs) <-
     unzip3
@@ -99,6 +109,18 @@ generateMultiEquation env (pats, expr) = do
 
 sameNumberOfPatterns :: [([Pattern], a)] -> Bool
 sameNumberOfPatterns = allEqual . map (length . fst)
+
+patternVariables :: [Pattern] -> [Name]
+patternVariables = concatMap f
+ where
+  f p = case p of
+    VarPat x     -> [x]
+    WildPat      -> []
+    IntPat    _  -> []
+    StringPat _  -> []
+    TuplePat  ps -> patternVariables ps
+    ListPat   ps -> patternVariables ps
+    ConsPat _ ps -> patternVariables ps
 
 allEqual :: Eq a => [a] -> Bool
 allEqual []       = True

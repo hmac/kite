@@ -1,0 +1,4 @@
+module UnknownVariable
+
+foo : Int -> Int
+foo x = y

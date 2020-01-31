@@ -9,9 +9,7 @@ import qualified Data.Map.Strict               as Map
 
 import           Constraint
 import           Constraint.Expr
-import           Constraint.Solve               ( solveC
-                                                , Error(..)
-                                                )
+import           Constraint.Solve               ( solveC )
 import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )
@@ -285,33 +283,33 @@ test = do
 
 
 infersType :: Env -> Exp -> Type -> Expectation
-infersType env expr expectedType =
-  let ((_, t, constraints), touchables) = run (generate env expr)
-  in  case solveC touchables constraints of
-        Left  err     -> expectationFailure $ printError err
-        Right (cs, s) -> do
-          cs `shouldBe` mempty
-          sub s t `shouldBe` expectedType
+infersType env expr expectedType = case run (generate env expr) of
+  (Right (_, t, constraints), touchables) ->
+    case solveC touchables constraints of
+      Left  err     -> expectationFailure $ printError err
+      Right (cs, s) -> do
+        cs `shouldBe` mempty
+        sub s t `shouldBe` expectedType
+  (Left err, _) -> expectationFailure $ printError err
 
 infersError :: Env -> Bind -> Expectation
-infersError env bind =
-  let (res, _) = run (generateBind env bind)
-  in  case res of
-        Left err -> pure ()
-        Right (_env, bindt) ->
-          expectationFailure
-            $  "Expected type error but was successful: \n"
-            <> pShow bindt
+infersError env bind = case run (generateBind env bind) of
+  (Right (_env, bindt), _) ->
+    expectationFailure
+      $  "Expected type error but was successful: \n"
+      <> pShow bindt
+  (Left _, _) -> pure ()
 
 inferAndZonk :: Env -> Exp -> ExpT -> Expectation
-inferAndZonk env expr expectedExpr =
-  let ((expr', _, constraints), touchables) = run (generate env expr)
-  in  case solveC touchables constraints of
-        Left err ->
-          expectationFailure $ "Expected Right, found Left " <> show err
-        Right (cs, s) -> do
-          cs `shouldBe` mempty
-          sub s expr' `shouldBe` expectedExpr
+inferAndZonk env expr expectedExpr = case run (generate env expr) of
+  (Right (expr', _, constraints), touchables) ->
+    case solveC touchables constraints of
+      Left err ->
+        expectationFailure $ "Expected Right, found Left " <> show err
+      Right (cs, s) -> do
+        cs `shouldBe` mempty
+        sub s expr' `shouldBe` expectedExpr
+  (Left err, _) -> expectationFailure (printError err)
 
 printError :: Error -> String
 printError (OccursCheckFailure t v) =

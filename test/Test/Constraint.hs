@@ -17,9 +17,7 @@ import           Data.Name                      ( RawName(..)
 import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr
-import           Constraint.Solve               ( solveC
-                                                , Error(..)
-                                                )
+import           Constraint.Solve               ( solveC )
 import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )
@@ -287,31 +285,34 @@ test = do
       infersType env expr TString
 
 infersType :: Env -> Exp -> Type -> Expectation
-infersType env expr expectedType =
-  let ((_, t, constraints), touchables) = run (generate env expr)
-  in  case solveC touchables constraints of
-        Left  err     -> expectationFailure $ printError err
-        Right (cs, s) -> do
-          cs `shouldBe` mempty
-          sub s t `shouldBe` expectedType
+infersType env expr expectedType = case run (generate env expr) of
+  (Right (_, t, constraints), touchables) ->
+    case solveC touchables constraints of
+      Left  err     -> expectationFailure $ printError err
+      Right (cs, s) -> do
+        cs `shouldBe` mempty
+        sub s t `shouldBe` expectedType
+  (Left err, _) -> expectationFailure $ printError err
 
 -- TODO: use this
 infersError :: Env -> Exp -> Expectation
-infersError env expr =
-  let ((_, _, constraints), touchables) = run (generate env expr)
-  in  case solveC touchables constraints of
-        Left  _ -> pure ()
-        Right _ -> expectationFailure "Expected type error but was successful"
+infersError env expr = case run (generate env expr) of
+  (Right (_, _, constraints), touchables) ->
+    case solveC touchables constraints of
+      Left  _ -> pure ()
+      Right _ -> expectationFailure "Expected type error but was successful"
+  (Left err, _) -> pure ()
 
 inferAndZonk :: Env -> Exp -> ExpT -> Expectation
-inferAndZonk env expr expectedExpr =
-  let ((expr', _, constraints), touchables) = run (generate env expr)
-  in  case solveC touchables constraints of
-        Left err ->
-          expectationFailure $ "Expected Right, found Left " <> show err
-        Right (cs, s) -> do
-          cs `shouldBe` mempty
-          sub s expr' `shouldBe` expectedExpr
+inferAndZonk env expr expectedExpr = case run (generate env expr) of
+  (Right (expr', _, constraints), touchables) ->
+    case solveC touchables constraints of
+      Left err ->
+        expectationFailure $ "Expected Right, found Left " <> show err
+      Right (cs, s) -> do
+        cs `shouldBe` mempty
+        sub s expr' `shouldBe` expectedExpr
+  (Left err, _) -> expectationFailure (printError err)
 
 isLawfulMonoid :: (Eq a, Show a, Monoid a) => H.Gen a -> H.Property
 isLawfulMonoid gen = H.property $ do

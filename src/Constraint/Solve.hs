@@ -21,6 +21,7 @@ import           Data.Set                       (Set )
 
 import           Control.Monad.State.Strict
 import           Constraint
+import           Canonical                      (Name)
 
 import           Prelude                 hiding ( interact )
 
@@ -31,12 +32,6 @@ import           Prelude                 hiding ( interact )
 -- - top level axiom scheme
 type Quad = (Set Var, Constraint)
 type Solve = State Quad
-
-data Error = OccursCheckFailure Type Type
-           | ConstructorMismatch Type Type
-           | UnsolvedConstraints Constraint
-           | EquationsHaveDifferentNumberOfPatterns
-  deriving (Show, Eq)
 
 -- See fig. 14
 -- TODO: solveC should take as arguments:

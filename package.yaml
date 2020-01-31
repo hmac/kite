@@ -50,6 +50,7 @@ dependencies:
 - hspec-megaparsec
 - hedgehog
 - hw-hspec-hedgehog
+- filepath
 
 library:
   source-dirs: src
