@@ -8,7 +8,7 @@ import           System.FilePath.Posix          ( (</>) )
 import           Test.Hspec
 
 import           ModuleLoader
-import           Typecheck
+import           ModuleGroupTypechecker
 
 
 test :: Spec
@@ -27,23 +27,19 @@ expectTypecheckPass :: FilePath -> Expectation
 expectTypecheckPass path = do
   res <- parseFile path
   case res of
-    Left err -> expectationFailure err
-    Right (ModuleGroup m deps) ->
-      let modules = deps ++ [m]
-      in  case mapM_ inferModule modules of
-            Left  err -> expectationFailure (show err)
-            Right _   -> pure ()
+    Left  err -> expectationFailure err
+    Right g   -> case typecheckModuleGroup g of
+      Left  err -> expectationFailure (show err)
+      Right _   -> pure ()
 
 expectTypecheckFail :: FilePath -> Expectation
 expectTypecheckFail path = do
   res <- parseFile path
   case res of
-    Left err -> expectationFailure err
-    Right (ModuleGroup m deps) ->
-      let modules = deps ++ [m]
-      in  case mapM_ inferModule modules of
-            Left  _ -> pure ()
-            Right _ -> expectationFailure "expected type error but succeeded"
+    Left  err -> expectationFailure err
+    Right g   -> case typecheckModuleGroup g of
+      Left  _ -> pure ()
+      Right _ -> expectationFailure "expected type error but succeeded"
 
 parseFile :: FilePath -> IO (Either String ModuleGroup)
 parseFile path = do

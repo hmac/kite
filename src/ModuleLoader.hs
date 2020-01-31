@@ -34,7 +34,6 @@ import           Canonicalise                   ( canonicaliseModule )
 
 -- TODO: structured errors
 
--- With canonicalisation we can probably flatten this tree.
 --                             the module   its dependencies
 data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [Can.Module Can.Exp]
   deriving (Show)

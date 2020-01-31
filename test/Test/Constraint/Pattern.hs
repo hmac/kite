@@ -52,14 +52,14 @@ test = do
     infersType pat ty =
       let gen = fresh >>= \u -> generatePattern env (TVar u) pat
       in  case runGenerate gen of
-            Left  err                -> expectationFailure (printError err)
+            Left  err                -> failure (printError err)
             Right (t, constraint, _) -> do
               constraint `shouldBe` mempty
               t `shouldBe` ty
     -- Check that a type is inferred for a pattern with an annotation
     infersTypeA :: Pattern -> Type -> Expectation
     infersTypeA pat ty = case runGenerate (generatePattern env ty pat) of
-      Left  err                -> expectationFailure (printError err)
+      Left  err                -> failure (printError err)
       Right (t, constraint, _) -> do
         constraint `shouldBe` mempty
         t `shouldBe` ty
@@ -78,7 +78,7 @@ test = do
       -> (Env -> Expectation)
       -> Expectation
     generatesEnv gen f = case runGenerate gen of
-      Left  err       -> expectationFailure (printError err)
+      Left  err       -> failure (printError err)
       Right (_, _, e) -> f e
 
   describe "Constraint solving for patterns" $ do
@@ -94,7 +94,7 @@ test = do
             u <- TVar <$> fresh
             generatePattern mempty u (VarPat "x")
       case runGenerate gen of
-        Left  err                    -> expectationFailure (printError err)
+        Left  err                    -> failure (printError err)
         Right (ty, constraint, env') -> do
           ty `shouldBe` TVar (U "1")
           constraint `shouldBe` mempty
@@ -140,7 +140,7 @@ test = do
               , pat1Env <> pat2Env
               )
       case runGenerateMulti gen of
-        Left err -> expectationFailure (printError err)
+        Left  err                          -> failure (printError err)
         Right ([t1, t2], constraint, env') -> do
           constraint `shouldBe` mempty
           t1 `shouldBe` pair bool nat
@@ -205,18 +205,5 @@ runGenerateMulti g =
         (cs, s)                 <- solveC touchables constraints
         pure (map (sub s) ts, cs, sub s env')
 
-printError :: Error -> String
-printError (OccursCheckFailure t v) =
-  show
-    $  "Occurs check failure between "
-    <> printType t
-    <> " and "
-    <> printType v
-printError (ConstructorMismatch t v) =
-  show
-    $  "Constructors do not match between "
-    <> printType t
-    <> " and "
-    <> printType v
-printError (UnsolvedConstraints c) =
-  show $ "Unsolved constraints: " <> printConstraint c
+failure :: Show a => a -> Expectation
+failure x = expectationFailure (show x)

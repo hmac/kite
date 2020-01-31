@@ -288,11 +288,11 @@ infersType :: Env -> Exp -> Type -> Expectation
 infersType env expr expectedType = case run (generate env expr) of
   (Right (_, t, constraints), touchables) ->
     case solveC touchables constraints of
-      Left  err     -> expectationFailure $ printError err
+      Left  err     -> failure $ printError err
       Right (cs, s) -> do
         cs `shouldBe` mempty
         sub s t `shouldBe` expectedType
-  (Left err, _) -> expectationFailure $ printError err
+  (Left err, _) -> failure $ printError err
 
 -- TODO: use this
 infersError :: Env -> Exp -> Expectation
@@ -312,7 +312,10 @@ inferAndZonk env expr expectedExpr = case run (generate env expr) of
       Right (cs, s) -> do
         cs `shouldBe` mempty
         sub s expr' `shouldBe` expectedExpr
-  (Left err, _) -> expectationFailure (printError err)
+  (Left err, _) -> failure (printError err)
+
+failure :: Show a => a -> Expectation
+failure x = expectationFailure (show x)
 
 isLawfulMonoid :: (Eq a, Show a, Monoid a) => H.Gen a -> H.Property
 isLawfulMonoid gen = H.property $ do
@@ -368,19 +371,3 @@ genRawName = Name <$> Gen.list (Range.linear 1 5) Gen.alphaNum
 
 genUVarName :: H.Gen Name
 genUVarName = Local . Name <$> Gen.list (Range.linear 1 5) Gen.digit
-
-printError :: Error -> String
-printError (OccursCheckFailure t v) =
-  show
-    $  "Occurs check failure between "
-    <> printType t
-    <> " and "
-    <> printType v
-printError (ConstructorMismatch t v) =
-  show
-    $  "Constructors do not match between "
-    <> printType t
-    <> " and "
-    <> printType v
-printError (UnsolvedConstraints c) =
-  show $ "Unsolved constraints: " <> printConstraint c

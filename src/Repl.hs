@@ -46,7 +46,7 @@ repl env = do
 processDecl :: [Decl Syn] -> IO Bool
 processDecl decls =
   let g = ModuleGroup (buildModule decls) []
-  in  case ModuleGroupTypechecker.typecheckModule g of
+  in  case ModuleGroupTypechecker.typecheckModuleGroup g of
         Left err -> do
           putStrLn $ "Type error: " <> show err
           pure False
@@ -65,7 +65,7 @@ processExpr decls e =
                        }
     g = ModuleGroup (buildModule (decls ++ [main])) []
   in
-    case ModuleGroupTypechecker.typecheckModule g of
+    case ModuleGroupTypechecker.typecheckModuleGroup g of
       Left  err -> putStrLn $ "Type error: " <> show err
       Right _   -> do
         let compiled = ModuleGroupCompiler.compileModule g

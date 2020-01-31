@@ -14,13 +14,12 @@ import qualified ModuleLoader
 import qualified ModuleGroupTypechecker
 import qualified ModuleGroupCompiler
 
-import           Typecheck.Error                ( printError )
 import qualified Repl                           ( run )
 import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
 import           Options.Generic
 
-import           Typecheck                      ( inferModule )
+import           Constraint.Print
 
 data Config =
       Repl
@@ -55,19 +54,19 @@ dumpTypeEnv :: FilePath -> IO ()
 dumpTypeEnv = withParsedFile (pPrint . ModuleGroupTypechecker.dumpEnv)
 
 typecheck :: FilePath -> IO ()
-typecheck = withParsedFile $ \(ModuleGroup m deps) ->
-  let modules = deps ++ [m]
-  in  case mapM_ inferModule modules of
-        Left  err -> print err
-        Right _   -> putStrLn "Success."
+typecheck = withParsedFile $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left  err -> printNicely (printError err)
+    Right _   -> printNicely "Success."
 
 run :: FilePath -> IO ()
-run = withParsedFile $ \g -> case ModuleGroupTypechecker.typecheckModule g of
-  Left err -> putStrLn (printError err)
-  Right _ ->
-    let cm     = ModuleGroupCompiler.compileModule g
-        answer = evalMain (cModuleName cm) (cModuleEnv cm)
-    in  renderIO stdout (layout (LC.Print.print answer)) >> putStrLn ""
+run = withParsedFile $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left err -> print (printError err)
+    Right _ ->
+      let cm     = ModuleGroupCompiler.compileModule g
+          answer = evalMain (cModuleName cm) (cModuleEnv cm)
+      in  printNicely (LC.Print.print answer)
 
 withParsedFile :: (ModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
@@ -78,6 +77,9 @@ withParsedFile cb path = do
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutPretty defaultLayoutOptions doc)
+
+printNicely :: Document -> IO ()
+printNicely doc = renderIO stdout (layout doc) >> putStrLn ""
 
 -- Conor Colours
 -- https://github.com/idris-lang/Idris-dev/blob/master/docs/reference/semantic-highlighting.rst

@@ -281,17 +281,6 @@ test = do
         let bind = Bind "f" Nothing body
         infersError env bind
 
-
-infersType :: Env -> Exp -> Type -> Expectation
-infersType env expr expectedType = case run (generate env expr) of
-  (Right (_, t, constraints), touchables) ->
-    case solveC touchables constraints of
-      Left  err     -> expectationFailure $ printError err
-      Right (cs, s) -> do
-        cs `shouldBe` mempty
-        sub s t `shouldBe` expectedType
-  (Left err, _) -> expectationFailure $ printError err
-
 infersError :: Env -> Bind -> Expectation
 infersError env bind = case run (generateBind env bind) of
   (Right (_env, bindt), _) ->
@@ -299,30 +288,3 @@ infersError env bind = case run (generateBind env bind) of
       $  "Expected type error but was successful: \n"
       <> pShow bindt
   (Left _, _) -> pure ()
-
-inferAndZonk :: Env -> Exp -> ExpT -> Expectation
-inferAndZonk env expr expectedExpr = case run (generate env expr) of
-  (Right (expr', _, constraints), touchables) ->
-    case solveC touchables constraints of
-      Left err ->
-        expectationFailure $ "Expected Right, found Left " <> show err
-      Right (cs, s) -> do
-        cs `shouldBe` mempty
-        sub s expr' `shouldBe` expectedExpr
-  (Left err, _) -> expectationFailure (printError err)
-
-printError :: Error -> String
-printError (OccursCheckFailure t v) =
-  show
-    $  "Occurs check failure between "
-    <> printType t
-    <> " and "
-    <> printType v
-printError (ConstructorMismatch t v) =
-  show
-    $  "Constructors do not match between "
-    <> printType t
-    <> " and "
-    <> printType v
-printError (UnsolvedConstraints c) =
-  show $ "Unsolved constraints: " <> printConstraint c
