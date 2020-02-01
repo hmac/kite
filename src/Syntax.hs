@@ -11,24 +11,24 @@ import           Data.Name                      ( ModuleName(..)
 import           Util
 
 -- module Foo
-type Module = Module_ Name
-data Module_ name a = Module { moduleName :: ModuleName
-                             , moduleImports :: [Import]
-                             , moduleExports :: [name]
-                             , moduleDecls :: [Decl_ name a]
-                             , moduleMetadata :: [(String, String)]
-                             }
-                             deriving (Eq, Show)
+type Module a = Module_ Name a Type
+data Module_ name a ty = Module { moduleName :: ModuleName
+                                , moduleImports :: [Import]
+                                , moduleExports :: [name]
+                                , moduleDecls :: [Decl_ name a ty]
+                                , moduleMetadata :: [(String, String)]
+                                }
+                                deriving (Eq, Show)
 
 modifyModuleDecls :: (Decl a -> Decl a) -> Module a -> Module a
 modifyModuleDecls f m = m { moduleDecls = map f (moduleDecls m) }
 
-typeclassDecls :: Module_ n a -> [Typeclass_ n]
+typeclassDecls :: Module_ n a ty -> [Typeclass_ n]
 typeclassDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
     TypeclassDecl t -> Just t
     _               -> Nothing
 
-instanceDecls :: Module_ n e -> [Instance_ n e]
+instanceDecls :: Module_ n e ty -> [Instance_ n e]
 instanceDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
   TypeclassInst i -> Just i
   _ -> Nothing
@@ -52,22 +52,22 @@ unName (Name n) = n
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...
-type Decl a = Decl_ Name a
-data Decl_ name exp = FunDecl (Fun_ name exp)
+type Decl a = Decl_ Name a Type
+data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
                     | DataDecl (Data_ name)
                     | TypeclassDecl (Typeclass_ name)
                     | TypeclassInst (Instance_ name exp)
                     | Comment String
                   deriving (Eq, Show)
 
-type Fun exp = Fun_ Name exp
-data Fun_ name exp = Fun { funComments :: [String]
-                         , funName :: name
-                         , funType :: Type_ name
-                         , funConstraint :: Maybe (Constraint_ name)
-                         , funDefs :: [Def_ name exp]
-                         }
-                         deriving (Eq, Show)
+type Fun exp = Fun_ Name exp (Type_ Name)
+data Fun_ name exp ty = Fun { funComments :: [String]
+                            , funName :: name
+                            , funType :: ty
+                            , funConstraint :: Maybe (Constraint_ name)
+                            , funDefs :: [Def_ name exp]
+                            }
+                            deriving (Eq, Show)
 
 -- Typeclass constaints
 -- Monoid a => ...

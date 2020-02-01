@@ -16,6 +16,7 @@ import           Syntax                  hiding ( Name
 import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr                ( Exp
+                                                , ExpT
                                                 , Scheme(..)
                                                 )
 import           Constraint.FromSyn             ( fromSyn
@@ -25,7 +26,10 @@ import           Constraint.FromSyn             ( fromSyn
 import           Constraint.Generate.Bind
 import           Util
 
-generateModule :: Env -> Module_ Name (Syn_ Name) -> GenerateM [BindT]
+generateModule
+  :: Env
+  -> Module_ Name (Syn_ Name) (Type_ Name)
+  -> GenerateM (Env, Module_ Name ExpT Scheme)
 generateModule env modul = do
   -- Extract data declarations
   let datas = getDataDecls (moduleDecls modul)
@@ -43,32 +47,45 @@ generateModule env modul = do
                   binds
   let env'' = Map.fromList bindEnv <> env'
 
-  res <- forM binds $ \bind -> do
-    (_env, b) <- generateBind env'' bind
-    pure (Right b)
-  case lefts res of
-    []        -> pure (rights res)
-    (err : _) -> throwError err
+  (env''', binds') <- mapAccumLM generateBind env'' binds
 
-getFunDecls :: [Decl_ n e] -> [Fun_ n e]
+  -- Reconstruct module with typed declarations
+  let datadecls = map DataDecl datas
+      fundecls  = map (FunDecl . bindToFun) binds'
+
+  pure (env''', modul { moduleDecls = datadecls <> fundecls })
+
+getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
 getFunDecls (FunDecl f : rest) = f : getFunDecls rest
 getFunDecls (_         : rest) = getFunDecls rest
 getFunDecls []                 = []
 
-getDataDecls :: [Decl_ n e] -> [Data_ n]
+getDataDecls :: [Decl_ n e ty] -> [Data_ n]
 getDataDecls (DataDecl d : rest) = d : getDataDecls rest
 getDataDecls (_          : rest) = getDataDecls rest
 getDataDecls []                  = []
 
 -- TODO: typeclass constraints
-funToBind :: Fun_ Name (Syn_ Name) -> Bind
+funToBind :: Fun_ Name (Syn_ Name) (Type_ Name) -> Bind
 funToBind fun = Bind (funName fun) (Just scheme) equations
  where
   scheme    = tyToScheme (funType fun)
   equations = map defToEquation (funDefs fun)
 
+bindToFun :: BindT -> Fun_ Name ExpT Scheme
+bindToFun (BindT name equations scheme) = Fun
+  { funComments   = []
+  , funName       = name
+  , funType       = scheme
+  , funConstraint = Nothing
+  , funDefs       = map equationToDef equations
+  }
+
 defToEquation :: Def_ Name (Syn_ Name) -> ([Pattern_ Name], Exp)
 defToEquation Def { defArgs = pats, defExpr = e } = (pats, fromSyn e)
+
+equationToDef :: ([Pattern_ Name], ExpT) -> Def_ Name ExpT
+equationToDef (pats, expr) = Def { defArgs = pats, defExpr = expr }
 
 -- Generate new bindings for data declarations.
 --

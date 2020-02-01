@@ -14,25 +14,24 @@ import           Constraint                     ( Type(..)
                                                 )
 import qualified Constraint                    as C
                                                 ( fn )
+import           Constraint.Print
 
 import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )
+import qualified Data.Map.Strict               as Map
 
 test :: Spec
 test = describe "typing simple modules" $ do
   it "five : Int; five = 5" $ do
     infersType mempty
                (mkModule [("foo", TyInt, [([], IntLit 5)])])
-               [BindT "foo" [([], IntLitT 5 TInt)] (Forall [] mempty TInt)]
+               [("foo", Forall [] mempty TInt)]
   it "id : a -> a; id x = x" $ do
     infersType
       mempty
       (mkModule [("id", TyVar "a" `fn` TyVar "a", [([VarPat "x"], Var "x")])])
-      [ BindT "id"
-              [([VarPat "x"], VarT "x" (TVar (R "a")))]
-              (Forall [R "a"] mempty (TVar (R "a") `C.fn` TVar (R "a")))
-      ]
+      [("id", Forall [R "a"] mempty (TVar (R "a") `C.fn` TVar (R "a")))]
   it "const : a -> b -> a; const x y = x" $ do
     infersType
       mempty
@@ -43,13 +42,11 @@ test = describe "typing simple modules" $ do
           )
         ]
       )
-      [ BindT
-          "const"
-          [([VarPat "x", VarPat "y"], VarT "x" (TVar (R "a")))]
-          (Forall [R "a", R "b"]
-                  mempty
-                  (TVar (R "a") `C.fn` (TVar (R "b") `C.fn` TVar (R "a")))
-          )
+      [ ( "const"
+        , Forall [R "a", R "b"]
+                 mempty
+                 (TVar (R "a") `C.fn` (TVar (R "b") `C.fn` TVar (R "a")))
+        )
       ]
   it
       "data Maybe a = Just a | Nothing; fromMaybe : Maybe a -> a -> a; fromMaybe (Just x) _ = x; fromMaybe Nothing y = y"
@@ -77,20 +74,14 @@ test = describe "typing simple modules" $ do
         infersType
           mempty
           modul
-          [ BindT
-              (Local "fromMaybe")
-              [ ( [ConsPat "Just" [VarPat "x"], WildPat]
-                , VarT "x" (TVar (R "a"))
-                )
-              , ([WildPat, VarPat "y"], VarT "y" (TVar (R "a")))
-              ]
-              (Forall
-                [R "a"]
-                mempty
-                (TCon "Maybe" [TVar (R "a")] `C.fn` TVar (R "a") `C.fn` TVar
-                  (R "a")
-                )
+          [ ( "fromMaybe"
+            , Forall
+              [R "a"]
+              mempty
+              (TCon "Maybe" [TVar (R "a")] `C.fn` TVar (R "a") `C.fn` TVar
+                (R "a")
               )
+            )
           ]
   describe "expected typing failures" $ do
     it "id : a -> a; id x = 5" $ do
@@ -103,9 +94,17 @@ test = describe "typing simple modules" $ do
           )
         ]
 
-infersType :: Env -> Module_ Name (Syn_ Name) -> [BindT] -> Expectation
-infersType env input output =
-  let (res, _) = run (generateModule env input) in res `shouldBe` Right output
+infersType
+  :: Env
+  -> Module_ Name (Syn_ Name) (Type_ Name)
+  -> [(Name, Scheme)]
+  -> Expectation
+infersType env input outputs =
+  let (res, _) = run (generateModule env input)
+  in  case res of
+        Left err -> failure (printError err)
+        Right (env', _) ->
+          mapM_ (\(n, s) -> Map.lookup n env' `shouldBe` Just s) outputs
 
 infersError
   :: [(Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])] -> Expectation
@@ -116,9 +115,12 @@ infersError input =
         Right t ->
           expectationFailure $ "Expected type error, but succeeded: " <> show t
 
+failure :: Show a => a -> Expectation
+failure x = expectationFailure (show x)
+
 mkModule
   :: [(Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])]
-  -> Module_ Name (Syn_ Name)
+  -> Module_ Name (Syn_ Name) (Type_ Name)
 mkModule decls = Module { moduleName     = "Test"
                         , moduleMetadata = []
                         , moduleImports  = []
@@ -128,7 +130,7 @@ mkModule decls = Module { moduleName     = "Test"
 
 mkDecl
   :: (Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])
-  -> Decl_ Name (Syn_ Name)
+  -> Decl_ Name (Syn_ Name) (Type_ Name)
 mkDecl (name, ty, equations) = FunDecl $ Fun
   { funComments   = []
   , funName       = name
