@@ -1,0 +1,7 @@
+module T2
+
+import T1 (Maybe, Just, Nothing)
+
+rightJoin : Maybe a -> Maybe a -> Maybe a
+rightJoin _ (Just x) = Just x
+rightJoin y Nothing = y

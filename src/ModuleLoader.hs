@@ -1,6 +1,7 @@
 module ModuleLoader
   ( ModuleGroup(..)
   , loadFromPath
+  , loadFromPathAndRootDirectory
   )
 where
 
@@ -40,7 +41,12 @@ data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [Can.Module Can.Exp]
 
 loadFromPath :: FilePath -> IO (Either String ModuleGroup)
 loadFromPath path = do
-  root  <- getCurrentDirectory
+  root <- getCurrentDirectory
+  loadFromPathAndRootDirectory path root
+
+loadFromPathAndRootDirectory
+  :: FilePath -> FilePath -> IO (Either String ModuleGroup)
+loadFromPathAndRootDirectory path root = do
   modul <- fmap canonicaliseModule . parseLamFile <$> readFile path
   case modul of
     Left  err -> pure (Left err)

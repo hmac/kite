@@ -4,12 +4,13 @@ module Integration.Typecheck
 where
 
 import           System.Directory               ( listDirectory )
-import           System.FilePath.Posix          ( (</>) )
+import           System.FilePath.Posix          ( (</>)
+                                                , takeDirectory
+                                                )
 import           Test.Hspec
 
 import           ModuleLoader
 import           ModuleGroupTypechecker
-
 
 test :: Spec
 test = describe "typechecking Lam modules" $ do
@@ -43,7 +44,7 @@ expectTypecheckFail path = do
 
 parseFile :: FilePath -> IO (Either String ModuleGroup)
 parseFile path = do
-  mgroup <- ModuleLoader.loadFromPath path
+  mgroup <- ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)
   case mgroup of
     Left  e -> pure $ Left (show e)
     Right g -> pure $ Right g

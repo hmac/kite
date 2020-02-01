@@ -1,7 +1,4 @@
-module Test.Syn.RoundTrip
-  ( test
-  )
-where
+module Test.Syn.RoundTrip where
 
 -- This module tests the roundtrip property: parse . print == id
 
@@ -252,7 +249,7 @@ genHoleName :: H.Gen Name
 genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
 
 genComment :: H.Gen String
-genComment = Gen.string (Range.linear 1 80) (Gen.filter (/= '\n') Gen.ascii)
+genComment = Gen.string (Range.linear 1 10) (Gen.filter (/= '\n') Gen.ascii)
 
 -- Generates a string with valid escape sequences - i.e. a backslash must be
 -- followed by another backslash or a double quote.
@@ -267,14 +264,21 @@ genString range = Gen.recursive
   genEscape :: H.Gen String
   genEscape = Gen.choice [pure "\\\\", pure "\\\""]
 
+-- A simplified generator to speed up generation and shrinking
 genLowerString :: H.Gen String
-genLowerString = do
+genLowerString = Gen.element ["a", "b", "c", "foo", "bar", "xs"]
+
+genLowerString' :: H.Gen String
+genLowerString' = do
   c  <- Gen.lower
   cs <- Gen.list (Range.linear 0 5) Gen.alphaNum
   pure (c : cs)
 
 genUpperString :: H.Gen String
-genUpperString = do
+genUpperString = Gen.element ["A", "B", "C", "Foo", "Bar"]
+
+genUpperString' :: H.Gen String
+genUpperString' = do
   c  <- Gen.upper
   cs <- Gen.list (Range.linear 0 10) Gen.alphaNum
   pure (c : cs)
