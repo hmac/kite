@@ -16,7 +16,7 @@ import           Constraint.Generate.M          ( run
 import           Constraint.Generate            ( generate )
 import           Constraint.Generate.Bind
 import           Constraint.Print
-import           Syntax                         ( Pattern_(..) )
+import           Syn                            ( Pattern_(..) )
 import           Util
 
 -- Tests the constraint solver

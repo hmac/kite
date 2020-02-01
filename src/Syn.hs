@@ -1,6 +1,6 @@
 {-# LANGUAGE DerivingVia #-}
-module Syntax
-  ( module Syntax
+module Syn
+  ( module Syn
   , module Data.Name
   )
 where
@@ -162,23 +162,26 @@ fn = TyFun
 -- a process that qualifies all names with their full module path. This produces
 -- a Canonical.Exp which is another name for Syn (Canonical.Name).
 
--- For typechecking we convert Syn to Core and typecheck the Core.
--- For evaluation we convert Syn to ELC, then to LC for evaluation.
+-- For typechecking we convert Syn to Constraint.Exp and typecheck that.
+-- For evaluation we currently convert Syn to ELC, then to LC for evaluation.
+-- In the future we will convert Constraint.Exp to ELC, thereby retaining the
+-- inferred type information.
 
+-- TODO: patterns in let bindings
+-- TODO: type sigs in let bindings
+-- TODO: multi-definition functions in let bindings
+--       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
 type Syn = Syn_ Name
 data Syn_ name = Var name
-         | Cons name
+         | Con name
          | Hole name
          | Abs [name] (Syn_ name)
          | App (Syn_ name) (Syn_ name)
-         -- TODO: patterns in let bindings
-         -- TODO: type sigs in let bindinds
-         -- TODO: multi-definition functions in let bindings
-         --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
+         -- Note: the parser can't currently produce LetAs but the typechecker
+         -- can nonetheless handle them.
          | LetA name (Type_ name) (Syn_ name) (Syn_ name)
          | Let [(name, Syn_ name)] (Syn_ name)
          | Case (Syn_ name) [(Pattern_ name, Syn_ name)]
-         -- more exotic syntactic structures
          | TupleLit [Syn_ name]
          | ListLit [Syn_ name]
          | StringLit String [(Syn_ name, String)]

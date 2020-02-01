@@ -8,7 +8,7 @@ import           Constraint.Generate.Pattern
 import           Constraint.Generate.M
 import           Constraint.Solve
 import           Util
-import           Syntax                         ( Pattern_(..) )
+import           Syn                            ( Pattern_(..) )
 
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set

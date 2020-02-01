@@ -12,7 +12,7 @@ import           Syn.Parse                      ( pModule
                                                 , pType
                                                 )
 
-import           Syntax
+import           Syn
 
 
 test :: Spec
@@ -117,10 +117,10 @@ test = parallel $ do
                         , funConstraint = Nothing
                         , funDefs       =
                           [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
-                                , defExpr = App (Cons "Just") (Var "x")
+                                , defExpr = App (Con "Just") (Var "x")
                                 }
                           , Def { defArgs = [ConsPat "Right" [WildPat]]
-                                , defExpr = Cons "Nothing"
+                                , defExpr = Con "Nothing"
                                 }
                           ]
                         }
@@ -182,13 +182,13 @@ test = parallel $ do
                         , instanceDefs  =
                           [ ( "map"
                             , [ Def { defArgs = [WildPat, ConsPat "Nothing" []]
-                                    , defExpr = Cons "Nothing"
+                                    , defExpr = Con "Nothing"
                                     }
                               , Def
                                 { defArgs = [ VarPat "f"
                                             , ConsPat "Just" [VarPat "x"]
                                             ]
-                                , defExpr = App (Cons "Just")
+                                , defExpr = App (Con "Just")
                                                 (App (Var "f") (Var "x"))
                                 }
                               ]

@@ -12,7 +12,7 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
 
-import           Syntax
+import           Syn
 
 type Parser = Parsec Void String
 
@@ -334,7 +334,7 @@ pBinApp = do
  where
   pOp :: Parser Syn
   pOp =
-    (Cons . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
+    (Con . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
   twoCharOp =
     string "&&" <|> string "||" <|> string ">=" <|> string "<=" <|> string "<>"
   oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
@@ -430,7 +430,7 @@ pList = ListLit
   <$> between (symbolN "[") (symbol "]") (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
-pCons = Cons <$> uppercaseName
+pCons = Con <$> uppercaseName
 
 pCase :: Parser Syn
 pCase = do

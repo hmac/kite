@@ -9,6 +9,7 @@ import           System.FilePath.Posix          ( (</>)
                                                 )
 import           Test.Hspec
 
+import           ModuleGroup
 import           ModuleLoader
 import           ModuleGroupTypechecker
 
@@ -42,7 +43,7 @@ expectTypecheckFail path = do
       Left  _ -> pure ()
       Right _ -> expectationFailure "expected type error but succeeded"
 
-parseFile :: FilePath -> IO (Either String ModuleGroup)
+parseFile :: FilePath -> IO (Either String UntypedModuleGroup)
 parseFile path = do
   mgroup <- ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)
   case mgroup of

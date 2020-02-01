@@ -12,7 +12,7 @@ import           Constraint.Generate.M
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
 import           Constraint.Print
-import           Syntax                         ( Pattern_(..) )
+import           Syn                            ( Pattern_(..) )
 
 test :: Spec
 test = do

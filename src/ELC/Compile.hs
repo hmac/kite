@@ -17,12 +17,12 @@ import           ELC
 import           ELC.Primitive
 import           Canonical                      ( Name(..) )
 import qualified Canonical                     as Can
-import qualified Syntax                        as S
+import qualified Syn                           as S
 import           Data.Name
 import           NameGen                        ( NameGen
                                                 , freshM
-                                                , run
                                                 )
+import qualified Syn.Typed                     as T
 
 -- defs are normal definitions
 -- instances is a mapping from the name of the typeclass and the type(s) of the
@@ -72,7 +72,7 @@ freshTopLevel :: ModuleName -> NameGen Name
 freshTopLevel m = freshM (\i -> TopLevel m (Name ("$elc" ++ show i)))
 
 -- TODO: remove unreachable definitions
-translateModule :: Env -> Can.Module Can.Exp -> NameGen Env
+translateModule :: Env -> T.Module -> NameGen Env
 translateModule env S.Module { S.moduleDecls = decls } =
   -- To ensure the right things are in scope when needed, we process decls in a
   -- particular order:
@@ -92,7 +92,7 @@ translateModule env S.Module { S.moduleDecls = decls } =
       orderedDecls = sortBy ordering decls
   in  foldlM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
 
-translateDecl :: Env -> Can.Decl Can.Exp -> NameGen ([(Name, Exp)], InstMap)
+translateDecl :: Env -> T.Decl -> NameGen ([(Name, Exp)], InstMap)
 translateDecl env (S.FunDecl S.Fun { S.funName = n, S.funDefs = defs }) = do
   let numVars = length (S.defArgs (head defs))
   varNames <- replicateM numVars fresh
@@ -156,8 +156,7 @@ translateTypeclass env t = do
 -- TODO: Currently the order of methods has to match the order in the typeclass
 --       definition. Fix this.
 --       (when we support { a = .. } style record construction we can use that)
-translateInstance
-  :: Env -> Can.Instance Can.Exp -> NameGen ([(Name, Exp)], InstMap)
+translateInstance :: Env -> T.Instance -> NameGen ([(Name, Exp)], InstMap)
 translateInstance env i = do
   let typeclassName@(TopLevel moduleName rawTypeclassName) = S.instanceName i
   let recordType = fromMaybe
@@ -165,12 +164,13 @@ translateInstance env i = do
         (lookupEnv typeclassName env)
   let defs = S.instanceDefs i
   let defsAsFuns = map
-        (\(name, defs) -> S.Fun { S.funComments   = []
-                                , S.funName       = name
-                                , S.funType       = S.TyHole "method"
-                                , S.funConstraint = Nothing
-                                , S.funDefs       = defs
-                                }
+        (\(name, defs) -> S.Fun
+          { S.funComments   = []
+          , S.funName       = name
+          , S.funType       = T.Forall [] mempty (T.THole "method")
+          , S.funConstraint = Nothing
+          , S.funDefs       = defs
+          }
         )
         defs
   defsAsExps <-
@@ -209,7 +209,7 @@ translateProdCon S.RecordCon { S.conName = n, S.conFields = fields } = do
 
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.
-translateDef :: Env -> Can.Def Can.Exp -> NameGen Equation
+translateDef :: Env -> T.Def -> NameGen Equation
 translateDef env def = do
   args <- mapM (translatePattern env) (S.defArgs def)
   expr <- translateExpr env (S.defExpr def)
@@ -247,46 +247,43 @@ buildTuplePat elems = case length elems of
   6 -> ConPat tuple6 elems
   n -> error $ "cannot handle tuples of length " <> show n
 
-translateExpr :: Env -> Can.Exp -> NameGen Exp
-translateExpr _   (S.IntLit i         ) = pure (Const (Int i) [])
-translateExpr env (S.StringLit s parts) = translateStringLit env s parts
-translateExpr env (S.ListLit elems    ) = do
+translateExpr :: Env -> T.Exp -> NameGen Exp
+translateExpr _   (T.IntLitT i _         ) = pure (Const (Int i) [])
+translateExpr env (T.StringLitT s parts _) = translateStringLit env s parts
+translateExpr env (T.ListLitT elems _    ) = do
   elems' <- mapM (translateExpr env) elems
   buildList elems'
-translateExpr env (S.TupleLit elems) = do
+translateExpr env (T.TupleLitT elems _) = do
   elems' <- mapM (translateExpr env) elems
   pure (buildTuple elems')
 
 -- TODO: what's a better way to handle this?
 -- possible have a Prelude module which puts these variables in scope, bound to
 -- "$prim$Num$add" or something?
-translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "+")) =
-  binaryPrim PrimAdd
-translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "*")) =
-  binaryPrim PrimMult
-translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "-")) =
-  binaryPrim PrimSub
-translateExpr _ (S.Var (TopLevel (ModuleName ["Lam", "Primitive"]) "appendString"))
-  = binaryPrim PrimStringAppend
+translateExpr _ (T.VarT (TopLevel modPrim "+") _) = binaryPrim PrimAdd
+translateExpr _ (T.VarT (TopLevel modPrim "*") _) = binaryPrim PrimMult
+translateExpr _ (T.VarT (TopLevel modPrim "-") _) = binaryPrim PrimSub
+translateExpr _ (T.VarT (TopLevel modPrim "appendString") _) =
+  binaryPrim PrimStringAppend
 
-translateExpr _   (S.Var n  ) = pure (Var n)
-translateExpr env (S.App a b) = do
+translateExpr _   (T.VarT n _) = pure (Var n)
+translateExpr env (T.AppT a b) = do
   a' <- translateExpr env a
   b' <- translateExpr env b
   pure $ App a' b'
 -- We translate a constructor into a series of nested lambda abstractions, one
 -- for each argument to the constructor. When applied, the result is a fully
 -- saturated constructor.
-translateExpr env (S.Cons n) = do
+translateExpr env (T.ConT n) = do
   let con = lookupCon n env
       a   = arity con
   newVars <- replicateM a fresh
   pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
-translateExpr _ (S.Hole n) = pure $ Bottom ("Hole encountered: " <> show n)
-translateExpr env (S.Abs vars e) = do
+translateExpr _ (T.HoleT n _) = pure $ Bottom ("Hole encountered: " <> show n)
+translateExpr env (T.AbsT vars e) = do
   body <- translateExpr env e
-  pure $ buildAbs body (map VarPat vars)
-translateExpr env (S.Let alts expr) = do
+  pure $ buildAbs body (map (VarPat . fst) vars)
+translateExpr env (T.LetT alts expr _) = do
   alts' <- mapM
     (\(n, e) -> do
       e' <- translateExpr env e
@@ -302,11 +299,11 @@ translateExpr env (S.Let alts expr) = do
 -- let $v = foo bar
 --  in ((\p1 -> e1) $v) [] ((\p2 -> e2) $v) [] BOTTOM
 -- ((\p1 -> e1) [] (\p2 -> e2)) (foo bar)
-translateExpr env (S.Case scrut alts) = do
+translateExpr env (T.CaseT scrut alts _) = do
   var    <- fresh
   scrut' <- translateExpr env scrut
   alts'  <- mapM
-    (\(p, e) -> do
+    (\(T.AltT p e) -> do
       p' <- translatePattern env p
       e' <- translateExpr env e
       pure $ App (Abs p' e') (Var var)
@@ -316,7 +313,7 @@ translateExpr env (S.Case scrut alts) = do
   pure $ Let (VarPat var) scrut' lams
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
-translateStringLit :: Env -> String -> [(Can.Exp, String)] -> NameGen Exp
+translateStringLit :: Env -> String -> [(T.Exp, String)] -> NameGen Exp
 translateStringLit _   prefix []    = pure $ Const (String prefix) []
 translateStringLit env prefix parts = do
   rest <- go parts
@@ -333,7 +330,7 @@ translateStringLit env prefix parts = do
     r      <- fresh
     append <- binaryPrim PrimStringAppend
     pure $ Abs (VarPat l) (Abs (VarPat r) (App (App append (Var l)) (Var r)))
-  go :: [(Can.Exp, String)] -> NameGen [Exp]
+  go :: [(T.Exp, String)] -> NameGen [Exp]
   go []            = pure []
   go ((e, s) : is) = do
     e'   <- translateExpr env e

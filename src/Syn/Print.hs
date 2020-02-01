@@ -6,7 +6,7 @@ import           Prelude                 hiding ( mod )
 
 import           Data.Text.Prettyprint.Doc
 
-import           Syntax
+import           Syn
 
 -- Semantic annotation
 data Style = VarStyle | KeywordStyle | FunctionStyle | TypeStyle | DataStyle | HoleStyle
@@ -168,7 +168,7 @@ printPattern (ConsPat n pats) =
 -- TODO: binary operators
 printExpr :: Syn -> Document
 printExpr (Var  n) = printName n
-printExpr (Cons n) = data_ (printName n)
+printExpr (Con  n) = data_ (printName n)
 printExpr (Hole n) = hole ("?" <> printName n)
 printExpr (Abs args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
@@ -209,7 +209,7 @@ printApp (App (Var op) a) b | op `elem` binOps =
       parens (printExpr a) <+> printExpr (Var op) <+> printExpr b
 
 -- special case for the only infix constructor: (::)
-printApp (App (Cons "::") a) b = parens $ case (singleton a, singleton b) of
+printApp (App (Con "::") a) b = parens $ case (singleton a, singleton b) of
   (True , True ) -> printExpr a <+> "::" <+> printExpr b
   (False, False) -> parens (printExpr a) <+> "::" <+> parens (printExpr b)
   (True , False) -> printExpr a <+> "::" <+> parens (printExpr b)
@@ -302,7 +302,7 @@ prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 singleton :: Syn -> Bool
 singleton (Var      _) = True
 singleton (Hole     _) = True
-singleton (Cons     _) = True
+singleton (Con      _) = True
 singleton (IntLit   _) = True
 singleton (TupleLit _) = True
 singleton (ListLit  _) = True

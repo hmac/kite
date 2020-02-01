@@ -6,7 +6,7 @@ where
 import           Test.Hspec
 import           Constraint
 import qualified Constraint.Expr               as E
-import qualified Syntax                        as S
+import qualified Syn                           as S
 import           Canonical                      ( Name(..) )
 import           Constraint.FromSyn
 
@@ -21,7 +21,7 @@ test = do
       fromSyn (S.Var "x") `shouldBe` E.Var "x"
       fromSyn (S.Var mx) `shouldBe` E.Var mx
     it "Left x" $ do
-      fromSyn (S.Cons left) `shouldBe` E.Con left
+      fromSyn (S.Con left) `shouldBe` E.Con left
     it "?x" $ do
       fromSyn (S.Hole "x") `shouldBe` E.Hole "x"
     it "\a b -> x" $ do
@@ -31,10 +31,10 @@ test = do
       fromSyn (S.App (S.Var "f") (S.Var "x"))
         `shouldBe` E.App (E.Var "f") (E.Var "x")
     it "let x = SomeModule.x in Left e" $ do
-      fromSyn (S.Let [("x", S.Var mx)] (S.App (S.Cons left) (S.Var "e")))
+      fromSyn (S.Let [("x", S.Var mx)] (S.App (S.Con left) (S.Var "e")))
         `shouldBe` E.Let [("x", E.Var mx)] (E.App (E.Con left) (E.Var "e"))
     it "let x : Int; x = mx in Left e" $ do
-      fromSyn (S.LetA "x" S.TyInt (S.Var mx) (S.App (S.Cons left) (S.Var "e")))
+      fromSyn (S.LetA "x" S.TyInt (S.Var mx) (S.App (S.Con left) (S.Var "e")))
         `shouldBe` E.LetA "x"
                           (E.Forall [] mempty TInt)
                           (E.Var mx)

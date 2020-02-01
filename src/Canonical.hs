@@ -8,7 +8,7 @@ import           Data.String                    ( IsString(fromString) )
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
                                                 )
-import           Syntax                  hiding ( Name )
+import           Syn                     hiding ( Name )
 
 data Name
   = Local RawName

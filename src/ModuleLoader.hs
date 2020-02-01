@@ -1,5 +1,6 @@
 module ModuleLoader
   ( ModuleGroup(..)
+  , UntypedModuleGroup
   , loadFromPath
   , loadFromPathAndRootDirectory
   )
@@ -8,7 +9,7 @@ where
 import           System.Directory               ( getCurrentDirectory )
 
 import           Syn.Parse                      ( parseLamFile )
-import           Syntax
+import           Syn
 import           Data.List                      ( nub
                                                 , intercalate
                                                 , sortBy
@@ -16,6 +17,7 @@ import           Data.List                      ( nub
                                                 )
 import qualified Canonical                     as Can
 import           Canonicalise                   ( canonicaliseModule )
+import           ModuleGroup
 
 -- This module is responsible for loading Lam modules. It should attempt to
 -- cache modules so they're not loaded multiple times.
@@ -35,17 +37,13 @@ import           Canonicalise                   ( canonicaliseModule )
 
 -- TODO: structured errors
 
---                             the module   its dependencies
-data ModuleGroup = ModuleGroup (Can.Module Can.Exp) [Can.Module Can.Exp]
-  deriving (Show)
-
-loadFromPath :: FilePath -> IO (Either String ModuleGroup)
+loadFromPath :: FilePath -> IO (Either String UntypedModuleGroup)
 loadFromPath path = do
   root <- getCurrentDirectory
   loadFromPathAndRootDirectory path root
 
 loadFromPathAndRootDirectory
-  :: FilePath -> FilePath -> IO (Either String ModuleGroup)
+  :: FilePath -> FilePath -> IO (Either String UntypedModuleGroup)
 loadFromPathAndRootDirectory path root = do
   modul <- fmap canonicaliseModule . parseLamFile <$> readFile path
   case modul of

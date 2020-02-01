@@ -23,7 +23,7 @@ import           Constraint.Generate.M          ( run
                                                 )
 import           Constraint.Generate            ( generate )
 import           Constraint.Print
-import           Syntax                         ( Pattern
+import           Syn                            ( Pattern
                                                 , Pattern_(..)
                                                 )
 

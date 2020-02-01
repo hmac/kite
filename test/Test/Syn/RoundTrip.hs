@@ -5,7 +5,7 @@ module Test.Syn.RoundTrip where
 import           Test.Hspec
 import           Text.Megaparsec                ( parse )
 
-import           Syntax
+import           Syn
 import           Syn.Parse
 import           Syn.Print
 
@@ -184,7 +184,7 @@ genExpr :: H.Gen Syn
 genExpr = Gen.recursive
   Gen.choice
   [ Var <$> genLowerName
-  , Cons <$> genUpperName
+  , Con <$> genUpperName
   , Hole <$> genHoleName
   , IntLit <$> genInt
   ]

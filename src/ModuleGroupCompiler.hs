@@ -5,10 +5,12 @@ module ModuleGroupCompiler where
 -- merges it all together.
 
 import           ModuleLoader                   ( ModuleGroup(..) )
+import           ModuleGroup
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
-import           Syntax
+import           Syn
 import qualified Canonical                     as Can
+import qualified Syn.Typed                     as T
 
 
 -- We'll attempt this as follows:
@@ -34,7 +36,7 @@ data CompiledModule a = CompiledModule { cModuleName :: ModuleName
                                        }
   deriving Show
 
-compileModule :: ModuleGroup -> CompiledModule LC.Env
+compileModule :: TypedModuleGroup -> CompiledModule LC.Env
 compileModule (ModuleGroup m deps) = CompiledModule
   { cModuleName    = moduleName m
   , cModuleImports = moduleImports m
@@ -44,5 +46,5 @@ compileModule (ModuleGroup m deps) = CompiledModule
   }
   where env = foldl compileModule'' ELC.defaultEnv (deps ++ [m])
 
-compileModule'' :: ELC.Env -> Can.Module Can.Exp -> ELC.Env
+compileModule'' :: ELC.Env -> T.Module -> ELC.Env
 compileModule'' env m = LC.runConvert (ELC.translateModule env m)

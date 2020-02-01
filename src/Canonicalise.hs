@@ -4,7 +4,7 @@ import qualified Data.Map.Strict         as Map
 
 import           Util
 import           Data.Name
-import           Syntax                  as Syn
+import           Syn
 import           Canonical (Name(..))
 import qualified Canonical               as Can
 import qualified Canonical.Primitive
@@ -114,8 +114,8 @@ canonicaliseExp env = go
   where go locals = \case
           Var n | n `elem` locals -> Var (Local n)
                 | otherwise -> Var $ canonicaliseName env n
-          Cons n | n `elem` locals -> Cons (Local n)
-                 | otherwise -> Cons $ canonicaliseName env n
+          Con n | n `elem` locals -> Con (Local n)
+                 | otherwise -> Con $ canonicaliseName env n
           Abs ns e -> Abs (fmap Local ns) $ go (ns <> locals) e
           App a b -> App (go locals a) (go locals b)
           Let binds e -> canonicaliseLet (binds, e)

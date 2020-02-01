@@ -16,7 +16,7 @@ import           Text.Megaparsec                ( parse
 
 import qualified LC.Eval                        ( evalVar )
 import qualified LC.Print                       ( print )
-import           Syntax
+import           Syn
 import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
 import           Canonicalise                   ( canonicaliseModule )
@@ -67,8 +67,8 @@ processExpr decls e =
   in
     case ModuleGroupTypechecker.typecheckModuleGroup g of
       Left  err -> putStrLn $ "Type error: " <> show err
-      Right _   -> do
-        let compiled = ModuleGroupCompiler.compileModule g
+      Right g'  -> do
+        let compiled = ModuleGroupCompiler.compileModule g'
         let answer = LC.Eval.evalVar
               (TopLevel (cModuleName compiled) "$main")
               (cModuleEnv compiled)

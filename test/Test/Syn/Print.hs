@@ -5,7 +5,7 @@ where
 
 import           Test.Hspec
 import Syn.Print
-import           Syntax
+import           Syn
 import Data.Maybe (fromMaybe)
 import Data.Text.Prettyprint.Doc (Doc)
 

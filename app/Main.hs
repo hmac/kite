@@ -8,7 +8,7 @@ import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 
-import           ModuleLoader                   ( ModuleGroup(..) )
+import           ModuleGroup
 import           ModuleGroupCompiler            ( CompiledModule(..) )
 import qualified ModuleLoader
 import qualified ModuleGroupTypechecker
@@ -48,7 +48,10 @@ parse :: FilePath -> IO ()
 parse = withParsedFile pPrint
 
 dumpLC :: FilePath -> IO ()
-dumpLC = withParsedFile (pPrint . ModuleGroupCompiler.compileModule)
+dumpLC = withParsedFile $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left  err -> printNicely (printError err)
+    Right g'  -> pPrint (ModuleGroupCompiler.compileModule g')
 
 dumpTypeEnv :: FilePath -> IO ()
 dumpTypeEnv = withParsedFile (pPrint . ModuleGroupTypechecker.dumpEnv)
@@ -63,12 +66,12 @@ run :: FilePath -> IO ()
 run = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> print (printError err)
-    Right _ ->
-      let cm     = ModuleGroupCompiler.compileModule g
+    Right g' ->
+      let cm     = ModuleGroupCompiler.compileModule g'
           answer = evalMain (cModuleName cm) (cModuleEnv cm)
       in  printNicely (LC.Print.print answer)
 
-withParsedFile :: (ModuleGroup -> IO ()) -> FilePath -> IO ()
+withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
   mgroup <- ModuleLoader.loadFromPath path
   case mgroup of

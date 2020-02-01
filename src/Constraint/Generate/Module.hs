@@ -10,7 +10,7 @@ module Constraint.Generate.Module where
 import qualified Data.Map.Strict               as Map
 
 import           Constraint.Generate.M
-import           Syntax                  hiding ( Name
+import           Syn                     hiding ( Name
                                                 , fn
                                                 )
 import           Canonical                      ( Name(..) )

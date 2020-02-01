@@ -3,7 +3,7 @@ module Constraint.FromSyn (fromSyn, tyToType, tyToScheme) where
 -- Converts a Syn AST to a Constraint.Expr AST
 
 import Canonical (Name(..))
-import qualified Syntax as S
+import qualified Syn as S
 import qualified Constraint.Expr as E
 import Constraint
 import Util
@@ -12,7 +12,7 @@ import qualified Data.Set as Set
 fromSyn :: S.Syn_ Name -> E.Exp
 fromSyn = \case
   S.Var n -> E.Var n
-  S.Cons n -> E.Con n
+  S.Con n -> E.Con n
   S.Hole n -> E.Hole n
   S.Abs xs e -> E.Abs xs (fromSyn e)
   S.App a b -> E.App (fromSyn a) (fromSyn b)

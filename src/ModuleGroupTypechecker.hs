@@ -1,8 +1,10 @@
 module ModuleGroupTypechecker where
 
-import           ModuleLoader                   ( ModuleGroup(..) )
+import           ModuleLoader                   ( ModuleGroup(..)
+                                                , UntypedModuleGroup
+                                                )
 
-import           Syntax                  hiding ( Name )
+import           Syn                     hiding ( Name )
 import           Canonical                      ( Name(..) )
 import           Constraint                     ( Error )
 import           Constraint.Expr                ( ExpT
@@ -13,6 +15,7 @@ import           Constraint.Generate.M          ( run
                                                 )
 import           Constraint.Generate.Module     ( generateModule )
 import qualified Constraint.Primitive
+import           ModuleGroup
 import           Util
 
 -- This module takes a list of modules from the loader and attempts to typecheck
@@ -22,7 +25,8 @@ import           Util
 -- that all names are unique and not worry about clashes. We also assume that
 -- the modules are in dependency order (this is handled by the ModuleLoader).
 
-typecheckModuleGroup :: ModuleGroup -> Either Error [Module_ Name ExpT Scheme]
+
+typecheckModuleGroup :: UntypedModuleGroup -> Either Error TypedModuleGroup
 typecheckModuleGroup (ModuleGroup m deps) = do
   -- Typecheck each module in order, so that definitions from imported modules
   -- are available when the module is typechecked.
@@ -32,9 +36,10 @@ typecheckModuleGroup (ModuleGroup m deps) = do
   let ms       = deps ++ [m]
   let (res, _) = run $ mapAccumLM generateModule Constraint.Primitive.env ms
   (_env', typedModules) <- res
-  pure typedModules
+  let (typedModule : typedDeps) = reverse typedModules
+  pure $ ModuleGroup typedModule typedDeps
 
-dumpEnv :: ModuleGroup -> Either Error Env
+dumpEnv :: UntypedModuleGroup -> Either Error Env
 dumpEnv (ModuleGroup m deps) = do
   let ms       = deps ++ [m]
   let (res, _) = run $ mapAccumLM generateModule Constraint.Primitive.env ms

@@ -10,7 +10,7 @@ where
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.M
-import           Syntax                         ( Pattern_(..) )
+import           Syn                            ( Pattern_(..) )
 
 import qualified Data.Map.Strict               as Map
 

@@ -1,4 +1,7 @@
-module Constraint.Expr where
+module Constraint.Expr
+  ( module Constraint.Expr
+  )
+where
 
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
@@ -7,10 +10,13 @@ import           Constraint
 import           Canonical                      ( Name(..) )
 import           Util
 
-import           Syntax                         ( Pattern_ )
+import           Syn                            ( Pattern_
+                                                , Syn_(..)
+                                                )
 
 -- An example syntax type that we'll eventually replace with something linked to
 -- Syn.
+-- type Exp = Syn_ Name
 data Exp = Var Name
          | Con Con
          | App Exp Exp
@@ -85,6 +91,7 @@ instance Vars ExpT where
 data Alt = Alt Pattern Exp
   deriving (Eq, Show)
 
+-- TODO: merge with Alt since they're identical?
 data AltT = AltT Pattern ExpT
   deriving (Eq, Show)
 

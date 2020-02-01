@@ -4,7 +4,7 @@ module Test.Constraint.Module
 where
 
 import           Test.Hspec
-import           Syntax                  hiding ( Name )
+import           Syn                     hiding ( Name )
 import           Canonical                      ( Name(..) )
 import           Constraint.Generate.Bind       ( BindT(..) )
 import           Constraint.Generate.Module     ( generateModule )
