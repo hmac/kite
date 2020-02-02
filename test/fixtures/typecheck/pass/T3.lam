@@ -1,0 +1,11 @@
+module T3
+
+data Maybe a = Just a | Nothing
+
+data Foo = Foo
+
+foo : Maybe Foo
+foo = Nothing
+
+bar : Maybe Foo
+bar = Just Foo

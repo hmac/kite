@@ -13,6 +13,7 @@ import           Constraint.Expr
 import           Constraint.Generate.Pattern
 import           Constraint.Print
 import           Syn                            ( Pattern_(..) )
+import           Util
 
 test :: Spec
 test = do
@@ -68,11 +69,16 @@ test = do
       let gen = fresh >>= \u -> generatePattern env (TVar u) pat
       in  case runGenerate gen of
             Left _ -> pure ()
-            Right _ ->
-              expectationFailure "Expected type error but was successful"
+            Right (_, constraint, _)
+              | constraint == mempty -> expectationFailure
+                "Expected type error but was successful"
+              | otherwise -> pure ()
     infersError pat (Just t) = case runGenerate (generatePattern env t pat) of
-      Left  _ -> pure ()
-      Right _ -> expectationFailure "Expected type error but was successful"
+      Left _ -> pure ()
+      Right (_, constraint, _)
+        | constraint == mempty -> expectationFailure
+          "Expected type error but was successful"
+        | otherwise -> pure ()
     generatesEnv
       :: GenerateM (Type, CConstraint, Env)
       -> (Env -> Expectation)
@@ -192,7 +198,7 @@ runGenerate g =
   let (res, touchables) = run g
   in  do
         (t, constraints, env') <- res
-        (cs, s)                <- solveC touchables constraints
+        (cs, s)                <- solveC mempty touchables constraints
         pure (sub s t, cs, sub s env')
 
 runGenerateMulti
@@ -202,7 +208,7 @@ runGenerateMulti g =
   let (res, touchables) = run g
   in  do
         (ts, constraints, env') <- res
-        (cs, s)                 <- solveC touchables constraints
+        (cs, s)                 <- solveC mempty touchables constraints
         pure (map (sub s) ts, cs, sub s env')
 
 failure :: Show a => a -> Expectation

@@ -22,6 +22,9 @@ data BindT = BindT Name [([Pattern], ExpT)] Scheme
   deriving (Show, Eq)
 
 -- Fig. 12
+-- TODO: the behaviour for annotated binds here is missing a step.
+-- The (typeclass) constraints in the type annotation must be provided to the
+-- solver as given constraints.
 generateBind :: Env -> Bind -> GenerateM (Env, BindT)
 generateBind _ (Bind _ _ equations) | not (sameNumberOfPatterns equations) =
   throwError EquationsHaveDifferentNumberOfPatterns
@@ -31,12 +34,12 @@ generateBind env (Bind name annotation equations) = do
     beta <- TVar <$> fresh
     pure (beta, generateAllEqualConstraint beta eqTypes)
   let annotationConstraint = case annotation of
-        (Just (Forall tvars q t)) -> q <> beta :~: t
-        Nothing                   -> CNil
+        (Just (Forall _tvars q t)) -> q <> beta :~: t
+        Nothing                    -> CNil
   -- TODO: is it ok for all of these to be touchable?
   let touchables  = fuv eqTypes <> fuv beta <> fuv cs
   let constraints = mconcat cs <> Simple (allEqsEq <> annotationConstraint)
-  case solveC touchables constraints of
+  case solveC mempty touchables constraints of
     Left  err        -> throwError err
     Right (q, subst) -> do
       -- At this point, q should only contain typeclass constraints.
@@ -102,7 +105,7 @@ generateMultiEquation env (pats, expr) = do
   (patTypes, patCs, envs) <-
     unzip3
       <$> mapM (\pat -> fresh >>= \t -> generatePattern env (TVar t) pat) pats
-  let env' = mconcat envs
+  let env' = env <> mconcat envs
   (e, expType, expC) <- generate env' expr
   let eqType = foldr fn expType patTypes
   pure (e, eqType, mconcat patCs <> expC)

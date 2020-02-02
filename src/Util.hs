@@ -3,6 +3,7 @@ module Util
   , Text.Pretty.Simple.pPrint
   , Data.Maybe.mapMaybe
   , Data.Maybe.fromMaybe
+  , Data.Maybe.catMaybes
   , Data.List.nub
   , Data.List.sort
   , Data.List.partition
@@ -25,6 +26,7 @@ import qualified Data.List.Extra
 import qualified Data.List
 import qualified Data.Either
 import qualified Data.Maybe
+import qualified Data.Map.Strict               as Map
 import           Data.Text.Lazy                 ( unpack )
 import qualified Text.Pretty.Simple
 import qualified Data.Bifunctor
@@ -116,3 +118,9 @@ mapAccumLM f s (x : xs) = do
   (s1, x' ) <- f s x
   (s2, xs') <- mapAccumLM f s1 xs
   return (s2, x' : xs')
+
+-- deleteList :: Ord k => [k] -> Map.Map k v -> Map.Map k v
+-- deleteList ks m = foldr Map.delete m ks
+
+deleteList :: Ord k => [k] -> [(k, v)] -> [(k, v)]
+deleteList ks = Data.List.filter (not . (`elem` ks) . fst)

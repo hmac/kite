@@ -5,7 +5,6 @@ module LC.Compile
   )
 where
 
-import           Control.Monad.State.Strict
 import           Data.List                      ( nub )
 import           Data.Foldable                  ( foldrM )
 import           Control.Monad.Extra            ( mconcatMapM )
@@ -58,12 +57,12 @@ convertAbs (ConstPat c) e = do
   e' <- convert e
   v  <- fresh
   pure $ Abs v (If (Eq (Var v) (Const c [])) e' Fail)
-convertAbs (VarPat v                      ) e = Abs v <$> convert e
-convertAbs (ConPat Prod { arity = a } pats) e = do
+convertAbs (VarPat v                         ) e = Abs v <$> convert e
+convertAbs (ConPat Prod { conArity = a } pats) e = do
   lam <- convert (ELC.buildAbs e pats)
   f   <- fresh
   pure $ Abs f (UnpackProduct a lam (Var f))
-convertAbs (ConPat Sum { tag = t, arity = a } pats) e = do
+convertAbs (ConPat Sum { sumTag = t, conArity = a } pats) e = do
   lam <- convert (ELC.buildAbs e pats)
   f   <- fresh
   pure $ Abs f (UnpackSum t a lam (Var f))
@@ -137,7 +136,7 @@ convertSimpleELCLet n v e = Let n <$> convert v <*> convert e
 -- that in the type.
 convertIrrefutableLet
   :: Pattern -> ELC.Exp -> ELC.Exp -> NameGen (Name, ELC.Exp, ELC.Exp)
-convertIrrefutableLet (ConPat Prod { arity = a } pats) val body = do
+convertIrrefutableLet (ConPat Prod { conArity = a } pats) val body = do
   var <- fresh
   let patBinds =
         zipWith (\p i -> (p, ELC.Project a i (ELC.Var var))) pats [0 ..]
@@ -150,6 +149,7 @@ convertIrrefutableLet (ConPat Prod { arity = a } pats) val body = do
     patBinds
   pure (var, val, body')
 convertIrrefutableLet (VarPat v) val body = pure (v, val, body)
+convertIrrefutableLet p _ _ = error $ "Unexpected pattern " <> show p
 
 -- Convert an irrefutable letrec expression to a simple letrec expression
 convertIrrefutableLetRec :: [(Pattern, ELC.Exp)] -> ELC.Exp -> NameGen ELC.Exp
@@ -158,7 +158,7 @@ convertIrrefutableLetRec alts body = do
   pure $ ELC.LetRec alts' body
  where
   convertSinglePattern :: (Pattern, ELC.Exp) -> NameGen [(Pattern, ELC.Exp)]
-  convertSinglePattern (ConPat Prod { arity = a } pats, val) = do
+  convertSinglePattern (ConPat Prod { conArity = a } pats, val) = do
     var <- fresh
     let patBinds =
           zipWith (\p i -> (p, ELC.Project a i (ELC.Var var))) pats [0 ..]
@@ -172,7 +172,7 @@ irrefutableLetRec2IrrefutableLet
 irrefutableLetRec2IrrefutableLet alts body = do
   tupleName <- fresh
   let pats  = map fst alts
-  let con = Prod { name = tupleName, arity = length pats }
+  let con = Prod { conName = tupleName, conArity = length pats }
   let tuple = ELC.Cons con (map snd alts)
   let pat   = ConPat con pats
   pure $ ELC.Let pat (ELC.Y (ELC.Abs pat tuple)) body
@@ -183,7 +183,7 @@ convertRefutableLetBinding (pat, val) = do
   tupleName <- fresh
   varName   <- fresh
   let vars  = extractPatternVars pat
-  let con   = Prod { name = tupleName, arity = length vars }
+  let con   = Prod { conName = tupleName, conArity = length vars }
   let tuple = ELC.Cons con (map ELC.Var vars)
   let pat'  = ConPat con (map VarPat vars)
   let rhs = ELC.Let
@@ -222,7 +222,8 @@ convertCase varName clauses = do
 unpackClause :: Exp -> Clause -> NameGen Exp
 unpackClause scrut (Clause c vars body) = do
   body' <- convert body
-  let binds = zipWith (\v i -> Let v (Project (arity c) i scrut)) vars [0 ..]
+  let binds =
+        zipWith (\v i -> Let v (Project (conArity c) i scrut)) vars [0 ..]
   pure $ if null binds then body' else foldl1 (.) binds body'
 
 buildAbs :: Exp -> [Name] -> Exp

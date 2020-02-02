@@ -287,7 +287,7 @@ test = do
 infersType :: Env -> Exp -> Type -> Expectation
 infersType env expr expectedType = case run (generate env expr) of
   (Right (_, t, constraints), touchables) ->
-    case solveC touchables constraints of
+    case solveC mempty touchables constraints of
       Left  err     -> failure $ printError err
       Right (cs, s) -> do
         cs `shouldBe` mempty
@@ -298,7 +298,7 @@ infersType env expr expectedType = case run (generate env expr) of
 infersError :: Env -> Exp -> Expectation
 infersError env expr = case run (generate env expr) of
   (Right (_, _, constraints), touchables) ->
-    case solveC touchables constraints of
+    case solveC mempty touchables constraints of
       Left  _ -> pure ()
       Right _ -> expectationFailure "Expected type error but was successful"
   (Left err, _) -> pure ()
@@ -306,7 +306,7 @@ infersError env expr = case run (generate env expr) of
 inferAndZonk :: Env -> Exp -> ExpT -> Expectation
 inferAndZonk env expr expectedExpr = case run (generate env expr) of
   (Right (expr', _, constraints), touchables) ->
-    case solveC touchables constraints of
+    case solveC mempty touchables constraints of
       Left err ->
         expectationFailure $ "Expected Right, found Left " <> show err
       Right (cs, s) -> do

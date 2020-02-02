@@ -1,11 +1,45 @@
-module Constraint.Generate.Module where
-
--- Generate constraints for a whole Lam module
+-- | Generate constraints for a whole Lam module
 -- This basically involves generating constraints for each bind, accumulating an
 -- environment as we go.
-
 -- We will need an initial environment containing (possibly unknown) types for
 -- any imported items.
+--
+-- = Typeclass generation
+-- Typeclasses generate new names that can be used in axiom schemes, along
+-- with a record type for the typeclass methods.
+-- E.g.
+-- >    class Eq a where
+-- >      (==) : a -> a -> Bool
+--
+-- generates the following:
+--
+-- - a new axiom scheme name "Semigroup"
+-- - a new function declaration:
+--
+-- > append : Semigroup a => a -> a -> a
+--
+-- TODO: how do we represent multiple parameters in a typeclass?
+--
+-- = Instance generation
+-- Typeclass instances generate axiom schemes, which declare that a particular
+-- type is a member of a particular typeclass. They also generate function
+-- declarations which need to be namespaced somehow to ensure they don't clash
+-- with any existing functions in the module.
+-- E.g.
+--
+-- >    instance Eq a => Eq [a] where
+-- >      (==) []       []       = True
+-- >      (==) (x : xs) (y : ys) = x == y && xs == ys
+-- >      (==) _        _        = False
+--
+-- This generates a new axiom scheme
+--
+-- > CForall [a] (Eq a) Eq [Lam.Primitive.List a]
+--
+-- and we also typecheck the methods in the instance, but leave dictionary
+-- generation to the compiler.
+
+module Constraint.Generate.Module where
 
 import qualified Data.Map.Strict               as Map
 
@@ -35,7 +69,7 @@ generateModule env modul = do
   let datas = getDataDecls (moduleDecls modul)
   let env'  = foldl generateDataDecl env datas
 
-  --       typeclass declarations
+  -- TODO: typeclass declarations
   --       instance declarations
 
   -- Extract function declarations
@@ -47,6 +81,7 @@ generateModule env modul = do
                   binds
   let env'' = Map.fromList bindEnv <> env'
 
+  -- Typecheck each bind
   (env''', binds') <- mapAccumLM generateBind env'' binds
 
   -- Reconstruct module with typed declarations

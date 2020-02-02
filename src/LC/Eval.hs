@@ -39,17 +39,17 @@ eval env = \case
   Eq a b -> let a' = eval env a
                 b' = eval env b
              in if a' == b' then ETrue else EFalse
-  UnpackProduct i f (Cons c args) -> if arity c == i
+  UnpackProduct i f (Cons c args) -> if conArity c == i
                                         then eval env (buildApp f args)
                                         else error $ "expected " <> show c <> " to have arity " <> show i
   UnpackProduct i f e -> UnpackProduct i f (eval env e)
-  UnpackSum t i f (Cons c@Sum { tag = t', arity = i' } args) | t == t' && i == i' -> eval env (buildApp f args)
-                                                             | otherwise -> error $ "expected " <> show c <> " to have arity " <> show i <> " and tag " <> show t
+  UnpackSum t i f (Cons c@Sum { sumTag = t', conArity = i' } args) | t == t' && i == i' -> eval env (buildApp f args)
+                                                                   | otherwise -> error $ "expected " <> show c <> " to have arity " <> show i <> " and tag " <> show t
   UnpackSum t i f e -> eval env $ UnpackSum t i f (eval env e)
   Project _a i (Cons _ args) -> eval env (args !! i)
   Project a i e -> eval env $ Project a i (eval env e)
   Y e -> eval env $ App e (Y e)
-  CaseN _ (Cons Sum { tag = t } _) branches -> eval env (branches !! t)
+  CaseN _ (Cons Sum { sumTag = t } _) branches -> eval env (branches !! t)
   CaseN n e branches -> eval env $ CaseN n (eval env e) branches
 
 evalConst :: Env -> Constant -> [Exp] -> Exp
@@ -72,7 +72,7 @@ primShow e          = Const (String (go e)) []
   go (Const (String s) _   ) = s
   go (Const (Prim   _) _   ) = "<builtin>"
   go (Abs   _          _   ) = "<function>"
-  go (Cons c args) = let TopLevel _ (Name n) = name c in n <> " " <> unwords (map go args)
+  go (Cons c args) = let TopLevel _ (Name n) = conName c in n <> " " <> unwords (map go args)
   go _                       = "<unevaluated>"
 
 subst :: Exp -> Name -> Exp -> Exp

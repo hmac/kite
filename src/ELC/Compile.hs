@@ -40,30 +40,30 @@ import qualified Syn.Typed                     as T
 -- representation. This requires a significant restructuring as right now the
 -- typechecker and the compiler use entirely orthogonal ASTs.
 -- See https://www.youtube.com/watch?v=x3evzO8O9e8 for how GHC does this.
-data Env = Env { defs :: Map Name Exp, instances :: Map (Name, [Can.Type]) Name }
+data Env = Env { envDefs :: Map Name Exp, envInstances :: Map (Name, [Can.Type]) Name }
   deriving (Show)
 
 type InstMap = [((Name, [Can.Type]), Name)]
 
 defaultEnv :: Env
-defaultEnv = Env { defs      = Map.fromList primConstructors
-                 , instances = Map.fromList primInstances
+defaultEnv = Env { envDefs      = Map.fromList primConstructors
+                 , envInstances = Map.fromList primInstances
                  }
 
 merge :: Env -> ([(Name, Exp)], InstMap) -> Env
 merge env (newDefs, newInsts) = env
-  { defs      = defs env <> Map.fromList newDefs
-  , instances = instances env <> Map.fromList newInsts
+  { envDefs      = envDefs env <> Map.fromList newDefs
+  , envInstances = envInstances env <> Map.fromList newInsts
   }
 
 collapseEnv :: Env -> [(Name, Exp)]
-collapseEnv = Map.toList . defs
+collapseEnv = Map.toList . envDefs
 
 lookupEnv :: Name -> Env -> Maybe Exp
-lookupEnv n env = Map.lookup n (defs env)
+lookupEnv n env = Map.lookup n (envDefs env)
 
 lookupInstance :: Name -> [Can.Type] -> Env -> Maybe Name
-lookupInstance n ts env = Map.lookup (n, ts) (instances env)
+lookupInstance n ts env = Map.lookup (n, ts) (envInstances env)
 
 fresh :: NameGen Name
 fresh = freshM (\i -> Local (Name ("$elc" ++ show i)))
@@ -106,7 +106,7 @@ translateDecl _env (S.DataDecl d) = do
   datadefs <- if length cons > 1
     then
       let cs = zipWith (translateSumCon cs) [0 ..] cons
-      in  pure $ map (\c -> (name c, Cons c [])) cs
+      in  pure $ map (\c -> (conName c, Cons c [])) cs
     else concat <$> mapM translateProdCon cons
   pure (datadefs, [])
 translateDecl env (S.TypeclassDecl t) = translateTypeclass env t
@@ -158,18 +158,18 @@ translateTypeclass env t = do
 --       (when we support { a = .. } style record construction we can use that)
 translateInstance :: Env -> T.Instance -> NameGen ([(Name, Exp)], InstMap)
 translateInstance env i = do
-  let typeclassName@(TopLevel moduleName rawTypeclassName) = S.instanceName i
+  let typeclassName@(TopLevel moduleName _rawTypeclassName) = S.instanceName i
   let recordType = fromMaybe
         (error $ "undefined typeclass " <> show typeclassName)
         (lookupEnv typeclassName env)
   let defs = S.instanceDefs i
   let defsAsFuns = map
-        (\(name, defs) -> S.Fun
+        (\(name, ds) -> S.Fun
           { S.funComments   = []
           , S.funName       = name
           , S.funType       = T.Forall [] mempty (T.THole "method")
           , S.funConstraint = Nothing
-          , S.funDefs       = defs
+          , S.funDefs       = ds
           }
         )
         defs
@@ -186,13 +186,15 @@ translateInstance env i = do
 -- checking on patterns that use the constructor.
 translateSumCon :: [Con] -> Int -> Can.DataCon -> Con
 translateSumCon f t S.DataCon { S.conName = n, S.conArgs = args } =
-  Sum { name = n, tag = t, arity = length args, family = f }
+  Sum { conName = n, conArity = length args, sumTag = t, sumFamily = f }
+translateSumCon _ _ S.RecordCon{} =
+  error "Cannot translate record constructors in sums yet"
 
 translateProdCon :: Can.DataCon -> NameGen [(Name, Exp)]
 translateProdCon S.DataCon { S.conName = n, S.conArgs = args } =
-  pure [(n, Cons Prod { name = n, arity = length args } [])]
+  pure [(n, Cons Prod { conName = n, conArity = length args } [])]
 translateProdCon S.RecordCon { S.conName = n, S.conFields = fields } = do
-  let constructor = Prod { name = n, arity = length fields }
+  let constructor = Prod { conName = n, conArity = length fields }
       wildPat     = VarPat <$> fresh
       selectorPat i var = mapM
         (\x -> if x == i then pure (VarPat var) else wildPat)
@@ -216,9 +218,10 @@ translateDef env def = do
   pure (args, expr)
 
 translatePattern :: Env -> Can.Pattern -> NameGen Pattern
-translatePattern _   (S.VarPat  n ) = pure (VarPat n)
-translatePattern _   (S.IntPat  i ) = pure (ConstPat (Int i))
-translatePattern env (S.ListPat es) = do
+translatePattern _   (S.VarPat    n ) = pure (VarPat n)
+translatePattern _   (S.IntPat    i ) = pure (ConstPat (Int i))
+translatePattern _   (S.StringPat s ) = pure (ConstPat (String s))
+translatePattern env (S.ListPat   es) = do
   pats <- mapM (translatePattern env) es
   pure (buildListPat pats)
 translatePattern env (S.TuplePat es) = do
@@ -260,10 +263,10 @@ translateExpr env (T.TupleLitT elems _) = do
 -- TODO: what's a better way to handle this?
 -- possible have a Prelude module which puts these variables in scope, bound to
 -- "$prim$Num$add" or something?
-translateExpr _ (T.VarT (TopLevel modPrim "+") _) = binaryPrim PrimAdd
-translateExpr _ (T.VarT (TopLevel modPrim "*") _) = binaryPrim PrimMult
-translateExpr _ (T.VarT (TopLevel modPrim "-") _) = binaryPrim PrimSub
-translateExpr _ (T.VarT (TopLevel modPrim "appendString") _) =
+translateExpr _ (T.VarT (TopLevel m "+") _) | m == modPrim = binaryPrim PrimAdd
+translateExpr _ (T.VarT (TopLevel m "*") _) | m == modPrim = binaryPrim PrimMult
+translateExpr _ (T.VarT (TopLevel m "-") _) | m == modPrim = binaryPrim PrimSub
+translateExpr _ (T.VarT (TopLevel m "appendString") _) | m == modPrim =
   binaryPrim PrimStringAppend
 
 translateExpr _   (T.VarT n _) = pure (Var n)
@@ -276,7 +279,7 @@ translateExpr env (T.AppT a b) = do
 -- saturated constructor.
 translateExpr env (T.ConT n) = do
   let con = lookupCon n env
-      a   = arity con
+      a   = conArity con
   newVars <- replicateM a fresh
   pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
 translateExpr _ (T.HoleT n _) = pure $ Bottom ("Hole encountered: " <> show n)
@@ -292,6 +295,7 @@ translateExpr env (T.LetT alts expr _) = do
     alts
   expr' <- translateExpr env expr
   pure $ LetRec alts' expr'
+translateExpr _   T.LetAT{}              = error "Cannot translate LetA yet"
 -- case (foo bar) of
 --   p1 -> e1
 --   p2 -> e2
@@ -428,8 +432,8 @@ match (u : us) qs def = do
 
 -- Given a constructor, return all constructors for that type
 constructors :: Con -> [Con]
-constructors Sum { family = f } = f
-constructors prod               = [prod]
+constructors Sum { sumFamily = f } = f
+constructors prod                  = [prod]
 
 rename :: Exp -> Name -> Name -> Exp
 rename e j k = subst (Var j) k e
@@ -447,8 +451,8 @@ matchVarCon us qs def =
   let f = if isVar (head qs) then matchVar else matchCon in f us qs def
 
 matchVar :: [Name] -> [Equation] -> Exp -> NameGen Exp
-matchVar (u : us) qs def =
-  match us [ (ps, rename e u v) | (VarPat v : ps, e) <- qs ] def
+matchVar (u : us) qs =
+  match us [ (ps, rename e u v) | (VarPat v : ps, e) <- qs ]
 
 matchCon :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchCon (u : us) qs def = do
@@ -458,7 +462,7 @@ matchCon (u : us) qs def = do
 
 matchClause :: Con -> [Name] -> [Equation] -> Exp -> NameGen Clause
 matchClause c (u : us) qs def = do
-  us'  <- replicateM (arity c) fresh
+  us'  <- replicateM (conArity c) fresh
   expr <- match (us' ++ us)
                 [ (ps' ++ ps, e) | (ConPat c ps' : ps, e) <- qs ]
                 def

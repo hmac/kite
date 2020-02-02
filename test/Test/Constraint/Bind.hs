@@ -9,13 +9,10 @@ import qualified Data.Map.Strict               as Map
 
 import           Constraint
 import           Constraint.Expr
-import           Constraint.Solve               ( solveC )
 import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )
-import           Constraint.Generate            ( generate )
 import           Constraint.Generate.Bind
-import           Constraint.Print
 import           Syn                            ( Pattern_(..) )
 import           Util
 

@@ -23,6 +23,8 @@ printConstraint :: Constraint -> Doc a
 printConstraint CNil      = "ϵ"
 printConstraint (c :^: d) = printConstraint c <+> "^" <+> printConstraint d
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v
+printConstraint (Inst classname tys) =
+  printName classname <+> hsep (map printType tys)
 
 printVar :: Var -> Doc a
 printVar (U n) = "U" <> printName n

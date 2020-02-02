@@ -82,7 +82,7 @@ generatePattern env st (ListPat pats) = do
   pure
     ( beta
     , patConstraints <> betaConstraints <> Simple listConstraints
-    , patEnvs <> env
+    , env <> patEnvs
     )
 generatePattern env st (ConsPat k pats) = case Map.lookup k env of
   Nothing -> do
@@ -118,5 +118,5 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
       <> scrutConstraint
       <> patConstraints
       <> betaConstraint
-      , patEnvs <> env
+      , env <> patEnvs
       )

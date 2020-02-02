@@ -1,0 +1,6 @@
+module BadAnnotation
+
+data Bool = True | False
+
+foo : Bool
+foo = []

@@ -10,9 +10,7 @@ import           Constraint
 import           Canonical                      ( Name(..) )
 import           Util
 
-import           Syn                            ( Pattern_
-                                                , Syn_(..)
-                                                )
+import           Syn                            ( Pattern_ )
 
 -- An example syntax type that we'll eventually replace with something linked to
 -- Syn.

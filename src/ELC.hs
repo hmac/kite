@@ -46,21 +46,21 @@ data Pattern = ConstPat Constant
              | ConPat Con [Pattern]
          deriving (Show, Eq)
 
-data Con = Prod { name :: Can.Name, arity :: Int }
-         | Sum { name :: Can.Name, tag :: Int, arity :: Int, family :: [Con] }
+data Con = Prod { conName :: Can.Name, conArity :: Int }
+         | Sum { conName :: Can.Name, conArity :: Int, sumTag :: Int, sumFamily :: [Con] }
 
 -- Because Sums contain infinite loops via family, we need to manually write Eq
 -- and Show instances.
 instance Eq Con where
-  Prod { name = n, arity = a } == Prod { name = n', arity = a' } =
+  Prod { conName = n, conArity = a } == Prod { conName = n', conArity = a' } =
     n == n' && a == a'
-  Sum { name = n, tag = t, arity = a } == Sum { name = n', tag = t', arity = a' }
+  Sum { conName = n, conArity = a, sumTag = t } == Sum { conName = n', conArity = a', sumTag = t' }
     = n == n' && t == t' && a == a'
   _ == _ = False
 instance Show Con where
-  show Prod { name = n, arity = a } =
+  show Prod { conName = n, conArity = a } =
     "Prod { name = " <> show n <> ", arity = " <> show a <> " }"
-  show Sum { name = n, tag = t, arity = a } =
+  show Sum { conName = n, conArity = a, sumTag = t } =
     "Sum { name = "
       <> show n
       <> ", tag = "

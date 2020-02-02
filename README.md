@@ -60,6 +60,7 @@ the current state of progress:
 - [x] Source code formatting
 - [ ] Typeclasses
 - [ ] Typed holes
+- [ ] Standard library
 - [ ] Totality checker
 - [ ] Safety checker
 - [ ] Errors & warnings
@@ -75,7 +76,6 @@ the current state of progress:
 - [ ] REPL
 - [ ] Go backend
 - [ ] JS backend
-- [ ] Standard library
 - [ ] Packaging
 - [ ] IO and runtime support
 

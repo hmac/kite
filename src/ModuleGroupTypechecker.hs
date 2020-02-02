@@ -4,12 +4,7 @@ import           ModuleLoader                   ( ModuleGroup(..)
                                                 , UntypedModuleGroup
                                                 )
 
-import           Syn                     hiding ( Name )
-import           Canonical                      ( Name(..) )
 import           Constraint                     ( Error )
-import           Constraint.Expr                ( ExpT
-                                                , Scheme
-                                                )
 import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )

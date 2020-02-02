@@ -16,8 +16,7 @@ print :: LC.Exp -> Doc a
 print = \case
   Const c _ -> printConstant c
   Var n -> printName n
-  Cons c args -> let n = name c
-                  in printName n <+> hsep (map print args)
+  Cons c args -> printName (conName c) <+> hsep (map print args)
   Bottom s -> "error:" <+> pretty s
   App _ _ -> "<unevaluated application>"
   Abs _ _ -> "<function>"

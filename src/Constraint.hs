@@ -1,8 +1,10 @@
--- The model for typing constraints
+-- | The model for typing constraints
 
 module Constraint
   ( Constraint(..)
   , CConstraint(..)
+  , Axiom(..)
+  , AxiomScheme
   , Type(..)
   , Var(..)
   , Vars(..)
@@ -34,10 +36,20 @@ import           Canonical                      ( Name(..) )
 
 -- Simple constraints
 -- Created by the user via type annotations
-data Constraint = CNil
+data Constraint =
+                -- | The empty constraint
+                  CNil
+                -- | Conjuction of two constraints
                 | Constraint :^: Constraint
+                -- | Equality between two types
                 | Type :~: Type
+                -- | Typeclass instance
+                | Inst Name [Type]
                 deriving (Eq, Show, Ord)
+
+-- Top level axiom scheme
+data Axiom = AForall (Set Var) Constraint Constraint deriving (Eq, Ord, Show)
+type AxiomScheme = [Axiom]
 
 instance Semigroup Constraint where
   CNil      <> c    = c
@@ -135,9 +147,10 @@ instance Sub Type where
   sub _ TString     = TString
 
 instance Sub Constraint where
-  sub _ CNil      = CNil
-  sub s (a :^: b) = sub s a :^: sub s b
-  sub s (t :~: v) = sub s t :~: sub s v
+  sub _ CNil                 = CNil
+  sub s (a    :^:       b  ) = sub s a :^: sub s b
+  sub s (t    :~:       v  ) = sub s t :~: sub s v
+  sub s (Inst classname tys) = Inst classname (sub s tys)
 
 instance Sub CConstraint where
   sub s (Simple c) = Simple (sub s c)
@@ -145,6 +158,9 @@ instance Sub CConstraint where
 -- not worrying about var capture here because unification vars are unique.
 -- this could be problematic, be aware
   sub s (E vs q c) = E vs (sub s q) (sub s c)
+
+instance Sub a => Sub [a] where
+  sub s = map (sub s)
 
 -- Vars is defined for any type for which we can extract a set of free
 -- unification variables
@@ -169,13 +185,15 @@ instance Vars Type where
   ftv TString     = mempty
 
 instance Vars Constraint where
-  fuv CNil      = mempty
-  fuv (a :^: b) = fuv a <> fuv b
-  fuv (t :~: v) = fuv t <> fuv v
+  fuv CNil           = mempty
+  fuv (a    :^: b  ) = fuv a <> fuv b
+  fuv (t    :~: v  ) = fuv t <> fuv v
+  fuv (Inst _   tys) = fuv tys
 
-  ftv CNil      = mempty
-  ftv (a :^: b) = ftv a <> ftv b
-  ftv (t :~: v) = ftv t <> ftv v
+  ftv CNil           = mempty
+  ftv (a    :^: b  ) = ftv a <> ftv b
+  ftv (t    :~: v  ) = ftv t <> ftv v
+  ftv (Inst _   tys) = ftv tys
 
 instance Vars CConstraint where
   fuv (Simple c   ) = fuv c
@@ -212,4 +230,5 @@ data Error = OccursCheckFailure Type Type
            | UnknownVariable Name
            | EmptyCase
            | DuplicatePatternVariables
+           | OverlappingTypeclassInstances
   deriving (Show, Eq)
