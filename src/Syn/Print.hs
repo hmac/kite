@@ -91,12 +91,16 @@ printDecl (TypeclassInst i) = printInstance i
 
 printFun :: Fun Syn -> Document
 printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty, funConstraint = constraint }
-  = vsep $ printComments comments ++ [sig] ++ map (printDef name) defs
+  = vsep $ printComments comments ++ sig ++ map (printDef name) defs
  where
-  sig = case constraint of
-    Just c -> printName name <> align
-      (space <> colon <+> printConstraint c <+> "=>" <+> printType ty)
-    Nothing -> printName name <> align (space <> colon <+> printType ty)
+  sig = case ty of
+    Just t -> case constraint of
+      Just c ->
+        [ printName name <> align
+            (space <> colon <+> printConstraint c <+> "=>" <+> printType t)
+        ]
+      Nothing -> [printName name <> align (space <> colon <+> printType t)]
+    Nothing -> []
   printComments [] = []
   printComments cs = map printComment cs
 
@@ -154,11 +158,12 @@ printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
   where lhs = printName name <+> hsep (map printPattern (defArgs d)) <+> equals
 
 printPattern :: Pattern -> Document
-printPattern (VarPat n)      = printName n
-printPattern WildPat         = "_"
-printPattern (IntPat   i   ) = pretty i
-printPattern (TuplePat pats) = tupled (map printPattern pats)
-printPattern (ListPat  pats) = list (map printPattern pats)
+printPattern (VarPat n)       = printName n
+printPattern WildPat          = "_"
+printPattern (IntPat    i   ) = pretty i
+printPattern (StringPat s   ) = dquotes (pretty s)
+printPattern (TuplePat  pats) = tupled (map printPattern pats)
+printPattern (ListPat   pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
 printPattern (ConsPat "::" [x, y]) =
   parens $ printPattern x <+> "::" <+> printPattern y
@@ -172,10 +177,11 @@ printExpr (Con  n) = data_ (printName n)
 printExpr (Hole n) = hole ("?" <> printName n)
 printExpr (Abs args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
-printExpr (App  a     b   ) = printApp a b
-printExpr (Let  binds e   ) = printLet binds e
-printExpr (Case e     alts) = printCase e alts
-printExpr (TupleLit es    ) = tupled (map printExpr es)
+printExpr (App a     b          ) = printApp a b
+printExpr (Let binds e          ) = printLet binds e
+printExpr (LetA name ty val body) = printLetA name ty val body
+printExpr (Case e alts          ) = printCase e alts
+printExpr (TupleLit es          ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (IntLit i                ) = pretty i
@@ -240,6 +246,14 @@ printLet binds e = keyword "let" <+> hang
   (-3)
   (vsep [hang 0 (vsep (map printLetBind binds)), keyword "in" <+> printExpr e])
   where printLetBind (name, expr) = printName name <+> "=" <+> printExpr expr
+
+printLetA :: Name -> Type -> Syn -> Syn -> Document
+printLetA name ty val body = keyword "letA" <+> hang
+  (-3)
+  (vsep [hang 0 (vsep [signature, bind]), keyword "in" <+> printExpr body])
+ where
+  signature = printName name <> align (space <> colon <+> printType ty)
+  bind      = printName name <+> "=" <+> printExpr val
 
 -- case expr of
 --   pat1 x y -> e1

@@ -187,16 +187,16 @@ getDeclBy extract (d : rest) = case extract d of
   Nothing -> getDeclBy extract rest
 
 funToBind :: Fun_ Name (Syn_ Name) (Type_ Name) -> Bind
-funToBind fun = Bind (funName fun) (Just scheme) equations
+funToBind fun = Bind (funName fun) scheme equations
  where
-  scheme    = tyToScheme (funConstraint fun) (funType fun)
+  scheme    = tyToScheme (funConstraint fun) <$> funType fun
   equations = map defToEquation (funDefs fun)
 
 bindToFun :: BindT -> Fun_ Name ExpT Scheme
 bindToFun (BindT name equations scheme) = Fun
   { funComments   = []
   , funName       = name
-  , funType       = scheme
+  , funType       = Just scheme
   , funConstraint = Nothing
   , funDefs       = map equationToDef equations
   }

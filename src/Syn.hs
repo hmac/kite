@@ -68,7 +68,7 @@ data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
 type Fun exp = Fun_ Name exp (Type_ Name)
 data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
-                            , funType :: ty
+                            , funType :: Maybe ty
                             , funConstraint :: Maybe (Constraint_ name)
                             , funDefs :: [Def_ name exp]
                             }

@@ -59,7 +59,7 @@ processExpr decls e =
   let
     main = FunDecl Fun { funComments   = []
                        , funName       = "$main"
-                       , funType       = TyHole "replExpression"
+                       , funType       = Nothing
                        , funConstraint = Nothing
                        , funDefs       = [Def { defArgs = [], defExpr = e }]
                        }

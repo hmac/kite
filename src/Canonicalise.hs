@@ -44,21 +44,27 @@ canonicaliseFun (mod, imps) f = f
   { funName       = TopLevel mod (funName f)
   , funDefs       = fmap (canonicaliseDef (mod, imps)) (funDefs f)
   , funConstraint = canonicaliseConstraint (mod, imps) <$> funConstraint f
-  , funType       = canonicaliseType (mod, imps) (funType f)
+  , funType       = canonicaliseType (mod, imps) <$> funType f
   }
 
 canonicaliseType :: Env -> Syn.Type -> Can.Type
 canonicaliseType env = \case
+  -- The type names String and Int are reserved, so they always refer to the
+  -- corresponding primitive types.
+  -- TODO: this is a bit of a hack and we do different things elsewhere. We
+  -- should standardise on how to deal with primitives.
+  TyCon "String" _  -> TyString
+  TyCon "Int"    _  -> TyInt
   -- Note: type variables are assumed to be local to the type
   -- this may need rethinking when we support type aliases
   TyCon n ts -> TyCon (canonicaliseName env n) (map (canonicaliseType env) ts)
-  TyVar   v  -> TyVar (Local v)
-  TyList  a  -> TyList (canonicaliseType env a)
-  TyTuple as -> TyTuple $ fmap (canonicaliseType env) as
-  TyHole  n  -> TyHole n
-  TyInt      -> TyInt
-  TyString   -> TyString
-  TyFun a b  -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyVar   v         -> TyVar (Local v)
+  TyList  a         -> TyList (canonicaliseType env a)
+  TyTuple as        -> TyTuple $ fmap (canonicaliseType env) as
+  TyHole  n         -> TyHole n
+  TyInt             -> TyInt
+  TyString          -> TyString
+  TyFun a b         -> TyFun (canonicaliseType env a) (canonicaliseType env b)
 
 canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
 canonicaliseConstraint env = \case

@@ -123,16 +123,33 @@ pData = do
 -- definitions
 pFun :: Parser (Fun Syn)
 pFun = do
-  comments         <- many pComment
-  name             <- lowercaseName <?> "declaration type name"
-  (constraint, ty) <- symbol ":" >> lexemeN pFunSig
-  defs             <- many (lexemeN (pDef name))
+  comments <- many pComment
+  name     <- lowercaseName <?> "declaration type name"
+  sig      <- optional (symbol ":" >> lexemeN pFunSig)
+  defs     <- case sig of
+    Just _  -> many (lexemeN (pDef name))
+    Nothing -> do
+      first <- lexemeN $ do
+        bindings <- many pPattern <?> "pattern"
+        void (symbolN "=")
+        expr <- pExpr
+        pure Def { defArgs = bindings, defExpr = expr }
+      rest <- many (lexemeN (pDef name))
+      pure (first : rest)
   pure Fun { funComments   = comments
            , funName       = name
-           , funType       = ty
-           , funConstraint = constraint
+           , funConstraint = fst =<< sig
+           , funType       = fmap snd sig
            , funDefs       = defs
            }
+
+pDef :: Name -> Parser (Def Syn)
+pDef (Name name) = do
+  void (symbol name)
+  bindings <- many pPattern <?> "pattern"
+  void (symbolN "=")
+  expr <- pExpr
+  pure Def { defArgs = bindings, defExpr = expr }
 
 -- Monoid a => [a] -> a
 pFunSig :: Parser (Maybe Constraint, Type)
@@ -188,14 +205,6 @@ pInstance = do
                 , instanceTypes = types
                 , instanceDefs  = defs
                 }
-
-pDef :: Name -> Parser (Def Syn)
-pDef (Name name) = do
-  void (symbol name)
-  bindings <- many pPattern <?> "pattern"
-  void (symbolN "=")
-  expr <- pExpr
-  pure Def { defArgs = bindings, defExpr = expr }
 
 -- Like pDef but will parse a definition with any name
 pDef' :: Parser (Name, Def Syn)

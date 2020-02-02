@@ -22,7 +22,7 @@ test = parallel $ do
       parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl
         Fun { funComments   = ["a comment"]
             , funName       = "id"
-            , funType       = TyVar "a" `fn` TyVar "a"
+            , funType       = Just (TyVar "a" `fn` TyVar "a")
             , funConstraint = Nothing
             , funDefs = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
             }
@@ -32,7 +32,7 @@ test = parallel $ do
         Fun
           { funComments   = []
           , funName       = "const"
-          , funType       = TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
+          , funType       = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
           , funConstraint = Nothing
           , funDefs       = [ Def { defArgs = [VarPat "x", VarPat "y"]
                                   , defExpr = Var "x"
@@ -44,7 +44,8 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "map"
-                        , funType       = (TyVar "a" `fn` TyVar "b")
+                        , funType       = Just
+                                          $    (TyVar "a" `fn` TyVar "b")
                                           `fn` (TyCon "f" [TyVar "a"])
                                           `fn` (TyCon "f" [TyVar "b"])
                         , funConstraint = Nothing
@@ -61,7 +62,7 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "head"
-                        , funType       = TyList (TyVar "a") `fn` TyVar "a"
+                        , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
                         , funConstraint = Nothing
                         , funDefs       =
                           [ Def
@@ -82,7 +83,7 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "concat"
-                        , funType       = TyList (TyVar "a") `fn` TyVar "a"
+                        , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
                         , funConstraint = Just (CInst "Monoid" [TyVar "a"])
                         , funDefs       = [ Def { defArgs = [ListPat []]
                                                 , defExpr = Var "empty"
@@ -93,7 +94,7 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "foo"
-                        , funType       = TyVar "a" `fn` TyCon "String" []
+                        , funType = Just $ TyVar "a" `fn` TyCon "String" []
                         , funConstraint =
                           Just
                             (CTuple (CInst "Eq" [TyVar "a"])
@@ -112,8 +113,9 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments   = []
                         , funName       = "fromLeft"
-                        , funType = (TyCon "Either" [TyVar "a", TyVar "b"])
-                                      `fn` (TyCon "Maybe" [TyVar "a"])
+                        , funType       = Just
+                                          $ (TyCon "Either" [TyVar "a", TyVar "b"])
+                                          `fn` (TyCon "Maybe" [TyVar "a"])
                         , funConstraint = Nothing
                         , funDefs       =
                           [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
@@ -206,7 +208,7 @@ test = parallel $ do
                           [ FunDecl Fun
                               { funName       = "one"
                               , funComments   = []
-                              , funType       = TyCon "Int" []
+                              , funType       = Just (TyCon "Int" [])
                               , funConstraint = Nothing
                               , funDefs       = [ Def { defArgs = []
                                                       , defExpr = IntLit 1

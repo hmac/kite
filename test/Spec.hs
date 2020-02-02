@@ -20,4 +20,4 @@ main = hspec $ do
   Test.Constraint.FromSyn.test
   Test.Constraint.Module.test
   Integration.Typecheck.test
-  -- Test.Syn.RoundTrip.test
+  Test.Syn.RoundTrip.test

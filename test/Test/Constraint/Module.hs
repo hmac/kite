@@ -107,7 +107,7 @@ test = describe "typing simple modules" $ do
             { funComments   = []
             , funName       = "id_"
             , funConstraint = Just (CInst "F" [TyVar "a"])
-            , funType       = TyVar "a" `fn` TyVar "a"
+            , funType       = Just (TyVar "a" `fn` TyVar "a")
             , funDefs       = [ Def { defArgs = [VarPat "x"]
                                     , defExpr = App (Var "bar") (Var "x")
                                     }
@@ -117,7 +117,7 @@ test = describe "typing simple modules" $ do
             { funComments   = []
             , funName       = "foo"
             , funConstraint = Nothing
-            , funType       = TyCon "Foo" []
+            , funType       = Just (TyCon "Foo" [])
             , funDefs       = [ Def { defArgs = []
                                     , defExpr = App (Var "id_") (Con "Foo")
                                     }
@@ -191,7 +191,7 @@ mkDecl
 mkDecl (name, ty, equations) = FunDecl $ Fun
   { funComments   = []
   , funName       = name
-  , funType       = ty
+  , funType       = Just ty
   , funConstraint = Nothing
   , funDefs       = map (uncurry Def) equations
   }

@@ -22,4 +22,5 @@ env = Map.fromList
         [TVar (R "a")]
       )
     )
+  , (TopLevel modPrim "+", Forall [] mempty (TInt `fn` TInt `fn` TInt))
   ]

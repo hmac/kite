@@ -167,7 +167,7 @@ translateInstance env i = do
         (\(name, ds) -> S.Fun
           { S.funComments   = []
           , S.funName       = name
-          , S.funType       = T.Forall [] mempty (T.THole "method")
+          , S.funType       = Just (T.Forall [] mempty (T.THole "method"))
           , S.funConstraint = Nothing
           , S.funDefs       = ds
           }
