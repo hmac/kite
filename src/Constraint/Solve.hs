@@ -13,14 +13,20 @@
 -- the SIMPLIFY rule (except for SEQFEQ and SFEQFEQ) (done)
 -- the TOPREACT rule (except for FINST)
 
-module Constraint.Solve (solveC) where
+module Constraint.Solve
+  ( solveC
+  )
+where
 
 import           Util
 import           Canonical                      ( Name(..) )
 import           Data.Name
 
-import qualified Data.Set as Set
-import           Data.Set                       (Set, (\\), member )
+import qualified Data.Set                      as Set
+import           Data.Set                       ( Set
+                                                , (\\)
+                                                , member
+                                                )
 
 import           Control.Monad.State.Strict
 import           Constraint
@@ -39,28 +45,34 @@ type Solve = State Quad
 
 fresh :: Solve Var
 fresh = do
-  (t,s,g,w,k) <- get
-  put (t,s,g,w,k+1)
+  (t, s, g, w, k) <- get
+  put (t, s, g, w, k + 1)
   let var = U (Local (Name (show k)))
   pure var
 
 -- See fig. 14
--- TODO: solveC should take as arguments:
--- - given constraints
--- - top level axiom scheme
-solveC :: AxiomScheme -> Set Var -> CConstraint -> Either Error (Constraint, Subst)
-solveC axs touchables c = case solve axs (touchables, mempty, mempty, simple c, 0) of
-  Left err -> Left err
-  Right (residual, subst) ->
-    -- All implication constraints should be completely solvable
-    let implications = implic (sub subst c)
-    in  do
-          results <- mapM (\(vars, _q, cc) -> do (cs, s) <- solveC axs vars cc
-                                                 pure (cs, s))
-                          implications
-          case mconcat (map fst results) of
-            CNil  -> Right (residual, subst <> mconcat (map snd results))
-            impls -> Left (UnsolvedConstraints impls)
+solveC
+  :: AxiomScheme
+  -> Set Var
+  -> Constraint
+  -> CConstraint
+  -> Either Error (Constraint, Subst)
+solveC axs touchables given wanted =
+  case solve axs (touchables, mempty, given, simple wanted, 0) of
+    Left err -> Left err
+    Right (residual, subst) ->
+      -- All implication constraints should be completely solvable
+      let implications = implic (sub subst wanted)
+      in  do
+            results <- mapM
+              (\(vars, q, cc) -> do
+                (cs, s) <- solveC axs vars (q <> given <> residual) cc
+                pure (cs, s)
+              )
+              implications
+            case mconcat (map fst results) of
+              CNil  -> Right (residual, subst <> mconcat (map snd results))
+              impls -> Left (UnsolvedConstraints impls)
 
 -- This is the actual top level solver function
 -- Given a set of simple constraints it returns a substitution and any residual
@@ -70,18 +82,15 @@ solve axs input = case rewriteAll axs input of
   Left err -> Left err
   -- See §7.5 for details
   Right (vars, _subst, _given, wanted, _) ->
-    let (epsilon, residual) = partitionConstraint
-          (\case
-            (TVar b :~: t) -> b `elem` vars && b `notElem` fuv t
-            (t :~: TVar b) -> b `elem` vars && b `notElem` fuv t
-            _         -> False
-          )
-          wanted
-        subst  = nubOn fst $ mapConstraint (\case
-                                              (TVar b :~: t) -> (b, t)
-                                              (t :~: TVar b) -> (b, t)
-                                              q -> error $ "Unexpected constraint " <> show q)
-                                           epsilon
+    let partitionPred (TVar b :~: t     ) = b `elem` vars && b `notElem` fuv t
+        partitionPred (t      :~: TVar b) = b `elem` vars && b `notElem` fuv t
+        partitionPred _                   = False
+        (epsilon, residual) = partitionConstraint partitionPred wanted
+
+        toTuple (TVar b :~: t     ) = (b, t)
+        toTuple (t      :~: TVar b) = (b, t)
+        toTuple q                   = error $ "Unexpected constraint " <> show q
+        subst = nubOn fst $ mapConstraint toTuple epsilon
     in  Right (sub subst residual, subst)
 
 -- Solve a set of constraints
@@ -90,17 +99,20 @@ rewriteAll :: AxiomScheme -> Quad -> Either Error Quad
 rewriteAll axs quad@(_, _, _, wanted, _) = case applyRewrite axs quad of
   Left err -> Left err
   Right quad'@(_, _, _, wanted', _) ->
-    if sortConstraint wanted == sortConstraint wanted' then Right quad' else rewriteAll axs quad'
+    if sortConstraint wanted == sortConstraint wanted'
+      then Right quad'
+      else rewriteAll axs quad'
 
 -- Like solve but shows the solving history
 solveDebug :: AxiomScheme -> Quad -> Either Error [Quad]
 solveDebug axs q = go [q] q
  where
   go hist quad@(_, _, _, wanted, _) = case applyRewrite axs quad of
-    Left  err           -> Left err
-    Right quad'@(_, _, _, wanted', _) -> if sortConstraint wanted == sortConstraint wanted'
-      then Right (quad' : hist)
-      else go (quad' : hist) quad'
+    Left err -> Left err
+    Right quad'@(_, _, _, wanted', _) ->
+      if sortConstraint wanted == sortConstraint wanted'
+        then Right (quad' : hist)
+        else go (quad' : hist) quad'
 
 run :: Solve (Either Error ()) -> Quad -> Either Error Quad
 run f c = case runState f c of
@@ -109,7 +121,15 @@ run f c = case runState f c of
 
 -- Apply a round of rewriting
 applyRewrite :: AxiomScheme -> Quad -> Either Error Quad
-applyRewrite axs = run (canonM Given >> canonM Wanted >> interactM Given >> interactM Wanted >> simplifyM >> topreactM Given axs >> topreactM Wanted axs)
+applyRewrite axs = run
+  (  canonM Given
+  >> canonM Wanted
+  >> interactM Given
+  >> interactM Wanted
+  >> simplifyM
+  >> topreactM Given  axs
+  >> topreactM Wanted axs
+  )
 
 data Domain = Given | Wanted deriving (Eq, Show)
 
@@ -119,15 +139,17 @@ interactM :: Domain -> Solve (Either Error ())
 interactM dom = do
   (vars, subst, given, wanted, k) <- get
   let constraints = case dom of
-                      Given -> given
-                      Wanted -> wanted
-  case firstJust (map interactEach (focusPairs (flattenConstraint constraints))) of
-    Just constraints' -> do
-      case dom of
-        Given -> put (vars, subst, mconcat constraints', wanted, k)
-        Wanted -> put (vars, subst, given, mconcat constraints', k)
-      pure $ Right ()
-    Nothing -> pure $ Right ()
+        Given  -> given
+        Wanted -> wanted
+  case
+      firstJust (map interactEach (focusPairs (flattenConstraint constraints)))
+    of
+      Just constraints' -> do
+        case dom of
+          Given  -> put (vars, subst, mconcat constraints', wanted, k)
+          Wanted -> put (vars, subst, given, mconcat constraints', k)
+        pure $ Right ()
+      Nothing -> pure $ Right ()
  where
   -- Try to interact the constraint with each one in the list.
   -- If a match is found, replace the two reactants with the result
@@ -141,8 +163,8 @@ interactM dom = do
 simplifyM :: Solve (Either Error ())
 simplifyM = do
   (vars, subst, given, wanted, k) <- get
-  let wanteds = flatten wanted
-      givens = flatten given
+  let wanteds  = flatten wanted
+      givens   = flatten given
       wanteds' = foldl (\ws g -> map (simplify g) ws) wanteds givens
   put (vars, subst, given, mconcat wanteds', k)
   pure (Right ())
@@ -152,14 +174,14 @@ canonM :: Domain -> Solve (Either Error ())
 canonM Given = do
   (vars, subst, given, wanted, k) <- get
   case canonAll (flattenConstraint given) of
-    Left  err          -> pure $ Left err
+    Left  err    -> pure $ Left err
     Right given' -> do
       put (vars, subst, mconcat given', wanted, k)
       pure $ Right ()
 canonM Wanted = do
   (vars, subst, given, wanted, k) <- get
   case canonAll (flattenConstraint wanted) of
-    Left  err          -> pure $ Left err
+    Left  err     -> pure $ Left err
     Right wanted' -> do
       put (vars, subst, given, mconcat wanted', k)
       pure $ Right ()
@@ -185,14 +207,15 @@ canon (TCon k as :~: TCon k' bs) | k == k' =
   pure (foldl (:^:) CNil (zipWith (:~:) as bs))
 
 -- FAILDEC: Equalities between constructor types must have the same constructor
-canon (t@(TCon k _) :~: v@(TCon k' _)) | k /= k'            = Left (ConstructorMismatch t v)
+canon (t@(TCon k _) :~: v@(TCon k' _)) | k /= k' =
+  Left (ConstructorMismatch t v)
 
 -- OCCCHECK: a type variable cannot be equal to a type containing that variable
 canon (v@(TVar _) :~: t) | v /= t && t `contains` v =
   Left $ OccursCheckFailure v t
 
 -- ORIENT: Flip an equality around if desirable
-canon (a :~: b) | canonCompare a b == GT            = pure (b :~: a)
+canon (a :~: b) | canonCompare a b == GT = pure (b :~: a)
 
 -- DFLATW, DFLATG, FFLATWL, FFLATWR, FFLATGL, FFLATGR: the flattening rules
 -- These are all omitted because they deal with type function application.
@@ -200,40 +223,41 @@ canon (a :~: b) | canonCompare a b == GT            = pure (b :~: a)
 -- have these.
 
 -- Custom rule: CNil ^ c = c
-canon (CNil :^: c   )                               = pure c
-canon (c    :^: CNil)                               = pure c
+canon (CNil :^: c   )                    = pure c
+canon (c    :^: CNil)                    = pure c
 
 -- Flattening rules only apply to type classes and type families, so are
 -- omitted.
-canon c                                             = pure c
+canon c                                  = pure c
 
 -- Combine two canonical constraints into one
 interact :: Constraint -> Constraint -> Maybe Constraint
 -- EQSAME: Two equalities with the same LHS are combined to equate the RHS.
 interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
-  | v1 == v2 && isCanonical c1 && isCanonical c2 =
-  Just $ (TVar v1 :~: t1) :^: (t1 :~: t2)
+  | v1 == v2 && isCanonical c1 && isCanonical c2
+  = Just $ (TVar v1 :~: t1) :^: (t1 :~: t2)
 
 -- EQDIFF: One equality can be substituted into the other. We rely the ORIENT
 -- rule in prior canonicalisation to ensure this makes progress.
 interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
-  | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2 =
-  Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: sub [(v1, t1)] t2)
+  | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2
+  = Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: sub [(v1, t1)] t2)
 
 -- EQDICT: We can substitute an equality into a typeclass constraint.
 interact c1@(TVar v1 :~: t1) (Inst className tys)
-  | v1 `member` ftv tys && isCanonical c1 =
-  Just $ (TVar v1 :~: t1) :^: Inst className (sub [(v1, t1)] tys)
+  | v1 `member` ftv tys && isCanonical c1 = Just $ (TVar v1 :~: t1) :^: Inst
+    className
+    (sub [(v1, t1)] tys)
 
 -- DDICT: We can drop duplicate typeclass constraints.
 interact i1@(Inst _ _) i2@(Inst _ _) | i1 == i2 = Just i1
 
 -- Redundant cases: drop CNil
-interact CNil c    = Just c
-interact c    CNil = Just c
+interact CNil c                                 = Just c
+interact c    CNil                              = Just c
 
 -- If no rules match, signal failure
-interact _    _    = Nothing
+interact _    _                                 = Nothing
 
 -- Use a given constraint to simplify a wanted constraint
 -- e.g. given:   a ~ Int
@@ -251,32 +275,38 @@ simplify (TVar v1 :~: t1) (TVar v2 :~: t2) | v1 `member` ftv t2 =
   TVar v2 :~: sub [(v1, t1)] t2
 
 -- SEQDICT
-simplify (TVar v1 :~: t1) (Inst className tys) | isCanonical (TVar v1 :~: t1) && v1 `member` ftv tys
-  = Inst className (sub [(v1, t1)] tys)
+simplify (TVar v1 :~: t1) (Inst className tys)
+  | isCanonical (TVar v1 :~: t1) && v1 `member` ftv tys = Inst
+    className
+    (sub [(v1, t1)] tys)
 
 -- SDDICTG
 simplify i1@Inst{} i2@Inst{} | i1 == i2 = mempty
 
 -- If no rules match, return the wanted constraint unchanged
-simplify _ w = w
+simplify _ w                            = w
 
 -- | Interact a constraint with an axiom from the top level axiom scheme
 -- This is where typeclass instances start to get introduced.
 topreactM :: Domain -> AxiomScheme -> Solve (Either Error ())
 topreactM Given axs = do
   (_, _, given, _, _) <- get
-  errors <- concat <$> mapM (\ax -> mapM (topreactDINSTG ax) (flatten given)) axs
+  errors              <-
+    concat <$> mapM (\ax -> mapM (topreactDINSTG ax) (flatten given)) axs
   case firstLeft errors of
     Just err -> pure (Left err)
-    _ -> pure (Right ())
+    _        -> pure (Right ())
 topreactM Wanted axs = do
   forM_ axs $ \ax -> do
     (vars, subst, given, wanted, _) <- get
-    (wanted', vars') <- unzip <$> forM (flatten wanted) (\w -> do
-      res <- topreactDINSTW ax w
-      case res of
-        Nothing -> pure (w, mempty)
-        Just (v, w') -> pure (w', v))
+    (wanted', vars')                <- unzip <$> forM
+      (flatten wanted)
+      (\w -> do
+        res <- topreactDINSTW ax w
+        case res of
+          Nothing      -> pure (w, mempty)
+          Just (v, w') -> pure (w', v)
+      )
     -- topreactDINSTW may have incremented k, so refetch it
     (_, _, _, _, k) <- get
     put (vars <> mconcat vars', subst, given, mconcat wanted', k)
@@ -293,25 +323,29 @@ topreactDINSTW (AForall as q (Inst cn1 ts0)) (Inst cn2 ts1) | cn1 == cn2 = do
   let bs = ftv ts0
       cs = Set.toList (as \\ bs)
   ys <- mapM (const fresh) cs
-  let btys = map (\v -> (v,) <$> firstJust (zipWith (findCounterpart v) ts0 ts1)) (Set.toList bs)
+  let btys = map
+        (\v -> (v, ) <$> firstJust (zipWith (findCounterpart v) ts0 ts1))
+        (Set.toList bs)
   -- TODO: I don't think we should have any Nothings in btys - I think that's a
   -- sign that we have two typeclass instances for the same class with different
   -- structure, which probably indicates a bug.
   let subst = zip cs (map TVar ys) <> catMaybes btys
   if sub subst ts0 == ts1
-     then pure $ Just (Set.fromList ys, sub subst q)
-     else pure Nothing
+    then pure $ Just (Set.fromList ys, sub subst q)
+    else pure Nothing
 topreactDINSTW _ _ = pure Nothing
 
 -- | React given typeclass instances with top level axioms
 -- This is just a consistency check, really.
 topreactDINSTG :: Axiom -> Constraint -> Solve (Either Error ())
 topreactDINSTG (AForall as _q (Inst cn1 ts0)) (Inst cn2 ts1) | cn1 == cn2 = do
-  let atys = map (\v -> (v,) <$> firstJust (zipWith (findCounterpart v) ts0 ts1)) (Set.toList as)
+  let atys = map
+        (\v -> (v, ) <$> firstJust (zipWith (findCounterpart v) ts0 ts1))
+        (Set.toList as)
   let subst = catMaybes atys
   if sub subst ts0 == ts1
-     then pure $ Left OverlappingTypeclassInstances
-     else pure $ Right ()
+    then pure $ Left OverlappingTypeclassInstances
+    else pure $ Right ()
 
 contains :: Type -> Type -> Bool
 contains a b | a == b  = True
@@ -324,7 +358,7 @@ canonCompare (TVar (R _)) (TVar (U _)) = GT
 canonCompare (TVar a    ) (TVar b    ) = compare a b
 canonCompare _            (TCon _ _  ) = LT
 canonCompare (TCon _ _)   _            = GT
-canonCompare _ _ = EQ
+canonCompare _            _            = EQ
 
 -- Fig. 20
 -- A constraint is canonical if either:
@@ -333,7 +367,7 @@ canonCompare _ _ = EQ
 isCanonical :: Constraint -> Bool
 isCanonical Inst{} = True
 isCanonical (TVar v :~: t) | v `member` ftv t = False
-                           | otherwise = True
+                           | otherwise        = True
 isCanonical _ = False
 
 -- | Given a variable, a type containing that variable, and another
@@ -343,7 +377,8 @@ isCanonical _ = False
 -- the corresponding part of the right type.
 findCounterpart :: Var -> Type -> Type -> Maybe Type
 findCounterpart v (TVar v') t | v == v' = Just t
-findCounterpart v (TCon _ ts1) (TCon _ ts2) = firstJust (zipWith (findCounterpart v) ts1 ts2)
+findCounterpart v (TCon _ ts1) (TCon _ ts2) =
+  firstJust (zipWith (findCounterpart v) ts1 ts2)
 findCounterpart v _ _ = Nothing
 
 -- A list of each element in the given list paired with the remaining elements
@@ -365,6 +400,6 @@ firstJust (Nothing : xs) = firstJust xs
 
 -- | Extract the first Left value from a list
 firstLeft :: [Either a b] -> Maybe a
-firstLeft [] = Nothing
-firstLeft (Left x : _) = Just x
-firstLeft (_ : xs) = firstLeft xs
+firstLeft []            = Nothing
+firstLeft (Left x : _ ) = Just x
+firstLeft (_      : xs) = firstLeft xs

@@ -198,7 +198,7 @@ runGenerate g =
   let (res, touchables) = run g
   in  do
         (t, constraints, env') <- res
-        (cs, s)                <- solveC mempty touchables constraints
+        (cs, s)                <- solveC mempty touchables mempty constraints
         pure (sub s t, cs, sub s env')
 
 runGenerateMulti
@@ -208,7 +208,7 @@ runGenerateMulti g =
   let (res, touchables) = run g
   in  do
         (ts, constraints, env') <- res
-        (cs, s)                 <- solveC mempty touchables constraints
+        (cs, s)                 <- solveC mempty touchables mempty constraints
         pure (map (sub s) ts, cs, sub s env')
 
 failure :: Show a => a -> Expectation
