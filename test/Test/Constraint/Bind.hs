@@ -97,7 +97,7 @@ test = do
               )
             ]
             (Forall [] CNil (bool `fn` bool))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -111,7 +111,7 @@ test = do
             "f"
             [([ConsPat true []], ConT true), ([ConsPat false []], ConT false)]
             (Forall [] CNil (bool `fn` bool))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -129,7 +129,7 @@ test = do
             , ([ConsPat cons [VarPat "x", VarPat "xs"]], ConT true)
             ]
             (Forall [R "$R11"] CNil (list (TVar (R "$R11")) `fn` bool))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -147,7 +147,7 @@ test = do
             , ([TuplePat [VarPat "x", ConsPat zero []]], ConT zero)
             ]
             (Forall [] CNil (tuple2 bool nat `fn` nat))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -177,7 +177,7 @@ test = do
               )
             ]
             (Forall [] CNil (bool `fn` bool))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -195,7 +195,7 @@ test = do
             , ([WildPat], ConT false)
             ]
             (Forall [] CNil (pair bool nat `fn` bool))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -216,7 +216,7 @@ test = do
             , ([ConsPat right [VarPat "n"]]     , VarT "n" nat)
             ]
             (Forall [] CNil (either bool nat `fn` nat))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -234,7 +234,7 @@ test = do
             , ([ConsPat nothing []]       , ConT false)
             ]
             (Forall [] CNil (maybe bool `fn` bool))
-      let (res, _) = run (generateBind env bind)
+      let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
@@ -279,7 +279,7 @@ test = do
         infersError env bind
 
 infersError :: Env -> Bind -> Expectation
-infersError env bind = case run (generateBind env bind) of
+infersError env bind = case run (generateBind mempty env bind) of
   (Right (_env, bindt), _) ->
     expectationFailure
       $  "Expected type error but was successful: \n"

@@ -42,6 +42,7 @@
 module Constraint.Generate.Module where
 
 import qualified Data.Map.Strict               as Map
+import           Control.Monad                  ( void )
 
 import           Constraint.Generate.M
 import           Syn                     hiding ( Name
@@ -66,23 +67,61 @@ generateModule
   -> GenerateM (Env, Module_ Name ExpT Scheme)
 generateModule env modul = do
   -- Extract data declarations
-  let datas = getDataDecls (moduleDecls modul)
-  let env'  = foldl generateDataDecl env datas
+  let datas       = getDataDecls (moduleDecls modul)
+  let env'        = foldl generateDataDecl env datas
 
-  -- TODO: typeclass declarations
-  --       instance declarations
+  -- For each typeclass, generate constrained types for the methods and add
+  -- these to the environment. E.g.
+  --
+  -- > class Semigroup a where
+  -- >         append : a -> a -> a
+  --
+  -- generates
+  --
+  -- > append : Semigroup a => a -> a -> a
+  let typeclasses = getTypeclassDecls (moduleDecls modul)
+  let typeclassMethods =
+        map (\t -> (typeclassName t, generateMethods t)) typeclasses
+  let allMethods  = Map.fromList (concatMap snd typeclassMethods)
+
+  -- Generate an axiom scheme from instance declarations
+  let instances   = getInstanceDecls (moduleDecls modul)
+  let axiomScheme = map instanceToAxiom instances
+
+  -- Check that every instance is of a known typeclass
+  let unknownTypeclassInstances =
+        let typeclassNames = map typeclassName typeclasses
+        in  filter (\i -> instanceName i `notElem` typeclassNames) instances
+  mapM_ (throwError . UnknownTypeclass . instanceName) unknownTypeclassInstances
+
+  -- TODO: typecheck instance methods
+  --       fetch and include imported typeclasses and instances
 
   -- Extract function declarations
   let funs  = getFunDecls (moduleDecls modul)
   let binds = map funToBind funs
 
+  -- Check that every typeclass constraint is of a known typeclass
+  let unknownTypeclassConstraints =
+        let typeclassNames           = map typeclassName typeclasses
+            typeclassesInConstraints = concatMap
+              (\(Bind _ msch _) ->
+                maybe [] (\(Forall _ q _) -> constraintTypeclasses q) msch
+              )
+              binds
+        in  filter (`notElem` typeclassNames) typeclassesInConstraints
+  mapM_ (throwError . UnknownTypeclass) unknownTypeclassConstraints
+
   -- Generate uvars for each bind upfront so they can be typechecked in any order
   bindEnv <- mapM (\(Bind n _ _) -> (n, ) . Forall [] mempty . TVar <$> fresh)
                   binds
-  let env'' = Map.fromList bindEnv <> env'
+  let env'' = Map.fromList bindEnv <> env' <> allMethods
 
   -- Typecheck each bind
-  (env''', binds') <- mapAccumLM generateBind env'' binds
+  (env''', binds') <- mapAccumLM (generateBind axiomScheme) env'' binds
+
+  -- Typecheck each typeclass instance method
+  mapM_ (generateInstance axiomScheme env''' typeclassMethods) instances
 
   -- Reconstruct module with typed declarations
   let datadecls = map DataDecl datas
@@ -90,21 +129,67 @@ generateModule env modul = do
 
   pure (env''', modul { moduleDecls = datadecls <> fundecls })
 
+-- Given an environment, a set of typeclasses and a typeclass instance,
+-- typecheck each of its methods
+-- For each method:
+-- - construct the correct type annotation by substituting the instance
+--   types into the typeclass method signature
+-- - typecheck the method with generateBind, throwing an error on failure
+generateInstance
+  :: AxiomScheme
+  -> Env
+  -> [(Name, [(Name, Scheme)])]
+  -> Instance_ Name (Syn_ Name)
+  -> GenerateM ()
+generateInstance axs env typeclasses inst =
+  case lookup (instanceName inst) typeclasses of
+    Nothing               -> throwError (UnknownTypeclass (instanceName inst))
+    Just typeclassMethods -> do
+      let checkMethod (name, defs) = case lookup name typeclassMethods of
+            Nothing -> throwError (UnknownInstanceMethod name)
+            Just (Forall vars q t) ->
+              let
+                -- substitute the instance types into the scheme
+                -- this may fail for multi-param typeclasses if the free type
+                -- variables are in the wong order - it's a bit hacky.
+                -- TODO: error if the number of vars doesn't match the number of
+                --       instanceTypes
+                  subst = zip vars (map tyToType (instanceTypes inst))
+                  sch'  = Forall [] (sub subst q) (sub subst t)
+                  bind  = Bind name (Just sch') (map defToEquation defs)
+              in  void (generateBind axs env bind)
+      mapM_ checkMethod (instanceDefs inst)
+
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
-getFunDecls (FunDecl f : rest) = f : getFunDecls rest
-getFunDecls (_         : rest) = getFunDecls rest
-getFunDecls []                 = []
+getFunDecls = getDeclBy $ \case
+  FunDecl f -> Just f
+  _         -> Nothing
 
 getDataDecls :: [Decl_ n e ty] -> [Data_ n]
-getDataDecls (DataDecl d : rest) = d : getDataDecls rest
-getDataDecls (_          : rest) = getDataDecls rest
-getDataDecls []                  = []
+getDataDecls = getDeclBy $ \case
+  DataDecl d -> Just d
+  _          -> Nothing
 
--- TODO: typeclass constraints
+getTypeclassDecls :: [Decl_ n e ty] -> [Typeclass_ n]
+getTypeclassDecls = getDeclBy $ \case
+  TypeclassDecl t -> Just t
+  _               -> Nothing
+
+getInstanceDecls :: [Decl_ n e ty] -> [Instance_ n e]
+getInstanceDecls = getDeclBy $ \case
+  TypeclassInst i -> Just i
+  _               -> Nothing
+
+getDeclBy :: (Decl_ n e ty -> Maybe a) -> [Decl_ n e ty] -> [a]
+getDeclBy _       []         = []
+getDeclBy extract (d : rest) = case extract d of
+  Just e  -> e : getDeclBy extract rest
+  Nothing -> getDeclBy extract rest
+
 funToBind :: Fun_ Name (Syn_ Name) (Type_ Name) -> Bind
 funToBind fun = Bind (funName fun) (Just scheme) equations
  where
-  scheme    = tyToScheme (funType fun)
+  scheme    = tyToScheme (funConstraint fun) (funType fun)
   equations = map defToEquation (funDefs fun)
 
 bindToFun :: BindT -> Fun_ Name ExpT Scheme
@@ -144,3 +229,26 @@ generateDataDecl env d =
       mkCon (DataCon   name args  ) = (name, mkType args)
       mkCon (RecordCon name fields) = (name, mkType (map snd fields))
   in  env <> Map.fromList (map mkCon (dataCons d))
+
+-- We don't yet support instance constraints so the first constraint of
+-- the axiom will always be empty.
+instanceToAxiom :: Instance_ Name e -> Axiom
+instanceToAxiom inst =
+  let types = map tyToType (instanceTypes inst)
+      vars  = ftv types
+  in  AForall vars mempty (Inst (instanceName inst) types)
+
+-- | Generate constrained types for all the methods in a given typeclass
+generateMethods :: Typeclass_ Name -> [(Name, Scheme)]
+generateMethods tc = mapSnd constrain (typeclassDefs tc)
+ where
+  constrain ty =
+    let vars = map R (typeclassTyVars tc)
+    in  Forall vars (Inst (typeclassName tc) (map TVar vars)) (tyToType ty)
+
+-- | Given a constraint, returns a list of the typeclasses it references
+constraintTypeclasses :: Constraint.Constraint -> [Name]
+constraintTypeclasses (a :^: b) =
+  constraintTypeclasses a <> constraintTypeclasses b
+constraintTypeclasses (Inst n _) = [n]
+constraintTypeclasses _          = []

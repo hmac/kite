@@ -25,13 +25,13 @@ modifyModuleDecls f m = m { moduleDecls = map f (moduleDecls m) }
 
 typeclassDecls :: Module_ n a ty -> [Typeclass_ n]
 typeclassDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
-    TypeclassDecl t -> Just t
-    _               -> Nothing
+  TypeclassDecl t -> Just t
+  _               -> Nothing
 
 instanceDecls :: Module_ n e ty -> [Instance_ n e]
 instanceDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
   TypeclassInst i -> Just i
-  _ -> Nothing
+  _               -> Nothing
 
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
@@ -60,6 +60,11 @@ data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
                     | Comment String
                   deriving (Eq, Show)
 
+-- TODO: I think it'll simplify things down the line if we have a single
+-- funScheme field that contains both the constraint and the type, instead of
+-- splitting them. This is because after type inference we get a Scheme, and
+-- splitting it back out into constraint and type (with free variables) seems a
+-- bit pointless.
 type Fun exp = Fun_ Name exp (Type_ Name)
 data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
@@ -112,7 +117,7 @@ data DataCon_ name = DataCon { conName :: name
                              }
                    | RecordCon { conName :: name
                                , conFields :: [(name, Type_ name)]
-                               } 
+                               }
                              deriving (Eq, Show)
 
 -- Consider adding defName here - I think it might simplify things elsewhere

@@ -69,6 +69,10 @@ printError EquationsHaveDifferentNumberOfPatterns =
 -- TODO: find the expressions these variables represent and print them instead
 printError (UnsolvedUnificationVariables vars) =
   "Unsolved unification variables:" <+> hsep (map printVar (Set.toList vars))
-printError (UnknownVariable v)       = "Unknown variable" <+> printName v
-printError EmptyCase                 = "Empty case expression"
-printError DuplicatePatternVariables = "Duplicate variables in pattern"
+printError (UnknownVariable v)           = "Unknown variable" <+> printName v
+printError EmptyCase                     = "Empty case expression"
+printError DuplicatePatternVariables     = "Duplicate variables in pattern"
+printError OverlappingTypeclassInstances = "Overlapping typeclass instances"
+printError (UnknownTypeclass n)          = "Unknown typeclass " <> printName n
+printError (UnknownInstanceMethod n) =
+  "Unknown instance method " <> printName n

@@ -1,0 +1,6 @@
+module UnknownTypeclassInstance
+
+data D = D
+
+instance Foo D where
+  bar = D

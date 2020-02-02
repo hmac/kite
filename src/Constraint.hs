@@ -231,4 +231,6 @@ data Error = OccursCheckFailure Type Type
            | EmptyCase
            | DuplicatePatternVariables
            | OverlappingTypeclassInstances
+           | UnknownTypeclass Name
+           | UnknownInstanceMethod Name
   deriving (Show, Eq)

@@ -1,0 +1,9 @@
+module UnknownInstanceMethod
+
+class F a where
+  f : a
+
+data D = D
+
+instance F D where
+  g = D

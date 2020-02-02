@@ -11,6 +11,7 @@ import           Constraint.Generate.Module     ( generateModule )
 import           Constraint.Expr         hiding ( Exp(..) )
 import           Constraint                     ( Type(..)
                                                 , Var(..)
+                                                , Constraint(..)
                                                 )
 import qualified Constraint                    as C
                                                 ( fn )
@@ -20,6 +21,7 @@ import           Constraint.Generate.M          ( run
                                                 , Env
                                                 )
 import qualified Data.Map.Strict               as Map
+import           Util
 
 test :: Spec
 test = describe "typing simple modules" $ do
@@ -83,6 +85,61 @@ test = describe "typing simple modules" $ do
               )
             )
           ]
+  it
+      "class Foo a where bar : a -> a; data Foo = Foo; instance F Foo; id_ : F a => a -> a; id_ x = bar x; foo : Foo; foo = id_ Foo"
+    $ do
+        let
+          dFoo = DataDecl $ Data
+            { dataName   = "Foo"
+            , dataTyVars = []
+            , dataCons   = [DataCon { conName = "Foo", conArgs = [] }]
+            }
+          fClass = TypeclassDecl $ Typeclass
+            { typeclassName   = "F"
+            , typeclassTyVars = ["a"]
+            , typeclassDefs   = [("bar", TyVar "a" `fn` TyVar "a")]
+            }
+          inst = TypeclassInst $ Instance { instanceName  = "F"
+                                          , instanceTypes = [TyCon "Foo" []]
+                                          , instanceDefs  = []
+                                          }
+          id_ = FunDecl $ Fun
+            { funComments   = []
+            , funName       = "id_"
+            , funConstraint = Just (CInst "F" [TyVar "a"])
+            , funType       = TyVar "a" `fn` TyVar "a"
+            , funDefs       = [ Def { defArgs = [VarPat "x"]
+                                    , defExpr = App (Var "bar") (Var "x")
+                                    }
+                              ]
+            }
+          foo = FunDecl $ Fun
+            { funComments   = []
+            , funName       = "foo"
+            , funConstraint = Nothing
+            , funType       = TyCon "Foo" []
+            , funDefs       = [ Def { defArgs = []
+                                    , defExpr = App (Var "id_") (Con "Foo")
+                                    }
+                              ]
+            }
+          modul = Module { moduleName     = "Test"
+                         , moduleMetadata = []
+                         , moduleImports  = []
+                         , moduleExports  = []
+                         , moduleDecls    = [dFoo, inst, id_, foo, fClass]
+                         }
+        infersType
+          mempty
+          modul
+          [ ("foo", Forall [] mempty (TCon "Foo" []))
+          , ( "id_"
+            , Forall [R "a"]
+                     (Inst "F" [TVar (R "a")])
+                     (TVar (R "a") `C.fn` TVar (R "a"))
+            )
+          ]
+
   describe "expected typing failures" $ do
     it "id : a -> a; id x = 5" $ do
       infersError [("id", TyVar "a" `fn` TyVar "a", [([VarPat "x"], IntLit 5)])]

@@ -1,0 +1,11 @@
+module BadInstanceMethod
+
+data D = D
+
+data C = C
+
+class F a where
+  f : a
+
+instance F D where
+  f = C

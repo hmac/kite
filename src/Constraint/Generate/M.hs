@@ -22,9 +22,6 @@ import           Canonical                      ( Name(..) )
 
 type Env = Map Name Scheme
 
-instance Sub Env where
-  sub s = fmap (sub s)
-
 type GenerateM = ExceptT Error (WriterT (Set.Set Var) (State Int))
 
 -- Generate a fresh rigid type variable

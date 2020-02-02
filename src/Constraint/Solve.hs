@@ -266,13 +266,13 @@ interact _    _                                 = Nothing
 -- These rules are all similar to the interact rules above
 simplify :: Constraint -> Constraint -> Constraint
 -- SEQSAME
-simplify (TVar v1 :~: t1) (TVar v2 :~: t2) | v1 == v2 = t1 :~: t2
+simplify c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
+  | v1 == v2 && isCanonical c1 && isCanonical c2 = t1 :~: t2
 
 -- SEQDIFF
--- TODO: see figure - need to check there are constraints (u ~ t1) and (v ~ t2)
--- in
-simplify (TVar v1 :~: t1) (TVar v2 :~: t2) | v1 `member` ftv t2 =
-  TVar v2 :~: sub [(v1, t1)] t2
+simplify c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
+  | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2
+  = TVar v2 :~: sub [(v1, t1)] t2
 
 -- SEQDICT
 simplify (TVar v1 :~: t1) (Inst className tys)
@@ -346,6 +346,7 @@ topreactDINSTG (AForall as _q (Inst cn1 ts0)) (Inst cn2 ts1) | cn1 == cn2 = do
   if sub subst ts0 == ts1
     then pure $ Left OverlappingTypeclassInstances
     else pure $ Right ()
+topreactDINSTG _ _ = pure (Right ())
 
 contains :: Type -> Type -> Bool
 contains a b | a == b  = True
@@ -379,7 +380,7 @@ findCounterpart :: Var -> Type -> Type -> Maybe Type
 findCounterpart v (TVar v') t | v == v' = Just t
 findCounterpart v (TCon _ ts1) (TCon _ ts2) =
   firstJust (zipWith (findCounterpart v) ts1 ts2)
-findCounterpart v _ _ = Nothing
+findCounterpart _ _ _ = Nothing
 
 -- A list of each element in the given list paired with the remaining elements
 focus :: [a] -> [(a, [a])]

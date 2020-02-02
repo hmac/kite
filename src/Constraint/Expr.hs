@@ -1,8 +1,10 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Constraint.Expr
   ( module Constraint.Expr
   )
 where
 
+import           Data.Map.Strict                ( Map )
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
 
@@ -116,3 +118,6 @@ instance Sub Scheme where
 instance Vars Scheme where
   fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
   ftv (Forall tvars c t) = ftv c <> ftv t \\ Set.fromList tvars
+
+instance Sub (Map Name Scheme) where
+  sub s = fmap (sub s)

@@ -1,42 +1,57 @@
-module Constraint.FromSyn (fromSyn, tyToType, tyToScheme) where
+module Constraint.FromSyn
+  ( fromSyn
+  , tyToType
+  , tyToScheme
+  )
+where
 
 -- Converts a Syn AST to a Constraint.Expr AST
 
-import Canonical (Name(..))
-import qualified Syn as S
-import qualified Constraint.Expr as E
-import Constraint
-import Util
-import qualified Data.Set as Set
+import           Canonical                      ( Name(..) )
+import qualified Syn                           as S
+import qualified Constraint.Expr               as E
+import           Constraint
+import           Util
+import qualified Data.Set                      as Set
 
 fromSyn :: S.Syn_ Name -> E.Exp
 fromSyn = \case
-  S.Var n -> E.Var n
-  S.Con n -> E.Con n
-  S.Hole n -> E.Hole n
-  S.Abs xs e -> E.Abs xs (fromSyn e)
-  S.App a b -> E.App (fromSyn a) (fromSyn b)
+  S.Var  n      -> E.Var n
+  S.Con  n      -> E.Con n
+  S.Hole n      -> E.Hole n
+  S.Abs xs    e -> E.Abs xs (fromSyn e)
+  S.App a     b -> E.App (fromSyn a) (fromSyn b)
   S.Let binds e -> E.Let (mapSnd fromSyn binds) (fromSyn e)
-  S.LetA x t e body -> E.LetA x (tyToScheme t) (fromSyn e) (fromSyn body)
-  S.Case scrut alts -> E.Case (fromSyn scrut) (map (\(p, e) -> E.Alt p (fromSyn e)) alts)
-  S.TupleLit es -> E.TupleLit (map fromSyn es)
-  S.ListLit es -> E.ListLit (map fromSyn es)
+  S.LetA x t e body ->
+    E.LetA x (tyToScheme Nothing t) (fromSyn e) (fromSyn body)
+  S.Case scrut alts ->
+    E.Case (fromSyn scrut) (map (\(p, e) -> E.Alt p (fromSyn e)) alts)
+  S.TupleLit es         -> E.TupleLit (map fromSyn es)
+  S.ListLit  es         -> E.ListLit (map fromSyn es)
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)
-  S.IntLit i -> E.IntLit i
+  S.IntLit i            -> E.IntLit i
 
--- Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
-tyToScheme :: S.Type_ Name -> E.Scheme
-tyToScheme t = let t' = tyToType t
-                   vars = Set.toList (ftv t')
-                in E.Forall vars mempty t'
+-- | Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
+tyToScheme :: Maybe (S.Constraint_ Name) -> S.Type_ Name -> E.Scheme
+tyToScheme c t =
+  let t'         = tyToType t
+      vars       = Set.toList (ftv t')
+      constraint = maybe mempty constraintToConstraint c
+  in  E.Forall vars constraint t'
+
+constraintToConstraint :: S.Constraint_ Name -> Constraint
+constraintToConstraint (S.CTuple a b) =
+  constraintToConstraint a :^: constraintToConstraint b
+constraintToConstraint (S.CInst className tys) =
+  Inst className (map tyToType tys)
 
 tyToType :: S.Type_ Name -> Type
 tyToType = \case
   S.TyCon n ts -> TCon n (map tyToType ts)
-  S.TyVar n -> TVar (R n)
-  S.TyList t -> list (tyToType t)
+  S.TyVar   n  -> TVar (R n)
+  S.TyList  t  -> list (tyToType t)
   S.TyTuple ts -> mkTupleType (map tyToType ts)
-  S.TyHole n -> THole (Local n)
-  S.TyInt -> TInt
-  S.TyString -> TString
-  S.TyFun a b -> TCon (TopLevel modPrim "->") [tyToType a, tyToType b]
+  S.TyHole  n  -> THole (Local n)
+  S.TyInt      -> TInt
+  S.TyString   -> TString
+  S.TyFun a b  -> TCon (TopLevel modPrim "->") [tyToType a, tyToType b]
