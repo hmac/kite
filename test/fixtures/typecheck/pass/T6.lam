@@ -1,0 +1,15 @@
+module T6
+
+import T5 (Semigroup, append)
+
+data Foo = Empty | MkFoo
+
+instance Semigroup Foo where
+  append Empty f = f
+  append MkFoo _ = MkFoo
+
+foo1 : Foo
+foo1 = MkFoo
+
+foo2 : Foo
+foo2 = append Empty MkFoo

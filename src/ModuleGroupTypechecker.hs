@@ -28,15 +28,21 @@ typecheckModuleGroup (ModuleGroup m deps) = do
   -- This requires that modules in a group have a total order (see
   -- ModuleLoader).
 
-  let ms       = deps ++ [m]
-  let (res, _) = run $ mapAccumLM generateModule Constraint.Primitive.env ms
+  let ms = deps ++ [m]
+  let (res, _) = run $ mapAccumLM
+        generateModule
+        (Constraint.Primitive.typeclasses, Constraint.Primitive.env)
+        ms
   (_env', typedModules) <- res
   let (typedModule : typedDeps) = reverse typedModules
   pure $ ModuleGroup typedModule typedDeps
 
 dumpEnv :: UntypedModuleGroup -> Either Error TypeEnv
 dumpEnv (ModuleGroup m deps) = do
-  let ms       = deps ++ [m]
-  let (res, _) = run $ mapAccumLM generateModule Constraint.Primitive.env ms
-  (env', _) <- res
+  let ms = deps ++ [m]
+  let (res, _) = run $ mapAccumLM
+        generateModule
+        (Constraint.Primitive.typeclasses, Constraint.Primitive.env)
+        ms
+  ((_, env'), _) <- res
   pure env'

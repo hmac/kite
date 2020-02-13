@@ -1,10 +1,12 @@
 module Constraint.Primitive
   ( env
+  , typeclasses
   )
 where
 
 import           Constraint.Generate.M
 import           Constraint
+import           Constraint.Generate.Module     ( Typeclasses )
 import           Canonical                      ( Name(..) )
 import           Constraint.Expr
 
@@ -24,3 +26,8 @@ env = Map.fromList
     )
   , (TopLevel modPrim "+", Forall [] mempty (TInt `fn` TInt `fn` TInt))
   ]
+
+-- Builtin typeclass names
+-- Currently none, but we might add some in the future
+typeclasses :: Typeclasses
+typeclasses = mempty

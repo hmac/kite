@@ -41,6 +41,7 @@
 
 module Constraint.Generate.Module where
 
+import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Control.Monad                  ( void )
 
@@ -61,14 +62,18 @@ import           Constraint.FromSyn             ( fromSyn
 import           Constraint.Generate.Bind
 import           Util
 
+-- The typeclasses we know about
+-- typeclass name => names and types of the methods
+type Typeclasses = Map Name TypeEnv
+
 generateModule
-  :: TypeEnv
+  :: (Typeclasses, TypeEnv)
   -> Module_ Name (Syn_ Name) (Type_ Name)
-  -> GenerateM (TypeEnv, Module_ Name ExpT Scheme)
-generateModule env modul = do
+  -> GenerateM ((Typeclasses, TypeEnv), Module_ Name ExpT Scheme)
+generateModule (typeclasses, env) modul = do
   -- Extract data declarations
-  let datas       = getDataDecls (moduleDecls modul)
-  let env'        = foldl generateDataDecl env datas
+  let datas = getDataDecls (moduleDecls modul)
+      env'  = foldl generateDataDecl env datas
 
   -- For each typeclass, generate constrained types for the methods and add
   -- these to the environment. E.g.
@@ -79,36 +84,30 @@ generateModule env modul = do
   -- generates
   --
   -- > append : Semigroup a => a -> a -> a
-  let typeclasses = getTypeclassDecls (moduleDecls modul)
-  let typeclassMethods =
-        map (\t -> (typeclassName t, generateMethods t)) typeclasses
-  let allMethods  = Map.fromList (concatMap snd typeclassMethods)
+  let moduleTypeclasses = Map.fromList $ map
+        (\t -> (typeclassName t, generateMethods t))
+        (getTypeclassDecls (moduleDecls modul))
+      allMethods   = mconcat $ Map.elems moduleTypeclasses
+      typeclasses' = moduleTypeclasses <> typeclasses
 
   -- Generate an axiom scheme from instance declarations
   let instances   = getInstanceDecls (moduleDecls modul)
-  let axiomScheme = map instanceToAxiom instances
+      axiomScheme = map instanceToAxiom instances
 
-  -- Check that every instance is of a known typeclass
-  let unknownTypeclassInstances =
-        let typeclassNames = map typeclassName typeclasses
-        in  filter (\i -> instanceName i `notElem` typeclassNames) instances
-  mapM_ (throwError . UnknownTypeclass . instanceName) unknownTypeclassInstances
-
-  -- TODO: fetch and include imported typeclasses and instances
+  let typeclassNames' = Map.keys typeclasses'
 
   -- Extract function declarations
   let funs  = getFunDecls (moduleDecls modul)
-  let binds = map funToBind funs
+      binds = map funToBind funs
 
   -- Check that every typeclass constraint is of a known typeclass
   let unknownTypeclassConstraints =
-        let typeclassNames           = map typeclassName typeclasses
-            typeclassesInConstraints = concatMap
+        let typeclassesInConstraints = concatMap
               (\(Bind _ msch _) ->
                 maybe [] (\(Forall _ q _) -> constraintTypeclasses q) msch
               )
               binds
-        in  filter (`notElem` typeclassNames) typeclassesInConstraints
+        in  filter (`notElem` typeclassNames') typeclassesInConstraints
   mapM_ (throwError . UnknownTypeclass) unknownTypeclassConstraints
 
   -- Generate uvars for each bind upfront so they can be typechecked in any order
@@ -120,13 +119,13 @@ generateModule env modul = do
   (env''', binds') <- mapAccumLM (generateBind axiomScheme) env'' binds
 
   -- Typecheck each typeclass instance method
-  mapM_ (generateInstance axiomScheme env''' typeclassMethods) instances
+  mapM_ (generateInstance axiomScheme env''' typeclasses') instances
 
   -- Reconstruct module with typed declarations
   let datadecls = map DataDecl datas
       fundecls  = map (FunDecl . bindToFun) binds'
 
-  pure (env''', modul { moduleDecls = datadecls <> fundecls })
+  pure ((typeclasses', env'''), modul { moduleDecls = datadecls <> fundecls })
 
 -- Given an environment, a set of typeclasses and a typeclass instance,
 -- typecheck each of its methods
@@ -137,26 +136,44 @@ generateModule env modul = do
 generateInstance
   :: AxiomScheme
   -> TypeEnv
-  -> [(Name, [(Name, Scheme)])]
+  -> Typeclasses
   -> Instance_ Name (Syn_ Name)
   -> GenerateM ()
 generateInstance axs env typeclasses inst =
-  case lookup (instanceName inst) typeclasses of
+  case Map.lookup (instanceName inst) typeclasses of
     Nothing               -> throwError (UnknownTypeclass (instanceName inst))
     Just typeclassMethods -> do
-      let checkMethod (name, defs) = case lookup name typeclassMethods of
-            Nothing -> throwError (UnknownInstanceMethod name)
-            Just (Forall vars q t) ->
-              let
-                -- substitute the instance types into the scheme
-                -- this may fail for multi-param typeclasses if the free type
-                -- variables are in the wong order - it's a bit hacky.
-                -- TODO: error if the number of vars doesn't match the number of
-                --       instanceTypes
+      -- The instanceName (i.e. the typeclass name) is canonical, so it will
+      -- be scoped to the module where the typeclass is defined. The instance
+      -- methods, however, will be scoped to the current module.
+      -- To find the type scheme of the method as defined in the class, we need
+      -- to construct a name in the scope of the module where the class is
+      -- defined.
+      let
+        checkMethod (n@(Local _), _) =
+          error $ "Unexpected local name " <> show n
+        checkMethod (TopLevel thisModule name, defs) =
+          let methodName =
+                  let (TopLevel m _) = instanceName inst in TopLevel m name
+          in
+            case Map.lookup methodName typeclassMethods of
+              Nothing -> do
+                trace (pShow typeclassMethods) (pure ())
+                throwError (UnknownInstanceMethod methodName)
+              Just (Forall vars q t) ->
+                let
+                  -- substitute the instance types into the scheme
+                  -- this may fail for multi-param typeclasses if the free type
+                  -- variables are in the wong order - it's a bit hacky.
+                  -- TODO: error if the number of vars doesn't match the number of
+                  --       instanceTypes
                   subst = zip vars (map tyToType (instanceTypes inst))
                   sch'  = Forall [] (sub subst q) (sub subst t)
-                  bind  = Bind name (Just sch') (map defToEquation defs)
-              in  void (generateBind axs env bind)
+                  bind  = Bind (TopLevel thisModule name)
+                               (Just sch')
+                               (map defToEquation defs)
+                in
+                  void (generateBind axs env bind)
       mapM_ checkMethod (instanceDefs inst)
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
@@ -238,8 +255,8 @@ instanceToAxiom inst =
   in  AForall vars mempty (Inst (instanceName inst) types)
 
 -- | Generate constrained types for all the methods in a given typeclass
-generateMethods :: Typeclass_ Name -> [(Name, Scheme)]
-generateMethods tc = mapSnd constrain (typeclassDefs tc)
+generateMethods :: Typeclass_ Name -> TypeEnv
+generateMethods tc = Map.fromList $ mapSnd constrain (typeclassDefs tc)
  where
   constrain ty =
     let vars = map R (typeclassTyVars tc)

@@ -157,10 +157,10 @@ infersType
   -> [(Name, Scheme)]
   -> Expectation
 infersType env input outputs =
-  let (res, _) = run (generateModule env input)
+  let (res, _) = run (generateModule (mempty, env) input)
   in  case res of
         Left err -> failure (printError err)
-        Right (env', _) ->
+        Right ((_, env'), _) ->
           mapM_ (\(n, s) -> Map.lookup n env' `shouldBe` Just s) outputs
 
 infersError
