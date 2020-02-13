@@ -10,7 +10,7 @@ import           Constraint.Expr
 
 import qualified Data.Map.Strict               as Map
 
-env :: Env
+env :: TypeEnv
 env = Map.fromList
   -- (::) : a -> [a] -> [a]
   [ ( TopLevel modPrim "::"

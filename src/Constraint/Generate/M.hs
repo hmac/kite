@@ -20,7 +20,7 @@ import           Constraint.Expr                ( Scheme )
 import           Data.Name
 import           Canonical                      ( Name(..) )
 
-type Env = Map Name Scheme
+type TypeEnv = Map Name Scheme
 
 type GenerateM = ExceptT Error (WriterT (Set.Set Var) (State Int))
 

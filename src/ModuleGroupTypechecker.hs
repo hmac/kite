@@ -6,7 +6,7 @@ import           ModuleLoader                   ( ModuleGroup(..)
 
 import           Constraint                     ( Error )
 import           Constraint.Generate.M          ( run
-                                                , Env
+                                                , TypeEnv
                                                 )
 import           Constraint.Generate.Module     ( generateModule )
 import qualified Constraint.Primitive
@@ -34,7 +34,7 @@ typecheckModuleGroup (ModuleGroup m deps) = do
   let (typedModule : typedDeps) = reverse typedModules
   pure $ ModuleGroup typedModule typedDeps
 
-dumpEnv :: UntypedModuleGroup -> Either Error Env
+dumpEnv :: UntypedModuleGroup -> Either Error TypeEnv
 dumpEnv (ModuleGroup m deps) = do
   let ms       = deps ++ [m]
   let (res, _) = run $ mapAccumLM generateModule Constraint.Primitive.env ms

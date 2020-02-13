@@ -13,7 +13,7 @@ import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
 
-generate :: Env -> Exp -> GenerateM (ExpT, Type, CConstraint)
+generate :: TypeEnv -> Exp -> GenerateM (ExpT, Type, CConstraint)
 -- VARCON
 generate env (Var name) = case Map.lookup name env of
   Just (Forall tvars c t) -> do
@@ -107,7 +107,7 @@ generate env (StringLit p cs) = do
 -- We use the simplified version from Fig 6 because Lam doesn't have GADTs. If
 -- it turns out that typeclasses need the more complex version, this will need
 -- to be changed.
-generateCase :: Env -> Exp -> [Alt] -> GenerateM (ExpT, Type, CConstraint)
+generateCase :: TypeEnv -> Exp -> [Alt] -> GenerateM (ExpT, Type, CConstraint)
 
 -- Lam doesn't support empty case expressions.
 generateCase _env _e        []   = throwError EmptyCase
@@ -139,7 +139,7 @@ generateCase env  scrutinee alts = do
 -- generateEquation ((x :: _), Just x)
 -- TODO: consider merging with Constraint.Generate.Bind.generateMultiEquation
 generateEquation
-  :: Env -> (Pattern, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
+  :: TypeEnv -> (Pattern, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
 generateEquation env (pat, expr) = do
   (patTy, patC , env') <- fresh >>= \t -> generatePattern env (TVar t) pat
   (e    , expTy, expC) <- generate env' expr

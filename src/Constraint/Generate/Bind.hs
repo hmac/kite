@@ -22,7 +22,7 @@ data BindT = BindT Name [([Pattern], ExpT)] Scheme
   deriving (Show, Eq)
 
 -- Fig. 12
-generateBind :: AxiomScheme -> Env -> Bind -> GenerateM (Env, BindT)
+generateBind :: AxiomScheme -> TypeEnv -> Bind -> GenerateM (TypeEnv, BindT)
 generateBind _ _ (Bind _ _ equations) | not (sameNumberOfPatterns equations) =
   throwError EquationsHaveDifferentNumberOfPatterns
 generateBind axs env (Bind name annotation equations) = do
@@ -90,7 +90,7 @@ generateBind axs env (Bind name annotation equations) = do
 --   and True True = True
 --   and _    _    = False
 generateMultiEquation
-  :: Env -> ([Pattern], Exp) -> GenerateM (ExpT, Type, CConstraint)
+  :: TypeEnv -> ([Pattern], Exp) -> GenerateM (ExpT, Type, CConstraint)
 generateMultiEquation _ (pats, _) | hasDuplicates (patternVariables pats) =
   throwError DuplicatePatternVariables
 generateMultiEquation env (pats, expr) = do

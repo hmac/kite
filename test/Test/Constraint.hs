@@ -20,7 +20,7 @@ import           Constraint
 import           Constraint.Expr
 import           Constraint.Solve               ( solveC )
 import           Constraint.Generate.M          ( run
-                                                , Env
+                                                , TypeEnv
                                                 )
 import           Constraint.Generate            ( generate )
 import           Constraint.Print
@@ -285,7 +285,7 @@ test = do
       let expr = StringLit "Hello" [(Con true, " and "), (Con false, "")]
       infersType env expr TString
 
-infersType :: Env -> Exp -> Type -> Expectation
+infersType :: TypeEnv -> Exp -> Type -> Expectation
 infersType env expr expectedType = case run (generate env expr) of
   (Right (_, t, constraints), touchables) ->
     case solveC mempty touchables mempty constraints of
@@ -296,7 +296,7 @@ infersType env expr expectedType = case run (generate env expr) of
   (Left err, _) -> failure $ printError err
 
 -- TODO: use this
-infersError :: Env -> Exp -> Expectation
+infersError :: TypeEnv -> Exp -> Expectation
 infersError env expr = case run (generate env expr) of
   (Right (_, _, constraints), touchables) ->
     case solveC mempty touchables mempty constraints of
@@ -304,7 +304,7 @@ infersError env expr = case run (generate env expr) of
       Right _ -> expectationFailure "Expected type error but was successful"
   (Left err, _) -> pure ()
 
-inferAndZonk :: Env -> Exp -> ExpT -> Expectation
+inferAndZonk :: TypeEnv -> Exp -> ExpT -> Expectation
 inferAndZonk env expr expectedExpr = case run (generate env expr) of
   (Right (expr', _, constraints), touchables) ->
     case solveC mempty touchables mempty constraints of

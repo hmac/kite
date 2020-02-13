@@ -10,7 +10,7 @@ import qualified Data.Map.Strict               as Map
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.M          ( run
-                                                , Env
+                                                , TypeEnv
                                                 )
 import           Constraint.Generate.Bind
 import           Syn                            ( Pattern_(..) )
@@ -278,7 +278,7 @@ test = do
         let bind = Bind "f" Nothing body
         infersError env bind
 
-infersError :: Env -> Bind -> Expectation
+infersError :: TypeEnv -> Bind -> Expectation
 infersError env bind = case run (generateBind mempty env bind) of
   (Right (_env, bindt), _) ->
     expectationFailure

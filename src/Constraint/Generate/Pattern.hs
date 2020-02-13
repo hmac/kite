@@ -27,7 +27,8 @@ import qualified Data.Map.Strict               as Map
 --
 -- Note: this code isn't taken from the Modular Type Inference paper - it's
 -- written by me instead. Treat it with caution and assume it has bugs.
-generatePattern :: Env -> Type -> Pattern -> GenerateM (Type, CConstraint, Env)
+generatePattern
+  :: TypeEnv -> Type -> Pattern -> GenerateM (Type, CConstraint, TypeEnv)
 generatePattern env st (IntPat _) = do
   let c = Simple (st :~: TInt)
   pure (TInt, c, env)

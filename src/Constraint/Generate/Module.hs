@@ -62,9 +62,9 @@ import           Constraint.Generate.Bind
 import           Util
 
 generateModule
-  :: Env
+  :: TypeEnv
   -> Module_ Name (Syn_ Name) (Type_ Name)
-  -> GenerateM (Env, Module_ Name ExpT Scheme)
+  -> GenerateM (TypeEnv, Module_ Name ExpT Scheme)
 generateModule env modul = do
   -- Extract data declarations
   let datas       = getDataDecls (moduleDecls modul)
@@ -94,8 +94,7 @@ generateModule env modul = do
         in  filter (\i -> instanceName i `notElem` typeclassNames) instances
   mapM_ (throwError . UnknownTypeclass . instanceName) unknownTypeclassInstances
 
-  -- TODO: typecheck instance methods
-  --       fetch and include imported typeclasses and instances
+  -- TODO: fetch and include imported typeclasses and instances
 
   -- Extract function declarations
   let funs  = getFunDecls (moduleDecls modul)
@@ -137,7 +136,7 @@ generateModule env modul = do
 -- - typecheck the method with generateBind, throwing an error on failure
 generateInstance
   :: AxiomScheme
-  -> Env
+  -> TypeEnv
   -> [(Name, [(Name, Scheme)])]
   -> Instance_ Name (Syn_ Name)
   -> GenerateM ()
@@ -221,7 +220,7 @@ equationToDef (pats, expr) = Def { defArgs = pats, defExpr = expr }
 --           age  : User -> Int
 --
 -- TODO: generate record field selectors
-generateDataDecl :: Env -> Data_ Name -> Env
+generateDataDecl :: TypeEnv -> Data_ Name -> TypeEnv
 generateDataDecl env d =
   let tyvars = map (R . Local) (dataTyVars d)
       tycon  = TCon (dataName d) (map TVar tyvars)

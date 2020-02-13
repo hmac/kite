@@ -18,7 +18,7 @@ import qualified Constraint                    as C
 import           Constraint.Print
 
 import           Constraint.Generate.M          ( run
-                                                , Env
+                                                , TypeEnv
                                                 )
 import qualified Data.Map.Strict               as Map
 import           Util
@@ -152,7 +152,7 @@ test = describe "typing simple modules" $ do
         ]
 
 infersType
-  :: Env
+  :: TypeEnv
   -> Module_ Name (Syn_ Name) (Type_ Name)
   -> [(Name, Scheme)]
   -> Expectation
