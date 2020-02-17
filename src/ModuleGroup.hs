@@ -8,4 +8,4 @@ import qualified Syn.Typed                     as T
 data ModuleGroup exp ty = ModuleGroup (Module_ Can.Name exp ty) [Module_ Can.Name exp ty]
   deriving (Show)
 type UntypedModuleGroup = ModuleGroup Can.Exp Can.Type
-type TypedModuleGroup = ModuleGroup T.Exp T.Scheme
+data TypedModuleGroup = TypedModuleGroup T.Module [T.Module] deriving Show

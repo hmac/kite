@@ -27,6 +27,7 @@ data Config =
     | Typecheck FilePath
     | Parse FilePath
     | DumpLc FilePath
+    | DumpElc FilePath
     | DumpTypeEnv FilePath
     deriving (Generic, Show)
 
@@ -41,6 +42,7 @@ main = do
     Run         f -> run f
     Parse       f -> parse f
     DumpLc      f -> dumpLC f
+    DumpElc     f -> dumpELC f
     DumpTypeEnv f -> dumpTypeEnv f
     Typecheck   f -> typecheck f
 
@@ -51,10 +53,19 @@ dumpLC :: FilePath -> IO ()
 dumpLC = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely (printError err)
-    Right g'  -> pPrint (ModuleGroupCompiler.compileModule g')
+    Right g'  -> pPrint (ModuleGroupCompiler.compileToLC g')
+
+dumpELC :: FilePath -> IO ()
+dumpELC = withParsedFile $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left  err -> printNicely (printError err)
+    Right g'  -> pPrint (ModuleGroupCompiler.compileToELC g')
 
 dumpTypeEnv :: FilePath -> IO ()
-dumpTypeEnv = withParsedFile (pPrint . ModuleGroupTypechecker.dumpEnv)
+dumpTypeEnv = withParsedFile $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left  err -> printNicely (printError err)
+    Right g'  -> pPrint g'
 
 typecheck :: FilePath -> IO ()
 typecheck = withParsedFile $ \g ->
@@ -67,7 +78,7 @@ run = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> print (printError err)
     Right g' ->
-      let cm     = ModuleGroupCompiler.compileModule g'
+      let cm     = ModuleGroupCompiler.compileToLC g'
           answer = evalMain (cModuleName cm) (cModuleEnv cm)
       in  printNicely (LC.Print.print answer)
 

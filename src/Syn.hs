@@ -20,9 +20,6 @@ data Module_ name a ty = Module { moduleName :: ModuleName
                                 }
                                 deriving (Eq, Show)
 
-modifyModuleDecls :: (Decl a -> Decl a) -> Module a -> Module a
-modifyModuleDecls f m = m { moduleDecls = map f (moduleDecls m) }
-
 typeclassDecls :: Module_ n a ty -> [Typeclass_ n]
 typeclassDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
   TypeclassDecl t -> Just t

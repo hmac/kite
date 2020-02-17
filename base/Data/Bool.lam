@@ -1,8 +1,18 @@
 module Data.Bool
 
+import Lam.Semigroup (Semigroup, append)
+
 data Bool = True | False
 
 all : [Bool] -> Bool
 all [] = True
 all (True :: bs) = all bs
 all (False :: _) = False
+
+-- This is the All semigroup
+instance Semigroup Bool where
+  append False _ = False
+  append True b = b
+
+main : Bool
+main = append True False

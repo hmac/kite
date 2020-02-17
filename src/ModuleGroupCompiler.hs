@@ -8,9 +8,9 @@ import           ModuleLoader                   ( ModuleGroup(..) )
 import           ModuleGroup
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
-import           Syn
+import           Syn.Typed
 import qualified Canonical                     as Can
-import qualified Syn.Typed                     as T
+import           Data.Name
 
 
 -- We'll attempt this as follows:
@@ -36,15 +36,28 @@ data CompiledModule a = CompiledModule { cModuleName :: ModuleName
                                        }
   deriving Show
 
-compileModule :: TypedModuleGroup -> CompiledModule LC.Env
-compileModule (ModuleGroup m deps) = CompiledModule
+compileToLC :: TypedModuleGroup -> CompiledModule LC.Env
+compileToLC group =
+  let c = compileToELC group
+  in  CompiledModule { cModuleName    = cModuleName c
+                     , cModuleImports = cModuleImports c
+                     , cModuleEnv     = compileModuleToLC (cModuleEnv c)
+                     , cModuleDeps    = []
+                     , cModuleExports = cModuleExports c
+                     }
+
+compileToELC :: TypedModuleGroup -> CompiledModule ELC.Env
+compileToELC (TypedModuleGroup m deps) = CompiledModule
   { cModuleName    = moduleName m
   , cModuleImports = moduleImports m
   , cModuleExports = moduleExports m
-  , cModuleEnv     = LC.runConvert (LC.convertEnv env)
+  , cModuleEnv     = env
   , cModuleDeps    = []
   }
-  where env = foldl compileModule'' ELC.defaultEnv (deps ++ [m])
+  where env = foldl compileModuleToELC ELC.defaultEnv (deps ++ [m])
 
-compileModule'' :: ELC.Env -> T.Module -> ELC.Env
-compileModule'' env m = LC.runConvert (ELC.translateModule env m)
+compileModuleToELC :: ELC.Env -> Module -> ELC.Env
+compileModuleToELC env m = LC.runConvert (ELC.translateModule env m)
+
+compileModuleToLC :: ELC.Env -> LC.Env
+compileModuleToLC = LC.runConvert . LC.convertEnv

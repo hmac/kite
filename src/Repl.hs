@@ -68,7 +68,7 @@ processExpr decls e =
     case ModuleGroupTypechecker.typecheckModuleGroup g of
       Left  err -> putStrLn $ "Type error: " <> show err
       Right g'  -> do
-        let compiled = ModuleGroupCompiler.compileModule g'
+        let compiled = ModuleGroupCompiler.compileToLC g'
         let answer = LC.Eval.evalVar
               (TopLevel (cModuleName compiled) "$main")
               (cModuleEnv compiled)

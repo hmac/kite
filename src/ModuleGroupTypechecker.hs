@@ -35,7 +35,7 @@ typecheckModuleGroup (ModuleGroup m deps) = do
         ms
   (_env', typedModules) <- res
   let (typedModule : typedDeps) = reverse typedModules
-  pure $ ModuleGroup typedModule typedDeps
+  pure $ TypedModuleGroup typedModule typedDeps
 
 dumpEnv :: UntypedModuleGroup -> Either Error TypeEnv
 dumpEnv (ModuleGroup m deps) = do

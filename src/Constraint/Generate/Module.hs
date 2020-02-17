@@ -43,12 +43,13 @@ module Constraint.Generate.Module where
 
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
-import           Control.Monad                  ( void )
 
 import           Constraint.Generate.M
+import qualified Syn.Typed                     as T
 import           Syn                     hiding ( Name
                                                 , fn
                                                 )
+import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr                ( Exp
@@ -69,10 +70,10 @@ type Typeclasses = Map Name TypeEnv
 generateModule
   :: (Typeclasses, TypeEnv)
   -> Module_ Name (Syn_ Name) (Type_ Name)
-  -> GenerateM ((Typeclasses, TypeEnv), Module_ Name ExpT Scheme)
+  -> GenerateM ((Typeclasses, TypeEnv), T.Module)
 generateModule (typeclasses, env) modul = do
   -- Extract data declarations
-  let datas = getDataDecls (moduleDecls modul)
+  let datas = map translateDataDecl (getDataDecls (moduleDecls modul))
       env'  = foldl generateDataDecl env datas
 
   -- For each typeclass, generate constrained types for the methods and add
@@ -119,13 +120,25 @@ generateModule (typeclasses, env) modul = do
   (env''', binds') <- mapAccumLM (generateBind axiomScheme) env'' binds
 
   -- Typecheck each typeclass instance method
-  mapM_ (generateInstance axiomScheme env''' typeclasses') instances
+  instances'       <- mapM (generateInstance axiomScheme env''' typeclasses')
+                           instances
+
 
   -- Reconstruct module with typed declarations
-  let datadecls = map DataDecl datas
-      fundecls  = map (FunDecl . bindToFun) binds'
+  let
+    datadecls      = map T.DataDecl datas
+    fundecls       = map (T.FunDecl . bindToFun) binds'
+    instancedecls  = map T.TypeclassInst instances'
+    typeclassdecls = map (T.TypeclassDecl . translateTypeclass)
+      $ getTypeclassDecls (moduleDecls modul)
+    moduleT = T.Module
+      { T.moduleName    = moduleName modul
+      , T.moduleImports = moduleImports modul
+      , T.moduleExports = moduleExports modul
+      , T.moduleDecls = datadecls <> fundecls <> instancedecls <> typeclassdecls
+      }
 
-  pure ((typeclasses', env'''), modul { moduleDecls = datadecls <> fundecls })
+  pure ((typeclasses', env'''), moduleT)
 
 -- Given an environment, a set of typeclasses and a typeclass instance,
 -- typecheck each of its methods
@@ -138,7 +151,7 @@ generateInstance
   -> TypeEnv
   -> Typeclasses
   -> Instance_ Name (Syn_ Name)
-  -> GenerateM ()
+  -> GenerateM T.Instance
 generateInstance axs env typeclasses inst =
   case Map.lookup (instanceName inst) typeclasses of
     Nothing               -> throwError (UnknownTypeclass (instanceName inst))
@@ -157,9 +170,7 @@ generateInstance axs env typeclasses inst =
                   let (TopLevel m _) = instanceName inst in TopLevel m name
           in
             case Map.lookup methodName typeclassMethods of
-              Nothing -> do
-                trace (pShow typeclassMethods) (pure ())
-                throwError (UnknownInstanceMethod methodName)
+              Nothing -> throwError (UnknownInstanceMethod methodName)
               Just (Forall vars q t) ->
                 let
                   -- substitute the instance types into the scheme
@@ -173,8 +184,15 @@ generateInstance axs env typeclasses inst =
                                (Just sch')
                                (map defToEquation defs)
                 in
-                  void (generateBind axs env bind)
-      mapM_ checkMethod (instanceDefs inst)
+                  do
+                    (_, BindT _ typedDefs sch) <- generateBind axs env bind
+                    let typedDefs' = map (uncurry T.Def) typedDefs
+                    pure (TopLevel thisModule name, sch, typedDefs')
+      methods <- mapM checkMethod (instanceDefs inst)
+      pure T.Instance { T.instanceName  = instanceName inst
+                      , T.instanceTypes = map tyToType (instanceTypes inst)
+                      , T.instanceDefs  = methods
+                      }
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
 getFunDecls = getDeclBy $ \case
@@ -202,26 +220,52 @@ getDeclBy extract (d : rest) = case extract d of
   Just e  -> e : getDeclBy extract rest
   Nothing -> getDeclBy extract rest
 
+translateTypeclass :: Can.Typeclass -> T.Typeclass
+translateTypeclass t = T.Typeclass
+  { T.typeclassName   = typeclassName t
+  , T.typeclassTyVars = typeclassTyVars t
+  , T.typeclassDefs   = mapSnd tyToType (typeclassDefs t)
+  }
+
+translateDataDecl :: Can.Data -> T.Data
+translateDataDecl d = T.Data { T.dataName   = dataName d
+                             , T.dataTyVars = tyvars
+                             , T.dataCons   = map translateDataCon (dataCons d)
+                             }
+ where
+  tyvars           = map Local (dataTyVars d)
+  translateDataCon = \case
+    DataCon { conName = name, conArgs = args } -> T.DataCon
+      { T.conName = name
+      , T.conArgs = map tyToType args
+      , T.conType = mkType args
+      }
+    RecordCon { conName = name, conFields = fields } -> T.RecordCon
+      { T.conName   = name
+      , T.conFields = mapSnd tyToType fields
+      , T.conType   = mkType (map snd fields)
+      }
+  mkType args = Forall (map R tyvars) mempty (foldr (fn . tyToType) tycon args)
+  tycon = TCon (dataName d) (map (TVar . R) tyvars)
+
 funToBind :: Fun_ Name (Syn_ Name) (Type_ Name) -> Bind
 funToBind fun = Bind (funName fun) scheme equations
  where
   scheme    = tyToScheme (funConstraint fun) <$> funType fun
   equations = map defToEquation (funDefs fun)
 
-bindToFun :: BindT -> Fun_ Name ExpT Scheme
-bindToFun (BindT name equations scheme) = Fun
-  { funComments   = []
-  , funName       = name
-  , funType       = Just scheme
-  , funConstraint = Nothing
-  , funDefs       = map equationToDef equations
+bindToFun :: BindT -> T.Fun
+bindToFun (BindT name equations scheme) = T.Fun
+  { T.funName = name
+  , T.funType = scheme
+  , T.funDefs = map equationToDef equations
   }
 
 defToEquation :: Def_ Name (Syn_ Name) -> ([Pattern_ Name], Exp)
 defToEquation Def { defArgs = pats, defExpr = e } = (pats, fromSyn e)
 
-equationToDef :: ([Pattern_ Name], ExpT) -> Def_ Name ExpT
-equationToDef (pats, expr) = Def { defArgs = pats, defExpr = expr }
+equationToDef :: ([Pattern_ Name], ExpT) -> T.Def
+equationToDef (pats, expr) = T.Def { T.defArgs = pats, T.defExpr = expr }
 
 -- Generate new bindings for data declarations.
 --
@@ -237,14 +281,10 @@ equationToDef (pats, expr) = Def { defArgs = pats, defExpr = expr }
 --           age  : User -> Int
 --
 -- TODO: generate record field selectors
-generateDataDecl :: TypeEnv -> Data_ Name -> TypeEnv
+generateDataDecl :: TypeEnv -> T.Data -> TypeEnv
 generateDataDecl env d =
-  let tyvars = map (R . Local) (dataTyVars d)
-      tycon  = TCon (dataName d) (map TVar tyvars)
-      mkType args = Forall tyvars mempty (foldr (fn . tyToType) tycon args)
-      mkCon (DataCon   name args  ) = (name, mkType args)
-      mkCon (RecordCon name fields) = (name, mkType (map snd fields))
-  in  env <> Map.fromList (map mkCon (dataCons d))
+  let mkCon c = (T.conName c, T.conType c)
+  in  env <> Map.fromList (map mkCon (T.dataCons d))
 
 -- We don't yet support instance constraints so the first constraint of
 -- the axiom will always be empty.
