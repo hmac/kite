@@ -84,7 +84,7 @@ genImport =
     <*> Gen.maybe genUpperName
     <*> Gen.list (Range.linear 0 3) genModuleItem
 
-genModuleItem :: H.Gen Name
+genModuleItem :: H.Gen RawName
 genModuleItem = Gen.choice [genLowerName, genUpperName]
 
 genDecl :: H.Gen (Decl Syn)
@@ -106,7 +106,7 @@ genInstance =
     <*> Gen.list (Range.singleton 1) genType
     <*> Gen.list (Range.linear 1 5) genInstanceDef
  where
-  genInstanceDef :: H.Gen (Name, [Def Syn])
+  genInstanceDef :: H.Gen (RawName, [Def Syn])
   genInstanceDef = (,) <$> genLowerName <*> Gen.list (Range.linear 1 3) genDef
 
 genTypeclass :: H.Gen Typeclass
@@ -116,7 +116,7 @@ genTypeclass =
     <*> Gen.list (Range.linear 1 3) genLowerName
     <*> Gen.list (Range.linear 1 3) typeclassdef
  where
-  typeclassdef :: H.Gen (Name, Type)
+  typeclassdef :: H.Gen (RawName, Type)
   typeclassdef = (,) <$> genLowerName <*> genType
 
 genData :: H.Gen Data
@@ -213,7 +213,7 @@ genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)
 genBinOp :: H.Gen Syn
 genBinOp = Gen.element $ Var <$> binOps
 
-genLetBinds :: Syn -> H.Gen [(Name, Syn)]
+genLetBinds :: Syn -> H.Gen [(RawName, Syn)]
 genLetBinds e = do
   n <- genLowerName
   pure [(n, e)]
@@ -233,12 +233,12 @@ genPattern = Gen.recursive
 genInt :: H.Gen Int
 genInt = Gen.int (Range.linear (-5) 5)
 
-genLowerName :: H.Gen Name
+genLowerName :: H.Gen RawName
 genLowerName =
   let gen = Name <$> genLowerString
   in  Gen.filter (\(Name n) -> n `notElem` keywords) gen
 
-genUpperName :: H.Gen Name
+genUpperName :: H.Gen RawName
 genUpperName =
   let gen = Name <$> genUpperString
   in  Gen.filter (\(Name n) -> n `notElem` keywords) gen
@@ -247,7 +247,7 @@ genUpperName =
 -- ?1
 -- ?hi
 -- ?HI
-genHoleName :: H.Gen Name
+genHoleName :: H.Gen RawName
 genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
 
 genComment :: H.Gen String

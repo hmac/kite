@@ -1,15 +1,15 @@
 module Canonical.Primitive where
 
 import           ELC.Primitive                  ( modPrim )
-import           Syn                           as Syn
+import           Syn
 
-primitives :: [(Syn.Name, Syn.ModuleName)]
+primitives :: [(RawName, ModuleName)]
 primitives = map (, modPrim) $ miscFunctions <> numFunctions <> list <> types
 
-miscFunctions :: [Syn.Name]
+miscFunctions :: [RawName]
 miscFunctions = ["error"]
 
-numFunctions, list, types :: [Syn.Name]
+numFunctions, list, types :: [RawName]
 numFunctions = ["+", "*", "-"]
 list = ["::", "[]"]
 types = ["Int", "String"]

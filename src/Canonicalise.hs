@@ -14,7 +14,7 @@ import qualified Canonical.Primitive
 -- To canonicalise a module we need to know what names are imported from other
 -- modules. We represent that as map from name to module.
 
-type Imports = Map.Map Syn.Name Syn.ModuleName
+type Imports = Map.Map RawName Syn.ModuleName
 type Env = (ModuleName, Imports)
 
 buildImports :: Syn.Module Syn.Syn -> Imports
@@ -23,7 +23,7 @@ buildImports m =
                           (moduleImports m)
   in  Map.fromList (imports <> Canonical.Primitive.primitives)
 
-canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module Can.Exp
+canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module
 canonicaliseModule m =
   let imports = buildImports m
       env     = (moduleName m, imports)
@@ -116,7 +116,7 @@ canonicaliseDef env d =
       args   = map snd res
   in  d { defExpr = canonicaliseExp env locals (defExpr d), defArgs = args }
 
-canonicaliseExp :: Env -> [Syn.Name] -> Syn.Syn -> Can.Exp
+canonicaliseExp :: Env -> [RawName] -> Syn.Syn -> Can.Exp
 canonicaliseExp env = go
  where
   go locals = \case
@@ -134,7 +134,7 @@ canonicaliseExp env = go
     Hole   n            -> Hole (canonicaliseName env n)
     IntLit i            -> IntLit i
    where
-    canonicaliseLet :: ([(Syn.Name, Syn.Syn)], Syn.Syn) -> Can.Exp
+    canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =
       let (locals', binds') = foldl
             (\(locals, acc) (n, e) ->
@@ -155,7 +155,7 @@ canonicaliseExp env = go
             alts
       in  Case (go locals e) alts'
 
-canonicalisePattern :: Env -> Syn.Pattern -> ([Syn.Name], Can.Pattern)
+canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case
   VarPat n -> ([n], VarPat (Local n))
   WildPat  -> ([], WildPat)
@@ -177,7 +177,7 @@ canonicalisePattern env = \case
         pats' = map snd res
     in  (vars, ConsPat c' pats')
 
-canonicaliseName :: Env -> Syn.Name -> Can.Name
+canonicaliseName :: Env -> RawName -> Can.Name
 canonicaliseName (thisModule, imps) n = case Map.lookup n imps of
   Just i  -> TopLevel i n
   Nothing -> TopLevel thisModule n

@@ -113,9 +113,7 @@ test = do
       --   False -> True
       let expr = Case
             (Con true)
-            [ Alt (ConsPat true [])  (Con false)
-            , Alt (ConsPat false []) (Con true)
-            ]
+            [(ConsPat true [], Con false), (ConsPat false [], Con true)]
       let annotatedExpr = CaseT
             (ConT true)
             [ AltT (ConsPat true [])  (ConT false)
@@ -132,9 +130,8 @@ test = do
       let idfun = Abs ["y"] (Var "y")
       let expr = Case
             (Con true)
-            [ Alt (ConsPat true [])
-                  (Let [("id", idfun)] (App (Var "id") (Con true)))
-            , Alt (ConsPat false []) (Con true)
+            [ (ConsPat true [], Let [("id", idfun)] (App (Var "id") (Con true)))
+            , (ConsPat false [], Con true)
             ]
       let annotatedExpr = CaseT
             (ConT true)
@@ -176,7 +173,7 @@ test = do
     it "case expressions with variable patterns" $ do
       -- case True of
       --   x -> Zero
-      let expr          = Case (Con true) [Alt (VarPat "x") (Con zero)]
+      let expr          = Case (Con true) [(VarPat "x", Con zero)]
       let annotatedExpr = CaseT (ConT true) [AltT (VarPat "x") (ConT zero)] nat
       infersType env expr (TCon "Nat" [])
       inferAndZonk env expr annotatedExpr
@@ -184,9 +181,9 @@ test = do
       -- case True of
       --   False -> False
       --   x -> x
-      let expr = Case
-            (Con true)
-            [Alt (ConsPat false []) (Con false), Alt (VarPat "x") (Var "x")]
+      let
+        expr =
+          Case (Con true) [(ConsPat false [], Con false), (VarPat "x", Var "x")]
       let annotatedExpr = CaseT
             (ConT true)
             [ AltT (ConsPat false []) (ConT false)
@@ -198,7 +195,7 @@ test = do
     it "case expressions with wildcard patterns" $ do
       -- case True of
       --   _ -> False
-      let expr          = Case (Con true) [Alt WildPat (Con false)]
+      let expr          = Case (Con true) [(WildPat, Con false)]
       let annotatedExpr = CaseT (ConT true) [AltT WildPat (ConT false)] bool
       infersType env expr bool
       inferAndZonk env expr annotatedExpr
@@ -206,9 +203,9 @@ test = do
       -- case True of
       --   True -> False
       --   x -> True
-      let expr = Case
-            (Con true)
-            [Alt (ConsPat true []) (Con false), Alt (VarPat "x") (Con true)]
+      let
+        expr =
+          Case (Con true) [(ConsPat true [], Con false), (VarPat "x", Con true)]
       let annotatedExpr = CaseT
             (ConT true)
             [AltT (ConsPat true []) (ConT false), AltT (VarPat "x") (ConT true)]
@@ -226,9 +223,9 @@ test = do
       --  in case x of
       --       MkWrap y -> y
       let x = App (Var "MkWrap") (Con true)
-      let expr = Let
-            [("x", x)]
-            (Case (Var "x") [Alt (ConsPat mkwrap [VarPat "y"]) (Var "y")])
+      let
+        expr = Let [("x", x)]
+                   (Case (Var "x") [(ConsPat mkwrap [VarPat "y"], Var "y")])
       infersType env expr bool
     it "deconstructing a parameterised type with a case expression (Pair)" $ do
       -- data Pair a b = MkPair a b
@@ -241,9 +238,10 @@ test = do
             [("x", x)]
             (Case
               (Var "x")
-              [ Alt (ConsPat mkpair [VarPat "y", VarPat "z"])
-                    (App (Var "MkWrap") (Var "y"))
-              , Alt (VarPat "w") (App (Var "MkWrap") (Con false))
+              [ ( ConsPat mkpair [VarPat "y", VarPat "z"]
+                , App (Var "MkWrap") (Var "y")
+                )
+              , (VarPat "w", App (Var "MkWrap") (Con false))
               ]
             )
       infersType env expr (wrap bool)
@@ -256,19 +254,18 @@ test = do
       --               True -> False
       --               False -> True
       --  in not ?foo
-      let expr' = Let
-            [ ( "not"
-              , Abs
-                ["b"]
-                (Case
-                  (Var "b")
-                  [ Alt (ConsPat true [])  (Con false)
-                  , Alt (ConsPat false []) (Con true)
-                  ]
-                )
+      let
+        expr' = Let
+          [ ( "not"
+            , Abs
+              ["b"]
+              (Case
+                (Var "b")
+                [(ConsPat true [], Con false), (ConsPat false [], Con true)]
               )
-            ]
-            (App (Var "not") (Hole "foo"))
+            )
+          ]
+          (App (Var "not") (Hole "foo"))
       infersType env expr' bool
     it "a tuple" $ do
       -- (True, False, Zero)

@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Constraint.Expr
   ( module Constraint.Expr
+  , Scheme_(..)
+  , Syn_(..)
   )
 where
 
@@ -12,34 +14,22 @@ import           Constraint
 import           Canonical                      ( Name(..) )
 import           Util
 
-import           Syn                            ( Pattern_ )
+import           Syn                            ( Pattern_
+                                                , Scheme_(..)
+                                                , Syn_(..)
+                                                )
 
--- An example syntax type that we'll eventually replace with something linked to
--- Syn.
--- type Exp = Syn_ Name
-data Exp = Var Name
-         | Con Con
-         | App Exp Exp
-         | Abs [Name] Exp
-         | Case Exp [Alt]
-         | Let [(Name, Exp)] Exp
-         | LetA Name Scheme Exp Exp
-         | Hole Name
-         | TupleLit [Exp]
-         | ListLit [Exp]
-         | IntLit Int
-         | StringLit String [(Exp, String)]
-         deriving (Eq, Show)
+type Exp = Syn_ Name Var Constraint Type
 
--- Exp with type annotation
+-- Exp with type annotations
 data ExpT = VarT Name Type
-          | ConT Con
-          | AppT ExpT ExpT
+          | ConT Name
+          | HoleT Name Type
           | AbsT [(Name, Type)] ExpT
+          | AppT ExpT ExpT
           | CaseT ExpT [AltT] Type
           | LetT [(Name, ExpT)] ExpT Type
           | LetAT Name Scheme ExpT ExpT Type
-          | HoleT Name Type
           | TupleLitT [ExpT] Type
           | ListLitT [ExpT] Type
           | IntLitT Int Type
@@ -88,10 +78,7 @@ instance Vars ExpT where
   ftv (IntLitT   _  t    ) = ftv t
   ftv (StringLitT _ cs t ) = ftv (map fst cs) <> ftv t
 
-data Alt = Alt Pattern Exp
-  deriving (Eq, Show)
-
--- TODO: merge with Alt since they're identical?
+-- TODO: replace with a tuple?
 data AltT = AltT Pattern ExpT
   deriving (Eq, Show)
 
@@ -100,15 +87,8 @@ type Pattern = Pattern_ Name
 instance Sub AltT where
   sub s (AltT p e) = AltT p (sub s e)
 
--- Note: raw data constructors have the following type (a Scheme):
--- Forall [a, b, ..] [] t
--- where t has the form m -> n -> ... -> T a b ..
-
-type Con = Name
-
 -- The Var will always be rigid type variables (I think)
-data Scheme = Forall [Var] Constraint Type
-  deriving (Eq, Show)
+type Scheme = Scheme_ Var Constraint Type
 
 instance Sub Scheme where
   sub s (Forall vars c t) =

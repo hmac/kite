@@ -4,9 +4,11 @@ module Test.Constraint.Module
 where
 
 import           Test.Hspec
-import           Syn                     hiding ( Name )
+import           Syn                     hiding ( Name
+                                                , Scheme
+                                                )
+import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
-import           Constraint.Generate.Bind       ( BindT(..) )
 import           Constraint.Generate.Module     ( generateModule )
 import           Constraint.Expr         hiding ( Exp(..) )
 import           Constraint                     ( Type(..)
@@ -151,11 +153,7 @@ test = describe "typing simple modules" $ do
           )
         ]
 
-infersType
-  :: TypeEnv
-  -> Module_ Name (Syn_ Name) (Type_ Name)
-  -> [(Name, Scheme)]
-  -> Expectation
+infersType :: TypeEnv -> Can.Module -> [(Name, Scheme)] -> Expectation
 infersType env input outputs =
   let (res, _) = run (generateModule (mempty, env) input)
   in  case res of
@@ -163,12 +161,11 @@ infersType env input outputs =
         Right ((_, env'), _) ->
           mapM_ (\(n, s) -> Map.lookup n env' `shouldBe` Just s) outputs
 
-infersError
-  :: [(Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])] -> Expectation
+infersError :: [(Name, Type_ Name, [([Pattern_ Name], Can.Exp)])] -> Expectation
 infersError input =
   let (res, _) = run (generateModule mempty (mkModule input))
   in  case res of
-        Left e -> pure ()
+        Left _ -> pure ()
         Right t ->
           expectationFailure $ "Expected type error, but succeeded: " <> show t
 
@@ -176,8 +173,8 @@ failure :: Show a => a -> Expectation
 failure x = expectationFailure (show x)
 
 mkModule
-  :: [(Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])]
-  -> Module_ Name (Syn_ Name) (Type_ Name)
+  :: [(Name, Type_ Name, [([Pattern_ Name], Can.Exp)])]
+  -> Module_ Name Can.Exp (Type_ Name)
 mkModule decls = Module { moduleName     = "Test"
                         , moduleMetadata = []
                         , moduleImports  = []
@@ -186,8 +183,8 @@ mkModule decls = Module { moduleName     = "Test"
                         }
 
 mkDecl
-  :: (Name, Type_ Name, [([Pattern_ Name], Syn_ Name)])
-  -> Decl_ Name (Syn_ Name) (Type_ Name)
+  :: (Name, Type_ Name, [([Pattern_ Name], Can.Exp)])
+  -> Decl_ Name Can.Exp (Type_ Name)
 mkDecl (name, ty, equations) = FunDecl $ Fun
   { funComments   = []
   , funName       = name

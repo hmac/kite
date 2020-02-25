@@ -80,9 +80,7 @@ test = do
       let pat = VarPat "x"
       let expr = Case
             (Var "x")
-            [ Alt (ConsPat true [])  (Con true)
-            , Alt (ConsPat false []) (Con false)
-            ]
+            [(ConsPat true [], Con true), (ConsPat false [], Con false)]
 
       let bind = Bind "f" Nothing [([pat], expr)]
       let bindT = BindT
@@ -159,9 +157,7 @@ test = do
       let pat = VarPat "x"
       let expr = Case
             (Var "x")
-            [ Alt (ConsPat true [])  (Con true)
-            , Alt (ConsPat false []) (Con false)
-            ]
+            [(ConsPat true [], Con true), (ConsPat false [], Con false)]
 
       let bind =
             Bind "f" (Just (Forall [] CNil (bool `fn` bool))) [([pat], expr)]

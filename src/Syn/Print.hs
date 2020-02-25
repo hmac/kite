@@ -59,7 +59,7 @@ printModName (ModuleName names) =
   keyword "module" <+> hcat (map pretty (intersperse "." names))
 
 --   (fun1, fun2)
-printModExports :: [Name] -> Maybe Document
+printModExports :: [RawName] -> Maybe Document
 printModExports []      = Nothing
 printModExports exports = Just $ tupled (map printName exports)
 
@@ -109,6 +109,11 @@ printConstraint :: Constraint -> Document
 printConstraint (CInst tyclass vars) =
   printName tyclass <+> hsep (map printType vars)
 printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
+
+printScheme :: Scheme -> Document
+printScheme (Forall vs CNil t) = printType t
+printScheme (Forall vs c    t) = printConstraint c <+> "=>" <+> printType t
+
 -- a -> b
 -- f a -> f b
 -- a -> b -> c
@@ -152,7 +157,7 @@ printType' ctx ty = case (ctx, ty) of
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
-printDef :: Name -> Def Syn -> Document
+printDef :: RawName -> Def Syn -> Document
 printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
                 | otherwise       = lhs <+> printExpr (defExpr d)
   where lhs = printName name <+> hsep (map printPattern (defArgs d)) <+> equals
@@ -177,11 +182,11 @@ printExpr (Con  n) = data_ (printName n)
 printExpr (Hole n) = hole ("?" <> printName n)
 printExpr (Abs args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
-printExpr (App a     b          ) = printApp a b
-printExpr (Let binds e          ) = printLet binds e
-printExpr (LetA name ty val body) = printLetA name ty val body
-printExpr (Case e alts          ) = printCase e alts
-printExpr (TupleLit es          ) = tupled (map printExpr es)
+printExpr (App a     b           ) = printApp a b
+printExpr (Let binds e           ) = printLet binds e
+printExpr (LetA name sch val body) = printLetA name sch val body
+printExpr (Case e alts           ) = printCase e alts
+printExpr (TupleLit es           ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (IntLit i                ) = pretty i
@@ -241,18 +246,18 @@ printList es = nest
 --  in expr
 --
 --  The hang (-3) pushes 'in' back to end in line with 'let'
-printLet :: [(Name, Syn)] -> Syn -> Document
+printLet :: [(RawName, Syn)] -> Syn -> Document
 printLet binds e = keyword "let" <+> hang
   (-3)
   (vsep [hang 0 (vsep (map printLetBind binds)), keyword "in" <+> printExpr e])
   where printLetBind (name, expr) = printName name <+> "=" <+> printExpr expr
 
-printLetA :: Name -> Type -> Syn -> Syn -> Document
-printLetA name ty val body = keyword "letA" <+> hang
+printLetA :: RawName -> Scheme -> Syn -> Syn -> Document
+printLetA name sch val body = keyword "letA" <+> hang
   (-3)
   (vsep [hang 0 (vsep [signature, bind]), keyword "in" <+> printExpr body])
  where
-  signature = printName name <> align (space <> colon <+> printType ty)
+  signature = printName name <> align (space <> colon <+> printScheme sch)
   bind      = printName name <+> "=" <+> printExpr val
 
 -- case expr of
@@ -306,7 +311,7 @@ printInstance i = vsep (header : map printInstanceDef (instanceDefs i))
 printComment :: String -> Document
 printComment c = "--" <+> pretty c
 
-printName :: Name -> Document
+printName :: RawName -> Document
 printName (Name n) = pretty n
 
 prettyModuleName :: ModuleName -> Document

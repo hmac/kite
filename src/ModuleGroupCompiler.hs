@@ -4,7 +4,6 @@ module ModuleGroupCompiler where
 -- This module takes a ModuleGroup, compiles each module in it, and somehow
 -- merges it all together.
 
-import           ModuleLoader                   ( ModuleGroup(..) )
 import           ModuleGroup
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC

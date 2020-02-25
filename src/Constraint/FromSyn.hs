@@ -7,6 +7,7 @@ where
 
 -- Converts a Syn AST to a Constraint.Expr AST
 
+import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
 import qualified Syn                           as S
 import qualified Constraint.Expr               as E
@@ -14,7 +15,7 @@ import           Constraint
 import           Util
 import qualified Data.Set                      as Set
 
-fromSyn :: S.Syn_ Name -> E.Exp
+fromSyn :: Can.Exp -> E.Exp
 fromSyn = \case
   S.Var  n      -> E.Var n
   S.Con  n      -> E.Con n
@@ -22,10 +23,9 @@ fromSyn = \case
   S.Abs xs    e -> E.Abs xs (fromSyn e)
   S.App a     b -> E.App (fromSyn a) (fromSyn b)
   S.Let binds e -> E.Let (mapSnd fromSyn binds) (fromSyn e)
-  S.LetA x t e body ->
-    E.LetA x (tyToScheme Nothing t) (fromSyn e) (fromSyn body)
-  S.Case scrut alts ->
-    E.Case (fromSyn scrut) (map (\(p, e) -> E.Alt p (fromSyn e)) alts)
+  S.LetA x sch e body ->
+    E.LetA x (schemeToScheme sch) (fromSyn e) (fromSyn body)
+  S.Case scrut alts     -> E.Case (fromSyn scrut) (mapSnd fromSyn alts)
   S.TupleLit es         -> E.TupleLit (map fromSyn es)
   S.ListLit  es         -> E.ListLit (map fromSyn es)
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)
@@ -39,7 +39,15 @@ tyToScheme c t =
       constraint = maybe mempty constraintToConstraint c
   in  E.Forall vars constraint t'
 
+schemeToScheme :: Can.Scheme -> E.Scheme
+schemeToScheme (S.Forall vs c t) =
+  let t'         = tyToType t
+      vars       = Set.toList (ftv t') <> map R vs
+      constraint = constraintToConstraint c
+  in  E.Forall vars constraint t'
+
 constraintToConstraint :: S.Constraint_ Name -> Constraint
+constraintToConstraint S.CNil = CNil
 constraintToConstraint (S.CTuple a b) =
   constraintToConstraint a :^: constraintToConstraint b
 constraintToConstraint (S.CInst className tys) =

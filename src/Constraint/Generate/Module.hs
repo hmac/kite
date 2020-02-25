@@ -54,7 +54,7 @@ import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr                ( Exp
                                                 , ExpT
-                                                , Scheme(..)
+                                                , Scheme
                                                 )
 import           Constraint.FromSyn             ( fromSyn
                                                 , tyToScheme
@@ -69,7 +69,7 @@ type Typeclasses = Map Name TypeEnv
 
 generateModule
   :: (Typeclasses, TypeEnv)
-  -> Module_ Name (Syn_ Name) (Type_ Name)
+  -> Module_ Name Can.Exp (Type_ Name)
   -> GenerateM ((Typeclasses, TypeEnv), T.Module)
 generateModule (typeclasses, env) modul = do
   -- Extract data declarations
@@ -150,7 +150,7 @@ generateInstance
   :: AxiomScheme
   -> TypeEnv
   -> Typeclasses
-  -> Instance_ Name (Syn_ Name)
+  -> Instance_ Name Can.Exp
   -> GenerateM T.Instance
 generateInstance axs env typeclasses inst =
   case Map.lookup (instanceName inst) typeclasses of
@@ -248,7 +248,7 @@ translateDataDecl d = T.Data { T.dataName   = dataName d
   mkType args = Forall (map R tyvars) mempty (foldr (fn . tyToType) tycon args)
   tycon = TCon (dataName d) (map (TVar . R) tyvars)
 
-funToBind :: Fun_ Name (Syn_ Name) (Type_ Name) -> Bind
+funToBind :: Fun_ Name Can.Exp (Type_ Name) -> Bind
 funToBind fun = Bind (funName fun) scheme equations
  where
   scheme    = tyToScheme (funConstraint fun) <$> funType fun
@@ -261,7 +261,7 @@ bindToFun (BindT name equations scheme) = T.Fun
   , T.funDefs = map equationToDef equations
   }
 
-defToEquation :: Def_ Name (Syn_ Name) -> ([Pattern_ Name], Exp)
+defToEquation :: Def_ Name Can.Exp -> ([Pattern_ Name], Exp)
 defToEquation Def { defArgs = pats, defExpr = e } = (pats, fromSyn e)
 
 equationToDef :: ([Pattern_ Name], ExpT) -> T.Def

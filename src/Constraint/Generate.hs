@@ -107,7 +107,8 @@ generate env (StringLit p cs) = do
 -- We use the simplified version from Fig 6 because Lam doesn't have GADTs. If
 -- it turns out that typeclasses need the more complex version, this will need
 -- to be changed.
-generateCase :: TypeEnv -> Exp -> [Alt] -> GenerateM (ExpT, Type, CConstraint)
+generateCase
+  :: TypeEnv -> Exp -> [(Pattern, Exp)] -> GenerateM (ExpT, Type, CConstraint)
 
 -- Lam doesn't support empty case expressions.
 generateCase _env _e        []   = throwError EmptyCase
@@ -117,7 +118,7 @@ generateCase env  scrutinee alts = do
   (scrutineeT, scrutTy, scrutC) <- generate env scrutinee
   -- infer each case alternative
   (es, patTys, expTys, cs)      <-
-    unzip4 <$> mapM (\(Alt p e) -> generateEquation env (p, e)) alts
+    unzip4 <$> mapM (\(p, e) -> generateEquation env (p, e)) alts
   -- all top level patterns must have the same type, equal to the scrutinee type
   let allPatsEq = generateAllEqualConstraint scrutTy patTys
   -- all corresponding branches must have the same type
@@ -127,7 +128,7 @@ generateCase env  scrutinee alts = do
   -- TODO: is it ok for all of these to be touchables?
   let allConstraints = scrutC <> mconcat cs <> Simple (allPatsEq <> allExpsEq)
   let caseTy         = head expTys
-  let altsT = zipWith (\e' (Alt p _) -> AltT p e') es alts
+  let altsT = zipWith (\e' (p, _) -> AltT p e') es alts
   let caseT          = CaseT scrutineeT altsT caseTy
   pure (caseT, caseTy, allConstraints)
 

@@ -76,7 +76,7 @@ processExpr decls e =
                  (layoutPretty defaultLayoutOptions (LC.Print.print answer))
         putStrLn ""
 
-buildModule :: [Decl Syn] -> Can.Module Can.Exp
+buildModule :: [Decl Syn] -> Can.Module
 buildModule decls = canonicaliseModule Module
   { moduleName     = ModuleName ["Repl"]
   , moduleImports  = []

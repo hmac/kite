@@ -143,7 +143,7 @@ pFun = do
            , funDefs       = defs
            }
 
-pDef :: Name -> Parser (Def Syn)
+pDef :: RawName -> Parser (Def Syn)
 pDef (Name name) = do
   void (symbol name)
   bindings <- many pPattern <?> "pattern"
@@ -182,7 +182,7 @@ pTypeclass = do
                  , typeclassDefs   = first : rest
                  }
  where
-  pTypeclassDef :: Parser (Name, Type)
+  pTypeclassDef :: Parser (RawName, Type)
   pTypeclassDef = do
     name       <- lowercaseName
     annotation <- symbol ":" >> lexeme pType
@@ -207,7 +207,7 @@ pInstance = do
                 }
 
 -- Like pDef but will parse a definition with any name
-pDef' :: Parser (Name, Def Syn)
+pDef' :: Parser (RawName, Def Syn)
 pDef' = do
   name     <- lexeme lowercaseName
   bindings <- many pPattern <?> "pattern"
@@ -423,7 +423,7 @@ pLet = do
   void (symbolN "in")
   Let binds <$> pExpr
  where
-  pBind :: Parser (Name, Syn)
+  pBind :: Parser (RawName, Syn)
   pBind = do
     var <- lowercaseName
     void (symbol "=")
@@ -466,7 +466,7 @@ pComment = do
   spaceConsumerN
   pure s
 
-pName :: Parser Name
+pName :: Parser RawName
 pName = uppercaseName <|> lowercaseName
 
 pModuleName :: Parser ModuleName
@@ -476,19 +476,19 @@ pModuleName = ModuleName <$> lexeme (uppercaseString' `sepBy` string ".")
   uppercaseString' :: Parser String
   uppercaseString' = (:) <$> upperChar <*> many alphaNumChar
 
-pHoleName :: Parser Name
+pHoleName :: Parser RawName
 pHoleName = lexeme $ Name <$> do
   s <- some alphaNumChar
   guard (s `notElem` keywords)
   pure s
 
-uppercaseName :: Parser Name
+uppercaseName :: Parser RawName
 uppercaseName = lexeme $ Name <$> do
   t <- (:) <$> upperChar <*> many alphaNumChar
   guard (t `notElem` keywords)
   pure t
 
-lowercaseName :: Parser Name
+lowercaseName :: Parser RawName
 lowercaseName = Name <$> lowercaseString
 
 lowercaseString :: Parser String

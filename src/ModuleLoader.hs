@@ -55,7 +55,7 @@ loadFromPathAndRootDirectory path root = do
         Right deps' ->
           pure $ ModuleGroup m <$> sortModules (nub (concat deps'))
 
-loadAll :: FilePath -> ModuleName -> IO (Either String [Can.Module Can.Exp])
+loadAll :: FilePath -> ModuleName -> IO (Either String [Can.Module])
 loadAll root name = do
   modul <- fmap canonicaliseModule <$> load root name
   case modul of
@@ -72,7 +72,7 @@ load root name = parseLamFile <$> readFile (filePath root name)
 -- We skip any references to Lam.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
 -- anyway.
-dependencies :: Module_ n (Syn_ n) ty -> [ModuleName]
+dependencies :: Module_ n (Syn_ n m c ty) ty -> [ModuleName]
 dependencies Module { moduleImports = imports } =
   filter (/= ModuleName ["Lam", "Primitive"]) $ nub $ map importName imports
 
@@ -83,7 +83,7 @@ filePath root (ModuleName components) =
 -- Sorts a set of modules in dependency order. Each module will only depend on
 -- modules before it in the list. Returns an error if there are cyclic
 -- dependencies.
-sortModules :: [Can.Module Can.Exp] -> Either String [Can.Module Can.Exp]
+sortModules :: [Can.Module] -> Either String [Can.Module]
 sortModules []  = Right []
 sortModules [m] = Right [m]
 sortModules ms =
@@ -92,14 +92,14 @@ sortModules ms =
         then Left "Cyclic dependency detected"
         else Right $ sortBy compareModules ms
 
-compareModules :: Can.Module Can.Exp -> Can.Module Can.Exp -> Ordering
+compareModules :: Can.Module -> Can.Module -> Ordering
 compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of
   (True , False) -> GT
   (False, True ) -> LT
   (False, False) -> EQ
   (True , True ) -> EQ
 
-dependsOn :: Can.Module Can.Exp -> Can.Module Can.Exp -> Bool
+dependsOn :: Can.Module -> Can.Module -> Bool
 m1 `dependsOn` m2
   | any (\i -> importName i == moduleName m2) (moduleImports m1) = True
   | otherwise = False

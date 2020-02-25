@@ -34,14 +34,15 @@ test = do
       fromSyn (S.Let [("x", S.Var mx)] (S.App (S.Con left) (S.Var "e")))
         `shouldBe` E.Let [("x", E.Var mx)] (E.App (E.Con left) (E.Var "e"))
     it "let x : Int; x = mx in Left e" $ do
-      fromSyn (S.LetA "x" S.TyInt (S.Var mx) (S.App (S.Con left) (S.Var "e")))
+      let int = S.Forall [] S.CNil S.TyInt
+      fromSyn (S.LetA "x" int (S.Var mx) (S.App (S.Con left) (S.Var "e")))
         `shouldBe` E.LetA "x"
                           (E.Forall [] mempty TInt)
                           (E.Var mx)
                           (E.App (E.Con left) (E.Var "e"))
     it "case s of; p -> e" $ do
       fromSyn (S.Case (S.Var "s") [(S.VarPat "p", S.Var "e")])
-        `shouldBe` E.Case (E.Var "s") [E.Alt (S.VarPat "p") (E.Var "e")]
+        `shouldBe` E.Case (E.Var "s") [(S.VarPat "p", E.Var "e")]
     it "(1, 2)" $ do
       fromSyn (S.TupleLit [S.IntLit 1, S.IntLit 2])
         `shouldBe` E.TupleLit [E.IntLit 1, E.IntLit 2]
