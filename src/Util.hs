@@ -27,7 +27,6 @@ import qualified Data.List.Extra
 import qualified Data.List
 import qualified Data.Either
 import qualified Data.Maybe
-import qualified Data.Map.Strict               as Map
 import           Data.Text.Lazy                 ( unpack )
 import qualified Text.Pretty.Simple
 import qualified Data.Bifunctor
