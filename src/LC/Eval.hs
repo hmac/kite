@@ -6,7 +6,9 @@ import           ELC                            ( Con(..)
                                                 , Primitive(..)
                                                 )
 import           LC
+import qualified LC.Print
 import           Canonical                      ( Name(..) )
+import           Util
 
 evalMain :: ModuleName -> Env -> Exp
 evalMain mn env = evalVar (TopLevel mn "main") env
@@ -15,7 +17,7 @@ evalVar :: Name -> Env -> Exp
 evalVar n env = eval env (Var n)
 
 eval :: Env -> Exp -> Exp
-eval env = \case
+eval env expr = case expr of
   Const c es -> evalConst env c es
   Var n      -> case lookup n env of
     Just e  -> eval env e
@@ -74,9 +76,10 @@ evalPrim PrimStringAppend [] = Const (String "") []
 evalPrim PrimStringAppend [Const (String a) _, Const (String b) _] =
   Const (String (a <> b)) []
 
-evalPrim PrimAdd  [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
-evalPrim PrimSub  [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
+evalPrim PrimAdd [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
+evalPrim PrimSub [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
 evalPrim PrimMult [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
+evalPrim PrimShow [e] = primShow e
 
 evalPrim p args =
   error $ "(LC.Eval) [" <> show p <> "] invalid args: " <> show args

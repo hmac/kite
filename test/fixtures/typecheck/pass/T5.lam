@@ -1,20 +1,12 @@
 module T5
 
-test : String
-test = append "Hi" " there"
+test : Int
+test = append 1 2
 
 class Semigroup a where
   append : a -> a -> a
 
-instance Semigroup String where
-  append x y = "#{x}#{y}"
-
-instance Semigroup [a] where
-  append [] ys = ys
-  append (x :: xs) ys = x :: (append xs ys)
-
 instance Semigroup Int where
   append x y = x + y
 
-pair : (Int, Int)
-pair = (1, 2)
+data Foo = Foo Int

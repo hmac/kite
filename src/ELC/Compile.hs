@@ -31,27 +31,20 @@ import qualified Syn.Typed                     as T
 -- defs are normal definitions
 -- instances is a mapping from the name of the typeclass and the type(s) of the
 -- instance to the name of the dictionary representing that instance.
+-- methods is the set of known typeclass methods
 --
--- TODO: whilst this looks reasonable on the surface, it turns out not to work
--- in all but the most trivial of cases. The main challenge here is that we need
--- to insert the correct dictionary into all typeclass method calls, based on
--- the type of the instance, which is inferred at typechecking time.
--- In the current architecture we have no access to inferred types in the
--- compile phase, so we have no idea which dictionary to insert.
---
--- I think the correct way to resolve this is for the typechecker to elaborate
--- the AST with type information, and for the compiler to operate on this
--- representation. This requires a significant restructuring as right now the
--- typechecker and the compiler use entirely orthogonal ASTs.
--- See https://www.youtube.com/watch?v=x3evzO8O9e8 for how GHC does this.
-data Env = Env { envDefs :: Map Name Exp, envInstances :: InstMap }
+data Env = Env { envDefs :: Map Name Exp
+               , envInstances :: InstMap
+               , envMethods :: Map Name Name -- ^ method name -> typeclass name
+               }
   deriving Show
 
-type InstMap = Map (Name, [T.Type]) Name
+type InstMap = Map (Name, T.Type) Name -- ^ method name, concrete method type, dictionary name
 
 defaultEnv :: Env
 defaultEnv = Env { envDefs      = Map.fromList primConstructors
                  , envInstances = Map.fromList primInstances
+                 , envMethods   = mempty
                  }
 
 merge :: Env -> ([(Name, Exp)], InstMap) -> Env
@@ -66,14 +59,12 @@ collapseEnv = Map.toList . envDefs
 lookupDef :: Name -> Env -> Maybe Exp
 lookupDef n env = Map.lookup n (envDefs env)
 
-lookupInstance :: Name -> [T.Type] -> Env -> Maybe Name
-lookupInstance n ts env = Map.lookup (n, ts) (envInstances env)
-
 fresh :: NameGen Name
 fresh = freshM (\i -> Local (Name ("$elc" ++ show i)))
 
-freshTopLevel :: ModuleName -> NameGen Name
-freshTopLevel m = freshM (\i -> TopLevel m (Name ("$elc" ++ show i)))
+freshTopLevel :: ModuleName -> String -> NameGen Name
+freshTopLevel m suffix =
+  freshM (\i -> TopLevel m (Name ("$elc" <> show i <> suffix)))
 
 -- TODO: remove unreachable definitions
 translateModule :: Env -> T.Module -> NameGen Env
@@ -172,9 +163,15 @@ translateTypeclass env t =
 translateInstance :: Env -> T.Instance -> NameGen ([(Name, Exp)], InstMap)
 translateInstance env i = do
   let typeclassName@(TopLevel moduleName _rawTypeclassName) = T.instanceName i
-  let recordType = fromMaybe
+  let recordCon = fromMaybe
         (error $ "undefined typeclass " <> show typeclassName)
         (lookupDef typeclassName env)
+  -- As when translating T.ConT, we wrap the constructor in functions so we can
+  -- apply arguments to it to produce a fully saturated constructor.
+  recordConAsFun <- do
+    let (Cons c _) = recordCon
+    newVars <- replicateM (conArity c) fresh
+    pure $ buildAbs (Cons c (map Var newVars)) (map VarPat newVars)
   let defs = T.instanceDefs i
   let defsAsFuns = map
         (\(name, ty, ds) ->
@@ -183,12 +180,14 @@ translateInstance env i = do
         defs
   defsAsExps <-
     concatMap fst <$> mapM (translateDecl env . T.FunDecl) defsAsFuns
-  let record = foldl App recordType (map snd defsAsExps)
-  recordName <- freshTopLevel moduleName
-  pure
-    ( [(recordName, record)]
-    , Map.singleton (typeclassName, T.instanceTypes i) recordName
-    )
+  let record = foldl App recordConAsFun (map snd defsAsExps)
+  recordName <-
+    let (TopLevel _ (Name tcRawName)) = typeclassName
+    in  freshTopLevel moduleName ("_dict_" <> tcRawName)
+  let instMap :: InstMap
+      instMap = Map.fromList
+        $ map (\(name, T.Forall _ _ ty, _) -> ((name, ty), recordName)) defs
+  pure ([(recordName, record)], instMap)
 
 -- Note: we do a weird trick here where each constructor has a reference to a
 -- list of all the constructors for its type, which includes itself.
@@ -270,12 +269,40 @@ translateExpr _ (T.VarT (TopLevel m "*") _) | m == modPrim = binaryPrim PrimMult
 translateExpr _ (T.VarT (TopLevel m "-") _) | m == modPrim = binaryPrim PrimSub
 translateExpr _ (T.VarT (TopLevel m "appendString") _) | m == modPrim =
   binaryPrim PrimStringAppend
+translateExpr _ (T.VarT (TopLevel m "show") _) | m == modPrim = do
+  v <- fresh
+  pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
 
-translateExpr _   (T.VarT n _) = pure (Var n)
+translateExpr _ (T.VarT n _) = pure (Var n)
+translateExpr env (T.AppT (T.VarT fName fType) b)
+  | typeclassName <- Map.lookup fName (envMethods env) = do
+  -- This is where we lookup and insert the correct dictionary into this application.
+  -- e.g.    $1 : Semigroup String
+  --         $1 = ...
+  --         append "foo" "bar"
+  -- becomes append $1 "foo" "bar"
+    case Map.lookup (fName, fType) (envInstances env) of
+      Nothing -> do
+        -- The most likely reason we can't find a matching instance method
+        -- is that we're compiling a typeclass instance, rather than a method
+        -- application, so we don't need to insert any dictionaries.
+        -- We just treat this as a normal application.
+        -- TODO: separate this out somehow so we can be sure
+        a' <- translateExpr env (T.VarT fName fType)
+        b' <- translateExpr env b
+        pure $ App a' b'
+      Just dictName -> do
+        let dictType = T.THole "unknown typclass dictionary type"
+            dict     = T.VarT dictName dictType
+        a'    <- translateExpr env (T.VarT fName fType)
+        dict' <- translateExpr env dict
+        b'    <- translateExpr env b
+        pure $ App (App a' dict') b'
 translateExpr env (T.AppT a b) = do
   a' <- translateExpr env a
   b' <- translateExpr env b
   pure $ App a' b'
+
 -- We translate a constructor into a series of nested lambda abstractions, one
 -- for each argument to the constructor. When applied, the result is a fully
 -- saturated constructor.
@@ -341,7 +368,11 @@ translateStringLit env prefix parts = do
   go ((e, s) : is) = do
     e'   <- translateExpr env e
     rest <- go is
-    pure $ App (Var primShow) e' : Const (String s) [] : rest
+    v    <- fresh
+    pure
+      $ App (Abs (VarPat v) (Const (Prim PrimShow) [Var v])) e'
+      : Const (String s) []
+      : rest
 
 -- here we follow the same scheme as with normal constructors
 buildList :: [Exp] -> NameGen Exp

@@ -1,0 +1,33 @@
+module TypeMismatchInTypeclassMethodApplication
+
+class Bing a where
+  bing : a -> a
+
+data Foo = Foo Int
+
+instance Bing Foo where
+  bing (Foo i) = Foo (i + 1)
+
+data Bar = Bar
+
+-- A simple type mismatch: the only Bing instance is Foo but we are passing a
+-- Bar as an argument.
+test : Foo
+test = bing Bar 
+
+-- A more complex type mismatch: the first argument is correct, but the second
+-- is not.
+
+class DoubleBing a where
+  doubleBing : a -> a -> a
+
+instance DoubleBing Foo where
+  doubleBing (Foo i) (Foo j) = Foo (i + j)
+
+test2 : String
+test2 = "#{doubleBing (Foo 1) Bar}"
+
+data Baz = Baz
+
+test3 : String
+test3 = "#{doubleBing (Foo 1) Baz}"

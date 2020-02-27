@@ -6,6 +6,7 @@ module Syn.Typed
   , Constraint.Expr.Scheme(..)
   , S.Pattern_(..)
   , S.Import_(..)
+  , Scheme_(..)
   )
 where
 
@@ -13,7 +14,8 @@ import           Data.Name
 import qualified Syn                           as S
 import           Constraint.Expr                ( ExpT(..)
                                                 , AltT(..)
-                                                , Scheme(..)
+                                                , Scheme
+                                                , Scheme_(..)
                                                 )
 import           Constraint                     ( Type(..) )
 import           Canonical                      ( Name )

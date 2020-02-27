@@ -39,6 +39,7 @@ data Primitive = PrimStringAppend
                | PrimAdd
                | PrimSub
                | PrimMult
+               | PrimShow -- TODO: this becomes PrimShowInt etc when we have a show typeclass
          deriving (Show, Eq)
 
 data Pattern = ConstPat Constant

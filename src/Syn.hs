@@ -160,7 +160,7 @@ fn = TyFun
 -- t: the type of types
 type Scheme = Scheme_ RawName Constraint Type
 data Scheme_ v c t = Forall [v] c t
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 -- Syn: the surface syntax
 -- Syn represents the code that users write. It goes through several

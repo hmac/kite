@@ -10,6 +10,7 @@ import           Data.Name                      ( ModuleName(..)
                                                 )
 import           Syn                     hiding ( Name )
 
+-- TODO: move to Data.Name
 data Name
   = Local RawName
   | TopLevel ModuleName RawName

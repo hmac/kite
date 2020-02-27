@@ -41,7 +41,7 @@ primConstructors = map
   [listNil, listCons, tuple2, tuple3, tuple4, tuple5, tuple6]
   where extract con = (conName con, Cons con [])
 
-primInstances :: [((Name, [T.Type]), Name)]
+primInstances :: [((Name, T.Type), Name)]
 primInstances = []
 
 -- Functions

@@ -128,7 +128,7 @@ generateCase env  scrutinee alts = do
   -- TODO: is it ok for all of these to be touchables?
   let allConstraints = scrutC <> mconcat cs <> Simple (allPatsEq <> allExpsEq)
   let caseTy         = head expTys
-  let altsT = zipWith (\e' (p, _) -> AltT p e') es alts
+  let altsT          = zipWith (\e' (p, _) -> AltT p e') es alts
   let caseT          = CaseT scrutineeT altsT caseTy
   pure (caseT, caseTy, allConstraints)
 
