@@ -3,7 +3,7 @@ version:             0.1.0.0
 github:              "hmac/lam"
 license:             BSD3
 author:              "Harry Maclean"
-maintainer:          "harryjmaclean@gmail.com"
+maintainer:          "harry@hmac.dev"
 copyright:           "2019 Harry Maclean"
 
 extra-source-files:

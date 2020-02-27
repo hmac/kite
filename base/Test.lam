@@ -9,9 +9,6 @@ import Lam.Monoid (Monoid, concat)
 e : Either Bool String
 e = Left True
 
-f : ?someHole
-f = 4
-
 data Foo a = Foo { unFoo : a, tag : Int }
 
 foo : Foo String

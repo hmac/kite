@@ -9,11 +9,11 @@ import Lam.Primitive (appendString)
 
 class Monoid a where
   empty : a
-  append : a -> a -> a
+  mappend : a -> a -> a
 
 instance Monoid String where
   empty = ""
-  append x y = appendString x y
+  mappend x y = appendString x y
 
 concat : Monoid a => [a] -> a
-concat = foldr append empty
+concat = foldr mappend empty
