@@ -54,13 +54,13 @@ import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr                ( Exp
                                                 , ExpT
-                                                , Scheme
                                                 )
 import           Constraint.FromSyn             ( fromSyn
                                                 , tyToScheme
                                                 , tyToType
                                                 )
 import           Constraint.Generate.Bind
+import qualified Constraint.Generate.Data
 import           Util
 
 -- The typeclasses we know about
@@ -69,12 +69,13 @@ type Typeclasses = Map Name TypeEnv
 
 generateModule
   :: (Typeclasses, TypeEnv)
-  -> Module_ Name Can.Exp (Type_ Name)
+  -> Can.Module
   -> GenerateM ((Typeclasses, TypeEnv), T.Module)
 generateModule (typeclasses, env) modul = do
   -- Extract data declarations
-  let datas = map translateDataDecl (getDataDecls (moduleDecls modul))
-      env'  = foldl generateDataDecl env datas
+  let datas = map Constraint.Generate.Data.translate
+                  (getDataDecls (moduleDecls modul))
+      env' = env <> mconcat (map Constraint.Generate.Data.generate datas)
 
   -- For each typeclass, generate constrained types for the methods and add
   -- these to the environment. E.g.
@@ -227,27 +228,6 @@ translateTypeclass t = T.Typeclass
   , T.typeclassDefs   = mapSnd tyToType (typeclassDefs t)
   }
 
-translateDataDecl :: Can.Data -> T.Data
-translateDataDecl d = T.Data { T.dataName   = dataName d
-                             , T.dataTyVars = tyvars
-                             , T.dataCons   = map translateDataCon (dataCons d)
-                             }
- where
-  tyvars           = map Local (dataTyVars d)
-  translateDataCon = \case
-    DataCon { conName = name, conArgs = args } -> T.DataCon
-      { T.conName = name
-      , T.conArgs = map tyToType args
-      , T.conType = mkType args
-      }
-    RecordCon { conName = name, conFields = fields } -> T.RecordCon
-      { T.conName   = name
-      , T.conFields = mapSnd tyToType fields
-      , T.conType   = mkType (map snd fields)
-      }
-  mkType args = Forall (map R tyvars) mempty (foldr (fn . tyToType) tycon args)
-  tycon = TCon (dataName d) (map (TVar . R) tyvars)
-
 funToBind :: Fun_ Name Can.Exp (Type_ Name) -> Bind
 funToBind fun = Bind (funName fun) scheme equations
  where
@@ -266,25 +246,6 @@ defToEquation Def { defArgs = pats, defExpr = e } = (pats, fromSyn e)
 
 equationToDef :: ([Pattern_ Name], ExpT) -> T.Def
 equationToDef (pats, expr) = T.Def { T.defArgs = pats, T.defExpr = expr }
-
--- Generate new bindings for data declarations.
---
---           data Maybe a = Just a | Nothing
--- generates
---           Just : Forall a. a -> Maybe a
---           Nothing : Forall a.
---
---           data User = User { name : String, age : Int }
--- generates
---           User : String -> Int -> User
---           name : User -> String
---           age  : User -> Int
---
--- TODO: generate record field selectors
-generateDataDecl :: TypeEnv -> T.Data -> TypeEnv
-generateDataDecl env d =
-  let mkCon c = (T.conName c, T.conType c)
-  in  env <> Map.fromList (map mkCon (T.dataCons d))
 
 -- We don't yet support instance constraints so the first constraint of
 -- the axiom will always be empty.

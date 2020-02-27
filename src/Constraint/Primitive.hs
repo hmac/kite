@@ -25,9 +25,13 @@ env = Map.fromList
       )
     )
   , (TopLevel modPrim "+", Forall [] mempty (TInt `fn` TInt `fn` TInt))
+  , ( TopLevel modPrim "appendString"
+    , Forall [] mempty (TString `fn` TString `fn` TString)
+    )
   ]
 
 -- Builtin typeclass names
 -- Currently none, but we might add some in the future
+-- e.g. Semigroup, so we can append strings in string interpolation
 typeclasses :: Typeclasses
 typeclasses = mempty

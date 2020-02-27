@@ -3,7 +3,7 @@ module Syn.Typed
   , Constraint.Type(..)
   , Constraint.Expr.ExpT(..)
   , Constraint.Expr.AltT(..)
-  , Constraint.Expr.Scheme(..)
+  , Constraint.Expr.Scheme
   , S.Pattern_(..)
   , S.Import_(..)
   , Scheme_(..)
