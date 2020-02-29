@@ -1,9 +1,21 @@
 module Data.List
+  (head
+  , tail
+  , last
+  , init
+  , uncons
+  , null
+  , length
+  , map
+  , reverse
+  , intersperse
+  )
 
 import Lam.Semigroup (Semigroup(..))
 import Data.Maybe (Maybe(..))
 import Data.Bool (Bool(..))
 import Lam.Monoid (Monoid(..))
+import Lam.List (foldr)
 
 instance Semigroup [a] where
   append [] ys = ys
@@ -12,6 +24,12 @@ instance Semigroup [a] where
 instance Monoid [a] where
   empty = []
   mappend xs ys = append xs ys
+
+-- TODO: Right now this doesn't typecheck, I think because the typechecker isn't
+--       correctly handling higher kinded typeclass arguments.
+-- instance Functor [a] where
+--   map _ [] = []
+--   map f (x :: xs) = map f xs
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.
@@ -59,3 +77,37 @@ null _ = False
 length : [a] -> Int
 length [] = 0
 length (x :: xs) = 1 + (length xs)
+
+-- TODO: replace with Functor.map when we get that working (see above)
+map : (a -> b) -> [a] -> [b]
+map _ [] = []
+map f (x :: xs) = (f x) :: (map f xs)
+
+-- A helper function for reverse.
+-- TOOD: inline when we support pattern matching lets
+reverseHelper : [a] -> [a] -> [a]
+reverseHelper [] acc = acc
+reverseHelper (x :: xs) acc = reverseHelper xs (x :: acc)
+
+-- Return the elements of the list in reverse order.
+reverse : [a] -> [a]
+reverse xs = reverseHelper xs []
+
+intersperseHelper : a -> [a] -> [a]
+intersperseHelper _ [] = []
+intersperseHelper e (x :: xs) = e :: (x :: (intersperseHelper e xs))
+
+-- Intersperse an item between each element of a list
+intersperse : a -> [a] -> [a]
+intersperse _ [] = []
+intersperse e (x :: xs) = x :: (intersperseHelper e xs)
+
+subsequences : [a] -> [[a]]
+subsequences xs = [] :: (nonEmptySubsequences xs)
+
+nonEmptySubsequencesHelper : a -> [a] -> [[a]] -> [[a]]
+nonEmptySubsequencesHelper x ys r = ys :: ((x :: ys) :: r)
+
+nonEmptySubsequences : [a] -> [[a]]
+nonEmptySubsequences [] = []
+nonEmptySubsequences (x :: xs) = [x] :: (foldr (nonEmptySubsequencesHelper x) [] (nonEmptySubsequences xs))
