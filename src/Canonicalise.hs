@@ -19,16 +19,48 @@ type Env = (ModuleName, Imports)
 
 buildImports :: Syn.Module Syn.Syn -> Imports
 buildImports m =
-  let imports = concatMap (\imp -> fmap (, importName imp) (importItems imp))
-                          (moduleImports m)
+  let imports =
+          [ (subitem, importName imp)
+          | imp     <- moduleImports m
+          , item    <- importItems imp
+          , subitem <- flattenImportItem m item
+          ]
   in  Map.fromList (imports <> Canonical.Primitive.primitives)
+
+-- Given an ImportItem which may contain nested names (e.g. Either(Left, Right))
+-- flatten it to a list of names: [Either, Left, Right]
+-- TODO: at what point do we check that the import names actually exist in the
+-- imported module?
+flattenImportItem :: Syn.Module Syn.Syn -> Syn.ImportItem -> [RawName]
+flattenImportItem modul = \case
+  ImportSingle { importItemName = n } -> [n]
+  ImportAll { importItemName = n } -> n : constructorsOrMethodsForType modul n
+  ImportSome { importItemName = n, importItemConstructors = cs } -> n : cs
+
+-- Given a name of a typeclass or a data type, find all the names that would be
+-- imported by a (..) style import.
+-- For data types, this is all the constructor names.
+-- For typeclasses, it's all the method names.
+constructorsOrMethodsForType :: Syn.Module Syn.Syn -> RawName -> [RawName]
+constructorsOrMethodsForType modul tyname =
+  let datas = dataDecls modul
+  in  case find ((== tyname) . dataName) datas of
+        Just d -> map conName (dataCons d)
+        Nothing ->
+          case find ((== tyname) . typeclassName) (typeclassDecls modul) of
+            Just t  -> map fst (typeclassDefs t)
+            Nothing -> []
 
 canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module
 canonicaliseModule m =
   let imports = buildImports m
       env     = (moduleName m, imports)
-  in  m { moduleExports = fmap Can.Local (moduleExports m)
-        , moduleDecls   = fmap (canonicaliseDecl env) (moduleDecls m)
+      exports =
+          [ (Can.Local export, map Can.Local subexports)
+          | (export, subexports) <- moduleExports m
+          ]
+  in  m { moduleExports = exports
+        , moduleDecls   = map (canonicaliseDecl env) (moduleDecls m)
         }
 
 canonicaliseDecl :: Env -> Syn.Decl Syn.Syn -> Can.Decl Can.Exp

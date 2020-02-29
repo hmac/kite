@@ -1,6 +1,6 @@
 module Data.Semigroup
 
-import Lam.Semigroup (Semigroup, append)
+import Lam.Semigroup (Semigroup(..))
 import Data.NonEmpty (NonEmpty)
 
 instance Semigroup Int where

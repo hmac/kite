@@ -15,6 +15,7 @@
 
 module Constraint.Solve
   ( solveC
+  , solveDebug
   )
 where
 

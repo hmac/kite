@@ -6,9 +6,7 @@ import           ELC                            ( Con(..)
                                                 , Primitive(..)
                                                 )
 import           LC
-import qualified LC.Print
 import           Canonical                      ( Name(..) )
-import           Util
 
 evalMain :: ModuleName -> Env -> Exp
 evalMain mn env = evalVar (TopLevel mn "main") env

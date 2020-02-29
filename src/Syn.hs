@@ -14,31 +14,49 @@ import           Util
 type Module a = Module_ RawName a Type
 data Module_ name a ty = Module { moduleName :: ModuleName
                                 , moduleImports :: [Import]
-                                , moduleExports :: [name]
+                                , moduleExports :: [(name, [name])]
                                 , moduleDecls :: [Decl_ name a ty]
                                 , moduleMetadata :: [(String, String)]
                                 }
                                 deriving (Eq, Show)
 
 typeclassDecls :: Module_ n a ty -> [Typeclass_ n]
-typeclassDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
+typeclassDecls = extractDecl $ \case
   TypeclassDecl t -> Just t
   _               -> Nothing
 
 instanceDecls :: Module_ n e ty -> [Instance_ n e]
-instanceDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
+instanceDecls = extractDecl $ \case
   TypeclassInst i -> Just i
   _               -> Nothing
 
+dataDecls :: Module_ n a ty -> [Data_ n]
+dataDecls = extractDecl $ \case
+  DataDecl d -> Just d
+  _          -> Nothing
+
+funDecls :: Module_ n a ty -> [Fun_ n a ty]
+funDecls = extractDecl $ \case
+  FunDecl f -> Just f
+  _         -> Nothing
+
+extractDecl :: (Decl_ n e ty -> Maybe b) -> Module_ n e ty -> [b]
+extractDecl f Module { moduleDecls = decls } = mapMaybe f decls
+
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
-type Import = Import_ RawName
-data Import_ name = Import { importQualified :: Bool
-                           , importName :: ModuleName
-                           , importAlias :: Maybe RawName
-                           , importItems :: [name]
-                           }
-                           deriving (Eq, Show)
+data Import = Import { importQualified :: Bool
+                     , importName :: ModuleName
+                     , importAlias :: Maybe RawName
+                     , importItems :: [ImportItem_ RawName]
+                     }
+                     deriving (Eq, Show)
+
+type ImportItem = ImportItem_ RawName
+data ImportItem_ name = ImportSingle { importItemName :: name }
+                      | ImportAll { importItemName :: name }
+                      | ImportSome { importItemName :: name, importItemConstructors :: [name] }
+                      deriving (Eq, Show)
 
 unName :: RawName -> String
 unName (Name n) = n

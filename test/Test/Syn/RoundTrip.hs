@@ -65,7 +65,7 @@ genModule =
   Module
     <$> genModuleName
     <*> Gen.list (Range.linear 0 5) genImport
-    <*> Gen.list (Range.linear 0 5) genModuleItem
+    <*> Gen.list (Range.linear 0 5) genExport
     <*> Gen.list (Range.linear 0 10) genDecl
     <*> genMetadata
 
@@ -82,10 +82,25 @@ genImport =
     <$> Gen.bool
     <*> genModuleName
     <*> Gen.maybe genUpperName
-    <*> Gen.list (Range.linear 0 3) genModuleItem
+    <*> Gen.list (Range.linear 0 3) genImportItem
+
+genExport :: H.Gen (RawName, [RawName])
+genExport = Gen.choice [genFunExport, genDataExport]
+ where
+  genFunExport = (,) <$> genLowerName <*> pure []
+  genDataExport =
+    (,) <$> genUpperName <*> Gen.list (Range.linear 0 3) genUpperName
 
 genModuleItem :: H.Gen RawName
-genModuleItem = Gen.choice [genLowerName, genUpperName]
+genModuleItem = Gen.choice [genUpperName, genLowerName]
+
+genImportItem :: H.Gen ImportItem
+genImportItem = Gen.choice [genImportSingle, genImportSome, genImportAll]
+ where
+  genImportSingle = ImportSingle <$> genModuleItem
+  genImportAll    = ImportAll <$> genModuleItem
+  genImportSome =
+    ImportSome <$> genModuleItem <*> Gen.list (Range.linear 0 3) genModuleItem
 
 genDecl :: H.Gen (Decl Syn)
 genDecl = Gen.choice

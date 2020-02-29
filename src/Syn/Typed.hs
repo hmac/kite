@@ -5,7 +5,7 @@ module Syn.Typed
   , Constraint.Expr.AltT(..)
   , Constraint.Expr.Scheme
   , S.Pattern_(..)
-  , S.Import_(..)
+  , S.Import(..)
   , Scheme_(..)
   )
 where
@@ -33,7 +33,7 @@ type Exp = ExpT
 type Pattern = S.Pattern_ Name
 
 data Module = Module { moduleName :: ModuleName
-                     , moduleImports :: [Import]
+                     , moduleImports :: [S.Import]
                      , moduleExports :: [Name]
                      , moduleDecls :: [Decl]
                      } deriving (Eq, Show)
@@ -47,10 +47,6 @@ instanceDecls :: Module -> [Instance]
 instanceDecls Module { moduleDecls = decls } = flip mapMaybe decls $ \case
   TypeclassInst i -> Just i
   _               -> Nothing
-
--- import Bar
--- import qualified Baz as Boo (fun1, fun2)
-type Import = S.Import
 
 -- foo x (y : ys) (a, b, c) = ...
 -- foo x []       _         = ...

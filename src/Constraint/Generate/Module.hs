@@ -135,7 +135,9 @@ generateModule (typeclasses, env) modul = do
     moduleT = T.Module
       { T.moduleName    = moduleName modul
       , T.moduleImports = moduleImports modul
-      , T.moduleExports = moduleExports modul
+      -- At this point we should have expanded all exports into a flat list (see
+      -- ExpandExports) so we can safely extract the fst of each.
+      , T.moduleExports = map fst (moduleExports modul)
       , T.moduleDecls = datadecls <> fundecls <> instancedecls <> typeclassdecls
       }
 

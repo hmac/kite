@@ -59,9 +59,13 @@ printModName (ModuleName names) =
   keyword "module" <+> hcat (map pretty (intersperse "." names))
 
 --   (fun1, fun2)
-printModExports :: [RawName] -> Maybe Document
+printModExports :: [(RawName, [RawName])] -> Maybe Document
 printModExports []      = Nothing
-printModExports exports = Just $ tupled (map printName exports)
+printModExports exports = Just $ tupled (map printExport exports)
+ where
+  printExport :: (RawName, [RawName]) -> Document
+  printExport (e, []) = printName e
+  printExport (e, s ) = printName e <> tupled (map printName s)
 
 -- import Data.Text
 -- import qualified Data.Text.Encoding as E (encodeUtf8)
@@ -75,8 +79,14 @@ printImport i = hsep
   , if importQualified i then keyword "qualified" else "         "
   , prettyModuleName (importName i)
   , maybe mempty (\n -> keyword "as" <+> printName n) (importAlias i)
-  , tupled (map printName (importItems i))
+  , tupled (map printImportItem (importItems i))
   ]
+
+printImportItem :: ImportItem -> Document
+printImportItem i = printName (importItemName i) <> case i of
+  ImportSingle{} -> mempty
+  ImportAll{}    -> parens ".."
+  ImportSome{}   -> tupled (map printName (importItemConstructors i))
 
 printModDecls :: [Decl Syn] -> Maybe Document
 printModDecls []    = Nothing
@@ -109,10 +119,11 @@ printConstraint :: Constraint -> Document
 printConstraint (CInst tyclass vars) =
   printName tyclass <+> hsep (map printType vars)
 printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
+printConstraint CNil         = "ϵ"
 
 printScheme :: Scheme -> Document
-printScheme (Forall vs CNil t) = printType t
-printScheme (Forall vs c    t) = printConstraint c <+> "=>" <+> printType t
+printScheme (Forall _ CNil t) = printType t
+printScheme (Forall _ c    t) = printConstraint c <+> "=>" <+> printType t
 
 -- a -> b
 -- f a -> f b

@@ -39,7 +39,7 @@ pModule = do
   metadata <- optional pMetadata
   void $ symbol "module"
   name    <- lexemeN pModuleName
-  exports <- optional . lexemeN . parens $ pName `sepBy` comma
+  exports <- optional . lexemeN . parens $ pExport `sepBy` comma
   imports <- many (lexemeN pImport)
   decls   <- many (lexemeN pDecl)
   pure $ Module { moduleName     = name
@@ -48,6 +48,12 @@ pModule = do
                 , moduleDecls    = decls
                 , moduleMetadata = fromMaybe [] metadata
                 }
+
+pExport :: Parser (RawName, [RawName])
+pExport = do
+  export     <- pName
+  subexports <- fromMaybe [] <$> optional (parens (pName `sepBy` comma))
+  pure (export, subexports)
 
 -- ---
 -- key1: val1
@@ -70,18 +76,39 @@ pMetadata = do
 
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
+-- import Foo (SomeType(..), OtherType(AConstructor), SomeClass)
+--
+-- When we have packaging: from some_pkg import ...
 pImport :: Parser Import
 pImport = do
   void $ symbol "import"
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
   alias     <- optional (symbol "as" >> uppercaseName)
-  items     <- optional $ parens (pName `sepBy` comma)
+  items     <- optional $ parens (pImportItem `sepBy` comma)
   pure Import { importQualified = qualified
               , importName      = name
               , importAlias     = alias
               , importItems     = fromMaybe [] items
               }
+
+pImportItem :: Parser ImportItem
+pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
+ where
+  -- Foo(..)
+  pImportAll = do
+    name <- uppercaseName
+    void $ parens (symbol "..")
+    pure $ ImportAll name
+  -- Foo(Bar, Baz)
+  -- Monoid(empty)
+  pImportSome = do
+    name     <- uppercaseName
+    subItems <- parens (pName `sepBy` comma)
+    pure $ ImportSome name subItems
+  -- Foo
+  -- foo
+  pImportSingle = ImportSingle <$> pName
 
 -- We ensure that comments are parsed last so that they get attached to a
 -- function if directly above one.

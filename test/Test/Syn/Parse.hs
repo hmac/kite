@@ -222,7 +222,7 @@ test = parallel $ do
       parse
           pModule
           ""
-          "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4)"
+          "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4, Foo(..), Bar(BarA, BarB))"
         `shouldParse` Module
                         { moduleName     = "Foo"
                         , moduleImports  =
@@ -231,13 +231,18 @@ test = parallel $ do
                                    , importAlias     = Nothing
                                    , importItems     = []
                                    }
-                          , Import { importQualified = True
-                                   , importName      = ModuleName ["Bar", "Baz"]
-                                   , importAlias     = Just "B"
-                                   , importItems     = ["fun3", "fun4"]
-                                   }
+                          , Import
+                            { importQualified = True
+                            , importName      = ModuleName ["Bar", "Baz"]
+                            , importAlias     = Just "B"
+                            , importItems = [ ImportSingle "fun3"
+                                            , ImportSingle "fun4"
+                                            , ImportAll "Foo"
+                                            , ImportSome "Bar" ["BarA", "BarB"]
+                                            ]
+                            }
                           ]
-                        , moduleExports  = ["fun1", "fun2"]
+                        , moduleExports  = [("fun1", []), ("fun2", [])]
                         , moduleDecls    = []
                         , moduleMetadata = []
                         }

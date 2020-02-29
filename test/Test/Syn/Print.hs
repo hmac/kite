@@ -49,15 +49,15 @@ test = parallel $ do
       let name = ModuleName ["Data", "List", "NonEmpty"]
       show (printModName name) `shouldBe` "module Data.List.NonEmpty"
     it "prints module exports correctly" $ do
-      let exports = ["fun1", "fun2", "SomeType"]
-      show (printMaybe (printModExports exports)) `shouldBe` "(fun1, fun2, SomeType)"
+      let exports = [("fun1", []), ("SomeType", []), ("OtherType", ["SomeConstructor"])]
+      show (printMaybe (printModExports exports)) `shouldBe` "(fun1, SomeType, OtherType(SomeConstructor))"
     it "prints an empty module correctly" $ do
       let mod = Module { moduleName = "Data.Text"
-                       , moduleExports = ["Text"]
+                       , moduleExports = [("Text", [])]
                        , moduleImports = [Import { importName = "Data.Text.Internal.Text"
                                                  , importAlias = Just "Internal"
                                                  , importQualified = True
-                                                 , importItems = ["Text"]
+                                                 , importItems = [ImportSingle "Text"]
                                                  }
                                          , Import { importName = "Data.Maybe"
                                                  , importAlias = Nothing

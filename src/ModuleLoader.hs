@@ -15,9 +15,10 @@ import           Data.List                      ( nub
                                                 , sortBy
                                                 , permutations
                                                 )
-import qualified Canonical                     as Can
 import           Canonicalise                   ( canonicaliseModule )
 import           ModuleGroup
+import           ExpandImports                  ( expandImports )
+import           ExpandExports                  ( expandExports )
 
 -- This module is responsible for loading Lam modules. It should attempt to
 -- cache modules so they're not loaded multiple times.
@@ -45,26 +46,34 @@ loadFromPath path = do
 loadFromPathAndRootDirectory
   :: FilePath -> FilePath -> IO (Either String UntypedModuleGroup)
 loadFromPathAndRootDirectory path root = do
-  modul <- fmap canonicaliseModule . parseLamFile <$> readFile path
-  case modul of
-    Left  err -> pure (Left err)
-    Right m   -> do
-      deps <- mapM (loadAll root) (dependencies m)
-      case sequence deps of
-        Left err -> pure (Left err)
-        Right deps' ->
-          pure $ ModuleGroup m <$> sortModules (nub (concat deps'))
-
-loadAll :: FilePath -> ModuleName -> IO (Either String [Can.Module])
-loadAll root name = do
-  modul <- fmap canonicaliseModule <$> load root name
+  modul <- parseLamFile <$> readFile path
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
       deps <- mapM (loadAll root) (dependencies m)
       case sequence deps of
         Left  err   -> pure (Left err)
-        Right deps' -> pure $ Right $ m : concat deps'
+        Right deps' -> case sortModules (nub (concat deps')) of
+          Left err -> pure (Left err)
+          Right sortedDeps ->
+            let (expandedModule, expandedDeps) =
+                    expandImports (expandExports m) sortedDeps
+            in  pure $ pure $ ModuleGroup
+                  (canonicaliseModule expandedModule)
+                  (map canonicaliseModule expandedDeps)
+
+loadAll :: FilePath -> ModuleName -> IO (Either String [Module Syn])
+loadAll root name = do
+  modul <- load root name
+  case modul of
+    Left  err -> pure (Left err)
+    Right m   -> do
+      deps <- mapM (loadAll root) (dependencies m)
+      case sequence deps of
+        Left  err   -> pure (Left err)
+        Right deps' -> do
+          let m' = expandExports m
+          pure $ Right $ m' : concat deps'
 
 load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
 load root name = parseLamFile <$> readFile (filePath root name)
@@ -83,7 +92,7 @@ filePath root (ModuleName components) =
 -- Sorts a set of modules in dependency order. Each module will only depend on
 -- modules before it in the list. Returns an error if there are cyclic
 -- dependencies.
-sortModules :: [Can.Module] -> Either String [Can.Module]
+sortModules :: [Module_ n e ty] -> Either String [Module_ n e ty]
 sortModules []  = Right []
 sortModules [m] = Right [m]
 sortModules ms =
@@ -92,14 +101,14 @@ sortModules ms =
         then Left "Cyclic dependency detected"
         else Right $ sortBy compareModules ms
 
-compareModules :: Can.Module -> Can.Module -> Ordering
+compareModules :: Module_ n e ty -> Module_ n e ty -> Ordering
 compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of
   (True , False) -> GT
   (False, True ) -> LT
   (False, False) -> EQ
   (True , True ) -> EQ
 
-dependsOn :: Can.Module -> Can.Module -> Bool
+dependsOn :: Module_ n e ty -> Module_ n e ty -> Bool
 m1 `dependsOn` m2
   | any (\i -> importName i == moduleName m2) (moduleImports m1) = True
   | otherwise = False
