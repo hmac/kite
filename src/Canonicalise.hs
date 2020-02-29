@@ -169,8 +169,16 @@ canonicaliseExp env = go
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =
       let (locals', binds') = foldl
-            (\(locals, acc) (n, e) ->
-              let b = (Local n, go locals e) in (n : locals, b : acc)
+            (\(locals, acc) (varName, expr) ->
+              -- Note: to handle recursive lets, here we would extend the set of
+              -- locals with the variable name before canonicalising the bound
+              -- expression. We currently don't do that because Lam's evaluation
+              -- strategy is strict and the naive evaluation of recursive lets
+              -- doesn't terminate. I'm not yet sure if we should support
+              -- recursive lets at all - maybe you should always write a
+              -- separate function if you want recursion?
+              let b = (Local varName, go locals expr)
+              in  (varName : locals, b : acc)
             )
             (locals, [])
             binds
