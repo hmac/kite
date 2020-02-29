@@ -19,13 +19,13 @@ test :: Spec
 test = parallel $ do
   describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
-      parse pDecl "" "-- a comment\nid : a -> a\nid x = x" `shouldParse` FunDecl
-        Fun { funComments   = ["a comment"]
-            , funName       = "id"
-            , funType       = Just (TyVar "a" `fn` TyVar "a")
-            , funConstraint = Nothing
-            , funDefs = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
-            }
+      parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl Fun
+        { funComments   = []
+        , funName       = "id"
+        , funType       = Just (TyVar "a" `fn` TyVar "a")
+        , funConstraint = Nothing
+        , funDefs       = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
+        }
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
@@ -260,6 +260,9 @@ test = parallel $ do
                         [ (ConsPat "Just" [VarPat "y"], Var "y")
                         , (ConsPat "Nothing" []       , Var "z")
                         ]
+    it "parses a case with variable patterns" $ do
+      parse pExpr "" "case x of\n  y -> y"
+        `shouldParse` Case (Var "x") [(VarPat "y", Var "y")]
     it "parses a let expression" $ do
       parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
         [("x", IntLit 1), ("y", IntLit 2)]

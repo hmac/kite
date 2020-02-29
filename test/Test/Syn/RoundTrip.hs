@@ -150,16 +150,21 @@ genDataCon = Gen.choice [genSimpleDataCon, genRecordCon]
     (Range.linear 1 3)
     ((,) <$> genLowerName <*> genType)
 
--- TODO: it doesn't make sense for a function to have a constraint but no type,
--- so generate these together.
 genFun :: H.Gen (Fun Syn)
-genFun =
-  Fun
-    <$> Gen.list (Range.linear 0 5) genComment
-    <*> genLowerName
-    <*> Gen.maybe genType
-    <*> genConstraint
-    <*> Gen.list (Range.linear 1 5) genDef
+genFun = Gen.choice [funWithType, funWithoutType]
+ where
+  funWithType =
+    Fun []
+      <$> genLowerName
+      <*> (Just <$> genType)
+      <*> genConstraint
+      <*> Gen.list (Range.linear 1 5) genDef
+  funWithoutType =
+    Fun []
+      <$> genLowerName
+      <*> pure Nothing
+      <*> pure Nothing
+      <*> Gen.list (Range.linear 1 5) genDef
 
 genConstraint :: H.Gen (Maybe Constraint)
 genConstraint = Gen.small $ Gen.recursive

@@ -112,17 +112,22 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
 
 -- We ensure that comments are parsed last so that they get attached to a
 -- function if directly above one.
+-- We want comments above functions to be associated with them, but doing this
+-- in the parser leads to some backtracking that worsens error messages and
+-- reduces performance, so we keep it simple here. In a later stage of the
+-- compiler we merge adjacent comment and function declarations.
 pDecl :: Parser (Decl Syn)
 pDecl =
-  TypeclassDecl
+  Comment
+    <$> pComment
+    <|> TypeclassDecl
     <$> pTypeclass
     <|> TypeclassInst
     <$> pInstance
     <|> DataDecl
     <$> pData
-    <|> try (FunDecl <$> pFun)
-    <|> Comment
-    <$> pComment
+    <|> FunDecl
+    <$> pFun
 
 pData :: Parser Data
 pData = do
@@ -189,7 +194,7 @@ pConstraint :: Parser Constraint
 pConstraint =
   let one   = CInst <$> uppercaseName <*> (map TyVar <$> some lowercaseName)
       multi = do
-        cs <- parens (pConstraint `sepBy2` comma)
+        cs <- parens (lexemeN pConstraint `sepBy2` comma)
         pure (foldl1 CTuple cs)
   in  one <|> multi
 
@@ -312,13 +317,7 @@ pPattern = pPattern' <|> cons
     pure $ ConsPat c args
 
 pPattern' :: Parser Pattern
-pPattern' = try int <|> wild <|> list <|> try tuple <|> var
- where
-  int   = IntPat <$> pInt
-  wild  = symbol "_" >> pure WildPat
-  list  = ListPat <$> brackets (pPattern `sepBy` comma)
-  tuple = TuplePat <$> parens (pPattern `sepBy` comma)
-  var   = VarPat <$> lowercaseName
+pPattern' = try pIntPat <|> pWildPat <|> pListPat <|> try pTuplePat <|> pVarPat
 
 -- Case patterns differ from function patterns in that a constructor pattern
 -- doesn't have to be in parentheses (because we are only scrutinising a single
@@ -330,8 +329,36 @@ pPattern' = try int <|> wild <|> list <|> try tuple <|> var
 -- is not the same as
 -- foo (Just x) = ...
 pCasePattern :: Parser Pattern
-pCasePattern = pPattern' <|> con
-  where con = ConsPat <$> uppercaseName <*> many pPattern
+pCasePattern =
+  parens (try infixBinaryCon <|> tuplePattern <|> pPattern)
+    <|> pIntPat
+    <|> pWildPat
+    <|> pListPat
+    <|> con
+    <|> pVarPat
+ where
+  tuplePattern   = TuplePat <$> pPattern `sepBy` comma
+  con            = ConsPat <$> uppercaseName <*> many pPattern
+  infixBinaryCon = do
+    left  <- pPattern
+    tycon <- Name <$> symbol "::"
+    right <- pPattern
+    pure $ ConsPat tycon [left, right]
+
+pIntPat :: Parser Pattern
+pIntPat = IntPat <$> pInt
+
+pWildPat :: Parser Pattern
+pWildPat = symbol "_" >> pure WildPat
+
+pListPat :: Parser Pattern
+pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
+
+pTuplePat :: Parser Pattern
+pTuplePat = TuplePat <$> parens (pPattern `sepBy` comma)
+
+pVarPat :: Parser Pattern
+pVarPat = VarPat <$> lowercaseName
 
 pInt :: Parser Int
 pInt = do

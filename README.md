@@ -51,14 +51,15 @@ Lam has many other features which are described below.
 
 ## Status
 
-Lam is in early development and most of the its features don't exist yet. Here's
+Lam is in early development and most of its features don't exist yet. Here's
 the current state of progress:
 
 - [x] Basic Haskell-style syntax
 - [x] Pattern matching in functions and case expressions
 - [x] String interpolation
 - [x] Source code formatting
-- [ ] Typeclasses
+- [x] Typeclasses
+- [x] Interpreter
 - [ ] Typed holes
 - [ ] Standard library
 - [ ] Totality checker
@@ -72,7 +73,6 @@ the current state of progress:
 - [ ] Overloaded string literals
 - [ ] Doctests
 - [ ] Automatic test discovery
-- [ ] Interpreter
 - [ ] REPL
 - [ ] Go backend
 - [ ] JS backend
