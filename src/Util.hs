@@ -6,6 +6,7 @@ module Util
   , Data.Maybe.catMaybes
   , Data.List.nub
   , Data.List.sort
+  , Data.List.sortOn
   , Data.List.find
   , Data.List.partition
   , Data.List.unzip3

@@ -13,7 +13,6 @@ import qualified Data.Map.Strict               as Map
 import           Util
 import           Control.Monad.State.Strict
 import           Control.Monad                  ( replicateM )
-import           Data.List                      ( sortBy )
 import           Data.List.Extra                ( groupOn )
 import           Data.Foldable                  ( foldlM
                                                 , foldrM
@@ -75,14 +74,13 @@ translateModule env T.Module { T.moduleDecls = decls } =
   -- 2. typeclass decls
   -- 3. instance decls
   -- 4. everything else
-  let ordering (T.DataDecl      _) _                   = LT
-      ordering (T.TypeclassDecl _) (T.DataDecl _)      = GT
-      ordering (T.TypeclassDecl _) _                   = LT
-      ordering (T.TypeclassInst _) (T.DataDecl      _) = GT
-      ordering (T.TypeclassInst _) (T.TypeclassDecl _) = GT
-      ordering (T.TypeclassInst _) _                   = LT
-      ordering (T.FunDecl       _) _                   = GT
-      orderedDecls = sortBy ordering decls
+  let ordering :: T.Decl -> Int
+      ordering = \case
+        (T.DataDecl      _) -> 0
+        (T.TypeclassDecl _) -> 1
+        (T.TypeclassInst _) -> 2
+        (T.FunDecl       _) -> 3
+      orderedDecls = sortOn ordering decls
   in  foldlM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
 
 translateDecl :: Env -> T.Decl -> NameGen ([(Name, Exp)], InstMap)
@@ -162,8 +160,8 @@ translateTypeclass env t =
 --       (when we support { a = .. } style record construction we can use that)
 translateInstance :: Env -> T.Instance -> NameGen ([(Name, Exp)], InstMap)
 translateInstance env i = do
-  let typeclassName@(TopLevel moduleName _rawTypeclassName) = T.instanceName i
-  let recordCon = fromMaybe
+  let typeclassName = T.instanceName i
+      recordCon     = fromMaybe
         (error $ "undefined typeclass " <> show typeclassName)
         (lookupDef typeclassName env)
   -- As when translating T.ConT, we wrap the constructor in functions so we can
@@ -182,7 +180,7 @@ translateInstance env i = do
     concatMap fst <$> mapM (translateDecl env . T.FunDecl) defsAsFuns
   let record = foldl App recordConAsFun (map snd defsAsExps)
   recordName <-
-    let (TopLevel _ (Name tcRawName)) = typeclassName
+    let (TopLevel moduleName (Name tcRawName)) = typeclassName
     in  freshTopLevel moduleName ("_dict_" <> tcRawName)
   let instMap :: InstMap
       instMap = Map.fromList
