@@ -1,7 +1,61 @@
 module Data.List
 
-import Lam.Semigroup (Semigroup, append)
+import Lam.Semigroup (Semigroup(..))
+import Data.Maybe (Maybe(..))
+import Data.Bool (Bool(..))
+import Lam.Monoid (Monoid(..))
 
 instance Semigroup [a] where
   append [] ys = ys
   append (x :: xs) ys = x :: (append xs ys)
+
+instance Monoid [a] where
+  empty = []
+  mappend xs ys = append xs ys
+
+-- Extract the first element of a list.
+-- Returns Nothing if the list is empty.
+head : [a] -> Maybe a
+head [] = Nothing
+head (x :: _) = Just x
+
+-- Extract the elements after the head of a list.
+-- Returns Nothing if the list is empty.
+tail : [a] -> Maybe [a]
+tail [] = Nothing
+tail (x :: xs) = Just xs
+
+-- Extract the last element of a list.
+-- Returns Nothing if the list is empty.
+last : [a] -> Maybe a
+last [] = Nothing
+last [x] = Just x
+last (x :: xs) = last xs
+
+-- Return all the elements of a list except the last one.
+-- Returns Nothing if the list is empty.
+-- TODO: to write this efficiently and nicely, we really need to support
+-- pattern matching definitions in let bindings
+initHelper : [a] -> [a]
+initHelper [x] = []
+initHelper (x :: xs) = x :: (initHelper xs)
+
+init : [a] -> Maybe [a]
+init [] = Nothing
+init xs = Just (initHelper xs)
+
+-- Decompose a list into its head and tail.
+-- Returns Nothing if the list is empty.
+uncons : [a] -> Maybe (a, [a])
+uncons [] = Nothing
+uncons (x :: xs) = Just (x, xs)
+
+-- Returns True is the list is empty
+null : [a] -> Bool
+null [] = True
+null _ = False
+
+-- Returns the length of the list
+length : [a] -> Int
+length [] = 0
+length (x :: xs) = 1 + (length xs)
