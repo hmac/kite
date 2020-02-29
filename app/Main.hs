@@ -19,10 +19,14 @@ import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
 import           Options.Generic
 
+import           Syn.Print                      ( printModule )
+import           Syn.Parse                      ( parseLamFile )
+
 import           Constraint.Print
 
 data Config =
       Repl
+    | Format FilePath
     | Run FilePath
     | Typecheck FilePath
     | Parse FilePath
@@ -39,6 +43,7 @@ main = do
   cfg <- getRecord "lam"
   case cfg of
     Repl          -> Repl.run
+    Format      f -> format f
     Run         f -> run f
     Parse       f -> parse f
     DumpLc      f -> dumpLC f
@@ -72,6 +77,11 @@ typecheck = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely (printError err)
     Right _   -> printNicely "Success."
+
+format :: FilePath -> IO ()
+format fp = parseLamFile <$> readFile fp >>= \case
+  Right m   -> printNicely (printModule m)
+  Left  err -> putStrLn err
 
 run :: FilePath -> IO ()
 run = withParsedFile $ \g ->

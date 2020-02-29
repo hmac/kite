@@ -39,7 +39,7 @@ pModule = do
   metadata <- optional pMetadata
   void $ symbol "module"
   name    <- lexemeN pModuleName
-  exports <- optional . lexemeN . parens $ pExport `sepBy` comma
+  exports <- optional . lexemeN . parens $ lexemeN pExport `sepBy` comma
   imports <- many (lexemeN pImport)
   decls   <- many (lexemeN pDecl)
   pure $ Module { moduleName     = name
