@@ -26,10 +26,13 @@ generateBind :: AxiomScheme -> TypeEnv -> Bind -> GenerateM (TypeEnv, BindT)
 generateBind _ _ (Bind _ _ equations) | not (sameNumberOfPatterns equations) =
   throwError EquationsHaveDifferentNumberOfPatterns
 generateBind axs env (Bind name annotation equations) = do
-  (es, eqTypes, cs) <- unzip3 <$> mapM (generateMultiEquation env) equations
-  (beta, allEqsEq)  <- do
-    beta <- TVar <$> fresh
-    pure (beta, generateAllEqualConstraint beta eqTypes)
+  -- Firstly, generate a fresh type variable for the whole binding, and extend
+  -- the environment with it. This means any recursive reference to the binding
+  -- will be correctly in scope.
+  beta <- TVar <$> fresh
+  let env' = Map.insert name (Forall [] CNil beta) env
+  (es, eqTypes, cs) <- unzip3 <$> mapM (generateMultiEquation env') equations
+  let allEqsEq = generateAllEqualConstraint beta eqTypes
   let (annGiven, annWanted) = case annotation of
         (Just (Forall _tvars q t)) -> (q, beta :~: t)
         Nothing                    -> mempty

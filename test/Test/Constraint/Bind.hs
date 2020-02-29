@@ -131,6 +131,29 @@ test = do
       case res of
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
+    it "a recursive function" $ do
+      -- f [] = True
+      -- f (x :: xs) = f xs
+      let body =
+            [ ([ListPat []], Con true)
+            , ( [ConsPat cons [VarPat "x", VarPat "xs"]]
+              , App (Var "f") (Var "xs")
+              )
+            ]
+      let bind        = Bind "f" Nothing body
+      let overallType = list (TVar (R "$R12")) `fn` bool
+      let bindT = BindT
+            "f"
+            [ ([ListPat []], ConT true)
+            , ( [ConsPat cons [VarPat "x", VarPat "xs"]]
+              , AppT (VarT "f" overallType) (VarT "xs" (list (TVar (R "$R12"))))
+              )
+            ]
+            (Forall [R "$R12"] CNil overallType)
+      let (res, _) = run (generateBind mempty env bind)
+      case res of
+        Left  err        -> expectationFailure (show err)
+        Right (_, bind') -> bind' `shouldBe` bindT
     it "tuple patterns" $ do
       -- f (True, y) = y
       -- f (x, Zero) = Zero
