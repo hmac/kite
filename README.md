@@ -123,11 +123,11 @@ succeed, but holes in terms may be left (and will generate a warning). If the
 program encounters a term hole at runtime it will throw an error. This is quite
 useful if you have half a program written and just want to try it out quickly.
 
-#### In the future: Case splitting
+### In the future: Case splitting
 
-Holes give a useful marker from which we can perform other interactive steps. If
-Lam gains LSP support then I aim to add case splitting on variables near holes,
-much like Agda and Idris.
+Holes give a useful marker from which we can perform other interactive steps.
+When Lam gains LSP support, this will include case splitting on variables near
+holes, much like Agda and Idris.
 
 ```haskell
 foo : a -> Maybe a -> a
@@ -177,6 +177,15 @@ depend on a safe package without worrying about it stealing your secrets in
 production, and the automated update of safe dependencies poses no security risk
 either. A module is safe if none of the functions defined in it use IO or FFI.
 
+### Typeclasses
+
+Lam supports multi-parameter typeclassesm but there is no support for functional
+dependencies. Haskell 98 has quite strict rules on the permitted form of
+instance delcarations, whereas Lam intends to be as relaxed as possible whilst
+guaranteeing:
+- there is an unambiguous instance for each typeclass constraint
+- typechecking always terminates
+
 ### Typeclass deriving
 
 Lam will be able to automatically generate typeclass instances for some common typeclasses:
@@ -221,8 +230,148 @@ operators will remain because they're familiar to everyone, and we still use `.`
 for function composition because it's so useful. A named function can be made
 infix by placing it in backticks.
 
+## Syntax
+
+Lam files start with optional YAML-style metadata delimited by `---`.
+
+```haskell
+---
+example: metadata
+someKey: someValue
+---
+```
+
+Every Lam file defines a module, which begins `module <name>`. The module name
+must begin with a capital letter. This is optionally followed by a list of
+exported definitions, and the `where` keyword.
+
+```haskell
+module Example (fun1, fun2, SomeType, SomeClass) where
+```
+
+The contents of a Lam module is a series of definitions, which are either
+- Function definitions
+- Data type definitions
+- Typeclass definitions
+- Typeclass instance definitions
+- Comments
+
+### Function Syntax
+
+Functions are defined by one or more equations, preceded by a type signature.
+Each equation can have a series of arguments, which are arguments to the
+function. You must have the same number of arguments for each equation.
+
+Type signatures describe the types of the arguments to the function, and the
+type it returns. Each is separated by a function arrow (`->`).
+
+```haskell
+isZero : Int -> Bool
+isZero 0 = True
+isZero _ = False
+```
+
+In this example, the function `isZero` takes one argument of type `Int` and
+returns a value of type `Bool`. It is defined by two equations:
+- The first describes what to return when the argument is 0
+- The second describes what to return otherwise
+
+The second equation uses a _wildcard pattern_, written using a single
+underscore. This pattern matches any value. There are several types of pattern
+you can use as function arguments. Here is a full list:
+- Variable patterns: `x`
+- Wildcard patterns: `_`
+- Tuple patterns: `(x, y)`, `(x, y, z)`
+- List patterns: `[1,2,3]`, `[]`
+- List constructor patterns: `(x :: xs)`
+- General constructor patterns: `(Just x)`, `(Right y)`
+- String patterns: `"hello"`
+
+### Let expressions
+
+In any expression (i.e. anywhere to the right of the `=` in an equation) you can
+use let expressions, which declare variables that you can use later on. All
+variables in Lam are immutable, so once you delcare them you cannot change their
+value.
+
+```
+doubleAndAddFive : Int -> Int
+doubleAndAddFive x = let doubled = x + x
+                      in doubled + 5
+```
+
+A let expression is one or more bindings of the form `variableName =
+variableValue`, separated by newlines, followed by a final expression which is
+the _body_ of the let. The body is the expression that the let will evaluate to.
+Here is an example with multiple bindings:
+
+```
+let a = 1
+    b = 2
+    c = a + b
+ in c + c
+```
+
+This expression simplifies to `(1 + 2) + (1 + 2)` and hence to `6`.
+
+Unlike in Haskell, let expressions cannot take arguments. If you want to bind
+functions in a let, use `where` instead.
+
+### Where clauses
+
+Where clauses allow you to define helper functions that are only available in
+the scope of some particular top level function. For example:
+
+```haskell
+init : [a] -> Maybe [a]
+init [] = Nothing
+init xs = Just (helper xs)
+  where helper : [a] -> [a]
+        helper [x] = []
+        helper (x :: xs) = x :: (helper xs)
+```
+
+The top level function defined here is `init` and it calls the helper
+function `helper` which is defined in a where clause. `helper` is only in scope
+inside `init`. Unlike Haskell, `helper` cannot see any variables bound in
+`init`, including its arguments.
+
+You can think of `where` as defining a top level function which can only be used
+by the parent function.
+
+### Anonymous functions
+
+Anonymous functions can be defined like this `\x y -> x`. You can write any
+number of variables after the `\` and any expression after the `->`. Anonymous
+functions can be used anywhere in an expression, for example:
+
+```haskell
+oneIsOne : Int
+oneIsOne = let one = 1
+               identity = \x -> x
+            in identity one
+```
+
+### Case expressions
+
+TODO: identical to Haskell, so see there for details (for now)
+
+### Data type syntax
+
+TODO: identical to Haskell, so see there for details (for now)
+
+### Typeclass syntax
+
+TODO: identical to Haskell, so see there for details (for now)
+
+### Typeclass instance syntax
+
+TODO: identical to Haskell, so see there for details (for now)
+
+## Records
+
 Lam has Haskell's ADTs and records, but aims to provide better ergonomics around
-record field selection. Out-of-the-box Haskell doesn't deal well with multiple
+record field selection. Out of the box, Haskell doesn't deal well with multiple
 record types having the same field name. There are a variety of solutions to
 this, each with their own tradeoffs. Lam aims to find one which is both simple
 and unsurprising, though the exact solution is not yet settled.
