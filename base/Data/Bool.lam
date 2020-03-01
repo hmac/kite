@@ -2,7 +2,7 @@ module Data.Bool
 
 import Lam.Semigroup (Semigroup(..))
 
-data Bool = True | False
+type Bool = True | False
 
 all : [Bool] -> Bool
 all [] = True

@@ -2,7 +2,7 @@ module T6
 
 import T5 (Semigroup, append)
 
-data Foo = Empty | MkFoo
+type Foo = Empty | MkFoo
 
 instance Semigroup Foo where
   append Empty f = f

@@ -1,8 +1,8 @@
 module BadInstanceMethod
 
-data D = D
+type D = D
 
-data C = C
+type C = C
 
 class F a where
   f : a

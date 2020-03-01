@@ -11,7 +11,7 @@ import Lam.Monoid (Monoid(..), concat)
 e : Either Bool String
 e = Left True
 
-data Foo a = Foo { unFoo : a, tag : Int }
+type Foo a = Foo { unFoo : a, tag : Int }
 
 foo : Foo String
 foo = Foo "isfoo" 1

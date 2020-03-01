@@ -6,4 +6,4 @@ fromLeft : Either a b -> Maybe a
 fromLeft (Left x) = Just x
 fromLeft (Right _) = Nothing
 
-data Either a b = Left a | Right b
+type Either a b = Left a | Right b

@@ -127,14 +127,14 @@ test = parallel $ do
                           ]
                         }
 
-    it "parses a simple data definition" $ do
-      parse pDecl "" "data Unit = Unit" `shouldParse` DataDecl Data
+    it "parses a simple type definition" $ do
+      parse pDecl "" "type Unit = Unit" `shouldParse` DataDecl Data
         { dataName   = "Unit"
         , dataTyVars = []
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
     it "parses a record definition" $ do
-      parse pDecl "" "data Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+      parse pDecl "" "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
@@ -149,7 +149,7 @@ test = parallel $ do
                           ]
                         }
     it "parses the definition of List" $ do
-      parse pDecl "" "data List a = Nil | Cons a (List a)"
+      parse pDecl "" "type List a = Nil | Cons a (List a)"
         `shouldParse` DataDecl Data
                         { dataName   = "List"
                         , dataTyVars = ["a"]

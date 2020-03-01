@@ -281,7 +281,7 @@ printCase e alts = keyword "case"
 
 printData :: Data -> Document
 printData d =
-  keyword "data"
+  keyword "type"
     <+> printName (dataName d)
     <+> hsep (map printName (dataTyVars d))
     <+> equals

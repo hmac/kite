@@ -131,7 +131,7 @@ pDecl =
 
 pData :: Parser Data
 pData = do
-  void (symbol "data")
+  void (symbol "type")
   name   <- uppercaseName
   tyvars <- many lowercaseName
   void (symbolN "=")
@@ -553,8 +553,7 @@ lowercaseString = lexeme . try $ do
 
 keywords :: [String]
 keywords =
-  [ "data"
-  , "type"
+  [ "type"
   , "alias"
   , "from"
   , "qualified"

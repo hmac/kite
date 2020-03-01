@@ -1,6 +1,6 @@
 module T1
 
-data Maybe a = Just a | Nothing
+type Maybe a = Just a | Nothing
 
 fromMaybe : Maybe a -> a -> a
 fromMaybe (Just x) _ = x

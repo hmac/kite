@@ -1,6 +1,6 @@
 module UnknownTypeclassInFunctionConstraint
 
-data D = D
+type D = D
 
 default : Foo a => a -> D
 default _ = D

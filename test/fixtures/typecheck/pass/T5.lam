@@ -9,4 +9,4 @@ class Semigroup a where
 instance Semigroup Int where
   append x y = x + y
 
-data Foo = Foo Int
+type Foo = Foo Int
