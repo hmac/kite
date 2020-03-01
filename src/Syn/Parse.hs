@@ -165,7 +165,7 @@ pFun = do
         bindings <- many pPattern <?> "pattern"
         void (symbolN "=")
         expr <- pExpr
-        pure Def { defArgs = bindings, defExpr = expr }
+        pure Def { defName = name, defArgs = bindings, defExpr = expr }
       rest <- many (lexemeN (pDef name))
       pure (first : rest)
   pure Fun { funComments   = comments
@@ -181,7 +181,7 @@ pDef (Name name) = do
   bindings <- many pPattern <?> "pattern"
   void (symbolN "=")
   expr <- pExpr
-  pure Def { defArgs = bindings, defExpr = expr }
+  pure Def { defName = Name name, defArgs = bindings, defExpr = expr }
 
 -- Monoid a => [a] -> a
 pFunSig :: Parser (Maybe Constraint, Type)
@@ -245,7 +245,7 @@ pDef' = do
   bindings <- many pPattern <?> "pattern"
   void (symbolN "=")
   expr <- pExpr
-  pure (name, Def { defArgs = bindings, defExpr = expr })
+  pure (name, Def { defName = name, defArgs = bindings, defExpr = expr })
 
 -- Int
 -- Maybe Int

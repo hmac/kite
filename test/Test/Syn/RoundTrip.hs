@@ -122,7 +122,10 @@ genInstance =
     <*> Gen.list (Range.linear 1 5) genInstanceDef
  where
   genInstanceDef :: H.Gen (RawName, [Def Syn])
-  genInstanceDef = (,) <$> genLowerName <*> Gen.list (Range.linear 1 3) genDef
+  genInstanceDef = do
+    name <- genLowerName
+    defs <- Gen.list (Range.linear 1 3) (genDef name)
+    pure (name, defs)
 
 genTypeclass :: H.Gen Typeclass
 genTypeclass =
@@ -153,18 +156,26 @@ genDataCon = Gen.choice [genSimpleDataCon, genRecordCon]
 genFun :: H.Gen (Fun Syn)
 genFun = Gen.choice [funWithType, funWithoutType]
  where
-  funWithType =
-    Fun []
-      <$> genLowerName
-      <*> (Just <$> genType)
-      <*> genConstraint
-      <*> Gen.list (Range.linear 1 5) genDef
-  funWithoutType =
-    Fun []
-      <$> genLowerName
-      <*> pure Nothing
-      <*> pure Nothing
-      <*> Gen.list (Range.linear 1 5) genDef
+  funWithType = do
+    name       <- genLowerName
+    ty         <- genType
+    constraint <- genConstraint
+    defs       <- Gen.list (Range.linear 1 5) (genDef name)
+    pure Fun { funComments   = []
+             , funName       = name
+             , funType       = Just ty
+             , funConstraint = constraint
+             , funDefs       = defs
+             }
+  funWithoutType = do
+    name <- genLowerName
+    defs <- Gen.list (Range.linear 1 5) (genDef name)
+    pure Fun { funComments   = []
+             , funName       = name
+             , funType       = Nothing
+             , funConstraint = Nothing
+             , funDefs       = defs
+             }
 
 genConstraint :: H.Gen (Maybe Constraint)
 genConstraint = Gen.small $ Gen.recursive
@@ -199,8 +210,8 @@ genType = Gen.recursive
   , Gen.subterm2 genType genType (\ty1 ty2 -> TyTuple [ty1, ty2])
   ]
 
-genDef :: H.Gen (Def Syn)
-genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
+genDef :: RawName -> H.Gen (Def Syn)
+genDef name = Def name <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 
 genExpr :: H.Gen Syn
 genExpr = Gen.recursive

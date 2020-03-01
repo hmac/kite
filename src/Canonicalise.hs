@@ -105,6 +105,7 @@ canonicaliseConstraint env = \case
     in  CInst n' $ fmap (canonicaliseType env) tys
   CTuple a b ->
     CTuple (canonicaliseConstraint env a) (canonicaliseConstraint env b)
+  CNil -> CNil
 
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
@@ -146,7 +147,10 @@ canonicaliseDef env d =
   let res    = map (canonicalisePattern env) (defArgs d)
       locals = concatMap fst res
       args   = map snd res
-  in  d { defExpr = canonicaliseExp env locals (defExpr d), defArgs = args }
+  in  d { defName = canonicaliseName env (defName d)
+        , defExpr = canonicaliseExp env locals (defExpr d)
+        , defArgs = args
+        }
 
 canonicaliseExp :: Env -> [RawName] -> Syn.Syn -> Can.Exp
 canonicaliseExp env = go

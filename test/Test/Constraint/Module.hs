@@ -90,47 +90,48 @@ test = describe "typing simple modules" $ do
   it
       "class Foo a where bar : a -> a; data Foo = Foo; instance F Foo; id_ : F a => a -> a; id_ x = bar x; foo : Foo; foo = id_ Foo"
     $ do
-        let
-          dFoo = DataDecl $ Data
-            { dataName   = "Foo"
-            , dataTyVars = []
-            , dataCons   = [DataCon { conName = "Foo", conArgs = [] }]
-            }
-          fClass = TypeclassDecl $ Typeclass
-            { typeclassName   = "F"
-            , typeclassTyVars = ["a"]
-            , typeclassDefs   = [("bar", TyVar "a" `fn` TyVar "a")]
-            }
-          inst = TypeclassInst $ Instance { instanceName  = "F"
-                                          , instanceTypes = [TyCon "Foo" []]
-                                          , instanceDefs  = []
-                                          }
-          id_ = FunDecl $ Fun
-            { funComments   = []
-            , funName       = "id_"
-            , funConstraint = Just (CInst "F" [TyVar "a"])
-            , funType       = Just (TyVar "a" `fn` TyVar "a")
-            , funDefs       = [ Def { defArgs = [VarPat "x"]
-                                    , defExpr = App (Var "bar") (Var "x")
-                                    }
-                              ]
-            }
-          foo = FunDecl $ Fun
-            { funComments   = []
-            , funName       = "foo"
-            , funConstraint = Nothing
-            , funType       = Just (TyCon "Foo" [])
-            , funDefs       = [ Def { defArgs = []
-                                    , defExpr = App (Var "id_") (Con "Foo")
-                                    }
-                              ]
-            }
-          modul = Module { moduleName     = "Test"
-                         , moduleMetadata = []
-                         , moduleImports  = []
-                         , moduleExports  = []
-                         , moduleDecls    = [dFoo, inst, id_, foo, fClass]
-                         }
+        let dFoo = DataDecl $ Data
+              { dataName   = "Foo"
+              , dataTyVars = []
+              , dataCons   = [DataCon { conName = "Foo", conArgs = [] }]
+              }
+            fClass = TypeclassDecl $ Typeclass
+              { typeclassName   = "F"
+              , typeclassTyVars = ["a"]
+              , typeclassDefs   = [("bar", TyVar "a" `fn` TyVar "a")]
+              }
+            inst = TypeclassInst $ Instance { instanceName  = "F"
+                                            , instanceTypes = [TyCon "Foo" []]
+                                            , instanceDefs  = []
+                                            }
+            id_ = FunDecl $ Fun
+              { funComments   = []
+              , funName       = "id_"
+              , funConstraint = Just (CInst "F" [TyVar "a"])
+              , funType       = Just (TyVar "a" `fn` TyVar "a")
+              , funDefs       = [ Def { defName = "id_"
+                                      , defArgs = [VarPat "x"]
+                                      , defExpr = App (Var "bar") (Var "x")
+                                      }
+                                ]
+              }
+            foo = FunDecl $ Fun
+              { funComments   = []
+              , funName       = "foo"
+              , funConstraint = Nothing
+              , funType       = Just (TyCon "Foo" [])
+              , funDefs       = [ Def { defName = "foo"
+                                      , defArgs = []
+                                      , defExpr = App (Var "id_") (Con "Foo")
+                                      }
+                                ]
+              }
+            modul = Module { moduleName     = "Test"
+                           , moduleMetadata = []
+                           , moduleImports  = []
+                           , moduleExports  = []
+                           , moduleDecls    = [dFoo, inst, id_, foo, fClass]
+                           }
         infersType
           mempty
           modul
@@ -190,5 +191,5 @@ mkDecl (name, ty, equations) = FunDecl $ Fun
   , funName       = name
   , funType       = Just ty
   , funConstraint = Nothing
-  , funDefs       = map (uncurry Def) equations
+  , funDefs       = map (uncurry (Def name)) equations
   }

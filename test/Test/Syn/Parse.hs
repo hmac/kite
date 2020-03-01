@@ -24,7 +24,11 @@ test = parallel $ do
         , funName       = "id"
         , funType       = Just (TyVar "a" `fn` TyVar "a")
         , funConstraint = Nothing
-        , funDefs       = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
+        , funDefs       = [ Def { defName = "id"
+                                , defArgs = [VarPat "x"]
+                                , defExpr = Var "x"
+                                }
+                          ]
         }
 
     it "parses a definition with multiple type arrows" $ do
@@ -34,7 +38,8 @@ test = parallel $ do
           , funName       = "const"
           , funType       = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
           , funConstraint = Nothing
-          , funDefs       = [ Def { defArgs = [VarPat "x", VarPat "y"]
+          , funDefs       = [ Def { defName = "const"
+                                  , defArgs = [VarPat "x", VarPat "y"]
                                   , defExpr = Var "x"
                                   }
                             ]
@@ -49,7 +54,8 @@ test = parallel $ do
                                           `fn` (TyCon "f" [TyVar "a"])
                                           `fn` (TyCon "f" [TyVar "b"])
                         , funConstraint = Nothing
-                        , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
+                        , funDefs = [ Def { defName = "map"
+                                          , defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
                                     ]
@@ -66,12 +72,14 @@ test = parallel $ do
                         , funConstraint = Nothing
                         , funDefs       =
                           [ Def
-                            { defArgs = [ListPat []]
+                            { defName = "head"
+                            , defArgs = [ListPat []]
                             , defExpr = App (Var "error")
                                             (StringLit "head: empty list" [])
                             }
                           , Def
-                            { defArgs = [ ConsPat "Cons"
+                            { defName = "head"
+                            , defArgs = [ ConsPat "Cons"
                                                   [VarPat "x", VarPat "xs"]
                                         ]
                             , defExpr = Var "x"
@@ -85,7 +93,8 @@ test = parallel $ do
                         , funName       = "concat"
                         , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
                         , funConstraint = Just (CInst "Monoid" [TyVar "a"])
-                        , funDefs       = [ Def { defArgs = [ListPat []]
+                        , funDefs       = [ Def { defName = "concat"
+                                                , defArgs = [ListPat []]
                                                 , defExpr = Var "empty"
                                                 }
                                           ]
@@ -100,7 +109,8 @@ test = parallel $ do
                             (CTuple (CInst "Eq" [TyVar "a"])
                                     (CInst "Show" [TyVar "a"])
                             )
-                        , funDefs       = [ Def { defArgs = [VarPat "x"]
+                        , funDefs       = [ Def { defName = "foo"
+                                                , defArgs = [VarPat "x"]
                                                 , defExpr = Var "bar"
                                                 }
                                           ]
@@ -118,10 +128,12 @@ test = parallel $ do
                                           `fn` (TyCon "Maybe" [TyVar "a"])
                         , funConstraint = Nothing
                         , funDefs       =
-                          [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
+                          [ Def { defName = "fromLeft"
+                                , defArgs = [ConsPat "Left" [VarPat "x"]]
                                 , defExpr = App (Con "Just") (Var "x")
                                 }
-                          , Def { defArgs = [ConsPat "Right" [WildPat]]
+                          , Def { defName = "fromLeft"
+                                , defArgs = [ConsPat "Right" [WildPat]]
                                 , defExpr = Con "Nothing"
                                 }
                           ]
@@ -183,11 +195,13 @@ test = parallel $ do
                         , instanceTypes = [TyCon "Maybe" []]
                         , instanceDefs  =
                           [ ( "map"
-                            , [ Def { defArgs = [WildPat, ConsPat "Nothing" []]
+                            , [ Def { defName = "map"
+                                    , defArgs = [WildPat, ConsPat "Nothing" []]
                                     , defExpr = Con "Nothing"
                                     }
                               , Def
-                                { defArgs = [ VarPat "f"
+                                { defName = "map"
+                                , defArgs = [ VarPat "f"
                                             , ConsPat "Just" [VarPat "x"]
                                             ]
                                 , defExpr = App (Con "Just")
@@ -210,7 +224,8 @@ test = parallel $ do
                               , funComments   = []
                               , funType       = Just (TyCon "Int" [])
                               , funConstraint = Nothing
-                              , funDefs       = [ Def { defArgs = []
+                              , funDefs       = [ Def { defName = "one"
+                                                      , defArgs = []
                                                       , defExpr = IntLit 1
                                                       }
                                                 ]

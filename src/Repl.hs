@@ -57,12 +57,13 @@ processDecl decls =
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
   let
-    main = FunDecl Fun { funComments   = []
-                       , funName       = "$main"
-                       , funType       = Nothing
-                       , funConstraint = Nothing
-                       , funDefs       = [Def { defArgs = [], defExpr = e }]
-                       }
+    main = FunDecl Fun
+      { funComments   = []
+      , funName       = "$main"
+      , funType       = Nothing
+      , funConstraint = Nothing
+      , funDefs       = [Def { defName = "$main", defArgs = [], defExpr = e }]
+      }
     g = ModuleGroup (buildModule (decls ++ [main])) []
   in
     case ModuleGroupTypechecker.typecheckModuleGroup g of

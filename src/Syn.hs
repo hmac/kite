@@ -135,7 +135,8 @@ data DataCon_ name = DataCon { conName :: name
 
 -- Consider adding defName here - I think it might simplify things elsewhere
 type Def = Def_ RawName
-data Def_ name a = Def { defArgs :: [Pattern_ name]
+data Def_ name a = Def { defName :: name
+                       , defArgs :: [Pattern_ name]
                        , defExpr :: a
                        }
                        deriving (Eq, Show)

@@ -101,7 +101,7 @@ printDecl (TypeclassInst i) = printInstance i
 
 printFun :: Fun Syn -> Document
 printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty, funConstraint = constraint }
-  = vsep $ printComments comments ++ sig ++ map (printDef name) defs
+  = vsep $ printComments comments ++ sig ++ map printDef defs
  where
   sig = case ty of
     Just t -> case constraint of
@@ -168,10 +168,12 @@ printType' ctx ty = case (ctx, ty) of
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
-printDef :: RawName -> Def Syn -> Document
-printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
-                | otherwise       = lhs <+> printExpr (defExpr d)
-  where lhs = printName name <+> hsep (map printPattern (defArgs d)) <+> equals
+printDef :: Def Syn -> Document
+printDef d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
+           | otherwise       = lhs <+> printExpr (defExpr d)
+ where
+  lhs =
+    printName (defName d) <+> hsep (map printPattern (defArgs d)) <+> equals
 
 printPattern :: Pattern -> Document
 printPattern (VarPat n)       = printName n
@@ -317,7 +319,7 @@ printInstance i = vsep (header : map printInstanceDef (instanceDefs i))
       <+> printName (instanceName i)
       <+> hsep (map printType (instanceTypes i))
       <+> "where"
-  printInstanceDef (name, defs) = indent 2 $ vsep (map (printDef name) defs)
+  printInstanceDef (_name, defs) = indent 2 $ vsep (map printDef defs)
 
 printComment :: String -> Document
 printComment c = "--" <+> pretty c
