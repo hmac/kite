@@ -1,12 +1,11 @@
 module T4
 
-class Default a where
-  def : a
+type Default a = Default { def : a }
 
 type D = A | B | C
 
-instance Default D where
-  def = A
+defaultD : Default D
+defaultD = Default A
 
 defD : D
-defD = def
+defD = def defaultD

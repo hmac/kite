@@ -1,6 +1,0 @@
-module UnknownTypeclassInstance
-
-type D = D
-
-instance Foo D where
-  bar = D

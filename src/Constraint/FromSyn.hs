@@ -50,8 +50,6 @@ constraintToConstraint :: S.Constraint_ Name -> Constraint
 constraintToConstraint S.CNil = CNil
 constraintToConstraint (S.CTuple a b) =
   constraintToConstraint a :^: constraintToConstraint b
-constraintToConstraint (S.CInst className tys) =
-  Inst className (map tyToType tys)
 
 tyToType :: S.Type_ Name -> Type
 tyToType = \case

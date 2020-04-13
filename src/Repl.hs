@@ -60,7 +60,6 @@ processExpr decls e =
     main = FunDecl Fun { funComments   = []
                        , funName       = "$main"
                        , funType       = Nothing
-                       , funConstraint = Nothing
                        , funDefs       = [Def { defArgs = [], defExpr = e }]
                        }
     g = ModuleGroup (buildModule (decls ++ [main])) []

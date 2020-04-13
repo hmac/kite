@@ -20,16 +20,6 @@ data Module_ name a ty = Module { moduleName :: ModuleName
                                 }
                                 deriving (Eq, Show)
 
-typeclassDecls :: Module_ n a ty -> [Typeclass_ n]
-typeclassDecls = extractDecl $ \case
-  TypeclassDecl t -> Just t
-  _               -> Nothing
-
-instanceDecls :: Module_ n e ty -> [Instance_ n e]
-instanceDecls = extractDecl $ \case
-  TypeclassInst i -> Just i
-  _               -> Nothing
-
 dataDecls :: Module_ n a ty -> [Data_ n]
 dataDecls = extractDecl $ \case
   DataDecl d -> Just d
@@ -66,8 +56,6 @@ unName (Name n) = n
 type Decl a = Decl_ RawName a Type
 data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
                     | DataDecl (Data_ name)
-                    | TypeclassDecl (Typeclass_ name)
-                    | TypeclassInst (Instance_ name exp)
                     | Comment String
                   deriving (Eq, Show)
 
@@ -80,18 +68,15 @@ type Fun exp = Fun_ RawName exp (Type_ RawName)
 data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
                             , funType :: Maybe ty
-                            , funConstraint :: Maybe (Constraint_ name)
                             , funDefs :: [Def_ name exp]
                             }
                             deriving (Eq, Show)
 
--- Typeclass constaints
--- Monoid a => ...
--- (Applicative a, Alternative b) => ...
+-- Constraints
+-- Should be removed as we no longer have typeclasses
 type Constraint = Constraint_ RawName
 data Constraint_ name =
-    CInst name [Type_ name]
-  | CTuple (Constraint_ name) (Constraint_ name)
+    CTuple (Constraint_ name) (Constraint_ name)
   | CNil
   deriving (Show, Eq)
 
@@ -101,26 +86,6 @@ data Data_ name = Data { dataName :: name
                        , dataCons :: [DataCon_ name]
                        }
                        deriving (Eq, Show)
-
--- TODO: default definitions
--- TODO: we probably want to error if you put type holes in typeclass/instance
--- defs
-type Typeclass = Typeclass_ RawName
-data Typeclass_ name = Typeclass { typeclassName :: name
-                                 , typeclassTyVars :: [name] -- should this be [RawName]?
-                                 , typeclassDefs :: [(name, Type_ name)]
-                                 }
-                                 deriving (Eq, Show)
-
--- TODO: instance constraints
--- e.g. instance (Eq a, Eq b) => Eq (a, b)
---               ^^^^^^^^^^^^^^^
-type Instance exp = Instance_ RawName exp
-data Instance_ name exp = Instance { instanceName :: name
-                                   , instanceTypes :: [Type_ name]
-                                   , instanceDefs :: [(name, [Def_ name exp])]
-                                   }
-                                   deriving (Eq, Show)
 
 type DataCon = DataCon_ RawName
 -- Left a

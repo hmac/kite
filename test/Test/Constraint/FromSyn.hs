@@ -98,11 +98,3 @@ test = do
               $    (TVar (R "a") `fn` TVar (R "b"))
               `fn` (TVar (R "a") `fn` TVar (R "b"))
       tyToScheme Nothing synType `shouldBe` scheme
-    it "Eq a => a -> a -> Bool" $ do
-      let synConstraint = S.CInst "Eq" [S.TyVar "a"]
-      let synType = (S.TyVar "a" `S.fn` S.TyVar "a") `S.fn` S.TyCon "Bool" []
-      let scheme =
-            E.Forall [R "a"] (Inst "Eq" [TVar (R "a")])
-              $    (TVar (R "a") `fn` TVar (R "a"))
-              `fn` TCon "Bool" []
-      tyToScheme (Just synConstraint) synType `shouldBe` scheme

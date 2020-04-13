@@ -22,8 +22,6 @@ test = do
     it "holds for function declarations" $ require roundtripFun
     it "holds for expressions" $ require roundtripSyn
     it "holds for data declarations" $ require roundtripData
-    it "holds for typeclass declarations" $ require roundtripTypeclass
-    it "holds for typeclass instances" $ require roundtripInstance
     it "holds for import statements" $ require roundtripImport
     it "holds for modules" $ require roundtripModule
 
@@ -35,12 +33,6 @@ roundtripFun = roundtrip genFun printFun pFun
 
 roundtripData :: H.Property
 roundtripData = roundtrip genData printData pData
-
-roundtripTypeclass :: H.Property
-roundtripTypeclass = roundtrip genTypeclass printTypeclass pTypeclass
-
-roundtripInstance :: H.Property
-roundtripInstance = roundtrip genInstance printInstance pInstance
 
 roundtripImport :: H.Property
 roundtripImport = roundtrip genImport printImport pImport
@@ -106,33 +98,11 @@ genDecl :: H.Gen (Decl Syn)
 genDecl = Gen.choice
   [ FunDecl <$> genFun
   , DataDecl <$> genData
-  , TypeclassDecl <$> genTypeclass
-  , TypeclassInst <$> genInstance
   , Comment <$> genComment
   ]
 
 genModuleName :: H.Gen ModuleName
 genModuleName = ModuleName <$> Gen.list (Range.linear 1 3) genUpperString
-
-genInstance :: H.Gen (Instance Syn)
-genInstance =
-  Instance
-    <$> genUpperName
-    <*> Gen.list (Range.singleton 1) genType
-    <*> Gen.list (Range.linear 1 5) genInstanceDef
- where
-  genInstanceDef :: H.Gen (RawName, [Def Syn])
-  genInstanceDef = (,) <$> genLowerName <*> Gen.list (Range.linear 1 3) genDef
-
-genTypeclass :: H.Gen Typeclass
-genTypeclass =
-  Typeclass
-    <$> genUpperName
-    <*> Gen.list (Range.linear 1 3) genLowerName
-    <*> Gen.list (Range.linear 1 3) typeclassdef
- where
-  typeclassdef :: H.Gen (RawName, Type)
-  typeclassdef = (,) <$> genLowerName <*> genType
 
 genData :: H.Gen Data
 genData =
@@ -157,25 +127,12 @@ genFun = Gen.choice [funWithType, funWithoutType]
     Fun []
       <$> genLowerName
       <*> (Just <$> genType)
-      <*> genConstraint
       <*> Gen.list (Range.linear 1 5) genDef
   funWithoutType =
     Fun []
       <$> genLowerName
       <*> pure Nothing
-      <*> pure Nothing
       <*> Gen.list (Range.linear 1 5) genDef
-
-genConstraint :: H.Gen (Maybe Constraint)
-genConstraint = Gen.small $ Gen.recursive
-  Gen.choice
-  [ Just
-      <$> (   CInst
-          <$> genUpperName
-          <*> (map TyVar <$> Gen.list (Range.linear 1 1) genLowerName)
-          )
-  ]
-  [Gen.subterm2 genConstraint genConstraint (liftA2 CTuple)]
 
 -- TyInt and TyString are omitted here because without parsing the whole module
 -- we can't distinguish between a locally defined Int type and the builtin Int

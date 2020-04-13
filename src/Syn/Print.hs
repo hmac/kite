@@ -96,28 +96,19 @@ printDecl :: Decl Syn -> Document
 printDecl (Comment       c) = printComment c
 printDecl (FunDecl       f) = printFun f
 printDecl (DataDecl      d) = printData d
-printDecl (TypeclassDecl t) = printTypeclass t
-printDecl (TypeclassInst i) = printInstance i
 
 printFun :: Fun Syn -> Document
-printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty, funConstraint = constraint }
+printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty }
   = vsep $ printComments comments ++ sig ++ map (printDef name) defs
  where
   sig = case ty of
-    Just t -> case constraint of
-      Just c ->
-        [ printName name <> align
-            (space <> colon <+> printConstraint c <+> "=>" <+> printType t)
-        ]
-      Nothing -> [printName name <> align (space <> colon <+> printType t)]
+    Just t -> [printName name <> align (space <> colon <+> printType t)]
     Nothing -> []
   printComments [] = []
   printComments cs = map printComment cs
 
 -- TODO: properly print 3+ element constraint tuples
 printConstraint :: Constraint -> Document
-printConstraint (CInst tyclass vars) =
-  printName tyclass <+> hsep (map printType vars)
 printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
 printConstraint CNil         = "ϵ"
 
@@ -297,27 +288,6 @@ printCon RecordCon { conName = name, conFields = fields } =
                  (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)
       )
     )
-
-printTypeclass :: Typeclass -> Document
-printTypeclass t = vsep (header : map printTypeclassDef (typeclassDefs t))
- where
-  header =
-    keyword "class"
-      <+> printName (typeclassName t)
-      <+> hsep (map printName (typeclassTyVars t))
-      <+> "where"
-  printTypeclassDef (name, ty) =
-    indent 2 $ printName name <+> colon <+> printType ty
-
-printInstance :: Instance Syn -> Document
-printInstance i = vsep (header : map printInstanceDef (instanceDefs i))
- where
-  header =
-    keyword "instance"
-      <+> printName (instanceName i)
-      <+> hsep (map printType (instanceTypes i))
-      <+> "where"
-  printInstanceDef (name, defs) = indent 2 $ vsep (map (printDef name) defs)
 
 printComment :: String -> Document
 printComment c = "--" <+> pretty c

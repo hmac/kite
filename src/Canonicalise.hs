@@ -34,22 +34,18 @@ buildImports m =
 flattenImportItem :: Syn.Module Syn.Syn -> Syn.ImportItem -> [RawName]
 flattenImportItem modul = \case
   ImportSingle { importItemName = n } -> [n]
-  ImportAll { importItemName = n } -> n : constructorsOrMethodsForType modul n
+  ImportAll { importItemName = n } -> n : constructorsForType modul n
   ImportSome { importItemName = n, importItemConstructors = cs } -> n : cs
 
--- Given a name of a typeclass or a data type, find all the names that would be
+-- Given a name of a data type, find all the names that would be
 -- imported by a (..) style import.
 -- For data types, this is all the constructor names.
--- For typeclasses, it's all the method names.
-constructorsOrMethodsForType :: Syn.Module Syn.Syn -> RawName -> [RawName]
-constructorsOrMethodsForType modul tyname =
+constructorsForType :: Syn.Module Syn.Syn -> RawName -> [RawName]
+constructorsForType modul tyname =
   let datas = dataDecls modul
   in  case find ((== tyname) . dataName) datas of
         Just d -> map conName (dataCons d)
-        Nothing ->
-          case find ((== tyname) . typeclassName) (typeclassDecls modul) of
-            Just t  -> map fst (typeclassDefs t)
-            Nothing -> []
+        Nothing -> []
 
 canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module
 canonicaliseModule m =
@@ -67,15 +63,12 @@ canonicaliseDecl :: Env -> Syn.Decl Syn.Syn -> Can.Decl Can.Exp
 canonicaliseDecl env = \case
   FunDecl       f -> FunDecl $ canonicaliseFun env f
   DataDecl      d -> DataDecl $ canonicaliseData env d
-  TypeclassDecl t -> TypeclassDecl $ canonicaliseTypeclass env t
-  TypeclassInst i -> TypeclassInst $ canonicaliseInstance env i
   Comment       s -> Comment s
 
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f = f
   { funName       = TopLevel mod (funName f)
   , funDefs       = fmap (canonicaliseDef (mod, imps)) (funDefs f)
-  , funConstraint = canonicaliseConstraint (mod, imps) <$> funConstraint f
   , funType       = canonicaliseType (mod, imps) <$> funType f
   }
 
@@ -98,14 +91,6 @@ canonicaliseType env = \case
   TyString          -> TyString
   TyFun a b         -> TyFun (canonicaliseType env a) (canonicaliseType env b)
 
-canonicaliseConstraint :: Env -> Syn.Constraint -> Can.Constraint
-canonicaliseConstraint env = \case
-  CInst n tys ->
-    let n' = canonicaliseName env n
-    in  CInst n' $ fmap (canonicaliseType env) tys
-  CTuple a b ->
-    CTuple (canonicaliseConstraint env a) (canonicaliseConstraint env b)
-
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
   { dataName = TopLevel mod (dataName d)
@@ -123,23 +108,6 @@ canonicaliseDataCon (mod, imps) RecordCon { conName = name, conFields = fields }
     , conFields = map (bimap (TopLevel mod) (canonicaliseType (mod, imps)))
                       fields
     }
-
-canonicaliseTypeclass :: Env -> Syn.Typeclass -> Can.Typeclass
-canonicaliseTypeclass (mod, imps) t = t
-  { typeclassName   = TopLevel mod (typeclassName t)
-  , typeclassDefs   = bimapL (TopLevel mod)
-                             (canonicaliseType (mod, imps))
-                             (typeclassDefs t)
-  , typeclassTyVars = map Local (typeclassTyVars t)
-  }
-
-canonicaliseInstance :: Env -> Syn.Instance Syn.Syn -> Can.Instance Can.Exp
-canonicaliseInstance env@(mod, _) i = i
-  { instanceName  = canonicaliseName env (instanceName i)
-  , instanceDefs  = fmap (bimap (TopLevel mod) (fmap (canonicaliseDef env)))
-                         (instanceDefs i)
-  , instanceTypes = fmap (canonicaliseType env) (instanceTypes i)
-  }
 
 canonicaliseDef :: Env -> Syn.Def Syn.Syn -> Can.Def Can.Exp
 canonicaliseDef env d =

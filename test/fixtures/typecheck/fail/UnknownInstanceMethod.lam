@@ -1,9 +1,0 @@
-module UnknownInstanceMethod
-
-class F a where
-  f : a
-
-type D = D
-
-instance F D where
-  g = D

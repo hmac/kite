@@ -9,8 +9,8 @@ where
 -- particular named module.
 
 import           Data.String                    ( IsString(fromString) )
-import           Data.Name                      ( ModuleName(..)
-                                                , RawName(..)
+import           Data.Name                      ( 
+                                                 RawName(..)
                                                 )
 import           Syn                     hiding ( Name )
 
@@ -36,8 +36,6 @@ type Type = Type_ Name
 type Scheme = Scheme_ Name (Constraint_ Name) (Type_ Name)
 type Pattern = Pattern_ Name
 type DataCon = DataCon_ Name
-type Instance = Instance_ Name
-type Typeclass = Typeclass_ Name
 type Data = Data_ Name
 type Def = Def_ Name
 type Fun a = Fun_ Name a (Type_ Name)

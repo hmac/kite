@@ -23,7 +23,6 @@ test = parallel $ do
         { funComments   = []
         , funName       = "id"
         , funType       = Just (TyVar "a" `fn` TyVar "a")
-        , funConstraint = Nothing
         , funDefs       = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
         }
 
@@ -33,7 +32,6 @@ test = parallel $ do
           { funComments   = []
           , funName       = "const"
           , funType       = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
-          , funConstraint = Nothing
           , funDefs       = [ Def { defArgs = [VarPat "x", VarPat "y"]
                                   , defExpr = Var "x"
                                   }
@@ -48,7 +46,6 @@ test = parallel $ do
                                           $    (TyVar "a" `fn` TyVar "b")
                                           `fn` (TyCon "f" [TyVar "a"])
                                           `fn` (TyCon "f" [TyVar "b"])
-                        , funConstraint = Nothing
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
@@ -63,7 +60,6 @@ test = parallel $ do
                         { funComments   = []
                         , funName       = "head"
                         , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
-                        , funConstraint = Nothing
                         , funDefs       =
                           [ Def
                             { defArgs = [ListPat []]
@@ -78,33 +74,6 @@ test = parallel $ do
                             }
                           ]
                         }
-    it "parses a function with typeclass constraints" $ do
-      parse pDecl "" "concat : Monoid a => [a] -> a\nconcat [] = empty"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "concat"
-                        , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
-                        , funConstraint = Just (CInst "Monoid" [TyVar "a"])
-                        , funDefs       = [ Def { defArgs = [ListPat []]
-                                                , defExpr = Var "empty"
-                                                }
-                                          ]
-                        }
-      parse pDecl "" "foo : (Eq a, Show a) => a -> String\nfoo x = bar"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "foo"
-                        , funType = Just $ TyVar "a" `fn` TyCon "String" []
-                        , funConstraint =
-                          Just
-                            (CTuple (CInst "Eq" [TyVar "a"])
-                                    (CInst "Show" [TyVar "a"])
-                            )
-                        , funDefs       = [ Def { defArgs = [VarPat "x"]
-                                                , defExpr = Var "bar"
-                                                }
-                                          ]
-                        }
     it "parses a function with a multi param argument type" $ do
       parse
           pDecl
@@ -116,7 +85,6 @@ test = parallel $ do
                         , funType       = Just
                                           $ (TyCon "Either" [TyVar "a", TyVar "b"])
                                           `fn` (TyCon "Maybe" [TyVar "a"])
-                        , funConstraint = Nothing
                         , funDefs       =
                           [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
                                 , defExpr = App (Con "Just") (Var "x")
@@ -161,42 +129,6 @@ test = parallel $ do
                             }
                           ]
                         }
-    it "parses a simple typeclass definition" $ do
-      parse pDecl "" "class Functor f where\n  map : (a -> b) -> f a -> f b\n"
-        `shouldParse` TypeclassDecl Typeclass
-                        { typeclassName   = "Functor"
-                        , typeclassTyVars = ["f"]
-                        , typeclassDefs   = [ ( "map"
-                                              , (TyVar "a" `fn` TyVar "b")
-                                              `fn` (TyCon "f" [TyVar "a"])
-                                              `fn` (TyCon "f" [TyVar "b"])
-                                              )
-                                            ]
-                        }
-    it "parses a typeclass instance" $ do
-      parse
-          pDecl
-          ""
-          "instance Functor Maybe where\n  map _ Nothing = Nothing\n  map f (Just x) = Just (f x)\n"
-        `shouldParse` TypeclassInst Instance
-                        { instanceName  = "Functor"
-                        , instanceTypes = [TyCon "Maybe" []]
-                        , instanceDefs  =
-                          [ ( "map"
-                            , [ Def { defArgs = [WildPat, ConsPat "Nothing" []]
-                                    , defExpr = Con "Nothing"
-                                    }
-                              , Def
-                                { defArgs = [ VarPat "f"
-                                            , ConsPat "Just" [VarPat "x"]
-                                            ]
-                                , defExpr = App (Con "Just")
-                                                (App (Var "f") (Var "x"))
-                                }
-                              ]
-                            )
-                          ]
-                        }
   describe "parsing modules" $ do
     it "parses a basic module with metadata" $ do
       parse pModule "" "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"
@@ -209,7 +141,6 @@ test = parallel $ do
                               { funName       = "one"
                               , funComments   = []
                               , funType       = Just (TyCon "Int" [])
-                              , funConstraint = Nothing
                               , funDefs       = [ Def { defArgs = []
                                                       , defExpr = IntLit 1
                                                       }

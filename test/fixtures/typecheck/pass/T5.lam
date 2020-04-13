@@ -3,10 +3,12 @@ module T5
 test : Int
 test = append 1 2
 
-class Semigroup a where
-  append : a -> a -> a
+type Semigroup a = Semigroup { append : a -> a -> a }
 
-instance Semigroup Int where
-  append x y = x + y
+semigroupInt : Semigroup Int
+semigroupInt = Semigroup appendInt
+
+appendInt : Int -> Int -> Int
+appendInt x y = x + y
 
 type Foo = Foo Int

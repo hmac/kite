@@ -19,7 +19,6 @@ import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
 import           Options.Generic
 
-import           Syn.Print                      ( printModule )
 import           Syn.Parse                      ( parseLamFile )
 
 import           Constraint.Print

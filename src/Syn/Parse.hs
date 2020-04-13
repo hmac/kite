@@ -1,6 +1,5 @@
 module Syn.Parse where
 
-import           Data.List                      ( groupBy )
 import           Data.Maybe                     ( isJust
                                                 , fromMaybe
                                                 )
@@ -120,10 +119,6 @@ pDecl :: Parser (Decl Syn)
 pDecl =
   Comment
     <$> pComment
-    <|> TypeclassDecl
-    <$> pTypeclass
-    <|> TypeclassInst
-    <$> pInstance
     <|> DataDecl
     <$> pData
     <|> FunDecl
@@ -157,7 +152,7 @@ pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
   name     <- lowercaseName <?> "declaration type name"
-  sig      <- optional (symbol ":" >> lexemeN pFunSig)
+  sig      <- optional (symbol ":" >> lexemeN pType)
   defs     <- case sig of
     Just _  -> many (lexemeN (pDef name))
     Nothing -> do
@@ -170,8 +165,7 @@ pFun = do
       pure (first : rest)
   pure Fun { funComments   = comments
            , funName       = name
-           , funConstraint = fst =<< sig
-           , funType       = fmap snd sig
+           , funType       = sig
            , funDefs       = defs
            }
 
@@ -182,61 +176,6 @@ pDef (Name name) = do
   void (symbolN "=")
   expr <- pExpr
   pure Def { defArgs = bindings, defExpr = expr }
-
--- Monoid a => [a] -> a
-pFunSig :: Parser (Maybe Constraint, Type)
-pFunSig = do
-  constraint <- optional (try (pConstraint <* lexeme "=>"))
-  ty         <- pType
-  pure (constraint, ty)
-
-pConstraint :: Parser Constraint
-pConstraint =
-  let one   = CInst <$> uppercaseName <*> (map TyVar <$> some lowercaseName)
-      multi = do
-        cs <- parens (lexemeN pConstraint `sepBy2` comma)
-        pure (foldl1 CTuple cs)
-  in  one <|> multi
-
--- TODO: currently we require at least one typeclass method
--- and no newlines between the class line and the first method
-pTypeclass :: Parser Typeclass
-pTypeclass = do
-  void (symbol "class")
-  name   <- uppercaseName
-  tyvars <- some lowercaseName
-  void (symbol "where" >> some newline)
-  indentation <- some (char ' ')
-  first       <- pTypeclassDef
-  rest        <- many (string indentation >> pTypeclassDef)
-  pure Typeclass { typeclassName   = name
-                 , typeclassTyVars = tyvars
-                 , typeclassDefs   = first : rest
-                 }
- where
-  pTypeclassDef :: Parser (RawName, Type)
-  pTypeclassDef = do
-    name       <- lowercaseName
-    annotation <- symbol ":" >> lexeme pType
-    void (optional newline)
-    pure (name, annotation)
-
-pInstance :: Parser (Instance Syn)
-pInstance = do
-  void (symbol "instance")
-  name  <- uppercaseName
-  types <- many pType
-  void (symbol "where" >> some newline)
-  indentation <- some (char ' ')
-  first       <- pDef'
-  rest        <- many (try (newline >> string indentation) >> pDef')
-  -- Convert [(Name, Def)] into [(Name, [Def])] (grouped by name)
-  let defs = map (\ds -> (fst (head ds), map snd ds))
-        $ groupBy (\x y -> fst x == fst y) (first : rest)
-  pure Instance { instanceName  = name
-                , instanceTypes = types
-                , instanceDefs  = defs
-                }
 
 -- Like pDef but will parse a definition with any name
 pDef' :: Parser (RawName, Def Syn)
