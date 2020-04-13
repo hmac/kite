@@ -5,8 +5,7 @@ import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
 import Lam.Show (Show(..))
 import Lam.Monoid (Monoid(..), concat)
--- TODO: uncommenting this produces the error: Unknown variable Data.List.Nothing
--- import Data.List (subsequences)
+import Data.List (subsequences)
 
 e : Either Bool String
 e = Left True

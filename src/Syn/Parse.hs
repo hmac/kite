@@ -20,7 +20,6 @@ type Parser = Parsec Void String
 -- TODO: escape quote chars in string literals
 -- TOOD: heredocs
 -- TODO: do notation
--- TODO: where clause?
 -- TODO: record construction, record patterns
 -- TODO: record field syntax
 -- TODO: typeclass constraints
@@ -168,12 +167,42 @@ pFun = do
         pure Def { defName = name, defArgs = bindings, defExpr = expr }
       rest <- many (lexemeN (pDef name))
       pure (first : rest)
+  where_ <- optional $ string "where" >> some pWhereFun
   pure Fun { funComments   = comments
            , funName       = name
            , funConstraint = fst =<< sig
            , funType       = fmap snd sig
            , funDefs       = defs
+           , funWhere      = fromMaybe [] where_
            }
+
+pWhereFun :: Parser (Where Syn)
+pWhereFun = do
+  void $ some (char ' ')
+  name <- lowercaseName <?> "function name"
+  sig  <- optional (symbol ":" >> lexemeN pFunSig)
+  defs <- case sig of
+    Just _  -> many (lexemeN (pDef name))
+    Nothing -> do
+      first <- lexemeN $ do
+        bindings <- many pPattern <?> "pattern"
+        void (symbolN "=")
+        expr <- pExpr
+        pure Def { defName = name, defArgs = bindings, defExpr = expr }
+      rest <- many (lexemeN (pDef name))
+      pure (first : rest)
+  pure Where { whereName       = name
+             , whereType       = fmap snd sig
+             , whereConstraint = fst =<< sig
+             , whereDefs       = defs
+             }
+
+-- Monoid a => [a] -> a
+pFunSig :: Parser (Maybe Constraint, Type)
+pFunSig = do
+  constraint <- optional (try (pConstraint <* lexeme "=>"))
+  ty         <- pType
+  pure (constraint, ty)
 
 pDef :: RawName -> Parser (Def Syn)
 pDef (Name name) = do
@@ -182,13 +211,6 @@ pDef (Name name) = do
   void (symbolN "=")
   expr <- pExpr
   pure Def { defName = Name name, defArgs = bindings, defExpr = expr }
-
--- Monoid a => [a] -> a
-pFunSig :: Parser (Maybe Constraint, Type)
-pFunSig = do
-  constraint <- optional (try (pConstraint <* lexeme "=>"))
-  ty         <- pType
-  pure (constraint, ty)
 
 pConstraint :: Parser Constraint
 pConstraint =

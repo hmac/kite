@@ -161,20 +161,33 @@ genFun = Gen.choice [funWithType, funWithoutType]
     ty         <- genType
     constraint <- genConstraint
     defs       <- Gen.list (Range.linear 1 5) (genDef name)
+    wheres     <- Gen.list (Range.linear 0 3) genWhere
     pure Fun { funComments   = []
              , funName       = name
              , funType       = Just ty
              , funConstraint = constraint
              , funDefs       = defs
+             , funWhere      = wheres
              }
   funWithoutType = do
-    name <- genLowerName
-    defs <- Gen.list (Range.linear 1 5) (genDef name)
+    name   <- genLowerName
+    defs   <- Gen.list (Range.linear 1 5) (genDef name)
+    wheres <- Gen.list (Range.linear 0 3) genWhere
     pure Fun { funComments   = []
              , funName       = name
              , funType       = Nothing
              , funConstraint = Nothing
              , funDefs       = defs
+             , funWhere      = wheres
+             }
+
+genWhere :: H.Gen (Where Syn)
+genWhere = do
+  fun <- genFun
+  pure Where { whereName       = funName fun
+             , whereType       = funType fun
+             , whereConstraint = funConstraint fun
+             , whereDefs       = funDefs fun
              }
 
 genConstraint :: H.Gen (Maybe Constraint)

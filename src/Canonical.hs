@@ -41,6 +41,7 @@ type Typeclass = Typeclass_ Name
 type Data = Data_ Name
 type Def = Def_ Name
 type Fun a = Fun_ Name a (Type_ Name)
+type Where a = Where_ Name a (Type_ Name)
 type Constraint = Constraint_ Name
 type Decl a = Decl_ Name a (Type_ Name)
 type ImportItem = ImportItem_ RawName

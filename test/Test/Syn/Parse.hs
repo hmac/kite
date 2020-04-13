@@ -14,46 +14,49 @@ import           Syn.Parse                      ( pModule
 
 import           Syn
 
+-- This is useful to avoid adding lots of extra lines to these tests if we add a
+-- new field to Fun.
+defaultFun = Fun { funComments   = []
+                 , funName       = "default"
+                 , funType       = Nothing
+                 , funConstraint = Nothing
+                 , funDefs       = []
+                 , funWhere      = []
+                 }
 
 test :: Spec
 test = parallel $ do
   describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
-      parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl Fun
-        { funComments   = []
-        , funName       = "id"
-        , funType       = Just (TyVar "a" `fn` TyVar "a")
-        , funConstraint = Nothing
-        , funDefs       = [ Def { defName = "id"
-                                , defArgs = [VarPat "x"]
-                                , defExpr = Var "x"
-                                }
-                          ]
+      parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl defaultFun
+        { funName = "id"
+        , funType = Just (TyVar "a" `fn` TyVar "a")
+        , funDefs = [ Def { defName = "id"
+                          , defArgs = [VarPat "x"]
+                          , defExpr = Var "x"
+                          }
+                    ]
         }
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
-        Fun
-          { funComments   = []
-          , funName       = "const"
-          , funType       = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
-          , funConstraint = Nothing
-          , funDefs       = [ Def { defName = "const"
-                                  , defArgs = [VarPat "x", VarPat "y"]
-                                  , defExpr = Var "x"
-                                  }
-                            ]
+        defaultFun
+          { funName = "const"
+          , funType = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
+          , funDefs = [ Def { defName = "const"
+                            , defArgs = [VarPat "x", VarPat "y"]
+                            , defExpr = Var "x"
+                            }
+                      ]
           }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap f m = undefined"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "map"
-                        , funType       = Just
-                                          $    (TyVar "a" `fn` TyVar "b")
-                                          `fn` (TyCon "f" [TyVar "a"])
-                                          `fn` (TyCon "f" [TyVar "b"])
-                        , funConstraint = Nothing
+        `shouldParse` FunDecl defaultFun
+                        { funName = "map"
+                        , funType = Just
+                                    $    (TyVar "a" `fn` TyVar "b")
+                                    `fn` (TyCon "f" [TyVar "a"])
+                                    `fn` (TyCon "f" [TyVar "b"])
                         , funDefs = [ Def { defName = "map"
                                           , defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
@@ -65,12 +68,10 @@ test = parallel $ do
           pDecl
           ""
           "head : [a] -> a\nhead [] = error \"head: empty list\"\nhead (Cons x xs) = x"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "head"
+        `shouldParse` FunDecl defaultFun
+                        { funName = "head"
                         , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
-                        , funConstraint = Nothing
-                        , funDefs       =
+                        , funDefs =
                           [ Def
                             { defName = "head"
                             , defArgs = [ListPat []]
@@ -88,9 +89,8 @@ test = parallel $ do
                         }
     it "parses a function with typeclass constraints" $ do
       parse pDecl "" "concat : Monoid a => [a] -> a\nconcat [] = empty"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "concat"
+        `shouldParse` FunDecl defaultFun
+                        { funName       = "concat"
                         , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
                         , funConstraint = Just (CInst "Monoid" [TyVar "a"])
                         , funDefs       = [ Def { defName = "concat"
@@ -100,9 +100,8 @@ test = parallel $ do
                                           ]
                         }
       parse pDecl "" "foo : (Eq a, Show a) => a -> String\nfoo x = bar"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "foo"
+        `shouldParse` FunDecl defaultFun
+                        { funName       = "foo"
                         , funType = Just $ TyVar "a" `fn` TyCon "String" []
                         , funConstraint =
                           Just
@@ -120,14 +119,12 @@ test = parallel $ do
           pDecl
           ""
           "fromLeft : Either a b -> Maybe a\nfromLeft (Left x) = Just x\nfromLeft (Right _) = Nothing"
-        `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "fromLeft"
-                        , funType       = Just
-                                          $ (TyCon "Either" [TyVar "a", TyVar "b"])
-                                          `fn` (TyCon "Maybe" [TyVar "a"])
-                        , funConstraint = Nothing
-                        , funDefs       =
+        `shouldParse` FunDecl defaultFun
+                        { funName = "fromLeft"
+                        , funType = Just
+                                    $    (TyCon "Either" [TyVar "a", TyVar "b"])
+                                    `fn` (TyCon "Maybe" [TyVar "a"])
+                        , funDefs =
                           [ Def { defName = "fromLeft"
                                 , defArgs = [ConsPat "Left" [VarPat "x"]]
                                 , defExpr = App (Con "Just") (Var "x")
@@ -219,9 +216,8 @@ test = parallel $ do
                         , moduleImports  = []
                         , moduleExports  = []
                         , moduleDecls    =
-                          [ FunDecl Fun
+                          [ FunDecl defaultFun
                               { funName       = "one"
-                              , funComments   = []
                               , funType       = Just (TyCon "Int" [])
                               , funConstraint = Nothing
                               , funDefs       = [ Def { defName = "one"

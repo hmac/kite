@@ -45,7 +45,6 @@ dependencies:
 - semigroupoids
 - directory
 # Testing - here so hoogle picks them up
-- QuickCheck
 - hspec
 - hspec-megaparsec
 - hedgehog

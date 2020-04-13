@@ -59,6 +59,7 @@ data Decl = FunDecl Fun
 data Fun = Fun { funName :: Name
                , funType :: Scheme
                , funDefs :: [Def]
+               , funWhere :: [Fun]
                } deriving (Eq, Show)
 
 data Data = Data { dataName :: Name

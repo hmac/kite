@@ -82,9 +82,10 @@ test = do
             (Var "x")
             [(ConsPat true [], Con true), (ConsPat false [], Con false)]
 
-      let bind = Bind "f" Nothing [([pat], expr)]
+      let bind = Bind "f" Nothing [([pat], expr)] []
       let bindT = BindT
             "f"
+            (Forall [] CNil (bool `fn` bool))
             [ ( [pat]
               , CaseT
                 (VarT "x" bool)
@@ -94,7 +95,7 @@ test = do
                 bool
               )
             ]
-            (Forall [] CNil (bool `fn` bool))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -104,11 +105,12 @@ test = do
       -- f False = False
       let body =
             [([ConsPat true []], Con true), ([ConsPat false []], Con false)]
-      let bind = Bind "f" Nothing body
+      let bind = Bind "f" Nothing body []
       let bindT = BindT
             "f"
-            [([ConsPat true []], ConT true), ([ConsPat false []], ConT false)]
             (Forall [] CNil (bool `fn` bool))
+            [([ConsPat true []], ConT true), ([ConsPat false []], ConT false)]
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -120,13 +122,14 @@ test = do
             [ ([ListPat []]                            , Con false)
             , ([ConsPat cons [VarPat "x", VarPat "xs"]], Con true)
             ]
-      let bind = Bind "f" Nothing body
+      let bind = Bind "f" Nothing body []
       let bindT = BindT
             "f"
+            (Forall [R "$R11"] CNil (list (TVar (R "$R11")) `fn` bool))
             [ ([ListPat []]                            , ConT false)
             , ([ConsPat cons [VarPat "x", VarPat "xs"]], ConT true)
             ]
-            (Forall [R "$R11"] CNil (list (TVar (R "$R11")) `fn` bool))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -140,16 +143,17 @@ test = do
               , App (Var "f") (Var "xs")
               )
             ]
-      let bind        = Bind "f" Nothing body
+      let bind        = Bind "f" Nothing body []
       let overallType = list (TVar (R "$R12")) `fn` bool
       let bindT = BindT
             "f"
+            (Forall [R "$R12"] CNil overallType)
             [ ([ListPat []], ConT true)
             , ( [ConsPat cons [VarPat "x", VarPat "xs"]]
               , AppT (VarT "f" overallType) (VarT "xs" (list (TVar (R "$R12"))))
               )
             ]
-            (Forall [R "$R12"] CNil overallType)
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -161,13 +165,14 @@ test = do
             [ ([TuplePat [ConsPat true [], VarPat "y"]], Var "y")
             , ([TuplePat [VarPat "x", ConsPat zero []]], Con zero)
             ]
-      let bind = Bind "f" Nothing body
+      let bind = Bind "f" Nothing body []
       let bindT = BindT
             "f"
+            (Forall [] CNil (tuple2 bool nat `fn` nat))
             [ ([TuplePat [ConsPat true [], VarPat "y"]], VarT "y" nat)
             , ([TuplePat [VarPat "x", ConsPat zero []]], ConT zero)
             ]
-            (Forall [] CNil (tuple2 bool nat `fn` nat))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -183,9 +188,10 @@ test = do
             [(ConsPat true [], Con true), (ConsPat false [], Con false)]
 
       let bind =
-            Bind "f" (Just (Forall [] CNil (bool `fn` bool))) [([pat], expr)]
+            Bind "f" (Just (Forall [] CNil (bool `fn` bool))) [([pat], expr)] []
       let bindT = BindT
             "f"
+            (Forall [] CNil (bool `fn` bool))
             [ ( [VarPat "x"]
               , CaseT
                 (VarT "x" bool)
@@ -195,7 +201,7 @@ test = do
                 bool
               )
             ]
-            (Forall [] CNil (bool `fn` bool))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -207,13 +213,14 @@ test = do
             [ ([ConsPat mkpair [VarPat "x", ConsPat zero []]], Var "x")
             , ([WildPat], Con false)
             ]
-      let bind = Bind "f" Nothing body
+      let bind = Bind "f" Nothing body []
       let bindT = BindT
             "f"
+            (Forall [] CNil (pair bool nat `fn` bool))
             [ ([ConsPat mkpair [VarPat "x", ConsPat zero []]], VarT "x" bool)
             , ([WildPat], ConT false)
             ]
-            (Forall [] CNil (pair bool nat `fn` bool))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -227,14 +234,15 @@ test = do
             , ([ConsPat left [WildPat]]         , App (Con suc) (Con zero))
             , ([ConsPat right [VarPat "n"]]     , Var "n")
             ]
-      let bind = Bind "f" Nothing body
+      let bind = Bind "f" Nothing body []
       let bindT = BindT
             "f"
+            (Forall [] CNil (either bool nat `fn` nat))
             [ ([ConsPat left [ConsPat false []]], ConT zero)
             , ([ConsPat left [WildPat]]         , AppT (ConT suc) (ConT zero))
             , ([ConsPat right [VarPat "n"]]     , VarT "n" nat)
             ]
-            (Forall [] CNil (either bool nat `fn` nat))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -246,13 +254,14 @@ test = do
             [ ([ConsPat just [VarPat "b"]], Var "b")
             , ([ConsPat nothing []]       , Con false)
             ]
-      let bind = Bind "f" Nothing body
+      let bind = Bind "f" Nothing body []
       let bindT = BindT
             "f"
+            (Forall [] CNil (maybe bool `fn` bool))
             [ ([ConsPat just [VarPat "b"]], VarT "b" bool)
             , ([ConsPat nothing []]       , ConT false)
             ]
-            (Forall [] CNil (maybe bool `fn` bool))
+            []
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)
@@ -263,13 +272,13 @@ test = do
         -- f Zero = False
         let body =
               [([ConsPat true []], Con true), ([ConsPat zero []], Con false)]
-        let bind = Bind "f" Nothing body
+        let bind = Bind "f" Nothing body []
         infersError env bind
       it "type mismatch between list pattern and boolean" $ do
         -- f [] = False
         -- f x = x
         let body = [([ListPat []], Con false), ([VarPat "x"], Var "x")]
-        let bind = Bind "f" Nothing body
+        let bind = Bind "f" Nothing body []
         infersError env bind
       it "type mismatch in tuple pattern" $ do
         -- f (True, y) = y
@@ -278,14 +287,14 @@ test = do
               [ ([TuplePat [ConsPat true [], VarPat "y"]], Var "y")
               , ([TuplePat [ConsPat zero [], VarPat "x"]], Var "x")
               ]
-        let bind = Bind "f" Nothing body
+        let bind = Bind "f" Nothing body []
         infersError env bind
       it "type mismatch between function and annotation" $ do
         -- id : a -> a
         -- id x = 5
         let body       = [([VarPat "x"], IntLit 5)]
         let annotation = Forall [R "a"] CNil (TVar (R "a") `fn` TVar (R "a"))
-        let bind       = Bind "id" (Just annotation) body
+        let bind       = Bind "id" (Just annotation) body []
         infersError env bind
       it "different numbers of patterns in equations" $ do
         -- f True = True
@@ -294,7 +303,7 @@ test = do
               [ ([ConsPat true []]                  , Con true)
               , ([ConsPat true [], ConsPat false []], Con true)
               ]
-        let bind = Bind "f" Nothing body
+        let bind = Bind "f" Nothing body []
         infersError env bind
 
 infersError :: TypeEnv -> Bind -> Expectation

@@ -82,8 +82,17 @@ data Fun_ name exp ty = Fun { funComments :: [String]
                             , funType :: Maybe ty
                             , funConstraint :: Maybe (Constraint_ name)
                             , funDefs :: [Def_ name exp]
+                            , funWhere :: [Where_ name exp ty]
                             }
                             deriving (Eq, Show)
+
+type Where exp = Where_ RawName exp (Type_ RawName)
+data Where_ name exp ty = Where { whereName :: name
+                                , whereType :: Maybe ty
+                                , whereConstraint :: Maybe (Constraint_ name)
+                                , whereDefs :: [Def_ name exp]
+                                }
+                                deriving (Eq, Show)
 
 -- Typeclass constaints
 -- Monoid a => ...

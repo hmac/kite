@@ -96,7 +96,7 @@ withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
   mgroup <- ModuleLoader.loadFromPath path
   case mgroup of
-    Left  e -> putStrLn e
+    Left  e -> print e
     Right g -> cb g
 
 layout :: Document -> SimpleDocStream AnsiStyle

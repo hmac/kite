@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 -- | Generate constraints for a whole Lam module
 -- This basically involves generating constraints for each bind, accumulating an
 -- environment as we go.
@@ -105,16 +106,19 @@ generateModule (typeclasses, env) modul = do
   -- Check that every typeclass constraint is of a known typeclass
   let unknownTypeclassConstraints =
         let typeclassesInConstraints = concatMap
-              (\(Bind _ msch _) ->
-                maybe [] (\(Forall _ q _) -> constraintTypeclasses q) msch
+              (\Bind { bindScheme } -> maybe
+                []
+                (\(Forall _ q _) -> constraintTypeclasses q)
+                bindScheme
               )
               binds
         in  filter (`notElem` typeclassNames') typeclassesInConstraints
   mapM_ (throwError . UnknownTypeclass) unknownTypeclassConstraints
 
   -- Generate uvars for each bind upfront so they can be typechecked in any order
-  bindEnv <- mapM (\(Bind n _ _) -> (n, ) . Forall [] mempty . TVar <$> fresh)
-                  binds
+  bindEnv <- mapM
+    (\Bind { bindName } -> (bindName, ) . Forall [] mempty . TVar <$> fresh)
+    binds
   let env'' = Map.fromList bindEnv <> env' <> allMethods
 
   -- Typecheck each bind
@@ -186,11 +190,15 @@ generateInstance axs env typeclasses inst =
                   bind  = Bind (TopLevel thisModule name)
                                (Just sch')
                                (map defToEquation defs)
+                               []
                 in
                   do
-                    (_, BindT _ typedDefs sch) <- generateBind axs env bind
-                    let typedDefs' = map (uncurry T.Def) typedDefs
-                    pure (TopLevel thisModule name, sch, typedDefs')
+                    (_, BindT { bindTEquations, bindTScheme }) <- generateBind
+                      axs
+                      env
+                      bind
+                    let typedDefs' = map (uncurry T.Def) bindTEquations
+                    pure (TopLevel thisModule name, bindTScheme, typedDefs')
       methods <- mapM checkMethod (instanceDefs inst)
       pure T.Instance { T.instanceName  = instanceName inst
                       , T.instanceTypes = map tyToType (instanceTypes inst)
@@ -230,18 +238,25 @@ translateTypeclass t = T.Typeclass
   , T.typeclassDefs   = mapSnd tyToType (typeclassDefs t)
   }
 
-funToBind :: Fun_ Name Can.Exp (Type_ Name) -> Bind
-funToBind fun = Bind (funName fun) scheme equations
+funToBind :: Can.Fun Can.Exp -> Bind
+funToBind fun = Bind (funName fun) scheme equations whereBinds
  where
-  scheme    = tyToScheme (funConstraint fun) <$> funType fun
-  equations = map defToEquation (funDefs fun)
+  scheme     = tyToScheme (funConstraint fun) <$> funType fun
+  equations  = map defToEquation (funDefs fun)
+  whereBinds = map whereToBind (funWhere fun)
+
+whereToBind :: Can.Where Can.Exp -> Bind
+whereToBind w = Bind (whereName w) scheme equations []
+ where
+  scheme    = tyToScheme (whereConstraint w) <$> whereType w
+  equations = map defToEquation (whereDefs w)
 
 bindToFun :: BindT -> T.Fun
-bindToFun (BindT name equations scheme) = T.Fun
-  { T.funName = name
-  , T.funType = scheme
-  , T.funDefs = map equationToDef equations
-  }
+bindToFun bind = T.Fun { T.funName  = bindTName bind
+                       , T.funType  = bindTScheme bind
+                       , T.funDefs  = map equationToDef (bindTEquations bind)
+                       , T.funWhere = map bindToFun (bindTWhere bind)
+                       }
 
 defToEquation :: Def_ Name Can.Exp -> ([Pattern_ Name], Exp)
 defToEquation Def { defArgs = pats, defExpr = e } = (pats, fromSyn e)

@@ -104,9 +104,8 @@ test = describe "typing simple modules" $ do
                                             , instanceTypes = [TyCon "Foo" []]
                                             , instanceDefs  = []
                                             }
-            id_ = FunDecl $ Fun
-              { funComments   = []
-              , funName       = "id_"
+            id_ = FunDecl $ defaultFun
+              { funName       = "id_"
               , funConstraint = Just (CInst "F" [TyVar "a"])
               , funType       = Just (TyVar "a" `fn` TyVar "a")
               , funDefs       = [ Def { defName = "id_"
@@ -115,7 +114,7 @@ test = describe "typing simple modules" $ do
                                       }
                                 ]
               }
-            foo = FunDecl $ Fun
+            foo = FunDecl $ defaultFun
               { funComments   = []
               , funName       = "foo"
               , funConstraint = Nothing
@@ -186,10 +185,18 @@ mkModule decls = Module { moduleName     = "Test"
 mkDecl
   :: (Name, Type_ Name, [([Pattern_ Name], Can.Exp)])
   -> Decl_ Name Can.Exp (Type_ Name)
-mkDecl (name, ty, equations) = FunDecl $ Fun
-  { funComments   = []
-  , funName       = name
-  , funType       = Just ty
-  , funConstraint = Nothing
-  , funDefs       = map (uncurry (Def name)) equations
+mkDecl (name, ty, equations) = FunDecl $ defaultFun
+  { funName = name
+  , funType = Just ty
+  , funDefs = map (uncurry (Def name)) equations
   }
+
+-- This is useful to avoid adding lots of extra lines to these tests if we add a
+-- new field to Fun.
+defaultFun = Fun { funComments   = []
+                 , funName       = "default"
+                 , funType       = Nothing
+                 , funConstraint = Nothing
+                 , funDefs       = []
+                 , funWhere      = []
+                 }

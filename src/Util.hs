@@ -4,6 +4,7 @@ module Util
   , Data.Maybe.mapMaybe
   , Data.Maybe.fromMaybe
   , Data.Maybe.catMaybes
+  , Data.Foldable.foldlM
   , Data.List.nub
   , Data.List.sort
   , Data.List.sortOn
@@ -30,6 +31,7 @@ import qualified Data.Either
 import qualified Data.Maybe
 import           Data.Text.Lazy                 ( unpack )
 import qualified Text.Pretty.Simple
+import qualified Data.Foldable
 import qualified Data.Bifunctor
 import           Data.List.Extra                ( concatUnzip
                                                 , concatUnzip3

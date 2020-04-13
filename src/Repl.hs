@@ -19,7 +19,7 @@ import qualified LC.Print                       ( print )
 import           Syn
 import qualified Canonical                     as Can
 import           Canonical                      ( Name(..) )
-import           Canonicalise                   ( canonicaliseModule )
+import qualified Canonicalise
 import qualified ModuleGroupTypechecker
 import           ModuleGroupCompiler            ( CompiledModule(..) )
 import qualified ModuleGroupCompiler
@@ -44,41 +44,47 @@ repl env = do
       repl env
 
 processDecl :: [Decl Syn] -> IO Bool
-processDecl decls =
-  let g = ModuleGroup (buildModule decls) []
-  in  case ModuleGroupTypechecker.typecheckModuleGroup g of
-        Left err -> do
-          putStrLn $ "Type error: " <> show err
-          pure False
-        Right _ -> do
-          putStrLn "OK."
-          pure True
+processDecl decls = case buildModule decls of
+  Left err -> print err >> pure False
+  Right m ->
+    case ModuleGroupTypechecker.typecheckModuleGroup (ModuleGroup m []) of
+      Left err -> do
+        putStrLn $ "Type error: " <> show err
+        pure False
+      Right _ -> do
+        putStrLn "OK."
+        pure True
 
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
-  let
-    main = FunDecl Fun
-      { funComments   = []
-      , funName       = "$main"
-      , funType       = Nothing
-      , funConstraint = Nothing
-      , funDefs       = [Def { defName = "$main", defArgs = [], defExpr = e }]
-      }
-    g = ModuleGroup (buildModule (decls ++ [main])) []
+  let main = FunDecl Fun
+        { funComments   = []
+        , funName       = "$main"
+        , funType       = Nothing
+        , funConstraint = Nothing
+        , funDefs       = [Def { defName = "$main", defArgs = [], defExpr = e }]
+        , funWhere      = []
+        }
   in
-    case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left  err -> putStrLn $ "Type error: " <> show err
-      Right g'  -> do
-        let compiled = ModuleGroupCompiler.compileToLC g'
-        let answer = LC.Eval.evalVar
-              (TopLevel (cModuleName compiled) "$main")
-              (cModuleEnv compiled)
-        renderIO stdout
-                 (layoutPretty defaultLayoutOptions (LC.Print.print answer))
-        putStrLn ""
+    case buildModule (decls ++ [main]) of
+      Left err -> print err
+      Right modul ->
+        let g = ModuleGroup modul []
+        in
+          case ModuleGroupTypechecker.typecheckModuleGroup g of
+            Left  err -> putStrLn $ "Type error: " <> show err
+            Right g'  -> do
+              let compiled = ModuleGroupCompiler.compileToLC g'
+              let answer = LC.Eval.evalVar
+                    (TopLevel (cModuleName compiled) "$main")
+                    (cModuleEnv compiled)
+              renderIO
+                stdout
+                (layoutPretty defaultLayoutOptions (LC.Print.print answer))
+              putStrLn ""
 
-buildModule :: [Decl Syn] -> Can.Module
-buildModule decls = canonicaliseModule Module
+buildModule :: [Decl Syn] -> Either Canonicalise.Error Can.Module
+buildModule decls = Canonicalise.canonicaliseModule Module
   { moduleName     = ModuleName ["Repl"]
   , moduleImports  = []
   , moduleExports  = []

@@ -41,7 +41,7 @@ test = parallel $ do
                                , TyVar "AVeryLongType"
                                , TyVar "AVeryLongType"
                                ])) `shouldBe` "( AVeryLongType\n, AVeryLongType\n, AVeryLongType\n, AVeryLongType\n, AVeryLongType\n, AVeryLongType )"
-  describe "printing module" $ do
+  describe "printing modules" $ do
     it "prints module metadata correctly" $ do
       let meta = [("hi", "there"), ("how", "are you")]
        in show (printMaybe (printMetadata meta)) `shouldBe` "---\nhi: there\nhow: are you\n---"
