@@ -17,12 +17,11 @@ type Parser = Parsec Void String
 
 -- TODO: markdown in comments & doctests
 -- TODO: escape quote chars in string literals
--- TOOD: heredocs
+-- TODO: heredocs
 -- TODO: do notation
--- TODO: where clause?
+-- TODO: where clause
 -- TODO: record construction, record patterns
 -- TODO: record field syntax
--- TODO: typeclass constraints
 -- TODO: infix constructors (like List ::)
 -- TODO: empty data types (e.g. Void)
 -- TODO: rename data to type, type to alias?
@@ -134,17 +133,7 @@ pData = do
   pure Data { dataName = name, dataTyVars = tyvars, dataCons = constructors }
  where
   pCon :: Parser DataCon
-  pCon       = try pRecordCon <|> pBasicCon
-  pBasicCon  = DataCon <$> uppercaseName <*> many pConType
-  pRecordCon = do
-    name   <- uppercaseName
-    fields <- braces $ pRecordField `sepBy1` comma
-    pure $ RecordCon { conName = name, conFields = fields }
-  pRecordField = do
-    fName <- lowercaseName
-    void (symbol ":")
-    ty <- pType
-    pure (fName, ty)
+  pCon  = DataCon <$> uppercaseName <*> many pConType
 
 -- TODO: we can make this more flexible by allowing annotations separate from
 -- definitions
@@ -204,12 +193,18 @@ pType = try arr <|> try app <|> pType'
   varApp name = do
     rest <- many (lexeme pType')
     pure $ if null rest then TyVar name else TyCon name rest
-  pType' = con <|> var <|> hole <|> list <|> try tuple <|> parens pType
+  pType' = con <|> var <|> hole <|> list <|> record <|> try tuple <|> parens pType
   var    = TyVar <$> lowercaseName
   con    = (`TyCon` []) <$> uppercaseName
   hole   = TyHole <$> (string "?" >> pHoleName)
   list   = TyList <$> brackets pType
   tuple  = TyTuple <$> parens (lexemeN pType `sepBy2` comma)
+  record = TyRecord <$> braces (recordField `sepBy1` comma)
+  recordField = do
+    fName <- lowercaseName
+    void (symbol ":")
+    ty <- pType
+    pure (fName, ty)
 
 -- Parses the type args to a constructor
 -- The rules are slightly different from types in annotations, because type
@@ -219,7 +214,7 @@ pType = try arr <|> try app <|> pType'
 pConType :: Parser Type
 pConType = ty
  where
-  ty  = hole <|> var <|> con <|> list <|> parens (try arr <|> try tuple <|> app)
+  ty  = hole <|> var <|> con <|> list <|> record <|> parens (try arr <|> try tuple <|> app)
   app = (lowercaseName >>= varApp) <|> (uppercaseName >>= conApp)
   conApp name = do
     rest <- many ty
@@ -236,6 +231,12 @@ pConType = ty
   list  = TyList <$> brackets ty
   tuple = TyTuple <$> ty `sepBy2` comma
   hole  = TyHole <$> (string "?" >> pHoleName)
+  record = TyRecord <$> braces (recordField `sepBy1` comma)
+  recordField = do
+    fName <- lowercaseName
+    void (symbol ":")
+    ty <- pType
+    pure (fName, ty)
 
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
@@ -312,9 +313,11 @@ pExpr' :: Parser Syn
 pExpr' =
   try pTuple
     <|> parens pExpr
+    <|> pRecord
     <|> pHole
     <|> try pStringLit
     <|> try (IntLit <$> pInt)
+    <|> try pRecordProject
     <|> pVar
     <|> pAbs
     <|> pLet
@@ -346,6 +349,17 @@ pApp = do
   first <- pExpr'
   rest  <- some pExpr'
   pure $ foldl1 App (first : rest)
+
+-- foo.bar
+-- For easy of implementation we currently only support using projection on
+-- variables. In the future we may want to support arbitrary expressions, e.g.
+--   (let a = 1 in Foo { x = a }).x
+pRecordProject :: Parser Syn
+pRecordProject = do
+  record <- pVar
+  void (string ".")
+  field <- lowercaseName
+  pure $ Project record field
 
 pHole :: Parser Syn
 pHole = do
@@ -452,6 +466,13 @@ pCase = do
     expr <- pExpr
     pure (pat, expr)
 
+pRecord :: Parser Syn
+pRecord = Record <$> braces (pField `sepBy1` comma)
+  where pField = do name <- lowercaseName
+                    void (symbol "=")
+                    expr <- pExpr
+                    pure (name, expr)
+
 pComment :: Parser String
 pComment = do
   void (symbol "-- " <|> symbol "--")
@@ -501,9 +522,7 @@ keywords =
   , "in"
   , "case"
   , "of"
-  , "class"
   , "where"
-  , "instance"
   , "module"
   , "import"
   ]

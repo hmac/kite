@@ -5,7 +5,7 @@ where
 
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
-import           Text.Megaparsec                ( parse )
+import           Text.Megaparsec                ( parse, eof )
 import           Syn.Parse                      ( pModule
                                                 , pDecl
                                                 , pExpr
@@ -13,7 +13,6 @@ import           Syn.Parse                      ( pModule
                                                 )
 
 import           Syn
-
 
 test :: Spec
 test = parallel $ do
@@ -102,17 +101,17 @@ test = parallel $ do
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
     it "parses a record definition" $ do
-      parse pDecl "" "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+      parse (pDecl <* eof) "" "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
                         , dataCons   =
-                          [ RecordCon
+                          [ DataCon
                               { conName   = "Foo"
-                              , conFields = [ ("unFoo", TyVar "a")
+                              , conArgs = [TyRecord [ ("unFoo", TyVar "a")
                                             , ("label", TyHole "b")
                                             , ("c", TyCon "A" [TyCon "A" []])
-                                            ]
+                                            ]]
                               }
                           ]
                         }
@@ -209,6 +208,11 @@ test = parallel $ do
         `shouldParse` StringLit "hello \"friend\"" []
       parse pExpr "" "\"this is a backslash: \\\\ (#{0})\""
         `shouldParse` StringLit "this is a backslash: \\ (" [(IntLit 0, ")")]
+    it "parses a record" $ do
+      parse pExpr "" "{ a = a, b = b }" `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
+    it "parses record projection" $ do
+      parse pExpr "" "a.b" `shouldParse` Project (Var "a") "b"
+      parse pExpr "" "f a.b" `shouldParse` App (Var "f") (Project (Var "a") "b")
   describe "parsing types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")
@@ -228,3 +232,5 @@ test = parallel $ do
         `shouldParse` TyList (TyCon "Maybe" [TyVar "a"])
     it "parses nested type constructors" $ do
       parse pType "" "A B" `shouldParse` TyCon "A" [TyCon "B" []]
+    it "parses record types" $ do
+      parse pType "" "{x : a, y : b}" `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]

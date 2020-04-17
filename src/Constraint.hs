@@ -45,6 +45,10 @@ data Constraint =
                 | Type :~: Type
                 -- | Typeclass instance
                 | Inst Name [Type]
+                -- | Record field constraint
+                -- HasField R l T means type R must unify with a record type
+                -- containing a field with label l and type T
+                | HasField Type Name Type
                 deriving (Eq, Show, Ord)
 
 -- Top level axiom scheme
@@ -102,6 +106,7 @@ data Type = TVar Var
           | THole Name
           | TInt
           | TString
+          | TRecord [(Name, Type)]
           deriving (Eq, Show, Ord)
 
 modPrim :: ModuleName
@@ -145,12 +150,14 @@ instance Sub Type where
   sub _ (THole n  ) = THole n
   sub _ TInt        = TInt
   sub _ TString     = TString
+  sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
 
 instance Sub Constraint where
   sub _ CNil                 = CNil
   sub s (a    :^:       b  ) = sub s a :^: sub s b
   sub s (t    :~:       v  ) = sub s t :~: sub s v
   sub s (Inst classname tys) = Inst classname (sub s tys)
+  sub s (HasField r l t    ) = HasField (sub s r) l (sub s t)
 
 instance Sub CConstraint where
   sub s (Simple c) = Simple (sub s c)
@@ -177,23 +184,27 @@ instance Vars Type where
   fuv (THole _   ) = mempty
   fuv TInt         = mempty
   fuv TString      = mempty
+  fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
 
   ftv (TVar v   ) = Set.singleton v
   ftv (TCon _ ts) = Set.unions (map ftv ts)
   ftv (THole _  ) = mempty
   ftv TInt        = mempty
   ftv TString     = mempty
+  ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)
 
 instance Vars Constraint where
   fuv CNil           = mempty
   fuv (a    :^: b  ) = fuv a <> fuv b
   fuv (t    :~: v  ) = fuv t <> fuv v
   fuv (Inst _   tys) = fuv tys
+  fuv (HasField r _ t) = fuv r <> fuv t
 
   ftv CNil           = mempty
   ftv (a    :^: b  ) = ftv a <> ftv b
   ftv (t    :~: v  ) = ftv t <> ftv v
   ftv (Inst _   tys) = ftv tys
+  ftv (HasField r _ t) = ftv r <> ftv t
 
 instance Vars CConstraint where
   fuv (Simple c   ) = fuv c
@@ -226,11 +237,13 @@ data Error = OccursCheckFailure Type Type
            | ConstructorMismatch Type Type
            | UnsolvedConstraints Constraint
            | EquationsHaveDifferentNumberOfPatterns
-           | UnsolvedUnificationVariables (Set Var)
+           | UnsolvedUnificationVariables (Set Var) Constraint
            | UnknownVariable Name
            | EmptyCase
            | DuplicatePatternVariables
            | OverlappingTypeclassInstances
            | UnknownTypeclass Name
            | UnknownInstanceMethod Name
+           | RecordDoesNotHaveLabel Type Name
+           | ProjectionOfNonRecordType Type Name
   deriving (Show, Eq)

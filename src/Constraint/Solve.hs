@@ -207,6 +207,18 @@ canon (a :~: b) | a == b = pure mempty
 canon (TCon k as :~: TCon k' bs) | k == k' =
   pure (foldl (:^:) CNil (zipWith (:~:) as bs))
 
+-- Equalities between records with identical field labels can be decomposed to
+-- equality on their fields
+canon (TRecord fs1 :~: TRecord fs2) | map fst fs1 == map fst fs2 =
+  pure (foldl (:^:) CNil (zipWith (:~:) (map snd fs1) (map snd fs2)))
+
+-- HasField constraints on a TRecord can be simplified into equality on the
+-- field type.
+canon (HasField (TRecord fields) l t) =
+  case lookup l fields of
+    Just t' -> pure (t :~: t')
+    Nothing -> Left $ RecordDoesNotHaveLabel (TRecord fields) l
+
 -- FAILDEC: Equalities between constructor types must have the same constructor
 canon (t@(TCon k _) :~: v@(TCon k' _)) | k /= k' =
   Left (ConstructorMismatch t v)
@@ -249,6 +261,13 @@ interact c1@(TVar v1 :~: t1) (Inst className tys)
   | v1 `member` ftv tys && isCanonical c1 = Just $ (TVar v1 :~: t1) :^: Inst
     className
     (sub [(v1, t1)] tys)
+
+-- EQRECORD (invented): We can substitute an equality into a HasField constraint
+interact c1@(TVar v1 :~: t1) (HasField r l t)
+  | v1 `member` ftv r && isCanonical c1
+  = Just $ (TVar v1 :~: t1) :^: HasField (sub [(v1, t1)] r) l t
+  | v1 `member` ftv t && isCanonical c1
+  = Just $ (TVar v1 :~: t1) :^: HasField r l (sub [(v1, t1)] t)
 
 -- DDICT: We can drop duplicate typeclass constraints.
 interact i1@(Inst _ _) i2@(Inst _ _) | i1 == i2 = Just i1

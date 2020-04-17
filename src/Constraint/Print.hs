@@ -25,6 +25,7 @@ printConstraint (c :^: d) = printConstraint c <+> "^" <+> printConstraint d
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v
 printConstraint (Inst classname tys) =
   printName classname <+> hsep (map printType tys)
+printConstraint (HasField r l t) = printType r <+> "~" <+> braces (printNameAsLocal l <+> colon <+> printType t)
 
 printVar :: Var -> Doc a
 printVar (U n) = "U" <> printName n
@@ -54,6 +55,10 @@ printName (Local (Name n)) = pretty n
 printName (TopLevel moduleName (Name n)) =
   printModuleName moduleName <> "." <> pretty n
 
+printNameAsLocal :: Name -> Doc a
+printNameAsLocal (TopLevel _ n) = printName (Local n)
+printNameAsLocal n = printName n
+
 printModuleName :: ModuleName -> Doc a
 printModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 
@@ -66,9 +71,12 @@ printError (UnsolvedConstraints c) =
   "Unsolved constraints:" <+> printConstraint c
 printError EquationsHaveDifferentNumberOfPatterns =
   "Equations have different number of patterns"
--- TODO: find the expressions these variables represent and print them instead
-printError (UnsolvedUnificationVariables vars) =
-  "Unsolved unification variables:" <+> hsep (map printVar (Set.toList vars))
+printError (UnsolvedUnificationVariables vars constraints) =
+  vsep [ "Unsolved unification variables:"
+       , hsep (map printVar (Set.toList vars))
+       , "In constraints:"
+       , printConstraint constraints
+       ]
 printError (UnknownVariable v)           = "Unknown variable" <+> printName v
 printError EmptyCase                     = "Empty case expression"
 printError DuplicatePatternVariables     = "Duplicate variables in pattern"

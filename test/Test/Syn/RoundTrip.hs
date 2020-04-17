@@ -9,6 +9,9 @@ import           Syn
 import           Syn.Parse
 import           Syn.Print
 
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.String (renderString)
+
 import           Control.Applicative            ( liftA2 )
 import           Data.Text.Prettyprint.Doc      ( Doc )
 import qualified Hedgehog                      as H
@@ -21,12 +24,16 @@ test = do
   describe "round trip property" $ do
     it "holds for function declarations" $ require roundtripFun
     it "holds for expressions" $ require roundtripSyn
+    it "holds for types" $ require roundtripType
     it "holds for data declarations" $ require roundtripData
     it "holds for import statements" $ require roundtripImport
     it "holds for modules" $ require roundtripModule
 
 roundtripSyn :: H.Property
 roundtripSyn = roundtrip genExpr printExpr pExpr
+
+roundtripType :: H.Property
+roundtripType = roundtrip genType printType pType
 
 roundtripFun :: H.Property
 roundtripFun = roundtrip genFun printFun pFun
@@ -41,9 +48,9 @@ roundtripModule :: H.Property
 roundtripModule = roundtrip genModule printModule pModule
 
 roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
-roundtrip gen printer parser = H.withTests 30 $ H.property $ do
+roundtrip gen printer parser = H.withTests 50 $ H.property $ do
   e <- H.forAll gen
-  let printed  = show (printer e)
+  let printed  = renderString (layoutPretty defaultLayoutOptions (printer e))
       reparsed = parse parser "" printed
   H.annotate printed
   r <- H.evalEither reparsed
@@ -92,7 +99,7 @@ genImportItem = Gen.choice [genImportSingle, genImportSome, genImportAll]
   genImportSingle = ImportSingle <$> genModuleItem
   genImportAll    = ImportAll <$> genModuleItem
   genImportSome =
-    ImportSome <$> genModuleItem <*> Gen.list (Range.linear 0 3) genModuleItem
+    ImportSome <$> genUpperName <*> Gen.list (Range.linear 0 3) genModuleItem
 
 genDecl :: H.Gen (Decl Syn)
 genDecl = Gen.choice
@@ -112,13 +119,7 @@ genData =
     <*> Gen.list (Range.linear 1 3) genDataCon
 
 genDataCon :: H.Gen DataCon
-genDataCon = Gen.choice [genSimpleDataCon, genRecordCon]
- where
-  genSimpleDataCon =
-    DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
-  genRecordCon = RecordCon <$> genUpperName <*> Gen.list
-    (Range.linear 1 3)
-    ((,) <$> genLowerName <*> genType)
+genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
 genFun :: H.Gen (Fun Syn)
 genFun = Gen.choice [funWithType, funWithoutType]
@@ -145,16 +146,23 @@ genType = Gen.recursive
   , TyVar <$> genLowerName
   , TyHole <$> genHoleName
   ]
-  [ Gen.subterm genType TyList
-  , Gen.subterm2 genType genType fn
+  [ Gen.subterm (Gen.small genType) TyList
+  , Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
   , Gen.subtermM2
-    genType
-    genType
+    (Gen.small genType)
+    (Gen.small genType)
     (\ty1 ty2 ->
       TyCon <$> Gen.choice [genUpperName, genLowerName] <*> pure [ty1, ty2]
     )
-  , Gen.subterm2 genType genType (\ty1 ty2 -> TyTuple [ty1, ty2])
+  , Gen.subterm2 (Gen.small genType) (Gen.small genType) (\ty1 ty2 -> TyTuple [ty1, ty2])
+  , Gen.subtermM2 (Gen.small genType) (Gen.small genType) genTyRecord
   ]
+
+genTyRecord :: Type -> Type -> H.Gen Type
+genTyRecord t1 t2 = do
+  f1 <- genLowerName
+  f2 <- genLowerName
+  pure $ TyRecord [(f1, t1), (f2, t2)]
 
 genDef :: H.Gen (Def Syn)
 genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
@@ -168,21 +176,29 @@ genExpr = Gen.recursive
   , IntLit <$> genInt
   ]
   [ Gen.subtermM
-    genExpr
+    (Gen.small genExpr)
     (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
-  , Gen.subterm2 genExpr genExpr App
-  , Gen.subtermM2 genExpr
-                  genExpr
+  , Gen.subterm2 (Gen.small genExpr) (Gen.small genExpr) App
+  , Gen.subtermM2 (Gen.small genExpr)
+                  (Gen.small genExpr)
                   (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
-  , Gen.subtermM2 genExpr genExpr (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
-  , Gen.subtermM3 genExpr
-                  genExpr
-                  genExpr
+  , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
+  , Gen.subtermM3 (Gen.small genExpr)
+                  (Gen.small genExpr)
+                  (Gen.small genExpr)
                   (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
   , StringLit
   <$> genString (Range.linear 0 10)
   <*> Gen.list (Range.linear 0 2) genStringInterpPair
+  , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
+  , Project <$> (Var <$> genLowerName) <*> genLowerName
   ]
+
+genRecord :: Syn -> Syn -> H.Gen Syn
+genRecord e1 e2 = do
+  f1 <- genLowerName
+  f2 <- genLowerName
+  pure (Record [(f1, e1), (f2, e2)])
 
 genStringInterpPair :: H.Gen (Syn, String)
 genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)

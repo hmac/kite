@@ -72,7 +72,7 @@ processExpr decls e =
               (TopLevel (cModuleName compiled) "$main")
               (cModuleEnv compiled)
         renderIO stdout
-                 (layoutPretty defaultLayoutOptions (LC.Print.print answer))
+                 (layoutSmart defaultLayoutOptions (LC.Print.print answer))
         putStrLn ""
 
 buildModule :: [Decl Syn] -> Can.Module

@@ -1,0 +1,8 @@
+module A
+
+xs : A
+xs a = a
+
+
+xs : A
+xs a = a

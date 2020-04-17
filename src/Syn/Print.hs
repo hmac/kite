@@ -1,5 +1,6 @@
 module Syn.Print where
 
+import Data.Bifunctor (bimap)
 import           Data.Maybe                     ( catMaybes )
 import           Data.List                      ( intersperse )
 import           Prelude                 hiding ( mod )
@@ -156,6 +157,7 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyTuple ts) -> tupled (map (printType' Root) ts)
   (_   , TyInt     ) -> "Int"
   (_   , TyString  ) -> "String"
+  (_, TyRecord fields) -> printRecordSyntax ":" $ map (bimap printName printType) fields
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
@@ -181,6 +183,8 @@ printPattern (ConsPat n pats) =
 printExpr :: Syn -> Document
 printExpr (Var  n) = printName n
 printExpr (Con  n) = data_ (printName n)
+printExpr (Record fields) = data_ $ braces (hsep (punctuate comma (map (\(f, e) -> printName f <+> "=" <+> printExpr e) fields)))
+printExpr (Project e f) = printExpr' e <> dot <> printName f
 printExpr (Hole n) = hole ("?" <> printName n)
 printExpr (Abs args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
@@ -193,6 +197,14 @@ printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
+
+-- print an expression with unambiguous precendence
+printExpr' :: Syn -> Document
+printExpr' e@App{} = parens (printExpr e)
+printExpr' e@Let{} = parens (printExpr e)
+printExpr' e@LetA{} = parens (printExpr e)
+printExpr' e@Case{} = parens (printExpr e)
+printExpr' e = printExpr e
 
 printInterpolatedString :: String -> [(Syn, String)] -> Document
 printInterpolatedString prefix interps = dquotes str
@@ -280,14 +292,7 @@ printData d =
 
 printCon :: DataCon -> Document
 printCon DataCon { conName = name, conArgs = args } =
-  printName name <+> hsep (map printType args)
-printCon RecordCon { conName = name, conFields = fields } =
-  printName name <+> braces
-    (hsep
-      (punctuate comma
-                 (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)
-      )
-    )
+  printName name <+> hsep (map (printType' AppR) args)
 
 printComment :: String -> Document
 printComment c = "--" <+> pretty c
@@ -318,3 +323,7 @@ big _            = False
 size :: Syn -> Int
 size (App a b) = size a + size b
 size _         = 1
+
+printRecordSyntax :: Doc a -> [(Doc a, Doc a)] -> Doc a
+printRecordSyntax separator rec = braces $
+  hsep $ punctuate comma (map (\(n, t) -> n <+> separator <+> t) rec)

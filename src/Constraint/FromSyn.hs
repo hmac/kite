@@ -30,6 +30,8 @@ fromSyn = \case
   S.ListLit  es         -> E.ListLit (map fromSyn es)
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)
   S.IntLit i            -> E.IntLit i
+  S.Record fields       -> E.Record $ mapSnd fromSyn fields
+  S.Project r l         -> E.Project (fromSyn r) l
 
 -- | Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
 tyToScheme :: Maybe (S.Constraint_ Name) -> S.Type_ Name -> E.Scheme
@@ -61,3 +63,4 @@ tyToType = \case
   S.TyInt      -> TInt
   S.TyString   -> TString
   S.TyFun a b  -> TCon (TopLevel modPrim "->") [tyToType a, tyToType b]
+  S.TyRecord fields -> TRecord $ mapSnd tyToType fields

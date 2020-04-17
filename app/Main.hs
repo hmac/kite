@@ -99,7 +99,7 @@ withParsedFile cb path = do
     Right g -> cb g
 
 layout :: Document -> SimpleDocStream AnsiStyle
-layout doc = reAnnotateS styleToColor (layoutPretty defaultLayoutOptions doc)
+layout doc = reAnnotateS styleToColor (layoutSmart defaultLayoutOptions doc)
 
 printNicely :: Document -> IO ()
 printNicely doc = renderIO stdout (layout doc) >> putStrLn ""

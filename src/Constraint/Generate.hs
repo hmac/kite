@@ -8,6 +8,7 @@ import qualified Data.Set                      as Set
 
 import qualified Data.Map.Strict               as Map
 
+import           Constraint.Solve              (solveC)
 import           Constraint.Generate.M
 import           Constraint
 import           Constraint.Expr
@@ -101,6 +102,21 @@ generate env (StringLit p cs) = do
       pure ((e', s), c)
     )
   pure (StringLitT p cs' TString, TString, mconcat constraints)
+-- Record
+generate env (Record fields) = do
+  let fieldLabels = map fst fields
+      fieldExprs = map snd fields
+  (fieldExprs', fieldTypes, constraints) <- unzip3 <$> mapM (generate env) fieldExprs
+  let ty = TRecord (zip fieldLabels fieldTypes)
+  let record' = RecordT (zip fieldLabels fieldExprs') ty
+  pure (record', ty, mconcat constraints)
+generate env (Project record label) = do
+  (record', recordType, recordConstraints) <- generate env record
+  -- Generate a tyvar beta for the projection
+  beta <- TVar <$> fresh
+  -- Constraint recordType to have a field with label l and type beta
+  let fieldConstraint = HasField recordType label beta
+  pure (ProjectT record' label recordType, beta, recordConstraints <> Simple fieldConstraint)
 
 -- Case expressions
 -------------------

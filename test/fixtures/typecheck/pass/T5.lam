@@ -5,10 +5,13 @@ test = append 1 2
 
 type Semigroup a = Semigroup { append : a -> a -> a }
 
-semigroupInt : Semigroup Int
-semigroupInt = Semigroup appendInt
+append : Semigroup a -> a -> a -> a
+append (Semigroup d) = d.append
+
+type Foo = Foo Int
 
 appendInt : Int -> Int -> Int
 appendInt x y = x + y
 
-type Foo = Foo Int
+semigroupInt : Semigroup Int
+semigroupInt = Semigroup { append = appendInt }

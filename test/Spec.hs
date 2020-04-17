@@ -8,6 +8,8 @@ import qualified Test.Constraint.Bind
 import qualified Test.Constraint.FromSyn
 import qualified Test.Constraint.Module
 
+import qualified Test.Type2
+
 import qualified Integration.Typecheck
 
 main :: IO ()
@@ -20,4 +22,5 @@ main = hspec $ do
   Test.Constraint.FromSyn.test
   Test.Constraint.Module.test
   Integration.Typecheck.test
-  -- Test.Syn.RoundTrip.test
+  Test.Syn.RoundTrip.test
+  Test.Type2.test

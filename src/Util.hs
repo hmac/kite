@@ -19,6 +19,8 @@ module Util
   , Control.Monad.forM
   , Control.Monad.foldM
   , Debug.Trace.trace
+  , Debug.Trace.traceShow
+  , Debug.Trace.traceShowId
   )
 where
 

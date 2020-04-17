@@ -54,11 +54,6 @@ translateDataCon typeName tyvars datacon = case datacon of
     , T.conArgs = map tyToType args
     , T.conType = mkType typeName tyvars args
     }
-  RecordCon { conName = name, conFields = fields } -> T.RecordCon
-    { T.conName   = name
-    , T.conFields = mapSnd tyToType fields
-    , T.conType   = mkType typeName tyvars (map snd fields)
-    }
 
 mkType :: Can.Name -> [Can.Name] -> [Can.Type] -> Scheme
 mkType dataTypeName tyvars args = T.Forall (map R tyvars)

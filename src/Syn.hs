@@ -93,9 +93,6 @@ type DataCon = DataCon_ RawName
 data DataCon_ name = DataCon { conName :: name
                              , conArgs :: [Type_ name]
                              }
-                   | RecordCon { conName :: name
-                               , conFields :: [(name, Type_ name)]
-                               }
                              deriving (Eq, Show)
 
 -- Consider adding defName here - I think it might simplify things elsewhere
@@ -121,6 +118,7 @@ data Pattern_ a = VarPat a
 -- Int -> String
 -- a -> b
 -- f a
+-- { a : A, b : B }
 type Type = Type_ RawName
 data Type_ a =
           TyCon a [Type_ a]
@@ -131,6 +129,7 @@ data Type_ a =
         | TyInt
         | TyString
         | TyFun (Type_ a) (Type_ a)
+        | TyRecord [(a, Type_ a)]
   deriving (Eq, Show, Ord)
 
 infixr 4 `fn`
@@ -178,6 +177,9 @@ data Syn_ n v c t = Var n
          | ListLit [Syn_ n v c t]
          | StringLit String [(Syn_ n v c t, String)]
          | IntLit Int
+         -- Records
+         | Record [(n, Syn_ n v c t)]
+         | Project (Syn_ n v c t) n
          deriving (Eq, Show)
 
 -- Supported binary operators

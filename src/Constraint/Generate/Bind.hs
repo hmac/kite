@@ -54,7 +54,7 @@ generateBind axs env (Bind name annotation equations) = do
           -- We should now have no remaining unification variables.
           let remainingUVars = fuv eqTypes' <> fuv exps'
           if remainingUVars /= mempty
-            then throwError (UnsolvedUnificationVariables remainingUVars)
+             then throwError (UnsolvedUnificationVariables remainingUVars q)
             else
               let
                 bind = BindT

@@ -281,6 +281,13 @@ test = do
     it "a string literal" $ do
       let expr = StringLit "Hello" [(Con true, " and "), (Con false, "")]
       infersType env expr TString
+    it "a record" $ do
+      let expr = Record [("five", IntLit 5), ("msg", StringLit "Hello" [])]
+      infersType env expr (TRecord [("five", TInt), ("msg", TString)])
+    it "a record projection" $ do
+      let record = Record [("five", IntLit 5), ("msg", StringLit "Hello" [])]
+      let expr = Project record "five"
+      infersType env expr TInt
 
 infersType :: TypeEnv -> Exp -> Type -> Expectation
 infersType env expr expectedType = case run (generate env expr) of

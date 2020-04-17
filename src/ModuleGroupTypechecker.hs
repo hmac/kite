@@ -1,9 +1,5 @@
 module ModuleGroupTypechecker where
 
-import           ModuleLoader                   ( ModuleGroup(..)
-                                                , UntypedModuleGroup
-                                                )
-
 import           Constraint                     ( Error )
 import           Constraint.Generate.M          ( run
                                                 , TypeEnv

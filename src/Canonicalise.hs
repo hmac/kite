@@ -90,6 +90,7 @@ canonicaliseType env = \case
   TyInt             -> TyInt
   TyString          -> TyString
   TyFun a b         -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyRecord fields -> TyRecord (map (bimap (canonicaliseName env) (canonicaliseType env)) fields)
 
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
@@ -102,12 +103,6 @@ canonicaliseDataCon (mod, imps) DataCon { conName = name, conArgs = args } =
   DataCon { conName = TopLevel mod name
           , conArgs = fmap (canonicaliseType (mod, imps)) args
           }
-canonicaliseDataCon (mod, imps) RecordCon { conName = name, conFields = fields }
-  = RecordCon
-    { conName   = TopLevel mod name
-    , conFields = map (bimap (TopLevel mod) (canonicaliseType (mod, imps)))
-                      fields
-    }
 
 canonicaliseDef :: Env -> Syn.Def Syn.Syn -> Can.Def Can.Exp
 canonicaliseDef env d =
@@ -133,6 +128,8 @@ canonicaliseExp env = go
     StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
     Hole   n            -> Hole (canonicaliseName env n)
     IntLit i            -> IntLit i
+    Record fields       -> Record $ bimapL (canonicaliseName env) (go locals) fields
+    Project r l         -> Project (go locals r) (canonicaliseName env l)
    where
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =
