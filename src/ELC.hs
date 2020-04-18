@@ -5,6 +5,7 @@ module ELC where
 
 import           Canonical                      ( Name(..) )
 import qualified Canonical                     as Can
+import Data.Map.Strict (Map)
 
 data Exp = Const Constant [Exp]
          | Var Name
@@ -19,6 +20,8 @@ data Exp = Const Constant [Exp]
          | Bottom String
          | Project Int Int Exp   -- arity of the constructor; index of the field
          | Y Exp                 -- the Y combinator
+         | Record (Map String Exp)
+         | RecordProject Exp String
          deriving (Show, Eq)
 
 buildAbs :: Exp -> [Pattern] -> Exp

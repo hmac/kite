@@ -1,5 +1,6 @@
 module LC.Eval where
 
+import qualified Data.Map.Strict as Map
 import           Data.Name
 import           ELC                            ( Con(..)
                                                 , Constant(..)
@@ -64,6 +65,11 @@ eval env expr = case expr of
   Y e                        -> eval env $ App e (Y e)
   CaseN _ (Cons Sum { sumTag = t } _) branches -> eval env (branches !! t)
   CaseN n e branches         -> eval env $ CaseN n (eval env e) branches
+  Record fields              -> Record fields
+  RecordProject (Record fields) l -> case Map.lookup l fields of
+                                       Just e -> eval env e
+                                       Nothing -> error $ "Eval: expected " <> show (Record fields) <> "to have field " <> show l
+  RecordProject e l -> eval env $ RecordProject (eval env e) l
 
 evalConst :: Env -> Constant -> [Exp] -> Exp
 evalConst _ (Prim f) args = evalPrim f args
@@ -118,6 +124,8 @@ subst a  n  (Eq x y             ) = Eq (subst a n x) (subst a n y)
 subst a  n  (UnpackProduct i x y) = UnpackProduct i (subst a n x) (subst a n y)
 subst a  n  (UnpackSum t i x y  ) = UnpackSum t i (subst a n x) (subst a n y)
 subst a  n  (CaseN i x ys       ) = CaseN i (subst a n x) (map (subst a n) ys)
+subst _a _n (Record fields      ) = Record fields
+subst a n   (RecordProject e l  ) = RecordProject (subst a n e) l
 
 buildApp :: Exp -> [Exp] -> Exp
 buildApp = foldl App

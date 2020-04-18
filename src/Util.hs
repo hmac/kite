@@ -34,6 +34,7 @@ import qualified Data.Maybe
 import           Data.Text.Lazy                 ( unpack )
 import qualified Text.Pretty.Simple
 import qualified Data.Bifunctor
+import qualified Data.Bitraversable
 import           Data.List.Extra                ( concatUnzip
                                                 , concatUnzip3
                                                 )
@@ -47,6 +48,9 @@ second = Data.Bifunctor.second
 
 bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
 bimap = Data.Bifunctor.bimap
+
+bimapM :: (Data.Bitraversable.Bitraversable t, Applicative f) => (a -> f b) -> (c -> f d) -> t a c -> f (t b d)
+bimapM = Data.Bitraversable.bimapM
 
 bimapL :: (a -> b) -> (c -> d) -> [(a, c)] -> [(b, d)]
 bimapL f g = map (bimap f g)

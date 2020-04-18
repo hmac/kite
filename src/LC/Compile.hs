@@ -49,6 +49,8 @@ convert = go
   go (ELC.Bottom s     )    = pure (Bottom s)
   go (ELC.Project a i e)    = Project a i <$> go e
   go (ELC.Y e          )    = Y <$> go e
+  go (ELC.Record fields)    = Record <$> traverse go fields
+  go (ELC.RecordProject e l) = RecordProject <$> go e <*> pure l
 
 convertAbs :: Pattern -> ELC.Exp -> NameGen Exp
 -- constant patterns

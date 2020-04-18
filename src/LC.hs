@@ -2,6 +2,7 @@ module LC where
 
 -- Simple lambda calculus
 
+import Data.Map.Strict (Map)
 import           Canonical                      ( Name(..) )
 import           ELC                            ( Constant(..)
                                                 , Con(..)
@@ -36,6 +37,8 @@ data Exp = Const Constant [Exp]
          -- constructor) and selects the corresponding branch.
          -- CASE-N n (si ...) b1...bn = bi
          | CaseN Int Exp [Exp]
+         | Record (Map String Exp)
+         | RecordProject Exp String
          deriving (Eq, Show)
 
 type Env = [(Name, Exp)]

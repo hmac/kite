@@ -5,7 +5,6 @@ module ELC.Primitive where
 import           Data.Name
 import           Canonical
 import           ELC
-import qualified Syn.Typed                     as T
 
 modPrim :: ModuleName
 modPrim = ModuleName ["Lam", "Primitive"]
@@ -40,9 +39,6 @@ primConstructors = map
   extract
   [listNil, listCons, tuple2, tuple3, tuple4, tuple5, tuple6]
   where extract con = (conName con, Cons con [])
-
-primInstances :: [((Name, T.Type), Name)]
-primInstances = []
 
 -- Functions
 
