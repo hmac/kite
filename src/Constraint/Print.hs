@@ -39,6 +39,7 @@ printType (TCon c args) = hsep (printName c : map printType' args)
 printType (THole n    ) = "?" <> printName n
 printType TInt          = "Int"
 printType TString       = "String"
+printType (TRecord fields) = printType' (TRecord fields)
 
 -- like printType but assume we're in a nested context, so add parentheses
 printType' :: Type -> Doc a
@@ -49,6 +50,7 @@ printType' (TCon c args) = parens $ hsep (printName c : map printType args)
 printType' (THole n    ) = "?" <> printName n
 printType' TInt          = "Int"
 printType' TString       = "String"
+printType' (TRecord fields) = braces $ hsep $ punctuate comma (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)
 
 printName :: Name -> Doc a
 printName (Local (Name n)) = pretty n
@@ -84,3 +86,5 @@ printError OverlappingTypeclassInstances = "Overlapping typeclass instances"
 printError (UnknownTypeclass n)          = "Unknown typeclass " <> printName n
 printError (UnknownInstanceMethod n) =
   "Unknown instance method " <> printName n
+printError (RecordDoesNotHaveLabel ty name) = "The record type" <+> printType ty <+> "was expected to contain the label" <+> printName name <+> "but it does not."
+printError (ProjectionOfNonRecordType ty name) = "I cannot get the field" <+> printName name <+> "from the type" <+> printType ty <+> "because it is not a record type."

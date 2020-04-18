@@ -14,6 +14,20 @@ import qualified Canonical.Primitive
 -- To canonicalise a module we need to know what names are imported from other
 -- modules. We represent that as map from name to module.
 
+{-
+  Note: Record labels
+  -------------------
+
+  Record labels are expected to be globally unique, so we don't qualify them
+  with a module. Instead, which is a bit of a hack, we make them all Local.
+  This means that two labels which are the same on the surface will be
+  recognised as the same by the typechecker.
+
+  Ideally we'd have a special namespace for record labels, so it's less
+  confusing.
+
+-}
+
 type Imports = Map.Map RawName Syn.ModuleName
 type Env = (ModuleName, Imports)
 
@@ -90,7 +104,7 @@ canonicaliseType env = \case
   TyInt             -> TyInt
   TyString          -> TyString
   TyFun a b         -> TyFun (canonicaliseType env a) (canonicaliseType env b)
-  TyRecord fields -> TyRecord (map (bimap (canonicaliseName env) (canonicaliseType env)) fields)
+  TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
 
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
@@ -128,8 +142,8 @@ canonicaliseExp env = go
     StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
     Hole   n            -> Hole (canonicaliseName env n)
     IntLit i            -> IntLit i
-    Record fields       -> Record $ bimapL (canonicaliseName env) (go locals) fields
-    Project r l         -> Project (go locals r) (canonicaliseName env l)
+    Record fields       -> Record $ bimapL Local (go locals) fields
+    Project r l         -> Project (go locals r) (Local l)
    where
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =
@@ -185,4 +199,4 @@ canonicalisePattern env = \case
 canonicaliseName :: Env -> RawName -> Can.Name
 canonicaliseName (thisModule, imps) n = case Map.lookup n imps of
   Just i  -> TopLevel i n
-  Nothing -> TopLevel thisModule n
+  Nothing -> trace ("[" <> show thisModule <> "] Could not find " <> show n <> "\n") (TopLevel thisModule n)

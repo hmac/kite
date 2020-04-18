@@ -28,4 +28,4 @@ expandItem importedModule = \case
   i@ImportSingle{} -> i
   i@ImportSome{}   -> i
   ImportAll { importItemName = n } ->
-    ImportSome n (fromMaybe [] (lookup n (moduleExports importedModule)))
+    ImportSome n (fromMaybe [] (traceShowId (lookup n (moduleExports importedModule))))
