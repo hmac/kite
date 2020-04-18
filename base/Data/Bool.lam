@@ -10,6 +10,9 @@ all (True :: bs) = all bs
 all (False :: _) = False
 
 -- This is the All semigroup
-instance Semigroup Bool where
-  append False _ = False
-  append True b = b
+semigroupBool : Semigroup Bool
+semigroupBool = Semigroup { append = appendBool }
+
+appendBool : Bool -> Bool -> Bool
+appendBool False _ = False
+appendBool True b = b

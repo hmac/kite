@@ -1,19 +1,9 @@
 module Lam.Monoid
 
 import Lam.List (foldr)
-import Lam.Primitive (appendString)
+import Lam.Semigroup (Semigroup, append)
 
--- We can't (yet) handle superclass constraints
--- class Semigroup a => Monoid a where
---   empty : a
+type Monoid a = Monoid { empty : a, semigroup : Semigroup a }
 
-class Monoid a where
-  empty : a
-  mappend : a -> a -> a
-
-instance Monoid String where
-  empty = ""
-  mappend x y = appendString x y
-
-concat : Monoid a => [a] -> a
-concat = foldr mappend empty
+concat : Monoid a -> [a] -> a
+concat (Monoid d) = foldr (append d.semigroup) d.empty

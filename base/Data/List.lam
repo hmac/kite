@@ -6,7 +6,6 @@ module Data.List
   , uncons
   , null
   , length
-  , map
   , reverse
   , intersperse
   )
@@ -16,20 +15,26 @@ import Data.Maybe (Maybe(..))
 import Data.Bool (Bool(..))
 import Lam.Monoid (Monoid(..))
 import Lam.List (foldr)
+import Lam.Functor (Functor(..))
 
-instance Semigroup [a] where
-  append [] ys = ys
-  append (x :: xs) ys = x :: (append xs ys)
+semigroupList : Semigroup [a]
+semigroupList = Semigroup { append = listAppend }
 
-instance Monoid [a] where
-  empty = []
-  mappend xs ys = append xs ys
+listAppend : [a] -> [a] -> [a]
+listAppend [] ys = ys
+listAppend (x :: xs) ys = x :: (listAppend xs ys)
+
+monoidList : Monoid [a]
+monoidList = Monoid { empty = [], semigroup = semigroupList }
 
 -- TODO: Right now this doesn't typecheck, I think because the typechecker isn't
 --       correctly handling higher kinded typeclass arguments.
--- instance Functor [a] where
---   map _ [] = []
---   map f (x :: xs) = map f xs
+functorList : Functor [a]
+functorList = Functor { map = mapList }
+
+mapList : (a -> b) -> [a] -> [b]
+mapList _ [] = []
+mapList f (x :: xs) = mapList f xs
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.

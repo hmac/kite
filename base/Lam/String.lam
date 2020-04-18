@@ -1,0 +1,11 @@
+module Lam.String
+
+import Lam.Primitive (appendString)
+import Lam.Semigroup (Semigroup)
+import Lam.Monoid (Monoid)
+
+semigroupString : Semigroup String
+semigroupString = Semigroup { append = appendString }
+
+monoidString : Monoid String
+monoidString = Monoid { empty = "", semigroup = Semigroup { append = appendString } }

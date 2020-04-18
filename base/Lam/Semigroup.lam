@@ -1,4 +1,6 @@
 module Lam.Semigroup
 
-class Semigroup a where
-  append : a -> a -> a
+type Semigroup a = Semigroup { append : a -> a -> a }
+
+append : Semigroup a -> a -> a -> a
+append (Semigroup d) = d.append

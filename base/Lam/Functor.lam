@@ -2,5 +2,7 @@ module Lam.Functor
 
 -- TODO: right now I'm not sure we can write any instances of this class,
 -- because higher kinded typeclasses don't seem to work.
-class Functor f where
-  map : (a -> b) -> f a -> f b
+type Functor f = Functor { map : (a -> b) -> f a -> f b }
+
+map : Functor f -> (a -> b) -> f a -> f b
+map (Functor d) = d.map

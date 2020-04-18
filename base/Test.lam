@@ -5,8 +5,9 @@ import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
 import Lam.Show (Show(..))
 import Lam.Monoid (Monoid(..), concat)
--- TODO: uncommenting this produces the error: Unknown variable Data.List.Nothing
--- import Data.List (subsequences)
+import Lam.String (monoidString)
+import Data.List (subsequences)
+import Lam.Functor (map)
 
 e : Either Bool String
 e = Left True
@@ -14,13 +15,21 @@ e = Left True
 type Foo a = Foo { unFoo : a, tag : Int }
 
 foo : Foo String
-foo = Foo "isfoo" 1
+foo = Foo { unFoo = "isfoo", tag = 1 }
 
--- one : Int
--- one = tag foo
+one : Int
+one = case foo of
+        Foo f -> f.tag
 
--- isfoo : String
--- isfoo = unFoo foo
+isfoo : String
+isfoo = case foo of
+          Foo f -> f.unFoo
+
+inc : Int -> Int
+inc i = i + 1
+
+mapTest : [Int]
+mapTest = map inc [1,2,3]
 
 main : String
 main = "#{45 + 54} is a number"
