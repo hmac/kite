@@ -9,6 +9,8 @@ import           Syn
 import           Syn.Parse
 import           Syn.Print
 
+import Util
+
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.String (renderString)
 
@@ -18,6 +20,8 @@ import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
 import           HaskellWorks.Hspec.Hedgehog
+
+import Text.Megaparsec (errorBundlePretty)
 
 test :: Spec
 test = do
@@ -51,11 +55,16 @@ roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
 roundtrip gen printer parser = H.withTests 50 $ H.property $ do
   e <- H.forAll gen
   let printed  = renderString (layoutPretty defaultLayoutOptions (printer e))
-      reparsed = parse parser "" printed
+      reparsed = first errorBundlePretty $ parse parser "" printed
   H.annotate printed
-  r <- H.evalEither reparsed
-  H.annotateShow (printer r)
-  e H.=== r
+  case reparsed of
+    Left err -> do
+      H.annotate err
+      _ <- H.evalEither reparsed
+      pure ()
+    Right r -> do
+      H.annotateShow (printer r)
+      e H.=== r
 
 -- Hedgehog generators
 
@@ -97,7 +106,7 @@ genImportItem :: H.Gen ImportItem
 genImportItem = Gen.choice [genImportSingle, genImportSome, genImportAll]
  where
   genImportSingle = ImportSingle <$> genModuleItem
-  genImportAll    = ImportAll <$> genModuleItem
+  genImportAll    = ImportAll <$> genUpperName
   genImportSome =
     ImportSome <$> genUpperName <*> Gen.list (Range.linear 0 3) genModuleItem
 

@@ -39,10 +39,10 @@ import           Data.List.Extra                ( concatUnzip
                                                 )
 -- Misc useful functions
 
-first :: (a -> b) -> (a, c) -> (b, c)
+first :: Data.Bifunctor.Bifunctor p => (a -> b) -> p a c -> p b c
 first = Data.Bifunctor.first
 
-second :: (c -> d) -> (a, c) -> (a, d)
+second :: Data.Bifunctor.Bifunctor p => (c -> d) -> p a c -> p a d
 second = Data.Bifunctor.second
 
 bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
