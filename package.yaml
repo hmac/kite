@@ -72,7 +72,7 @@ executables:
 
 tests:
   lam-test:
-    main:                Spec.hs
+    main:                Main.hs
     source-dirs:         test
     ghc-options:
     - -threaded
@@ -80,3 +80,12 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - lam
+  hlint:
+    main: hlint.hs
+    source-dirs:
+    - test
+    - src
+    dependencies:
+    - lam
+    - hlint
+

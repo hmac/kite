@@ -1,3 +1,5 @@
+module Main where
+
 import           Test.Hspec
 import qualified Test.Syn.Parse
 import qualified Test.Syn.Print
