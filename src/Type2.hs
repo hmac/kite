@@ -4,10 +4,6 @@ module Type2 where
 
 -- Currently just used to experiment with typechecking records
 
-import           Util
-import           Data.Set                       ( (\\) )
-import qualified Data.Set                      as Set
-
 import           Data.Map.Strict               (Map)
 import qualified Data.Map.Strict               as Map
 
@@ -26,7 +22,7 @@ infer env = \case
   Var name -> case Map.lookup name env of
                 Just t -> pure t
                 Nothing -> Left (UnknownVariable name)
-  Abs xs e -> undefined -- need type variables to infer this?
+  Abs _xs _e -> undefined -- need type variables to infer this?
   Record fields -> do
     let fieldLabels = map fst fields
         fieldExprs = map snd fields
@@ -40,3 +36,4 @@ infer env = \case
           Nothing -> Left (RecordDoesNotHaveLabel (TRecord fieldTypes) label)
           Just ty  -> pure ty
       nonRecordType -> Left (ProjectionOfNonRecordType nonRecordType label)
+  e -> error $ "Type2.infer: cannot handle expression " <> show e

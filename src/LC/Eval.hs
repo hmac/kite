@@ -91,8 +91,9 @@ primShow e          = Const (String (go e)) []
   go (Const (String s) _) = s
   go (Const (Prim   _) _) = "<builtin>"
   go (Abs   _          _) = "<function>"
-  go (Cons c args) =
-    let TopLevel _ (Name n) = conName c in n <> " " <> unwords (map go args)
+  go (Cons c args) = case conName c of
+                       TopLevel _ (Name n) -> n <> " " <> unwords (map go args)
+                       n -> error $ "primShow: unexpected conName " <> show n
   go _ = "<unevaluated>"
 
 subst :: Exp -> Name -> Exp -> Exp

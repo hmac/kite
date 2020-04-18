@@ -8,7 +8,11 @@ import           Syn
 import           Util
 
 expandImports :: Module Syn -> [Module Syn] -> (Module Syn, [Module Syn])
-expandImports m deps = let (m' : deps') = go (m : deps) in (m', deps')
+expandImports m deps =
+  let expanded = go (m : deps)
+      mExpanded = head expanded
+      depsExpanded = tail expanded
+   in (mExpanded, depsExpanded)
  where
   go []       = []
   go (n : ns) = mapImports (expand ns) n : go ns

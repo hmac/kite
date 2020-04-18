@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 -- | The model for typing constraints
 
 module Constraint
@@ -21,6 +22,8 @@ module Constraint
   , modPrim
   , mkTupleType
   , Error(..)
+  , Scheme
+  , Scheme_(..)
   )
 where
 
@@ -33,6 +36,7 @@ import           Data.Set                       ( Set
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Canonical                      ( Name(..) )
+import Syn (Scheme_(..))
 
 -- Simple constraints
 -- Created by the user via type annotations
@@ -65,6 +69,7 @@ instance Semigroup Constraint where
 instance Monoid Constraint where
   mempty = CNil
 
+type Scheme = Scheme_ Var Constraint Type
 
 flattenConstraint :: Constraint -> [Constraint]
 flattenConstraint (c :^: d) = flattenConstraint c <> flattenConstraint d
@@ -169,6 +174,14 @@ instance Sub CConstraint where
 instance Sub a => Sub [a] where
   sub s = map (sub s)
 
+instance Sub Scheme where
+  sub s (Forall vars c t) =
+    let s' = filter (\(v, _) -> v `notElem` vars) s
+    in  Forall vars (sub s' c) (sub s' t)
+
+instance Sub (Map Name Scheme) where
+  sub s = fmap (sub s)
+
 -- Vars is defined for any type for which we can extract a set of free
 -- unification variables
 class Vars a where
@@ -222,6 +235,10 @@ instance Vars b => Vars (Map a b) where
 instance Vars a => Vars [a] where
   fuv = mconcat . map fuv
   ftv = mconcat . map ftv
+
+instance Vars Scheme where
+  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
+  ftv (Forall tvars c t) = ftv c <> ftv t \\ Set.fromList tvars
 
 simple :: CConstraint -> Constraint
 simple E{}        = mempty

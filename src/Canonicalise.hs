@@ -1,5 +1,7 @@
 module Canonicalise where
 
+import Prelude hiding (mod)
+
 import qualified Data.Map.Strict               as Map
 
 import           Util
@@ -106,6 +108,9 @@ canonicaliseType env = \case
   TyFun a b         -> TyFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
 
+canonicaliseScheme :: Env -> Syn.Scheme -> Can.Scheme
+canonicaliseScheme _env _ = error "canonicaliseScheme: not implemented yet"
+
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
   { dataName = TopLevel mod (dataName d)
@@ -136,6 +141,7 @@ canonicaliseExp env = go
     Abs  ns    e        -> Abs (fmap Local ns) $ go (ns <> locals) e
     App  a     b        -> App (go locals a) (go locals b)
     Let  binds e        -> canonicaliseLet (binds, e)
+    LetA n sch e body    -> LetA (canonicaliseName env n) (canonicaliseScheme env sch) (go locals e) (go (n : locals) body)
     Case e     alts     -> canonicaliseCase (e, alts)
     TupleLit es         -> TupleLit $ fmap (go locals) es
     ListLit  es         -> ListLit $ fmap (go locals) es
@@ -148,7 +154,7 @@ canonicaliseExp env = go
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =
       let (locals', binds') = foldl
-            (\(locals, acc) (varName, expr) ->
+            (\(locals_, acc) (varName, expr) ->
               -- Note: to handle recursive lets, here we would extend the set of
               -- locals with the variable name before canonicalising the bound
               -- expression. We currently don't do that because Lam's evaluation
@@ -156,8 +162,8 @@ canonicaliseExp env = go
               -- doesn't terminate. I'm not yet sure if we should support
               -- recursive lets at all - maybe you should always write a
               -- separate function if you want recursion?
-              let b = (Local varName, go locals expr)
-              in  (varName : locals, b : acc)
+              let b = (Local varName, go locals_ expr)
+              in  (varName : locals_, b : acc)
             )
             (locals, [])
             binds
@@ -166,9 +172,9 @@ canonicaliseExp env = go
     canonicaliseCase :: (Syn.Syn, [(Pattern, Syn.Syn)]) -> Can.Exp
     canonicaliseCase (e, alts) =
       let alts' = map
-            (\(pat, e) ->
+            (\(pat, e_) ->
               let (vars, pat') = canonicalisePattern env pat
-                  e'           = go (vars <> locals) e
+                  e'           = go (vars <> locals) e_
               in  (pat', e')
             )
             alts
@@ -179,6 +185,7 @@ canonicalisePattern env = \case
   VarPat n -> ([n], VarPat (Local n))
   WildPat  -> ([], WildPat)
   IntPat i -> ([], IntPat i)
+  StringPat s -> ([], StringPat s)
   TuplePat pats ->
     let res   = map (canonicalisePattern env) pats
         vars  = concatMap fst res

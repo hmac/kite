@@ -89,35 +89,39 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
   Nothing -> do
     u <- TVar <$> fresh
     pure (u, mempty, env)
-  Just (Forall as cs kt) -> do -- TODO: should we be using cs?
+  Just (Forall as _cs kt) -> do -- TODO: should we be using cs?
     -- generate new uvars for each a in as
     ys <- mapM (const fresh) as
     -- construct tyvar substitution
     let subst = zip as (map TVar ys)
-    let (TCon tyname tyargs, tyconargs) =
-          let ts = unfoldFnType kt
-          in  (sub subst (last ts), map (sub subst) (init ts))
-    let scrutConstraint = Simple (TCon tyname (map TVar ys) :~: st)
-    -- generate each subpattern and apply the substitution to each
-    (patTypes, patConstraints, patEnvs) <- do
-      freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
-      (tys, constraints, envs) <-
-        unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
-      pure (map (sub subst) tys, mconcat constraints, mconcat envs)
-    -- Each pattern type should be equal to the corresponding type from the type
-    -- constructor
-    let patEqualityConstraints = mconcat $ zipWith
-          (\patTy argTy -> Simple (patTy :~: argTy))
-          patTypes
-          tyconargs
-    -- generate a fresh variable for the type of the whole pattern
-    beta <- TVar <$> fresh
-    let betaConstraint = Simple $ beta :~: st <> beta :~: TCon tyname tyargs
-    pure
-      ( beta
-      , patEqualityConstraints
-      <> scrutConstraint
-      <> patConstraints
-      <> betaConstraint
-      , env <> patEnvs
-      )
+
+    -- TODO: make it clearer what this is doing - could it be an aux function?
+    let result = let ts = unfoldFnType kt
+                  in (sub subst (last ts), map (sub subst) (init ts))
+    case result of
+      (TCon tyname tyargs, tyconargs) -> do
+        let scrutConstraint = Simple (TCon tyname (map TVar ys) :~: st)
+        -- generate each subpattern and apply the substitution to each
+        (patTypes, patConstraints, patEnvs) <- do
+          freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
+          (tys, constraints, envs) <-
+            unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
+          pure (map (sub subst) tys, mconcat constraints, mconcat envs)
+        -- Each pattern type should be equal to the corresponding type from the type
+        -- constructor
+        let patEqualityConstraints = mconcat $ zipWith
+              (\patTy argTy -> Simple (patTy :~: argTy))
+              patTypes
+              tyconargs
+        -- generate a fresh variable for the type of the whole pattern
+        beta <- TVar <$> fresh
+        let betaConstraint = Simple $ beta :~: st <> beta :~: TCon tyname tyargs
+        pure
+          ( beta
+          , patEqualityConstraints
+          <> scrutConstraint
+          <> patConstraints
+          <> betaConstraint
+          , env <> patEnvs
+          )
+      other -> error $ "generatePattern(ConsPat): expected TCon, found " <> show other

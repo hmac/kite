@@ -30,8 +30,9 @@ typecheckModuleGroup (ModuleGroup m deps) = do
         Constraint.Primitive.env
         ms
   (_env', typedModules) <- res
-  let (typedModule : typedDeps) = reverse typedModules
-  pure $ TypedModuleGroup typedModule (reverse typedDeps)
+  case reverse typedModules of
+    (typedModule : typedDeps) -> pure $ TypedModuleGroup typedModule (reverse typedDeps)
+    [] -> error "ModuleGroupTypechecker: empty list found"
 
 dumpEnv :: UntypedModuleGroup -> Either Error TypeEnv
 dumpEnv (ModuleGroup m deps) = do

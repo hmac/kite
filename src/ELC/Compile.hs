@@ -12,7 +12,6 @@ import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Util
 import           Control.Monad.State.Strict
-import           Control.Monad                  ( replicateM )
 import           Data.List.Extra                ( groupOn )
 import           Data.Foldable                  ( foldlM
                                                 , foldrM
@@ -61,10 +60,6 @@ lookupDef n env = Map.lookup n (envDefs env)
 fresh :: NameGen Name
 fresh = freshM (\i -> Local (Name ("$elc" ++ show i)))
 
-freshTopLevel :: ModuleName -> String -> NameGen Name
-freshTopLevel m suffix =
-  freshM (\i -> TopLevel m (Name ("$elc" <> show i <> suffix)))
-
 -- TODO: remove unreachable definitions
 translateModule :: Env -> T.Module -> NameGen Env
 translateModule env T.Module { T.moduleDecls = decls } =
@@ -77,8 +72,6 @@ translateModule env T.Module { T.moduleDecls = decls } =
   let ordering :: T.Decl -> Int
       ordering = \case
         (T.DataDecl      _) -> 0
-        (T.TypeclassDecl _) -> 1
-        (T.TypeclassInst _) -> 2
         (T.FunDecl       _) -> 3
       orderedDecls = sortOn ordering decls
   in  foldlM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
@@ -100,8 +93,6 @@ translateDecl _env (T.DataDecl d) = do
       in  pure $ map (\c -> (conName c, Cons c [])) cs
     else concat <$> mapM translateProdCon cons
   pure (datadefs, mempty)
-translateDecl env (T.TypeclassDecl t) = translateTypeclass env t
-translateDecl env (T.TypeclassInst i) = translateInstance env i
 
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.
@@ -110,82 +101,6 @@ translateDef env def = do
   args <- mapM (translatePattern env) (T.defArgs def)
   expr <- translateExpr env (T.defExpr def)
   pure (args, expr)
-
--- Translating typeclasses
--- -----------------------
--- Typeclasses get translated into record types. Each method corresponds to a
--- field in the record.
--- e.g.    class Monoid a where
---           empty : a
---           append : a -> a -> a
--- becomes data Monoid a = Monoid {
---           empty : a,
---           append : a -> a -> a }
-translateTypeclass :: Env -> T.Typeclass -> NameGen ([(Name, Exp)], InstMap)
-translateTypeclass env t =
-  let
-    record = T.Data
-      { T.dataName   = T.typeclassName t
-      , T.dataTyVars = T.typeclassTyVars t
-      , T.dataCons   =
-        [ T.RecordCon
-            { T.conName   = T.typeclassName t
-            , T.conFields = T.typeclassDefs t
-            , T.conType   = error "type of typeclass datacon is not defined"
-            }
-        ]
-      }
-  in  translateDecl env (T.DataDecl record)
-
--- Translating typeclass instances
--- -------------------------------
--- Typeclass instances get translated into record values.
--- e.g.    instance Monoid Int where
---           empty = 0
---           append x y = x + y
--- becomes $freshName : Monoid Int
---         $freshName = Monoid { empty = 0, append = \x y -> x + y }
---
--- The compiler will automatically generate selectors for each field, which
--- correspond to each typeclass method. The other half of this translation is
--- adding an extra argument to each use of a typeclass method, passing in the
--- correct instance record... and we can't do this unless we know the
--- instantiated type of each method call.
--- Note: we can't construct a friendly record name in general because not all
---       types can be easily converted to names. (e.g. a -> [(a, b)]).
--- Note: we register the instance in the env so it can be inserted into method
---       calls elsewhere in the program.
--- TODO: Currently the order of methods has to match the order in the typeclass
---       definition. Fix this.
---       (when we support { a = .. } style record construction we can use that)
-translateInstance :: Env -> T.Instance -> NameGen ([(Name, Exp)], InstMap)
-translateInstance env i = do
-  let typeclassName = T.instanceName i
-      recordCon     = fromMaybe
-        (error $ "undefined typeclass " <> show typeclassName)
-        (lookupDef typeclassName env)
-  -- As when translating T.ConT, we wrap the constructor in functions so we can
-  -- apply arguments to it to produce a fully saturated constructor.
-  recordConAsFun <- do
-    let (Cons c _) = recordCon
-    newVars <- replicateM (conArity c) fresh
-    pure $ buildAbs (Cons c (map Var newVars)) (map VarPat newVars)
-  let defs = T.instanceDefs i
-  let defsAsFuns = map
-        (\(name, ty, ds) ->
-          T.Fun { T.funName = name, T.funType = ty, T.funDefs = ds }
-        )
-        defs
-  defsAsExps <-
-    concatMap fst <$> mapM (translateDecl env . T.FunDecl) defsAsFuns
-  let record = foldl App recordConAsFun (map snd defsAsExps)
-  recordName <-
-    let (TopLevel moduleName (Name tcRawName)) = typeclassName
-    in  freshTopLevel moduleName ("_dict_" <> tcRawName)
-  let instMap :: InstMap
-      instMap = Map.fromList
-        $ map (\(name, T.Forall _ _ ty, _) -> ((name, ty), recordName)) defs
-  pure ([(recordName, record)], instMap)
 
 -- Note: we do a weird trick here where each constructor has a reference to a
 -- list of all the constructors for its type, which includes itself.
@@ -272,30 +187,6 @@ translateExpr _ (T.VarT (TopLevel m "show") _) | m == modPrim = do
   pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
 
 translateExpr _ (T.VarT n _) = pure (Var n)
-translateExpr env (T.AppT (T.VarT fName fType) b)
-  | typeclassName <- Map.lookup fName (envMethods env) = do
-  -- This is where we lookup and insert the correct dictionary into this application.
-  -- e.g.    $1 : Semigroup String
-  --         $1 = ...
-  --         append "foo" "bar"
-  -- becomes append $1 "foo" "bar"
-    case Map.lookup (fName, fType) (envInstances env) of
-      Nothing -> do
-        -- The most likely reason we can't find a matching instance method
-        -- is that we're compiling a typeclass instance, rather than a method
-        -- application, so we don't need to insert any dictionaries.
-        -- We just treat this as a normal application.
-        -- TODO: separate this out somehow so we can be sure
-        a' <- translateExpr env (T.VarT fName fType)
-        b' <- translateExpr env b
-        pure $ App a' b'
-      Just dictName -> do
-        let dictType = T.THole "unknown typclass dictionary type"
-            dict     = T.VarT dictName dictType
-        a'    <- translateExpr env (T.VarT fName fType)
-        dict' <- translateExpr env dict
-        b'    <- translateExpr env b
-        pure $ App (App a' dict') b'
 translateExpr env (T.AppT a b) = do
   a' <- translateExpr env a
   b' <- translateExpr env b
@@ -342,6 +233,8 @@ translateExpr env (T.CaseT scrut alts _) = do
     alts
   let lams = foldr Fatbar (Bottom "pattern match failure") alts'
   pure $ Let (VarPat var) scrut' lams
+translateExpr _env T.RecordT{} = error "ELC.Compile.translateExpr: cannot translate records yet"
+translateExpr _env T.ProjectT{} = error "ELC.Compile.translateExpr: cannot translate record projections yet"
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
 translateStringLit :: Env -> String -> [(T.Exp, String)] -> NameGen Exp
@@ -484,20 +377,23 @@ matchVarCon us qs def =
 matchVar :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchVar (u : us) qs =
   match us [ (ps, rename e u v) | (VarPat v : ps, e) <- qs ]
+matchVar [] _ = error "ELC.Compile.matchVar: unexpected empty list"
 
 matchCon :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchCon (u : us) qs def = do
   clauses <- mapM (\c -> matchClause c (u : us) (choose c qs) def) cs
   pure $ Case u clauses
   where cs = constructors (getCon (head qs))
+matchCon [] _ _ = error "ELC.Compile.matchCon: unexpected empty list"
 
 matchClause :: Con -> [Name] -> [Equation] -> Exp -> NameGen Clause
-matchClause c (u : us) qs def = do
-  us'  <- replicateM (conArity c) fresh
+matchClause con (_u : us) qs def = do
+  us'  <- replicateM (conArity con) fresh
   expr <- match (us' ++ us)
-                [ (ps' ++ ps, e) | (ConPat c ps' : ps, e) <- qs ]
+                [ (ps' ++ ps, e) | (ConPat _ ps' : ps, e) <- qs ]
                 def
-  pure $ Clause c us' expr
+  pure $ Clause con us' expr
+matchClause _ [] _ _ = error "ELC.Compile.matchClause: unexpected empty list"
 
 choose :: Con -> [Equation] -> [Equation]
 choose c qs = filter ((== c) . getCon) qs

@@ -8,7 +8,6 @@ import qualified Data.Set                      as Set
 
 import qualified Data.Map.Strict               as Map
 
-import           Constraint.Solve              (solveC)
 import           Constraint.Generate.M
 import           Constraint
 import           Constraint.Expr
@@ -29,26 +28,26 @@ generate env (Con n) = do
   pure (ConT n, t, c)
 -- APP
 generate env (App e1 e2) = do
-  (e1, t1, c1) <- generate env e1
-  (e2, t2, c2) <- generate env e2
+  (e1', t1, c1) <- generate env e1
+  (e2', t2, c2) <- generate env e2
   a            <- TVar <$> fresh
   let funcConstraint = Simple $ t1 :~: (t2 `fn` a)
-  pure (AppT e1 e2, a, c1 <> (c2 <> funcConstraint))
+  pure (AppT e1' e2', a, c1 <> (c2 <> funcConstraint))
 -- ABS
 generate env (Abs xs e) = do
   binds <- mapM (\x -> (x, ) . TVar <$> fresh) xs
-  let env' = foldl (\e (x, t) -> Map.insert x (Forall [] CNil t) e) env binds
-  (e, t, c) <- generate env' e
+  let env' = foldl (\env_ (x, t) -> Map.insert x (Forall [] CNil t) env_) env binds
+  (e', t, c) <- generate env' e
   let ty = foldr (\(_, a) b -> a `fn` b) t binds
-  pure (AbsT binds e, ty, c)
+  pure (AbsT binds e', ty, c)
 -- LET: let with no annotation
 generate env (Let binds body) = do
   -- extend the environment simultaneously with all variables
-  binds <- mapM (\(x, e) -> (x, , e) . TVar <$> fresh) binds
+  binds' <- mapM (\(x, e) -> (x, , e) . TVar <$> fresh) binds
   let env' =
-        foldl (\e (x, t, _) -> Map.insert x (Forall [] CNil t) e) env binds
+        foldl (\e (x, t, _) -> Map.insert x (Forall [] CNil t) e) env binds'
   -- infer each bound expression with the extended environment
-  (xs, ts, es, cs) <-
+  (xs, _ts, es, cs) <-
     unzip4
       <$> mapM
             (\(x, t, e) -> do
@@ -56,22 +55,22 @@ generate env (Let binds body) = do
               let c' = Simple (t :~: t')
               pure (x, t, e', c <> c')
             )
-            binds
+            binds'
   -- infer the body with the extended environment
-  (body, bodyT, bodyC) <- generate env' body
-  pure (LetT (zip xs es) body bodyT, bodyT, bodyC <> mconcat cs)
+  (body', bodyT, bodyC) <- generate env' body
+  pure (LetT (zip xs es) body' bodyT, bodyT, bodyC <> mconcat cs)
 -- LETA: let with a monomorphic annotation
 generate env (LetA x (Forall [] CNil t1) e1 e2) = do
-  (e1, t , c1) <- generate env e1
-  (e2, t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
-  pure (LetAT x (Forall [] CNil t1) e1 e2 t2, t2, c1 <> c2 <> Simple (t :~: t1))
+  (e1', t , c1) <- generate env e1
+  (e2', t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
+  pure (LetAT x (Forall [] CNil t1) e1' e2' t2, t2, c1 <> c2 <> Simple (t :~: t1))
 -- GLETA: let with a polymorphic annotation
 generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
-  (e1, t, c) <- generate env e1
+  (e1', t, c) <- generate env e1
   let betas = Set.toList $ (fuv t <> fuv c) \\ fuv env
   let c1    = E betas q1 (c :^^: Simple (t :~: t1))
-  (e2, t2, c2) <- generate (Map.insert x s1 env) e2
-  pure (LetAT x s1 e1 e2 t2, t2, c1 <> c2)
+  (e2', t2, c2) <- generate (Map.insert x s1 env) e2
+  pure (LetAT x s1 e1' e2' t2, t2, c1 <> c2)
 -- CASE: case expression
 generate env (Case e alts) = generateCase env e alts
 -- Expression hole
@@ -91,7 +90,7 @@ generate env (ListLit elems) = do
   let sameTypeConstraint = mconcat $ map (beta :~:) elemTypes
   pure (ListLitT elems' t, t, mconcat constraints <> Simple sameTypeConstraint)
 -- Int literal
-generate env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
+generate _env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
 -- String literal
 generate env (StringLit p cs) = do
   -- TODO: each expression's type should be in the Show typeclass
@@ -138,7 +137,7 @@ generateCase env  scrutinee alts = do
   -- all top level patterns must have the same type, equal to the scrutinee type
   let allPatsEq = generateAllEqualConstraint scrutTy patTys
   -- all corresponding branches must have the same type
-  (beta2, allExpsEq) <- do
+  (_beta2, allExpsEq) <- do
     beta <- TVar <$> fresh
     pure (beta, generateAllEqualConstraint beta expTys)
   -- TODO: is it ok for all of these to be touchables?

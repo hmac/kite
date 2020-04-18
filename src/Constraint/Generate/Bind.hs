@@ -71,7 +71,10 @@ generateBind axs env (Bind name annotation equations) = do
           -- Since everything is solved, we can take the first equation type
           -- and use that
           let eqType = head eqTypes'
-          let bindTy = Forall (map (\(_, TVar v) -> v) tysubst)
+          let getTVar t = case t of
+                            TVar v -> v
+                            t' -> error $ "Constraint.Generate.Bind: expected TVar, found " <> show t'
+          let bindTy = Forall (map (getTVar . snd) tysubst)
                               (sub tysubst q)
                               (sub tysubst eqType)
           let exps'' = map (sub tysubst) exps'

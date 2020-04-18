@@ -3,19 +3,15 @@ module Constraint.Expr
   ( module Constraint.Expr
   , Scheme_(..)
   , Syn_(..)
+  , Scheme
   )
 where
-
-import           Data.Map.Strict                ( Map )
-import           Data.Set                       ( (\\) )
-import qualified Data.Set                      as Set
 
 import           Constraint
 import           Canonical                      ( Name(..) )
 import           Util
 
 import           Syn                            ( Pattern_
-                                                , Scheme_(..)
                                                 , Syn_(..)
                                                 )
 
@@ -94,18 +90,3 @@ type Pattern = Pattern_ Name
 
 instance Sub AltT where
   sub s (AltT p e) = AltT p (sub s e)
-
--- The Var will always be rigid type variables (I think)
-type Scheme = Scheme_ Var Constraint Type
-
-instance Sub Scheme where
-  sub s (Forall vars c t) =
-    let s' = filter (\(v, _) -> v `notElem` vars) s
-    in  Forall vars (sub s' c) (sub s' t)
-
-instance Vars Scheme where
-  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
-  ftv (Forall tvars c t) = ftv c <> ftv t \\ Set.fromList tvars
-
-instance Sub (Map Name Scheme) where
-  sub s = fmap (sub s)

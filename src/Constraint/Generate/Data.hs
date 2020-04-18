@@ -6,7 +6,6 @@ where
 
 import qualified Data.Map.Strict               as Map
 
-import           Util
 import           Syn                     hiding ( Scheme
                                                 , fn
                                                 )

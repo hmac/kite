@@ -7,7 +7,6 @@ where
 
 import           Data.List                      ( nub )
 import           Data.Foldable                  ( foldrM )
-import           Control.Monad.Extra            ( mconcatMapM )
 
 import           LC
 import           Canonical                      ( Name(..) )
@@ -78,9 +77,11 @@ convertLetRec :: [(Pattern, ELC.Exp)] -> ELC.Exp -> NameGen Exp
 convertLetRec alts body = do
   alts'          <- mapM convertRefutableLetBinding alts
   irrefutableLet <- irrefutableLetRec2IrrefutableLet alts' body
-  let ELC.Let pat val body' = irrefutableLet
-  (n, v, e) <- convertIrrefutableLet pat val body'
-  convertSimpleELCLet n v e
+  case irrefutableLet of
+    ELC.Let pat val body' -> do
+      (n, v, e) <- convertIrrefutableLet pat val body'
+      convertSimpleELCLet n v e
+    other -> error $ "LC.Compile.convertLetRec: expected let but found " <> show other
 
 --------------------------------------------------------------------------------
 -- Definition: Irrefutable Pattern
@@ -110,22 +111,17 @@ convertLetRec alts body = do
 -- A general let(rec) can have any arbitrary pattern on the left hand side.
 --------------------------------------------------------------------------------
 
-isSimple :: ELC.Exp -> Bool
-isSimple (ELC.Let (VarPat _) v e) = isSimple v && isSimple e
-isSimple ELC.Let{}                = False
-isSimple _                        = True
-
+-- This isn't used but it's an informative definition
+--
+-- isSimple :: ELC.Exp -> Bool
+-- isSimple (ELC.Let (VarPat _) v e) = isSimple v && isSimple e
+-- isSimple ELC.Let{}                = False
+-- isSimple _                        = True
+-- 
 -- How we transform let(rec)s:
 -- ---------------------------
 -- refutable letrec -> irrefutable letrec -> irrefutable let -> simple let -> lambda
 -- refutable let    -> irrefutable let                       -> simple let -> lambda
-
--- Convert a simple let expression to a lambda abstraction
-convertSimpleLet :: Name -> ELC.Exp -> ELC.Exp -> NameGen Exp
-convertSimpleLet v val body = do
-  val'  <- convert val
-  body' <- convert body
-  pure $ App (Abs v body') val'
 
 -- Convert a simple ELC let expression to an LC let expression
 convertSimpleELCLet :: Name -> ELC.Exp -> ELC.Exp -> NameGen Exp
@@ -150,21 +146,6 @@ convertIrrefutableLet (ConPat Prod { conArity = a } pats) val body = do
   pure (var, val, body')
 convertIrrefutableLet (VarPat v) val body = pure (v, val, body)
 convertIrrefutableLet p _ _ = error $ "Unexpected pattern " <> show p
-
--- Convert an irrefutable letrec expression to a simple letrec expression
-convertIrrefutableLetRec :: [(Pattern, ELC.Exp)] -> ELC.Exp -> NameGen ELC.Exp
-convertIrrefutableLetRec alts body = do
-  alts' <- mconcatMapM convertSinglePattern alts
-  pure $ ELC.LetRec alts' body
- where
-  convertSinglePattern :: (Pattern, ELC.Exp) -> NameGen [(Pattern, ELC.Exp)]
-  convertSinglePattern (ConPat Prod { conArity = a } pats, val) = do
-    var <- fresh
-    let patBinds =
-          zipWith (\p i -> (p, ELC.Project a i (ELC.Var var))) pats [0 ..]
-    patBinds' <- mconcatMapM convertSinglePattern patBinds
-    pure $ (VarPat var, val) : patBinds'
-  convertSinglePattern (p, val) = pure [(p, val)]
 
 -- Convert an irrefutable letrec to an irrefutable let
 irrefutableLetRec2IrrefutableLet
@@ -225,9 +206,6 @@ unpackClause scrut (Clause c vars body) = do
   let binds =
         zipWith (\v i -> Let v (Project (conArity c) i scrut)) vars [0 ..]
   pure $ if null binds then body' else foldl1 (.) binds body'
-
-buildAbs :: Exp -> [Name] -> Exp
-buildAbs = foldr Abs
 
 mapSndM :: Monad m => (b -> m c) -> [(a, b)] -> m [(a, c)]
 mapSndM _ []            = return []

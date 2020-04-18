@@ -56,6 +56,11 @@ library:
   source-dirs: src
   ghc-options:
   - -Wall
+  - -Werror
+  - -Wcompat
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
 
 executables:
   lam:
@@ -80,7 +85,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - lam
-  hlint:
+  lam-hlint:
     main: hlint.hs
     source-dirs:
     - test

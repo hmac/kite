@@ -96,10 +96,16 @@ sortModules :: [Module_ n e ty] -> Either String [Module_ n e ty]
 sortModules []  = Right []
 sortModules [m] = Right [m]
 sortModules ms =
-  let pairs = map (take 2) (permutations ms)
-  in  if any (\[a, b] -> a `dependsOn` b && b `dependsOn` a) pairs
+  let pairs = asPairs $ map (take 2) (permutations ms)
+  in  if any (\(a, b) -> a `dependsOn` b && b `dependsOn` a) pairs
         then Left "Cyclic dependency detected"
         else Right $ sortBy compareModules ms
+
+asPairs :: [[a]] -> [(a,a)]
+asPairs [] = []
+asPairs ([x,y] : xs) = (x,y) : asPairs xs
+asPairs (x : _) =
+  error $ "ModuleLoader.asPairs: Expected list of length 2, found list of length " <> show (length x)
 
 compareModules :: Module_ n e ty -> Module_ n e ty -> Ordering
 compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of

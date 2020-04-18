@@ -212,24 +212,23 @@ pType = try arr <|> try app <|> pType'
 -- i.e. MyCon f a   -> name = MyCon, args = [f, a]
 -- vs.  func : f a  -> name = func, type = f :@: a
 pConType :: Parser Type
-pConType = ty
+pConType = hole <|> var <|> con <|> list <|> record <|> parens (try arr <|> try tuple <|> app)
  where
-  ty  = hole <|> var <|> con <|> list <|> record <|> parens (try arr <|> try tuple <|> app)
   app = (lowercaseName >>= varApp) <|> (uppercaseName >>= conApp)
   conApp name = do
-    rest <- many ty
+    rest <- many pConType
     pure $ TyCon name rest
   varApp name = do
-    rest <- many ty
+    rest <- many pConType
     pure $ if null rest then TyVar name else TyCon name rest
   arr = do
-    a <- lexemeN ty
+    a <- lexemeN pConType
     void $ symbolN "->"
-    TyFun a <$> ty
+    TyFun a <$> pConType
   con   = TyCon <$> uppercaseName <*> pure []
   var   = TyVar <$> lowercaseName
-  list  = TyList <$> brackets ty
-  tuple = TyTuple <$> ty `sepBy2` comma
+  list  = TyList <$> brackets pConType
+  tuple = TyTuple <$> pConType `sepBy2` comma
   hole  = TyHole <$> (string "?" >> pHoleName)
   record = TyRecord <$> braces (recordField `sepBy1` comma)
   recordField = do

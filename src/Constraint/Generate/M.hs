@@ -16,7 +16,6 @@ import           Control.Monad.Writer.Strict
 import           Control.Monad.Except
 
 import           Constraint
-import           Constraint.Expr                ( Scheme )
 import           Data.Name
 import           Canonical                      ( Name(..) )
 

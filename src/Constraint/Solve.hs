@@ -91,7 +91,7 @@ solve axs input = case rewriteAll axs input of
         toTuple (TVar b :~: t     ) = (b, t)
         toTuple (t      :~: TVar b) = (b, t)
         toTuple q                   = error $ "Unexpected constraint " <> show q
-        subst = nubOn fst $ mapConstraint toTuple epsilon
+        subst = nubOrdOn fst $ mapConstraint toTuple epsilon
     in  Right (sub subst residual, subst)
 
 -- Solve a set of constraints
