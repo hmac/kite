@@ -154,9 +154,11 @@ pFun = do
 
 pDef :: RawName -> Parser (Def Syn)
 pDef (Name name) = do
-  void (symbol name)
-  bindings <- many pPattern <?> "pattern"
-  void (symbolN "=")
+  bindings <- try $ do
+    void (symbol name)
+    bindings <- many pPattern <?> "pattern"
+    void (symbolN "=")
+    pure bindings
   expr <- pExpr
   pure Def { defArgs = bindings, defExpr = expr }
 

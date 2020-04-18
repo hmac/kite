@@ -93,4 +93,3 @@ tests:
     dependencies:
     - lam
     - hlint
-

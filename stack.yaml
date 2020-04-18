@@ -1,3 +1,7 @@
 resolver: lts-15.8
 packages:
 - .
+# nix:
+#   enable: true
+#   packages:
+#   - darwin.xcode

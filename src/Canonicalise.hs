@@ -209,6 +209,4 @@ canonicalisePattern env = \case
 canonicaliseName :: Env -> RawName -> Can.Name
 canonicaliseName (thisModule, imps) n = case Map.lookup n imps of
   Just i  -> TopLevel i n
-  Nothing -> trace
-    ("[" <> show thisModule <> "] Could not find " <> show n <> "\n")
-    (TopLevel thisModule n)
+  Nothing -> TopLevel thisModule n

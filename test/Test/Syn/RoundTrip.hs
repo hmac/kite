@@ -3,35 +3,36 @@ module Test.Syn.RoundTrip where
 -- This module tests the roundtrip property: parse . print == id
 
 import           Test.Hspec
-import           Text.Megaparsec                ( parse, eof )
+import           Text.Megaparsec                ( parse
+                                                , eof
+                                                , errorBundlePretty
+                                                )
 
 import           Syn
 import           Syn.Parse
 import           Syn.Print
 
-import Util
+import           Util
 
+import           Data.List                      ( subsequences )
 import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.String (renderString)
+import           Data.Text.Prettyprint.Doc.Render.String
+                                                ( renderString )
 
 import           Control.Applicative            ( liftA2 )
-import           Data.Text.Prettyprint.Doc      ( Doc )
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
 import           HaskellWorks.Hspec.Hedgehog
 
-import Text.Megaparsec (errorBundlePretty)
-
 test :: Spec
-test = do
-  describe "round trip property" $ do
-    it "holds for function declarations" $ require roundtripFun
-    it "holds for expressions" $ require roundtripSyn
-    it "holds for types" $ require roundtripType
-    it "holds for data declarations" $ require roundtripData
-    it "holds for import statements" $ require roundtripImport
-    it "holds for modules" $ require roundtripModule
+test = describe "round trip property" $ do
+  it "holds for function declarations" $ require roundtripFun
+  it "holds for expressions" $ require roundtripSyn
+  it "holds for types" $ require roundtripType
+  it "holds for data declarations" $ require roundtripData
+  it "holds for import statements" $ require roundtripImport
+  it "holds for modules" $ require roundtripModule
 
 roundtripSyn :: H.Property
 roundtripSyn = roundtrip genExpr printExpr pExpr
@@ -52,7 +53,7 @@ roundtripModule :: H.Property
 roundtripModule = roundtrip genModule printModule pModule
 
 roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
-roundtrip gen printer parser = H.withTests 50 $ H.property $ do
+roundtrip gen printer parser = H.withTests 100 $ H.property $ do
   e <- H.forAll gen
   let printed  = renderString (layoutSmart defaultLayoutOptions (printer e))
       reparsed = first errorBundlePretty $ parse (parser <* eof) "" printed
@@ -111,11 +112,8 @@ genImportItem = Gen.choice [genImportSingle, genImportSome, genImportAll]
     ImportSome <$> genUpperName <*> Gen.list (Range.linear 0 3) genModuleItem
 
 genDecl :: H.Gen (Decl Syn)
-genDecl = Gen.choice
-  [ FunDecl <$> genFun
-  , DataDecl <$> genData
-  , Comment <$> genComment
-  ]
+genDecl =
+  Gen.choice [FunDecl <$> genFun, DataDecl <$> genData, Comment <$> genComment]
 
 genModuleName :: H.Gen ModuleName
 genModuleName = ModuleName <$> Gen.list (Range.linear 1 3) genUpperString
@@ -163,7 +161,9 @@ genType = Gen.recursive
     (\ty1 ty2 ->
       TyCon <$> Gen.choice [genUpperName, genLowerName] <*> pure [ty1, ty2]
     )
-  , Gen.subterm2 (Gen.small genType) (Gen.small genType) (\ty1 ty2 -> TyTuple [ty1, ty2])
+  , Gen.subterm2 (Gen.small genType)
+                 (Gen.small genType)
+                 (\ty1 ty2 -> TyTuple [ty1, ty2])
   , Gen.subtermM2 (Gen.small genType) (Gen.small genType) genTyRecord
   ]
 
@@ -177,7 +177,7 @@ genDef :: H.Gen (Def Syn)
 genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 
 genExpr :: H.Gen Syn
-genExpr = Gen.recursive
+genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   Gen.choice
   [ Var <$> genLowerName
   , Con <$> genUpperName
@@ -191,7 +191,9 @@ genExpr = Gen.recursive
   , Gen.subtermM2 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
-  , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
+  , Gen.subtermM2 (Gen.small genExpr)
+                  (Gen.small genExpr)
+                  (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
   , Gen.subtermM3 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (Gen.small genExpr)
@@ -202,6 +204,24 @@ genExpr = Gen.recursive
   , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
   , Project <$> (Var <$> genLowerName) <*> genLowerName
   ]
+
+shrinkExpr :: Syn -> [Syn]
+shrinkExpr = \case
+  Var    _          -> []
+  Con    _          -> []
+  Hole   _          -> []
+  IntLit _          -> []
+  Abs [v     ] e    -> [e]
+  Abs (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (subsequences vs)
+  App a        b    -> [a, b]
+  LetA n sch e body -> [body]
+  Let  binds body   -> [body]
+  Case e     alts   -> [e] <> map snd alts
+  TupleLit es       -> (TupleLit <$> subsequences es) <> es
+  ListLit  es       -> (ListLit <$> subsequences es) <> es
+  StringLit p c     -> [StringLit p []]
+  Record fields     -> Record <$> subsequences fields
+  Project r n       -> [r]
 
 genRecord :: Syn -> Syn -> H.Gen Syn
 genRecord e1 e2 = do
@@ -227,10 +247,20 @@ genCaseAlts e1 e2 = do
   pure [(p1, e1), (p2, e2)]
 
 genPattern :: H.Gen Pattern
-genPattern = Gen.recursive
+genPattern = Gen.shrink shrinkPattern $ Gen.recursive
   Gen.choice
   [VarPat <$> genLowerName, pure WildPat, IntPat <$> genInt]
-  [TuplePat <$> Gen.list (Range.linear 2 5) genPattern]
+  [Gen.small $ TuplePat <$> Gen.list (Range.linear 2 3) genPattern]
+
+shrinkPattern :: (Pattern -> [Pattern])
+shrinkPattern = \case
+  VarPat _       -> []
+  WildPat        -> []
+  IntPat   _     -> []
+  TuplePat pats  -> TuplePat <$> subsequences pats
+  ListPat  pats  -> ListPat <$> subsequences pats
+  ConsPat c pats -> ConsPat c <$> subsequences pats
+  StringPat s    -> []
 
 genInt :: H.Gen Int
 genInt = Gen.int (Range.linear (-5) 5)
