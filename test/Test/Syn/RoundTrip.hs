@@ -3,7 +3,7 @@ module Test.Syn.RoundTrip where
 -- This module tests the roundtrip property: parse . print == id
 
 import           Test.Hspec
-import           Text.Megaparsec                ( parse )
+import           Text.Megaparsec                ( parse, eof )
 
 import           Syn
 import           Syn.Parse
@@ -54,8 +54,8 @@ roundtripModule = roundtrip genModule printModule pModule
 roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
 roundtrip gen printer parser = H.withTests 50 $ H.property $ do
   e <- H.forAll gen
-  let printed  = renderString (layoutPretty defaultLayoutOptions (printer e))
-      reparsed = first errorBundlePretty $ parse parser "" printed
+  let printed  = renderString (layoutSmart defaultLayoutOptions (printer e))
+      reparsed = first errorBundlePretty $ parse (parser <* eof) "" printed
   H.annotate printed
   case reparsed of
     Left err -> do

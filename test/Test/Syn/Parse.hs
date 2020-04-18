@@ -230,6 +230,14 @@ test = parallel $ do
     it "parses parameterised constructors inside lists" $ do
       parse pType "" "[Maybe a]"
         `shouldParse` TyList (TyCon "Maybe" [TyVar "a"])
+    it "parses function types in lists" $ do
+      parse pType "" "[a -> b]"
+        `shouldParse` TyList (TyVar "a" `fn` TyVar "b")
+    it "parses function types in higher kinded types" $ do
+      parse pType "" "A [a -> a]"
+        `shouldParse` TyCon "A" [TyList (TyVar "a" `fn` TyVar "a")]
+      parse pType "" "A [B -> C]"
+        `shouldParse` TyCon "A" [TyList (TyCon "B" [] `fn` TyCon "C" [])]
     it "parses nested type constructors" $ do
       parse pType "" "A B" `shouldParse` TyCon "A" [TyCon "B" []]
     it "parses record types" $ do

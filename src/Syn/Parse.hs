@@ -175,67 +175,59 @@ pDef' = do
   expr <- pExpr
   pure (name, Def { defArgs = bindings, defExpr = expr })
 
+-- The context for parsing a type
+-- Paren means that compound types have to be in parens
+-- Neutral means anything goes
+data TypeCtx = Neutral | Paren
+
 -- Int
 -- Maybe Int
 -- a
 -- a -> b
 pType :: Parser Type
-pType = try arr <|> try app <|> pType'
+pType = pType' Neutral
+
+-- Note: currently broken
+pType' :: TypeCtx -> Parser Type
+pType' ctx = case ctx of
+               Neutral -> try arr <|> try app <|> atomic <|> parens (pType' Neutral)
+               Paren -> atomic <|> parens (pType' Neutral)
  where
+  atomic = con <|> var <|> hole <|> list <|> record <|> try tuple
   arr = do
-    a <- lexemeN (try app <|> pType')
+    a <- lexemeN (try app <|> pType' Paren)
     void $ symbolN "->"
-    TyFun a <$> pType
-  app = (lowercaseName >>= varApp) <|> (uppercaseName >>= conApp)
-  conApp name = do
-    rest <- many (lexeme pType')
-    pure $ TyCon name rest
-  varApp name = do
-    rest <- many (lexeme pType')
-    pure $ if null rest then TyVar name else TyCon name rest
-  pType' = con <|> var <|> hole <|> list <|> record <|> try tuple <|> parens pType
+    TyFun a <$> pType' Neutral
+  app = conApp <|> varApp
+  conApp = do
+    f <- uppercaseName
+    xs <- many $ pType' Paren
+    pure $ TyCon f xs
+  -- applications of type variables are treated (for some reason) as TyCon
+  varApp = do
+    (f, xs) <- try $ do
+      f <- lowercaseName
+      xs <- some $ pType' Paren
+      pure (f, xs)
+    pure $ TyCon f xs
   var    = TyVar <$> lowercaseName
   con    = (`TyCon` []) <$> uppercaseName
   hole   = TyHole <$> (string "?" >> pHoleName)
-  list   = TyList <$> brackets pType
-  tuple  = TyTuple <$> parens (lexemeN pType `sepBy2` comma)
+  list   = TyList <$> brackets (pType' Neutral)
+  tuple  = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
   record = TyRecord <$> braces (recordField `sepBy1` comma)
   recordField = do
     fName <- lowercaseName
     void (symbol ":")
-    ty <- pType
+    ty <- pType' Neutral
     pure (fName, ty)
 
--- Parses the type args to a constructor
--- The rules are slightly different from types in annotations, because type
--- application must be inside parentheses
+-- When parsing the type args to a constructor, type application must be inside
+-- parentheses
 -- i.e. MyCon f a   -> name = MyCon, args = [f, a]
 -- vs.  func : f a  -> name = func, type = f :@: a
 pConType :: Parser Type
-pConType = hole <|> var <|> con <|> list <|> record <|> parens (try arr <|> try tuple <|> app)
- where
-  app = (lowercaseName >>= varApp) <|> (uppercaseName >>= conApp)
-  conApp name = do
-    rest <- many pConType
-    pure $ TyCon name rest
-  varApp name = do
-    rest <- many pConType
-    pure $ if null rest then TyVar name else TyCon name rest
-  arr = do
-    a <- lexemeN pConType
-    void $ symbolN "->"
-    TyFun a <$> pConType
-  con   = TyCon <$> uppercaseName <*> pure []
-  var   = TyVar <$> lowercaseName
-  list  = TyList <$> brackets pConType
-  tuple = TyTuple <$> pConType `sepBy2` comma
-  hole  = TyHole <$> (string "?" >> pHoleName)
-  record = TyRecord <$> braces (recordField `sepBy1` comma)
-  recordField = do
-    fName <- lowercaseName
-    void (symbol ":")
-    ty <- pType
-    pure (fName, ty)
+pConType = pType' Paren
 
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
