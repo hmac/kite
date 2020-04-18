@@ -1,0 +1,18 @@
+- ignore:
+    name: Redundant do
+    within:
+      - Test
+      - Test.Type2
+      - Test.Constraint
+      - Test.Constraint.FromSyn
+      - Test.Constraint.Module
+      - Test.Syn.Parse
+      - Test.Syn.Print
+- ignore:
+    name: Monoid law, right identity
+    within:
+      - Test.Constraint
+- ignore:
+    name: Monoid law, left identity
+    within:
+      - Test.Constraint

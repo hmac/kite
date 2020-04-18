@@ -28,7 +28,7 @@ test = parallel $ do
     it "prints type applications with arrows (1)" $ do
       show (printType (TyVar "a" `fn` TyCon "f" [TyVar "a"])) `shouldBe` "a -> f a"
     it "prints type applications with arrows (2)" $ do
-      show (printType ((TyCon "A" [TyVar "a"]) `fn` ((TyCon "f" [TyVar "a"])))) `shouldBe` "A a -> f a"
+      show (printType (TyCon "A" [TyVar "a"] `fn` TyCon "f" [TyVar "a"])) `shouldBe` "A a -> f a"
     it "prints type applications with arrows (3)" $ do
       show (printType ((TyCon "A" [] `fn` TyCon "A" []) `fn` TyCon "A" [])) `shouldBe` "(A -> A) -> A"
     it "prints tuple types" $ do

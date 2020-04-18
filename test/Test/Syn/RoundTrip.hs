@@ -14,7 +14,7 @@ import           Syn.Print
 
 import           Util
 
-import           Data.List                      ( subsequences )
+import           Data.List                      ( inits )
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.String
                                                 ( renderString )
@@ -212,16 +212,19 @@ shrinkExpr = \case
   Hole   _          -> []
   IntLit _          -> []
   Abs [v     ] e    -> [e]
-  Abs (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (subsequences vs)
+  Abs (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList vs)
   App a        b    -> [a, b]
   LetA n sch e body -> [body]
   Let  binds body   -> [body]
   Case e     alts   -> [e] <> map snd alts
-  TupleLit es       -> (TupleLit <$> subsequences es) <> es
-  ListLit  es       -> (ListLit <$> subsequences es) <> es
+  TupleLit es       -> (TupleLit <$> shrinkList es) <> es
+  ListLit  es       -> (ListLit <$> shrinkList es) <> es
   StringLit p c     -> [StringLit p []]
-  Record fields     -> Record <$> subsequences fields
+  Record fields     -> Record <$> shrinkList fields
   Project r n       -> [r]
+
+shrinkList :: [a] -> [[a]]
+shrinkList = tail . reverse . inits
 
 genRecord :: Syn -> Syn -> H.Gen Syn
 genRecord e1 e2 = do
@@ -257,9 +260,9 @@ shrinkPattern = \case
   VarPat _       -> []
   WildPat        -> []
   IntPat   _     -> []
-  TuplePat pats  -> TuplePat <$> subsequences pats
-  ListPat  pats  -> ListPat <$> subsequences pats
-  ConsPat c pats -> ConsPat c <$> subsequences pats
+  TuplePat pats  -> TuplePat <$> shrinkList pats
+  ListPat  pats  -> ListPat <$> shrinkList pats
+  ConsPat c pats -> ConsPat c <$> shrinkList pats
   StringPat s    -> []
 
 genInt :: H.Gen Int

@@ -185,26 +185,20 @@ canonicaliseExp env = go
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case
-  VarPat n    -> ([n], VarPat (Local n))
-  WildPat     -> ([], WildPat)
-  IntPat    i -> ([], IntPat i)
-  StringPat s -> ([], StringPat s)
-  TuplePat pats ->
-    let res   = map (canonicalisePattern env) pats
-        vars  = concatMap fst res
-        pats' = map snd res
-    in  (vars, TuplePat pats')
-  ListPat pats ->
-    let res   = map (canonicalisePattern env) pats
-        vars  = concatMap fst res
-        pats' = map snd res
-    in  (vars, ListPat pats')
+  VarPat n       -> ([n], VarPat (Local n))
+  WildPat        -> ([], WildPat)
+  IntPat    i    -> ([], IntPat i)
+  StringPat s    -> ([], StringPat s)
+  TuplePat  pats -> second TuplePat (canonicalisePatternList pats)
+  ListPat   pats -> second ListPat (canonicalisePatternList pats)
   ConsPat c pats ->
-    let c'    = canonicaliseName env c
-        res   = map (canonicalisePattern env) pats
-        vars  = concatMap fst res
-        pats' = map snd res
-    in  (vars, ConsPat c' pats')
+    second (ConsPat (canonicaliseName env c)) (canonicalisePatternList pats)
+ where
+  canonicalisePatternList :: [Syn.Pattern] -> ([RawName], [Can.Pattern])
+  canonicalisePatternList pats =
+    let res  = map (canonicalisePattern env) pats
+        vars = concatMap fst res
+    in  (vars, map snd res)
 
 canonicaliseName :: Env -> RawName -> Can.Name
 canonicaliseName (thisModule, imps) n = case Map.lookup n imps of

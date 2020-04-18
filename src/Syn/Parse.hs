@@ -133,36 +133,32 @@ pData = do
 -- definitions
 pFun :: Parser (Fun Syn)
 pFun = do
-  comments <- many pComment
-  name     <- lowercaseName <?> "declaration type name"
-  sig      <- optional (symbol ":" >> lexemeN pType)
-  defs     <- case sig of
-    Just _  -> many (lexemeN (pDef name))
+  comments  <- many pComment
+  Name name <- lowercaseName <?> "declaration type name"
+  sig       <- optional (symbol ":" >> lexemeN pType)
+  defs      <- case sig of
+    Just _  -> many (symbol name >> lexemeN pDef)
     Nothing -> do
-      first <- lexemeN $ do
-        bindings <- many pPattern <?> "pattern"
-        void (symbolN "=")
-        expr <- pExpr
-        pure Def { defArgs = bindings, defExpr = expr }
-      rest <- many (lexemeN (pDef name))
+      first <- pDef
+      rest  <- many (symbol name >> lexemeN pDef)
       pure (first : rest)
   pure Fun { funComments = comments
-           , funName     = name
+           , funName     = Name name
            , funType     = sig
            , funDefs     = defs
            }
 
-pDef :: RawName -> Parser (Def Syn)
-pDef (Name name) = do
+-- Parses the portion of a definition after the name
+pDef :: Parser (Def Syn)
+pDef = do
   bindings <- try $ do
-    void (symbol name)
     bindings <- many pPattern <?> "pattern"
     void (symbolN "=")
     pure bindings
   expr <- pExpr
   pure Def { defArgs = bindings, defExpr = expr }
 
--- Like pDef but will parse a definition with any name
+-- Like pDef parses the name bit as well
 pDef' :: Parser (RawName, Def Syn)
 pDef' = do
   name     <- lexeme lowercaseName
@@ -321,8 +317,7 @@ pBinApp = do
   left <- pExpr'
   op   <- pOp
   void $ some (char ' ')
-  right <- pExpr'
-  pure $ App (App op left) right
+  App (App op left) <$> pExpr'
  where
   pOp :: Parser Syn
   pOp =
@@ -345,8 +340,7 @@ pRecordProject :: Parser Syn
 pRecordProject = do
   record <- pVar
   void (string ".")
-  field <- lowercaseName
-  pure $ Project record field
+  Project record <$> lowercaseName
 
 pHole :: Parser Syn
 pHole = do

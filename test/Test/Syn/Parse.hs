@@ -5,7 +5,9 @@ where
 
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
-import           Text.Megaparsec                ( parse, eof )
+import           Text.Megaparsec                ( parse
+                                                , eof
+                                                )
 import           Syn.Parse                      ( pModule
                                                 , pDecl
                                                 , pExpr
@@ -19,32 +21,32 @@ test = parallel $ do
   describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
       parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl Fun
-        { funComments   = []
-        , funName       = "id"
-        , funType       = Just (TyVar "a" `fn` TyVar "a")
-        , funDefs       = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
+        { funComments = []
+        , funName     = "id"
+        , funType     = Just (TyVar "a" `fn` TyVar "a")
+        , funDefs     = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
         }
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
         Fun
-          { funComments   = []
-          , funName       = "const"
-          , funType       = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
-          , funDefs       = [ Def { defArgs = [VarPat "x", VarPat "y"]
-                                  , defExpr = Var "x"
-                                  }
-                            ]
+          { funComments = []
+          , funName     = "const"
+          , funType     = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
+          , funDefs     = [ Def { defArgs = [VarPat "x", VarPat "y"]
+                                , defExpr = Var "x"
+                                }
+                          ]
           }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap f m = undefined"
         `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "map"
-                        , funType       = Just
-                                          $    (TyVar "a" `fn` TyVar "b")
-                                          `fn` (TyCon "f" [TyVar "a"])
-                                          `fn` (TyCon "f" [TyVar "b"])
+                        { funComments = []
+                        , funName     = "map"
+                        , funType     = Just
+                                        $    (TyVar "a" `fn` TyVar "b")
+                                        `fn` TyCon "f" [TyVar "a"]
+                                        `fn` TyCon "f" [TyVar "b"]
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
@@ -56,10 +58,10 @@ test = parallel $ do
           ""
           "head : [a] -> a\nhead [] = error \"head: empty list\"\nhead (Cons x xs) = x"
         `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "head"
-                        , funType = Just $ TyList (TyVar "a") `fn` TyVar "a"
-                        , funDefs       =
+                        { funComments = []
+                        , funName     = "head"
+                        , funType     = Just $ TyList (TyVar "a") `fn` TyVar "a"
+                        , funDefs     =
                           [ Def
                             { defArgs = [ListPat []]
                             , defExpr = App (Var "error")
@@ -79,12 +81,12 @@ test = parallel $ do
           ""
           "fromLeft : Either a b -> Maybe a\nfromLeft (Left x) = Just x\nfromLeft (Right _) = Nothing"
         `shouldParse` FunDecl Fun
-                        { funComments   = []
-                        , funName       = "fromLeft"
-                        , funType       = Just
-                                          $ (TyCon "Either" [TyVar "a", TyVar "b"])
-                                          `fn` (TyCon "Maybe" [TyVar "a"])
-                        , funDefs       =
+                        { funComments = []
+                        , funName     = "fromLeft"
+                        , funType     = Just
+                                        $ TyCon "Either" [TyVar "a", TyVar "b"]
+                                        `fn` TyCon "Maybe" [TyVar "a"]
+                        , funDefs     =
                           [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
                                 , defExpr = App (Con "Just") (Var "x")
                                 }
@@ -101,19 +103,23 @@ test = parallel $ do
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
     it "parses a record definition" $ do
-      parse (pDecl <* eof) "" "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+      parse (pDecl <* eof)
+            ""
+            "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
-                        , dataCons   =
-                          [ DataCon
-                              { conName   = "Foo"
-                              , conArgs = [TyRecord [ ("unFoo", TyVar "a")
-                                            , ("label", TyHole "b")
-                                            , ("c", TyCon "A" [TyCon "A" []])
-                                            ]]
-                              }
-                          ]
+                        , dataCons   = [ DataCon
+                                           { conName = "Foo"
+                                           , conArgs =
+                                             [ TyRecord
+                                                 [ ("unFoo", TyVar "a")
+                                                 , ("label", TyHole "b")
+                                                 , ("c", TyCon "A" [TyCon "A" []])
+                                                 ]
+                                             ]
+                                           }
+                                       ]
                         }
     it "parses the definition of List" $ do
       parse pDecl "" "type List a = Nil | Cons a (List a)"
@@ -137,13 +143,13 @@ test = parallel $ do
                         , moduleExports  = []
                         , moduleDecls    =
                           [ FunDecl Fun
-                              { funName       = "one"
-                              , funComments   = []
-                              , funType       = Just (TyCon "Int" [])
-                              , funDefs       = [ Def { defArgs = []
-                                                      , defExpr = IntLit 1
-                                                      }
-                                                ]
+                              { funName     = "one"
+                              , funComments = []
+                              , funType     = Just (TyCon "Int" [])
+                              , funDefs     = [ Def { defArgs = []
+                                                    , defExpr = IntLit 1
+                                                    }
+                                              ]
                               }
                           ]
                         , moduleMetadata = [("key", "val")]
@@ -209,7 +215,8 @@ test = parallel $ do
       parse pExpr "" "\"this is a backslash: \\\\ (#{0})\""
         `shouldParse` StringLit "this is a backslash: \\ (" [(IntLit 0, ")")]
     it "parses a record" $ do
-      parse pExpr "" "{ a = a, b = b }" `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
+      parse pExpr "" "{ a = a, b = b }"
+        `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
     it "parses record projection" $ do
       parse pExpr "" "a.b" `shouldParse` Project (Var "a") "b"
       parse pExpr "" "f a.b" `shouldParse` App (Var "f") (Project (Var "a") "b")
@@ -224,15 +231,14 @@ test = parallel $ do
         `shouldParse` ((TyVar "a" `fn` TyVar "b") `fn` TyVar "a" `fn` TyVar "b")
     it "parses multi parameter type constructors" $ do
       parse pType "" "Either a b -> Maybe a"
-        `shouldParse` (    (TyCon "Either" [TyVar "a", TyVar "b"])
-                      `fn` (TyCon "Maybe" [TyVar "a"])
+        `shouldParse` (    TyCon "Either" [TyVar "a", TyVar "b"]
+                      `fn` TyCon "Maybe"  [TyVar "a"]
                       )
     it "parses parameterised constructors inside lists" $ do
       parse pType "" "[Maybe a]"
         `shouldParse` TyList (TyCon "Maybe" [TyVar "a"])
     it "parses function types in lists" $ do
-      parse pType "" "[a -> b]"
-        `shouldParse` TyList (TyVar "a" `fn` TyVar "b")
+      parse pType "" "[a -> b]" `shouldParse` TyList (TyVar "a" `fn` TyVar "b")
     it "parses function types in higher kinded types" $ do
       parse pType "" "A [a -> a]"
         `shouldParse` TyCon "A" [TyList (TyVar "a" `fn` TyVar "a")]
@@ -241,4 +247,5 @@ test = parallel $ do
     it "parses nested type constructors" $ do
       parse pType "" "A B" `shouldParse` TyCon "A" [TyCon "B" []]
     it "parses record types" $ do
-      parse pType "" "{x : a, y : b}" `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]
+      parse pType "" "{x : a, y : b}"
+        `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]

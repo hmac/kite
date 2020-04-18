@@ -286,7 +286,7 @@ test = do
       infersType env expr (TRecord [("five", TInt), ("msg", TString)])
     it "a record projection" $ do
       let record = Record [("five", IntLit 5), ("msg", StringLit "Hello" [])]
-      let expr = Project record "five"
+      let expr   = Project record "five"
       infersType env expr TInt
 
 infersType :: TypeEnv -> Exp -> Type -> Expectation

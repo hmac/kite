@@ -9,7 +9,7 @@ import           LC
 import           Canonical                      ( Name(..) )
 
 evalMain :: ModuleName -> Env -> Exp
-evalMain mn env = evalVar (TopLevel mn "main") env
+evalMain mn = evalVar (TopLevel mn "main")
 
 evalVar :: Name -> Env -> Exp
 evalVar n env = eval env (Var n)

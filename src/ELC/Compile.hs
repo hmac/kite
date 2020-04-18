@@ -353,8 +353,7 @@ type Equation = ([Pattern], Exp)
 -- to a nested series of case expressions
 match :: [Name] -> [Equation] -> Exp -> NameGen Exp
 match []       qs def = pure $ foldr Fatbar def [ e | ([], e) <- qs ]
-match (u : us) qs def = do
-  foldrM (matchVarCon (u : us)) def (groupOn isVar qs)
+match (u : us) qs def = foldrM (matchVarCon (u : us)) def (groupOn isVar qs)
 
 -- Given a constructor, return all constructors for that type
 constructors :: Con -> [Con]
@@ -398,4 +397,4 @@ matchClause con (_u : us) qs def = do
 matchClause _ [] _ _ = error "ELC.Compile.matchClause: unexpected empty list"
 
 choose :: Con -> [Equation] -> [Equation]
-choose c qs = filter ((== c) . getCon) qs
+choose c = filter ((== c) . getCon)

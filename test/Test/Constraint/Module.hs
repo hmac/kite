@@ -132,8 +132,8 @@ mkDecl
   :: (Name, Type_ Name, [([Pattern_ Name], Can.Exp)])
   -> Decl_ Name Can.Exp (Type_ Name)
 mkDecl (name, ty, equations) = FunDecl $ Fun
-  { funComments   = []
-  , funName       = name
-  , funType       = Just ty
-  , funDefs       = map (uncurry Def) equations
+  { funComments = []
+  , funName     = name
+  , funType     = Just ty
+  , funDefs     = map (uncurry Def) equations
   }

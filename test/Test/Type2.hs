@@ -1,4 +1,7 @@
-module Test.Type2 (test) where
+module Test.Type2
+  ( test
+  )
+where
 
 import           Test.Hspec
 import           Constraint.Expr
@@ -15,10 +18,10 @@ test = do
       infersType expr (TRecord [("five", TInt), ("msg", TString)])
     it "infers record projection types" $ do
       let record = Record [("five", IntLit 5), ("msg", StringLit "Hello" [])]
-      let expr = Project record "five"
+      let expr   = Project record "five"
       infersType expr TInt
 
 infersType :: Exp -> Type -> Expectation
 infersType expr expectedType = case infer mempty expr of
-  Left err -> expectationFailure $ show (printError err)
-  Right ty -> ty `shouldBe` expectedType
+  Left  err -> expectationFailure $ show (printError err)
+  Right ty  -> ty `shouldBe` expectedType

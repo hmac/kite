@@ -46,12 +46,8 @@ generatePattern env st (StringPat _) = do
   let c = Simple (st :~: TString)
   pure (TString, c, env)
 generatePattern env st (TuplePat pats) = do
-    -- generate each subpattern
-  (patTypes, patConstraints, patEnvs) <- do
-    freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
-    (tys, constraints, envs) <-
-      unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
-    pure (tys, mconcat constraints, mconcat envs)
+  -- generate each subpattern
+  (patTypes, patConstraints, patEnvs) <- generateSubpatterns env pats
   -- generate a fresh variable for the type of the whole tuple pattern
   beta <- TVar <$> fresh
   let betaConstraints =
@@ -65,12 +61,8 @@ generatePattern env st (ListPat []) = do
   let betaConstraints = Simple $ mconcat [beta :~: st, beta :~: list elemType]
   pure (beta, betaConstraints, env)
 generatePattern env st (ListPat pats) = do
-    -- generate each subpattern
-  (patTypes, patConstraints, patEnvs) <- do
-    freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
-    (tys, constraints, envs) <-
-      unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
-    pure (tys, mconcat constraints, mconcat envs)
+  -- generate each subpattern
+  (patTypes, patConstraints, patEnvs) <- generateSubpatterns env pats
   -- the type of each pattern must be the same
   -- N.B. it's guaranteed that patTypes has at least one element
   let (listConstraints, _) = foldl (\(c, t') t -> (c <> t' :~: t, t))
@@ -128,3 +120,11 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
           )
       other ->
         error $ "generatePattern(ConsPat): expected TCon, found " <> show other
+
+generateSubpatterns
+  :: TypeEnv -> [Pattern] -> GenerateM ([Type], CConstraint, TypeEnv)
+generateSubpatterns env pats = do
+  freshPatTypes            <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
+  (tys, constraints, envs) <-
+    unzip3 <$> mapM (uncurry (generatePattern env)) freshPatTypes
+  pure (tys, mconcat constraints, mconcat envs)
