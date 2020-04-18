@@ -55,12 +55,12 @@ constraintToConstraint (S.CTuple a b) =
 
 tyToType :: S.Type_ Name -> Type
 tyToType = \case
-  S.TyCon n ts -> TCon n (map tyToType ts)
-  S.TyVar   n  -> TVar (R n)
-  S.TyList  t  -> list (tyToType t)
-  S.TyTuple ts -> mkTupleType (map tyToType ts)
-  S.TyHole  n  -> THole (Local n)
-  S.TyInt      -> TInt
-  S.TyString   -> TString
-  S.TyFun a b  -> TCon (TopLevel modPrim "->") [tyToType a, tyToType b]
+  S.TyCon n ts      -> TCon n (map tyToType ts)
+  S.TyVar   n       -> TVar (R n)
+  S.TyList  t       -> list (tyToType t)
+  S.TyTuple ts      -> mkTupleType (map tyToType ts)
+  S.TyHole  n       -> THole (Local n)
+  S.TyInt           -> TInt
+  S.TyString        -> TString
+  S.TyFun a b       -> TCon (TopLevel modPrim "->") [tyToType a, tyToType b]
   S.TyRecord fields -> TRecord $ mapSnd tyToType fields

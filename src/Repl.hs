@@ -57,10 +57,10 @@ processDecl decls =
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
   let
-    main = FunDecl Fun { funComments   = []
-                       , funName       = "$main"
-                       , funType       = Nothing
-                       , funDefs       = [Def { defArgs = [], defExpr = e }]
+    main = FunDecl Fun { funComments = []
+                       , funName     = "$main"
+                       , funType     = Nothing
+                       , funDefs     = [Def { defArgs = [], defExpr = e }]
                        }
     g = ModuleGroup (buildModule (decls ++ [main])) []
   in

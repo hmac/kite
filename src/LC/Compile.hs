@@ -81,7 +81,8 @@ convertLetRec alts body = do
     ELC.Let pat val body' -> do
       (n, v, e) <- convertIrrefutableLet pat val body'
       convertSimpleELCLet n v e
-    other -> error $ "LC.Compile.convertLetRec: expected let but found " <> show other
+    other ->
+      error $ "LC.Compile.convertLetRec: expected let but found " <> show other
 
 --------------------------------------------------------------------------------
 -- Definition: Irrefutable Pattern

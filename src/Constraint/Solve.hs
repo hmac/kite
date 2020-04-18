@@ -214,10 +214,9 @@ canon (TRecord fs1 :~: TRecord fs2) | map fst fs1 == map fst fs2 =
 
 -- HasField constraints on a TRecord can be simplified into equality on the
 -- field type.
-canon (HasField (TRecord fields) l t) =
-  case lookup l fields of
-    Just t' -> pure (t :~: t')
-    Nothing -> Left $ RecordDoesNotHaveLabel (TRecord fields) l
+canon (HasField (TRecord fields) l t) = case lookup l fields of
+  Just t' -> pure (t :~: t')
+  Nothing -> Left $ RecordDoesNotHaveLabel (TRecord fields) l
 
 -- FAILDEC: Equalities between constructor types must have the same constructor
 canon (t@(TCon k _) :~: v@(TCon k' _)) | k /= k' =

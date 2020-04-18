@@ -101,11 +101,13 @@ sortModules ms =
         then Left "Cyclic dependency detected"
         else Right $ sortBy compareModules ms
 
-asPairs :: [[a]] -> [(a,a)]
-asPairs [] = []
-asPairs ([x,y] : xs) = (x,y) : asPairs xs
+asPairs :: [[a]] -> [(a, a)]
+asPairs []            = []
+asPairs ([x, y] : xs) = (x, y) : asPairs xs
 asPairs (x : _) =
-  error $ "ModuleLoader.asPairs: Expected list of length 2, found list of length " <> show (length x)
+  error
+    $  "ModuleLoader.asPairs: Expected list of length 2, found list of length "
+    <> show (length x)
 
 compareModules :: Module_ n e ty -> Module_ n e ty -> Ordering
 compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of

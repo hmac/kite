@@ -1,6 +1,6 @@
 module Canonicalise where
 
-import Prelude hiding (mod)
+import           Prelude                 hiding ( mod )
 
 import qualified Data.Map.Strict               as Map
 
@@ -60,7 +60,7 @@ constructorsForType :: Syn.Module Syn.Syn -> RawName -> [RawName]
 constructorsForType modul tyname =
   let datas = dataDecls modul
   in  case find ((== tyname) . dataName) datas of
-        Just d -> map conName (dataCons d)
+        Just d  -> map conName (dataCons d)
         Nothing -> []
 
 canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module
@@ -77,15 +77,15 @@ canonicaliseModule m =
 
 canonicaliseDecl :: Env -> Syn.Decl Syn.Syn -> Can.Decl Can.Exp
 canonicaliseDecl env = \case
-  FunDecl       f -> FunDecl $ canonicaliseFun env f
-  DataDecl      d -> DataDecl $ canonicaliseData env d
-  Comment       s -> Comment s
+  FunDecl  f -> FunDecl $ canonicaliseFun env f
+  DataDecl d -> DataDecl $ canonicaliseData env d
+  Comment  s -> Comment s
 
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f = f
-  { funName       = TopLevel mod (funName f)
-  , funDefs       = fmap (canonicaliseDef (mod, imps)) (funDefs f)
-  , funType       = canonicaliseType (mod, imps) <$> funType f
+  { funName = TopLevel mod (funName f)
+  , funDefs = fmap (canonicaliseDef (mod, imps)) (funDefs f)
+  , funType = canonicaliseType (mod, imps) <$> funType f
   }
 
 canonicaliseType :: Env -> Syn.Type -> Can.Type
@@ -138,11 +138,14 @@ canonicaliseExp env = go
           | otherwise       -> Var $ canonicaliseName env n
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
-    Abs  ns    e        -> Abs (fmap Local ns) $ go (ns <> locals) e
-    App  a     b        -> App (go locals a) (go locals b)
-    Let  binds e        -> canonicaliseLet (binds, e)
-    LetA n sch e body    -> LetA (canonicaliseName env n) (canonicaliseScheme env sch) (go locals e) (go (n : locals) body)
-    Case e     alts     -> canonicaliseCase (e, alts)
+    Abs ns    e       -> Abs (fmap Local ns) $ go (ns <> locals) e
+    App a     b       -> App (go locals a) (go locals b)
+    Let binds e       -> canonicaliseLet (binds, e)
+    LetA n sch e body -> LetA (canonicaliseName env n)
+                              (canonicaliseScheme env sch)
+                              (go locals e)
+                              (go (n : locals) body)
+    Case e alts         -> canonicaliseCase (e, alts)
     TupleLit es         -> TupleLit $ fmap (go locals) es
     ListLit  es         -> ListLit $ fmap (go locals) es
     StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
@@ -182,9 +185,9 @@ canonicaliseExp env = go
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case
-  VarPat n -> ([n], VarPat (Local n))
-  WildPat  -> ([], WildPat)
-  IntPat i -> ([], IntPat i)
+  VarPat n    -> ([n], VarPat (Local n))
+  WildPat     -> ([], WildPat)
+  IntPat    i -> ([], IntPat i)
   StringPat s -> ([], StringPat s)
   TuplePat pats ->
     let res   = map (canonicalisePattern env) pats
@@ -206,4 +209,6 @@ canonicalisePattern env = \case
 canonicaliseName :: Env -> RawName -> Can.Name
 canonicaliseName (thisModule, imps) n = case Map.lookup n imps of
   Just i  -> TopLevel i n
-  Nothing -> trace ("[" <> show thisModule <> "] Could not find " <> show n <> "\n") (TopLevel thisModule n)
+  Nothing -> trace
+    ("[" <> show thisModule <> "] Could not find " <> show n <> "\n")
+    (TopLevel thisModule n)

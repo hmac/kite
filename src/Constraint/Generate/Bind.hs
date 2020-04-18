@@ -54,7 +54,7 @@ generateBind axs env (Bind name annotation equations) = do
           -- We should now have no remaining unification variables.
           let remainingUVars = fuv eqTypes' <> fuv exps'
           if remainingUVars /= mempty
-             then throwError (UnsolvedUnificationVariables remainingUVars q)
+            then throwError (UnsolvedUnificationVariables remainingUVars q)
             else
               let
                 bind = BindT
@@ -71,9 +71,13 @@ generateBind axs env (Bind name annotation equations) = do
           -- Since everything is solved, we can take the first equation type
           -- and use that
           let eqType = head eqTypes'
-          let getTVar t = case t of
-                            TVar v -> v
-                            t' -> error $ "Constraint.Generate.Bind: expected TVar, found " <> show t'
+          let
+            getTVar t = case t of
+              TVar v -> v
+              t' ->
+                error
+                  $  "Constraint.Generate.Bind: expected TVar, found "
+                  <> show t'
           let bindTy = Forall (map (getTVar . snd) tysubst)
                               (sub tysubst q)
                               (sub tysubst eqType)

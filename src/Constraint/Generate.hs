@@ -30,13 +30,14 @@ generate env (Con n) = do
 generate env (App e1 e2) = do
   (e1', t1, c1) <- generate env e1
   (e2', t2, c2) <- generate env e2
-  a            <- TVar <$> fresh
+  a             <- TVar <$> fresh
   let funcConstraint = Simple $ t1 :~: (t2 `fn` a)
   pure (AppT e1' e2', a, c1 <> (c2 <> funcConstraint))
 -- ABS
 generate env (Abs xs e) = do
   binds <- mapM (\x -> (x, ) . TVar <$> fresh) xs
-  let env' = foldl (\env_ (x, t) -> Map.insert x (Forall [] CNil t) env_) env binds
+  let env' =
+        foldl (\env_ (x, t) -> Map.insert x (Forall [] CNil t) env_) env binds
   (e', t, c) <- generate env' e
   let ty = foldr (\(_, a) b -> a `fn` b) t binds
   pure (AbsT binds e', ty, c)
@@ -63,7 +64,8 @@ generate env (Let binds body) = do
 generate env (LetA x (Forall [] CNil t1) e1 e2) = do
   (e1', t , c1) <- generate env e1
   (e2', t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
-  pure (LetAT x (Forall [] CNil t1) e1' e2' t2, t2, c1 <> c2 <> Simple (t :~: t1))
+  pure
+    (LetAT x (Forall [] CNil t1) e1' e2' t2, t2, c1 <> c2 <> Simple (t :~: t1))
 -- GLETA: let with a polymorphic annotation
 generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
   (e1', t, c) <- generate env e1
@@ -92,7 +94,7 @@ generate env (ListLit elems) = do
 -- Int literal
 generate _env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
 -- String literal
-generate env (StringLit p cs) = do
+generate env  (StringLit p cs) = do
   -- TODO: each expression's type should be in the Show typeclass
   (cs', constraints) <- unzip <$> forM
     cs
@@ -104,9 +106,10 @@ generate env (StringLit p cs) = do
 -- Record
 generate env (Record fields) = do
   let fieldLabels = map fst fields
-      fieldExprs = map snd fields
-  (fieldExprs', fieldTypes, constraints) <- unzip3 <$> mapM (generate env) fieldExprs
-  let ty = TRecord (zip fieldLabels fieldTypes)
+      fieldExprs  = map snd fields
+  (fieldExprs', fieldTypes, constraints) <-
+    unzip3 <$> mapM (generate env) fieldExprs
+  let ty      = TRecord (zip fieldLabels fieldTypes)
   let record' = RecordT (zip fieldLabels fieldExprs') ty
   pure (record', ty, mconcat constraints)
 generate env (Project record label) = do
@@ -115,7 +118,11 @@ generate env (Project record label) = do
   beta <- TVar <$> fresh
   -- Constraint recordType to have a field with label l and type beta
   let fieldConstraint = HasField recordType label beta
-  pure (ProjectT record' label recordType, beta, recordConstraints <> Simple fieldConstraint)
+  pure
+    ( ProjectT record' label recordType
+    , beta
+    , recordConstraints <> Simple fieldConstraint
+    )
 
 -- Case expressions
 -------------------

@@ -71,8 +71,8 @@ translateModule env T.Module { T.moduleDecls = decls } =
   -- 4. everything else
   let ordering :: T.Decl -> Int
       ordering = \case
-        (T.DataDecl      _) -> 0
-        (T.FunDecl       _) -> 3
+        (T.DataDecl _) -> 0
+        (T.FunDecl  _) -> 3
       orderedDecls = sortOn ordering decls
   in  foldlM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
 
@@ -186,7 +186,7 @@ translateExpr _ (T.VarT (TopLevel m "show") _) | m == modPrim = do
   v <- fresh
   pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
 
-translateExpr _ (T.VarT n _) = pure (Var n)
+translateExpr _   (T.VarT n _) = pure (Var n)
 translateExpr env (T.AppT a b) = do
   a' <- translateExpr env a
   b' <- translateExpr env b
@@ -233,8 +233,10 @@ translateExpr env (T.CaseT scrut alts _) = do
     alts
   let lams = foldr Fatbar (Bottom "pattern match failure") alts'
   pure $ Let (VarPat var) scrut' lams
-translateExpr _env T.RecordT{} = error "ELC.Compile.translateExpr: cannot translate records yet"
-translateExpr _env T.ProjectT{} = error "ELC.Compile.translateExpr: cannot translate record projections yet"
+translateExpr _env T.RecordT{} =
+  error "ELC.Compile.translateExpr: cannot translate records yet"
+translateExpr _env T.ProjectT{} =
+  error "ELC.Compile.translateExpr: cannot translate record projections yet"
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
 translateStringLit :: Env -> String -> [(T.Exp, String)] -> NameGen Exp

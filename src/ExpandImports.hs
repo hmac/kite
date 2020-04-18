@@ -9,10 +9,10 @@ import           Util
 
 expandImports :: Module Syn -> [Module Syn] -> (Module Syn, [Module Syn])
 expandImports m deps =
-  let expanded = go (m : deps)
-      mExpanded = head expanded
+  let expanded     = go (m : deps)
+      mExpanded    = head expanded
       depsExpanded = tail expanded
-   in (mExpanded, depsExpanded)
+  in  (mExpanded, depsExpanded)
  where
   go []       = []
   go (n : ns) = mapImports (expand ns) n : go ns
@@ -29,7 +29,8 @@ expand deps imp =
 
 expandItem :: Module Syn -> ImportItem -> ImportItem
 expandItem importedModule = \case
-  i@ImportSingle{} -> i
-  i@ImportSome{}   -> i
-  ImportAll { importItemName = n } ->
-    ImportSome n (fromMaybe [] (traceShowId (lookup n (moduleExports importedModule))))
+  i@ImportSingle{}                 -> i
+  i@ImportSome{}                   -> i
+  ImportAll { importItemName = n } -> ImportSome
+    n
+    (fromMaybe [] (traceShowId (lookup n (moduleExports importedModule))))

@@ -87,13 +87,13 @@ primShow Fail       = Fail
 primShow (Bottom s) = Bottom s
 primShow e          = Const (String (go e)) []
  where
-  go (Const (Int    i) _) = show i
-  go (Const (String s) _) = s
-  go (Const (Prim   _) _) = "<builtin>"
-  go (Abs   _          _) = "<function>"
-  go (Cons c args) = case conName c of
-                       TopLevel _ (Name n) -> n <> " " <> unwords (map go args)
-                       n -> error $ "primShow: unexpected conName " <> show n
+  go (Const (Int    i) _   ) = show i
+  go (Const (String s) _   ) = s
+  go (Const (Prim   _) _   ) = "<builtin>"
+  go (Abs   _          _   ) = "<function>"
+  go (Cons  c          args) = case conName c of
+    TopLevel _ (Name n) -> n <> " " <> unwords (map go args)
+    n                   -> error $ "primShow: unexpected conName " <> show n
   go _ = "<unevaluated>"
 
 subst :: Exp -> Name -> Exp -> Exp

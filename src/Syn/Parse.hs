@@ -115,13 +115,7 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
 -- reduces performance, so we keep it simple here. In a later stage of the
 -- compiler we merge adjacent comment and function declarations.
 pDecl :: Parser (Decl Syn)
-pDecl =
-  Comment
-    <$> pComment
-    <|> DataDecl
-    <$> pData
-    <|> FunDecl
-    <$> pFun
+pDecl = Comment <$> pComment <|> DataDecl <$> pData <|> FunDecl <$> pFun
 
 pData :: Parser Data
 pData = do
@@ -133,7 +127,7 @@ pData = do
   pure Data { dataName = name, dataTyVars = tyvars, dataCons = constructors }
  where
   pCon :: Parser DataCon
-  pCon  = DataCon <$> uppercaseName <*> many pConType
+  pCon = DataCon <$> uppercaseName <*> many pConType
 
 -- TODO: we can make this more flexible by allowing annotations separate from
 -- definitions
@@ -152,10 +146,10 @@ pFun = do
         pure Def { defArgs = bindings, defExpr = expr }
       rest <- many (lexemeN (pDef name))
       pure (first : rest)
-  pure Fun { funComments   = comments
-           , funName       = name
-           , funType       = sig
-           , funDefs       = defs
+  pure Fun { funComments = comments
+           , funName     = name
+           , funType     = sig
+           , funDefs     = defs
            }
 
 pDef :: RawName -> Parser (Def Syn)
@@ -190,32 +184,32 @@ pType = pType' Neutral
 -- Note: currently broken
 pType' :: TypeCtx -> Parser Type
 pType' ctx = case ctx of
-               Neutral -> try arr <|> try app <|> atomic <|> parens (pType' Neutral)
-               Paren -> atomic <|> parens (pType' Neutral)
+  Neutral -> try arr <|> try app <|> atomic <|> parens (pType' Neutral)
+  Paren   -> atomic <|> parens (pType' Neutral)
  where
   atomic = con <|> var <|> hole <|> list <|> record <|> try tuple
-  arr = do
+  arr    = do
     a <- lexemeN (try app <|> pType' Paren)
     void $ symbolN "->"
     TyFun a <$> pType' Neutral
-  app = conApp <|> varApp
+  app    = conApp <|> varApp
   conApp = do
-    f <- uppercaseName
+    f  <- uppercaseName
     xs <- many $ pType' Paren
     pure $ TyCon f xs
   -- applications of type variables are treated (for some reason) as TyCon
   varApp = do
     (f, xs) <- try $ do
-      f <- lowercaseName
+      f  <- lowercaseName
       xs <- some $ pType' Paren
       pure (f, xs)
     pure $ TyCon f xs
-  var    = TyVar <$> lowercaseName
-  con    = (`TyCon` []) <$> uppercaseName
-  hole   = TyHole <$> (string "?" >> pHoleName)
-  list   = TyList <$> brackets (pType' Neutral)
-  tuple  = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
-  record = TyRecord <$> braces (recordField `sepBy1` comma)
+  var         = TyVar <$> lowercaseName
+  con         = (`TyCon` []) <$> uppercaseName
+  hole        = TyHole <$> (string "?" >> pHoleName)
+  list        = TyList <$> brackets (pType' Neutral)
+  tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
+  record      = TyRecord <$> braces (recordField `sepBy1` comma)
   recordField = do
     fName <- lowercaseName
     void (symbol ":")
@@ -459,10 +453,12 @@ pCase = do
 
 pRecord :: Parser Syn
 pRecord = Record <$> braces (pField `sepBy1` comma)
-  where pField = do name <- lowercaseName
-                    void (symbol "=")
-                    expr <- pExpr
-                    pure (name, expr)
+ where
+  pField = do
+    name <- lowercaseName
+    void (symbol "=")
+    expr <- pExpr
+    pure (name, expr)
 
 pComment :: Parser String
 pComment = do

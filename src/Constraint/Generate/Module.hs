@@ -25,10 +25,7 @@ import           Constraint.Generate.Bind
 import qualified Constraint.Generate.Data
 import           Util
 
-generateModule
-  :: TypeEnv
-  -> Can.Module
-  -> GenerateM (TypeEnv, T.Module)
+generateModule :: TypeEnv -> Can.Module -> GenerateM (TypeEnv, T.Module)
 generateModule env modul = do
   -- Extract data declarations
   let datas = map Constraint.Generate.Data.translate
@@ -48,17 +45,15 @@ generateModule env modul = do
   (env''', binds') <- mapAccumLM (generateBind mempty) env'' binds
 
   -- Reconstruct module with typed declarations
-  let
-    datadecls      = map T.DataDecl datas
-    fundecls       = map (T.FunDecl . bindToFun) binds'
-    moduleT = T.Module
-      { T.moduleName    = moduleName modul
-      , T.moduleImports = moduleImports modul
-      -- At this point we should have expanded all exports into a flat list (see
-      -- ExpandExports) so we can safely extract the fst of each.
-      , T.moduleExports = map fst (moduleExports modul)
-      , T.moduleDecls = datadecls <> fundecls
-      }
+  let datadecls = map T.DataDecl datas
+      fundecls  = map (T.FunDecl . bindToFun) binds'
+      moduleT   = T.Module { T.moduleName    = moduleName modul
+                           , T.moduleImports = moduleImports modul
+        -- At this point we should have expanded all exports into a flat list (see
+        -- ExpandExports) so we can safely extract the fst of each.
+                           , T.moduleExports = map fst (moduleExports modul)
+                           , T.moduleDecls   = datadecls <> fundecls
+                           }
 
   pure (env''', moduleT)
 

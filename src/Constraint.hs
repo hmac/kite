@@ -36,7 +36,7 @@ import           Data.Set                       ( Set
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Canonical                      ( Name(..) )
-import Syn (Scheme_(..))
+import           Syn                            ( Scheme_(..) )
 
 -- Simple constraints
 -- Created by the user via type annotations
@@ -150,11 +150,11 @@ class Sub a where
   sub :: Subst -> a -> a
 
 instance Sub Type where
-  sub s (TVar v   ) = fromMaybe (TVar v) (lookup v s)
-  sub s (TCon n ts) = TCon n (map (sub s) ts)
-  sub _ (THole n  ) = THole n
-  sub _ TInt        = TInt
-  sub _ TString     = TString
+  sub s (TVar v   )      = fromMaybe (TVar v) (lookup v s)
+  sub s (TCon n ts)      = TCon n (map (sub s) ts)
+  sub _ (THole n  )      = THole n
+  sub _ TInt             = TInt
+  sub _ TString          = TString
   sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
 
 instance Sub Constraint where
@@ -191,32 +191,32 @@ class Vars a where
   ftv  :: a -> Set Var
 
 instance Vars Type where
-  fuv (TVar (U v)) = Set.singleton (U v)
-  fuv (TVar _    ) = mempty
-  fuv (TCon _ ts ) = Set.unions (map fuv ts)
-  fuv (THole _   ) = mempty
-  fuv TInt         = mempty
-  fuv TString      = mempty
+  fuv (TVar (U v))     = Set.singleton (U v)
+  fuv (TVar _    )     = mempty
+  fuv (TCon _ ts )     = Set.unions (map fuv ts)
+  fuv (THole _   )     = mempty
+  fuv TInt             = mempty
+  fuv TString          = mempty
   fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
 
-  ftv (TVar v   ) = Set.singleton v
-  ftv (TCon _ ts) = Set.unions (map ftv ts)
-  ftv (THole _  ) = mempty
-  ftv TInt        = mempty
-  ftv TString     = mempty
+  ftv (TVar v   )      = Set.singleton v
+  ftv (TCon _ ts)      = Set.unions (map ftv ts)
+  ftv (THole _  )      = mempty
+  ftv TInt             = mempty
+  ftv TString          = mempty
   ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)
 
 instance Vars Constraint where
-  fuv CNil           = mempty
-  fuv (a    :^: b  ) = fuv a <> fuv b
-  fuv (t    :~: v  ) = fuv t <> fuv v
-  fuv (Inst _   tys) = fuv tys
+  fuv CNil             = mempty
+  fuv (a    :^: b    ) = fuv a <> fuv b
+  fuv (t    :~: v    ) = fuv t <> fuv v
+  fuv (Inst _   tys  ) = fuv tys
   fuv (HasField r _ t) = fuv r <> fuv t
 
-  ftv CNil           = mempty
-  ftv (a    :^: b  ) = ftv a <> ftv b
-  ftv (t    :~: v  ) = ftv t <> ftv v
-  ftv (Inst _   tys) = ftv tys
+  ftv CNil             = mempty
+  ftv (a    :^: b    ) = ftv a <> ftv b
+  ftv (t    :~: v    ) = ftv t <> ftv v
+  ftv (Inst _   tys  ) = ftv tys
   ftv (HasField r _ t) = ftv r <> ftv t
 
 instance Vars CConstraint where

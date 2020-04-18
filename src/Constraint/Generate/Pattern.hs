@@ -96,8 +96,9 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
     let subst = zip as (map TVar ys)
 
     -- TODO: make it clearer what this is doing - could it be an aux function?
-    let result = let ts = unfoldFnType kt
-                  in (sub subst (last ts), map (sub subst) (init ts))
+    let result =
+          let ts = unfoldFnType kt
+          in  (sub subst (last ts), map (sub subst) (init ts))
     case result of
       (TCon tyname tyargs, tyconargs) -> do
         let scrutConstraint = Simple (TCon tyname (map TVar ys) :~: st)
@@ -115,7 +116,8 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
               tyconargs
         -- generate a fresh variable for the type of the whole pattern
         beta <- TVar <$> fresh
-        let betaConstraint = Simple $ beta :~: st <> beta :~: TCon tyname tyargs
+        let betaConstraint =
+              Simple $ beta :~: st <> beta :~: TCon tyname tyargs
         pure
           ( beta
           , patEqualityConstraints
@@ -124,4 +126,5 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
           <> betaConstraint
           , env <> patEnvs
           )
-      other -> error $ "generatePattern(ConsPat): expected TCon, found " <> show other
+      other ->
+        error $ "generatePattern(ConsPat): expected TCon, found " <> show other

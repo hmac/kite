@@ -9,9 +9,7 @@ where
 -- particular named module.
 
 import           Data.String                    ( IsString(fromString) )
-import           Data.Name                      ( 
-                                                 RawName(..)
-                                                )
+import           Data.Name                      ( RawName(..) )
 import           Syn                     hiding ( Name )
 
 -- TODO: move to Data.Name
