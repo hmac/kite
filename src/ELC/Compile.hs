@@ -27,7 +27,7 @@ import           NameGen                        ( NameGen
 import qualified Syn.Typed                     as T
 
 -- defs are normal definitions
-data Env = Env { envDefs :: Map Name Exp }
+newtype Env = Env { envDefs :: Map Name Exp }
   deriving Show
 
 defaultEnv :: Env
@@ -71,12 +71,11 @@ translateDecl env (T.FunDecl T.Fun { T.funName = n, T.funDefs = defs }) = do
 
 translateDecl _env (T.DataDecl d) = do
   let cons = T.dataCons d
-  datadefs <- if length cons > 1
+  if length cons > 1
     then
       let cs = zipWith (translateSumCon cs) [0 ..] cons
       in  pure $ map (\c -> (conName c, Cons c [])) cs
     else concat <$> mapM translateProdCon cons
-  pure datadefs
 
 -- Translate a function definition into a form understood by the pattern match
 -- compiler.
