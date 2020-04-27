@@ -25,6 +25,31 @@ type Parser = Parsec Void String
 -- TODO: empty data types (e.g. Void)
 -- TODO: include package in imports: from std import Data.Either
 
+
+{-
+  Indentation
+  -----------
+
+  Indentation is currently not handled well in the parser. I would like to use
+  the `indentation` package but it hasn't been ported to megaparsec (and porting
+  it proved tricky).
+
+  Idris also uses Megaparsec for its parser, and they have developed their own
+  indentation handling which I think we can steal from.
+
+  The core idea seems to be to keep track of a stand of indentation positions in
+  the parser state, pushing them on as we enter new syntactic structures and
+  pushing off afterwards. We then use these positions to parse the correct
+  amount of indentation after each new line.
+
+  Links:
+    https://github.com/idris-lang/Idris-dev/blob/master/src/Idris/Parser/Helpers.hs
+    https://github.com/idris-lang/Idris-dev/blob/master/src/Idris/Parser/Stack.hs
+    https://github.com/idris-lang/Idris-dev/blob/master/src/Idris/Parser/Expr.hs
+
+-}
+
+
 parseLamFile :: String -> Either String (Module Syn)
 parseLamFile input = case parse (pModule <* eof) "" input of
   Left  e -> Left (errorBundlePretty e)
