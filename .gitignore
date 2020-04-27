@@ -3,3 +3,4 @@ lam.cabal
 *~
 .envrc
 dist/
+dist-newstyle/

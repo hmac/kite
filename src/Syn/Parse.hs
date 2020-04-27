@@ -16,7 +16,6 @@ import           Syn
 type Parser = Parsec Void String
 
 -- TODO: markdown in comments & doctests
--- TODO: escape quote chars in string literals
 -- TODO: heredocs
 -- TODO: do notation
 -- TODO: where clause
