@@ -41,6 +41,24 @@ test = parallel $ do
                                , TyVar "AVeryLongType"
                                , TyVar "AVeryLongType"
                                ])) `shouldBe` "( AVeryLongType\n, AVeryLongType\n, AVeryLongType\n, AVeryLongType\n, AVeryLongType\n, AVeryLongType )"
+  describe "printing string literals" $ do
+    it "prints simple strings" $ do
+      show (printInterpolatedString "hello" []) `shouldBe` "\"hello\""
+    it "prints strings with escaped double quotes" $ do
+      show (printInterpolatedString "hello quote: \"" []) `shouldBe` "\"hello quote: \\\"\""
+    it "prints a string with an escaped backslash" $ do
+      show (printInterpolatedString "hello backslash: \\" []) `shouldBe` "\"hello backslash: \\\\\""
+    it "prints a string with an interpolation" $ do
+        show (printInterpolatedString "hello " [(Var "name", "")]) `shouldBe` "\"hello #{name}\""
+    it "prints a string with more complex interpolation" $ do
+        show (printInterpolatedString "hello " [(App (App (Var "+") (Var "name")) (StringLit "!" []), "")])
+          `shouldBe` "\"hello #{(name + \"!\")}\""
+    it "prints a string with a lone hash" $ do
+        show (printInterpolatedString "hello hash: #" []) `shouldBe` "\"hello hash: #\""
+    it "prints a string with an escaped hash bracket" $ do
+        show (printInterpolatedString "hello hash bracket: #{" []) `shouldBe` "\"hello hash bracket: #\\{\""
+    it "prints a string with several escaped backslashes" $ do
+        show (printInterpolatedString "\\\\" []) `shouldBe` "\"\\\\\\\\\""
   describe "printing module" $ do
     it "prints module metadata correctly" $ do
       let meta = [("hi", "there"), ("how", "are you")]

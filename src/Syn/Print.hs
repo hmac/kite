@@ -221,6 +221,7 @@ escape :: String -> String
 escape ('"'  : s) = '\\' : '"' : escape s
 escape ('\\' : s) = '\\' : '\\' : escape s
 escape ('\n' : s) = '\\' : 'n' : escape s
+escape ('#' : '{' : s) =  '#' : '\\' : '{' : escape s
 escape (x    : s) = x : escape s
 escape []         = []
 
@@ -315,6 +316,7 @@ singleton (Con      _) = True
 singleton (IntLit   _) = True
 singleton (TupleLit _) = True
 singleton (ListLit  _) = True
+singleton (StringLit _  _) = True
 singleton _            = False
 
 big :: Syn -> Bool

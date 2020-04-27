@@ -20,11 +20,9 @@ type Parser = Parsec Void String
 -- TODO: heredocs
 -- TODO: do notation
 -- TODO: where clause
--- TODO: record construction, record patterns
--- TODO: record field syntax
+-- TODO: record patterns
 -- TODO: infix constructors (like List ::)
 -- TODO: empty data types (e.g. Void)
--- TODO: rename data to type, type to alias?
 -- TODO: include package in imports: from std import Data.Either
 
 parseLamFile :: String -> Either String (Module Syn)
@@ -129,22 +127,15 @@ pData = do
   pCon :: Parser DataCon
   pCon = DataCon <$> uppercaseName <*> many pConType
 
--- TODO: we can make this more flexible by allowing annotations separate from
--- definitions
 pFun :: Parser (Fun Syn)
 pFun = do
   comments  <- many pComment
   Name name <- lowercaseName <?> "declaration type name"
-  sig       <- optional (symbol ":" >> lexemeN pType)
-  defs      <- case sig of
-    Just _  -> many (symbol name >> lexemeN pDef)
-    Nothing -> do
-      first <- pDef
-      rest  <- many (symbol name >> lexemeN pDef)
-      pure (first : rest)
+  sig       <- symbol ":" >> lexemeN pType
+  defs      <- many (symbol name >> lexemeN pDef)
   pure Fun { funComments = comments
            , funName     = Name name
-           , funType     = sig
+           , funType     = Just sig
            , funDefs     = defs
            }
 
@@ -153,8 +144,20 @@ pDef :: Parser (Def Syn)
 pDef = do
   bindings <- try $ do
     bindings <- many pPattern <?> "pattern"
-    void (symbolN "=")
+    void (string "=")
     pure bindings
+  -- If the next thing we parse is some newlines, then the token following it
+  -- must be indented by at least two columns (from the start of the line)
+  -- e.g. this is ok
+  --
+  -- foo x y =
+  --   bar
+  --
+  -- but this is not
+  --
+  -- foo x y =
+  -- bar
+  _    <- (some newline >> indent) <|> someSpace
   expr <- pExpr
   pure Def { defArgs = bindings, defExpr = expr }
 
@@ -347,49 +350,79 @@ pHole = do
   void (string "?")
   Hole <$> pHoleName
 
+-- String literals are quite complex. These are some of the variations we need
+-- to handle:
+
 -- "hello"
 -- "hello \"friend\""
 -- "hello backslash: \\"
 -- "hello #{name}"
 -- "hello #{name + "!"}"
+-- "hello hash: #"
+-- "hello hash bracket: #\{"
+
+-- Represents a chunk of parsed literal string
+data StrParse = Interp Syn | StrEnd | Str String
+  deriving (Eq, Show)
+
 pStringLit :: Parser Syn
 pStringLit = do
-  void (string "\"")
-  (prefix, interps) <- pInner
+  void (char '"')
+  parts <- pInner
   void (symbol "\"")
-  pure $ StringLit prefix interps
+  let
+    first :: [StrParse] -> (String, [StrParse])
+    first (Str s    : rest) = let (s', rest') = first rest in (s <> s', rest')
+    first (StrEnd   : _   ) = ("", [])
+    first (Interp e : rest) = ("", Interp e : rest)
+    first []                = ("", [])
+
+    comps :: [StrParse] -> (String, [(Syn, String)])
+    comps (Interp e : rest) =
+      let (s, rest') = comps rest in ("", (e, s) : rest')
+    comps (Str s  : rest) = let (s', cs) = comps rest in (s <> s', cs)
+    comps (StrEnd : _   ) = ("", [])
+    comps []              = ("", [])
+
+  pure
+    $ let (prefix , rest   ) = first parts
+          (prefix', interps) = comps rest
+      in  StringLit (prefix <> prefix') interps
  where
-  pRawString :: Parser String
+  lexChar :: Parser String
+  lexChar = do
+    c <- anySingleBut '"' <?> "any character except a double quote"
+    case c of
+      '\\'  -> pEsc
+      '#'   -> (single '{' >> pure "#{") <|> pure "#"
+      other -> pure [other]
+  pEsc :: Parser String
+  pEsc = do
+    c <- single '"' <|> single '\\' <|> single '{'
+    pure [c]
+  pRawString :: Parser StrParse
   pRawString = do
-    beforeEscape <- takeWhileP Nothing (\c -> c /= '"' && c /= '#' && c /= '\\')
-    afterEscape  <- optional $ do
-      esc  <- pEscape
-      rest <- pRawString
-      pure (esc ++ rest)
-    pure $ beforeEscape ++ fromMaybe "" afterEscape
-  pEscape :: Parser String
-  pEscape =
-    string "\\" >> (string "\"" <|> string "\\" <|> (string "n" >> pure "\n"))
-  pInterp :: Parser Syn
-  pInterp = do
-    void (string "#{")
-    e <- pExpr
-    void (string "}")
-    return e
-  pInner :: Parser (String, [(Syn, String)])
+    s <- optional lexChar
+    case s of
+      -- we've reached the end of the string
+      Nothing   -> pure StrEnd
+      -- we've reached an interpolation
+      Just "#{" -> do
+        e <- pExpr
+        _ <- string "}"
+        pure (Interp e)
+      Just other -> pure (Str other)
+  pInner :: Parser [StrParse]
   pInner = do
-    prefix <- pRawString
-    -- after the #, we either have a string interpolation or just more raw string
-    next   <- Left <$> pInterp <|> Right <$> pRawString
-    case next of
-      Left e -> do
-        (str, interps) <- pInner
-        pure (prefix, (e, str) : interps)
-      Right s
-        | null s -> pure (prefix, [])
-        | otherwise -> do
-          (str, interps) <- pInner
-          pure (prefix <> s <> str, interps)
+    res <- pRawString
+    case res of
+      StrEnd   -> pure [StrEnd]
+      Interp e -> do
+        rest <- pInner
+        pure $ Interp e : rest
+      Str s -> do
+        rest <- pInner
+        pure $ Str s : rest
 
 pVar :: Parser Syn
 pVar = Var <$> lowercaseName
@@ -512,11 +545,11 @@ keywords =
 
 -- Consumes spaces and tabs
 spaceConsumer :: Parser ()
-spaceConsumer = L.space (void $ some (char ' ')) empty empty
+spaceConsumer = L.space (skipSome (char ' ')) empty empty
 
 -- Consumes spaces, tabs and newlines
 spaceConsumerN :: Parser ()
-spaceConsumerN = L.space (void (some spaceChar)) empty empty
+spaceConsumerN = L.space (skipSome spaceChar) empty empty
 
 -- Parses a specific string, skipping trailing spaces and tabs
 symbol :: String -> Parser String
@@ -533,6 +566,14 @@ lexeme = L.lexeme spaceConsumer
 -- Like lexeme but also skips trailing newlines
 lexemeN :: Parser a -> Parser a
 lexemeN = L.lexeme spaceConsumerN
+
+-- Skip at least two space characters
+indent :: Parser ()
+indent = char ' ' >> skipSome (char ' ')
+
+-- Skip one or more space characters
+someSpace :: Parser ()
+someSpace = skipSome (char ' ')
 
 parens :: Parser p -> Parser p
 parens = between (symbol "(") (symbol ")")

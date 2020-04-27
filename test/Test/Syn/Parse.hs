@@ -26,6 +26,8 @@ test = parallel $ do
         , funType     = Just (TyVar "a" `fn` TyVar "a")
         , funDefs     = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
         }
+    it "requires a line fold to be indented" $ do
+      parse pDecl "" `shouldFailOn` "id : a -> a\nid x =\nx"
 
     it "parses a definition with multiple type arrows" $ do
       parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
@@ -209,17 +211,29 @@ test = parallel $ do
     it "parses a tuple" $ do
       parse pExpr "" "(\"\", 0)"
         `shouldParse` TupleLit [StringLit "" [], IntLit 0]
-    it "parses a string literal" $ do
-      parse pExpr "" "\"hello \\\"friend\\\"\""
-        `shouldParse` StringLit "hello \"friend\"" []
-      parse pExpr "" "\"this is a backslash: \\\\ (#{0})\""
-        `shouldParse` StringLit "this is a backslash: \\ (" [(IntLit 0, ")")]
     it "parses a record" $ do
       parse pExpr "" "{ a = a, b = b }"
         `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
     it "parses record projection" $ do
       parse pExpr "" "a.b" `shouldParse` Project (Var "a") "b"
       parse pExpr "" "f a.b" `shouldParse` App (Var "f") (Project (Var "a") "b")
+  describe "parsing string literals" $ do
+    it "parses a simple string" $ do
+      parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello" []
+    it "parses a string with escaped double quotes" $ do
+      parse pExpr "" "\"hello quote: \\\"\"" `shouldParse` StringLit "hello quote: \"" []
+    it "parses a string with an escaped backslash" $ do
+      parse pExpr "" "\"hello backslash: \\\\\"" `shouldParse` StringLit "hello backslash: \\" []
+    it "parses a string with an interpolation" $ do
+      parse pExpr "" "\"hello #{name}\"" `shouldParse` StringLit "hello " [(Var "name", "")]
+    it "parses a string with more complex interpolation" $ do
+      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringLit "hello " [(App (App (Var "+") (Var "name")) (StringLit "!" []), "")]
+    it "parses a string with a lone hash" $ do
+      parse pExpr "" "\"hello hash: #\"" `shouldParse` StringLit "hello hash: #" []
+    it "parses a string with an escaped hash bracket" $ do
+      parse pExpr "" "\"hello hash bracket: #\\{\"" `shouldParse` StringLit "hello hash bracket: #{" []
+    it "parses a string with several escaped backslashes" $ do
+      parse pExpr "" "\"\\\\\\\\\"" `shouldParse` StringLit "\\\\" []
   describe "parsing types" $ do
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")

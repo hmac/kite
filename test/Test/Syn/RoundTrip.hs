@@ -129,18 +129,9 @@ genDataCon :: H.Gen DataCon
 genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
 genFun :: H.Gen (Fun Syn)
-genFun = Gen.choice [funWithType, funWithoutType]
- where
-  funWithType =
-    Fun []
-      <$> genLowerName
-      <*> (Just <$> genType)
-      <*> Gen.list (Range.linear 1 5) genDef
-  funWithoutType =
-    Fun []
-      <$> genLowerName
-      <*> pure Nothing
-      <*> Gen.list (Range.linear 1 5) genDef
+genFun = Fun [] <$> genLowerName
+                <*> (Just <$> genType)
+                <*> Gen.list (Range.linear 1 5) genDef
 
 -- TyInt and TyString are omitted here because without parsing the whole module
 -- we can't distinguish between a locally defined Int type and the builtin Int
@@ -212,19 +203,23 @@ shrinkExpr = \case
   Hole   _          -> []
   IntLit _          -> []
   Abs [v     ] e    -> [e]
-  Abs (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList vs)
-  App a        b    -> [a, b]
+  Abs (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
+  App a        b    -> [b]
   LetA n sch e body -> [body]
   Let  binds body   -> [body]
   Case e     alts   -> [e] <> map snd alts
-  TupleLit es       -> (TupleLit <$> shrinkList es) <> es
+  TupleLit es       -> (TupleLit <$> shrinkList1 es) <> es
   ListLit  es       -> (ListLit <$> shrinkList es) <> es
   StringLit p c     -> [StringLit p []]
-  Record fields     -> Record <$> shrinkList fields
+  Record fields     -> Record <$> shrinkList1 fields
   Project r n       -> [r]
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits
+
+-- | Shrinks a list, omitting the empty list
+shrinkList1 :: [a] -> [[a]]
+shrinkList1 = filter (not . null) . shrinkList
 
 genRecord :: Syn -> Syn -> H.Gen Syn
 genRecord e1 e2 = do
@@ -236,7 +231,7 @@ genStringInterpPair :: H.Gen (Syn, String)
 genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)
 
 genBinOp :: H.Gen Syn
-genBinOp = Gen.element $ Var <$> binOps
+genBinOp = Var <$> Gen.element binOps
 
 genLetBinds :: Syn -> H.Gen [(RawName, Syn)]
 genLetBinds e = do
@@ -260,7 +255,7 @@ shrinkPattern = \case
   VarPat _       -> []
   WildPat        -> []
   IntPat   _     -> []
-  TuplePat pats  -> TuplePat <$> shrinkList pats
+  TuplePat pats  -> TuplePat <$> shrinkList1 pats
   ListPat  pats  -> ListPat <$> shrinkList pats
   ConsPat c pats -> ConsPat c <$> shrinkList pats
   StringPat s    -> []
@@ -278,7 +273,7 @@ genUpperName =
   let gen = Name <$> genUpperString
   in  Gen.filter (\(Name n) -> n `notElem` keywords) gen
 
--- A hole name can be any combo or numbers or letters, in any case
+-- A hole name can be any combo of numbers or letters
 -- ?1
 -- ?hi
 -- ?HI
