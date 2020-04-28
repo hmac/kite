@@ -3,17 +3,19 @@ module Syn.Parse where
 import           Data.Maybe                     ( isJust
                                                 , fromMaybe
                                                 )
-import           Data.Void                      ( Void )
 import           Data.Functor                   ( void )
 import           Control.Monad                  ( guard )
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
+import           Text.Megaparsec.Char.Lexer     ( indentGuard
+--                                                , indentBlock
+--                                                , IndentOpt(..)
+                                                , indentLevel
+                                                )
 import qualified Text.Megaparsec.Char.Lexer    as L
 
 import           Syn
-
-type Parser = Parsec Void String
 
 -- TODO: markdown in comments & doctests
 -- TODO: heredocs
@@ -36,7 +38,7 @@ type Parser = Parsec Void String
   Idris also uses Megaparsec for its parser, and they have developed their own
   indentation handling which I think we can steal from.
 
-  The core idea seems to be to keep track of a stand of indentation positions in
+  The core idea seems to be to keep track of a stack of indentation positions in
   the parser state, pushing them on as we enter new syntactic structures and
   pushing off afterwards. We then use these positions to parse the correct
   amount of indentation after each new line.
@@ -48,6 +50,14 @@ type Parser = Parsec Void String
 
 -}
 
+type Parser = Parsec Error String
+
+newtype Error = VarKeyword String
+  deriving (Eq, Ord, Show)
+
+instance ShowErrorComponent Error where
+  showErrorComponent (VarKeyword v) =
+    show v <> " is a reserved keyword and cannot be used as a variable name."
 
 parseLamFile :: String -> Either String (Module Syn)
 parseLamFile input = case parse (pModule <* eof) "" input of
@@ -130,8 +140,6 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
   -- foo
   pImportSingle = ImportSingle <$> pName
 
--- We ensure that comments are parsed last so that they get attached to a
--- function if directly above one.
 -- We want comments above functions to be associated with them, but doing this
 -- in the parser leads to some backtracking that worsens error messages and
 -- reduces performance, so we keep it simple here. In a later stage of the
@@ -141,7 +149,7 @@ pDecl = Comment <$> pComment <|> DataDecl <$> pData <|> FunDecl <$> pFun
 
 pData :: Parser Data
 pData = do
-  void (symbol "type")
+  void (symbol' "type")
   name   <- uppercaseName
   tyvars <- many lowercaseName
   void (symbolN "=")
@@ -151,21 +159,29 @@ pData = do
   pCon :: Parser DataCon
   pCon = DataCon <$> uppercaseName <*> many pConType
 
+-- Parse a function definition
+-- Type signatures are mandatory
 pFun :: Parser (Fun Syn)
 pFun = do
-  comments  <- many pComment
-  Name name <- lowercaseName <?> "declaration type name"
-  sig       <- symbol ":" >> lexemeN pType
-  defs      <- many (symbol name >> lexemeN pDef)
+  comments <- many pComment
+  name     <- lowercaseName <?> "declaration type name"
+  sig      <- symbol ":" >> pType
+  _        <- indentGuard spaceConsumerN EQ pos1
+  defs     <- some (pDef name <* spaceConsumerN)
   pure Fun { funComments = comments
-           , funName     = Name name
+           , funName     = name
            , funType     = Just sig
            , funDefs     = defs
            }
 
 -- Parses the portion of a definition after the name
-pDef :: Parser (Def Syn)
-pDef = do
+-- Definitions must not be indented
+pDef :: RawName -> Parser (Def Syn)
+pDef name = do
+  _ <- try $ do
+    n <- lexeme lowercaseName
+    guard (name == n)
+    pure ()
   bindings <- try $ do
     bindings <- many pPattern <?> "pattern"
     void (string "=")
@@ -181,18 +197,9 @@ pDef = do
   --
   -- foo x y =
   -- bar
-  _    <- (some newline >> indent) <|> someSpace
+  _    <- indentGuard spaceConsumerN GT (mkPos 2)
   expr <- pExpr
   pure Def { defArgs = bindings, defExpr = expr }
-
--- Like pDef parses the name bit as well
-pDef' :: Parser (RawName, Def Syn)
-pDef' = do
-  name     <- lexeme lowercaseName
-  bindings <- many pPattern <?> "pattern"
-  void (symbolN "=")
-  expr <- pExpr
-  pure (name, Def { defArgs = bindings, defExpr = expr })
 
 -- The context for parsing a type
 -- Paren means that compound types have to be in parens
@@ -305,7 +312,18 @@ pListPat :: Parser Pattern
 pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
 
 pTuplePat :: Parser Pattern
-pTuplePat = TuplePat <$> parens (pPattern `sepBy` comma)
+pTuplePat = do
+  _     <- symbol "("
+  pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
+  pat1 <- pPattern
+  pats <- some $ do
+    _ <- indentGuard spaceConsumerN GT pos
+    _ <- comma
+    _ <- indentGuard spaceConsumerN GT pos
+    pPattern
+  spaceConsumerN
+  _ <- symbol ")"
+  pure $ TuplePat (pat1 : pats)
 
 pVarPat :: Parser Pattern
 pVarPat = VarPat <$> lowercaseName
@@ -380,6 +398,7 @@ pHole = do
 -- "hello"
 -- "hello \"friend\""
 -- "hello backslash: \\"
+-- "hello newline: \n"
 -- "hello #{name}"
 -- "hello #{name + "!"}"
 -- "hello hash: #"
@@ -421,9 +440,8 @@ pStringLit = do
       '#'   -> (single '{' >> pure "#{") <|> pure "#"
       other -> pure [other]
   pEsc :: Parser String
-  pEsc = do
-    c <- single '"' <|> single '\\' <|> single '{'
-    pure [c]
+  pEsc =
+    string "\"" <|> string "\\" <|> string "{" <|> (string "n" >> pure "\n")
   pRawString :: Parser StrParse
   pRawString = do
     s <- optional lexChar
@@ -477,7 +495,22 @@ pLet = do
     pure (var, val)
 
 pTuple :: Parser Syn
-pTuple = TupleLit <$> parens (pExpr `sepBy2` comma)
+pTuple = do
+  _     <- symbol "("
+  pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
+  expr1 <- pExpr
+  exprs <- some $ do
+    _ <- indentGuard spaceConsumerN GT pos
+    _ <- comma
+    _ <- indentGuard spaceConsumerN GT pos
+    pExpr
+  spaceConsumerN
+  _ <- symbol ")"
+  pure $ TupleLit (expr1 : exprs)
+
+makePositive :: Int -> Int
+makePositive n | n < 1     = 1
+               | otherwise = n
 
 pList :: Parser Syn
 pList = ListLit
@@ -533,8 +566,7 @@ pModuleName = ModuleName <$> lexeme (uppercaseString' `sepBy` string ".")
 pHoleName :: Parser RawName
 pHoleName = lexeme $ Name <$> do
   s <- some alphaNumChar
-  guard (s `notElem` keywords)
-  pure s
+  if s `elem` keywords then customFailure (VarKeyword s) else pure s
 
 uppercaseName :: Parser RawName
 uppercaseName = lexeme $ Name <$> do
@@ -578,6 +610,10 @@ spaceConsumerN = L.space (skipSome spaceChar) empty empty
 -- Parses a specific string, skipping trailing spaces and tabs
 symbol :: String -> Parser String
 symbol = L.symbol spaceConsumer
+
+-- Parses a specific string, requiring at least one trailing space
+symbol' :: String -> Parser String
+symbol' = L.symbol spaceConsumer
 
 -- Like symbol but also skips trailing newlines
 symbolN :: String -> Parser String

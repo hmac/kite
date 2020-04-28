@@ -224,6 +224,8 @@ test = parallel $ do
       parse pExpr "" "\"hello quote: \\\"\"" `shouldParse` StringLit "hello quote: \"" []
     it "parses a string with an escaped backslash" $ do
       parse pExpr "" "\"hello backslash: \\\\\"" `shouldParse` StringLit "hello backslash: \\" []
+    it "parses a string with an escaped newline" $ do
+      parse pExpr "" "\"hello newline: \\n\"" `shouldParse` StringLit "hello newline: \n" []
     it "parses a string with an interpolation" $ do
       parse pExpr "" "\"hello #{name}\"" `shouldParse` StringLit "hello " [(Var "name", "")]
     it "parses a string with more complex interpolation" $ do

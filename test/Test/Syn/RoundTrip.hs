@@ -19,7 +19,6 @@ import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.String
                                                 ( renderString )
 
-import           Control.Applicative            ( liftA2 )
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
@@ -75,8 +74,19 @@ genModule =
     <$> genModuleName
     <*> Gen.list (Range.linear 0 5) genImport
     <*> Gen.list (Range.linear 0 5) genExport
-    <*> Gen.list (Range.linear 0 10) genDecl
+    <*> (uniqueFunNames <$> Gen.list (Range.linear 0 10) genDecl)
     <*> genMetadata
+
+-- Filter a list of decls, removing any functions with duplicate names
+uniqueFunNames :: [Decl Syn] -> [Decl Syn]
+uniqueFunNames = go []
+ where
+  go _ [] = []
+  go seen (FunDecl f : rest)
+    | funName f `elem` seen = go seen rest
+    | otherwise             = FunDecl f : go (funName f : seen) rest
+  go seen (notFun : rest) = notFun : go seen rest
+
 
 genMetadata :: H.Gen [(String, String)]
 genMetadata = Gen.list (Range.linear 0 5) genKV
@@ -129,9 +139,11 @@ genDataCon :: H.Gen DataCon
 genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
 genFun :: H.Gen (Fun Syn)
-genFun = Fun [] <$> genLowerName
-                <*> (Just <$> genType)
-                <*> Gen.list (Range.linear 1 5) genDef
+genFun =
+  Fun []
+    <$> genLowerName
+    <*> (Just <$> genType)
+    <*> Gen.list (Range.linear 1 5) genDef
 
 -- TyInt and TyString are omitted here because without parsing the whole module
 -- we can't distinguish between a locally defined Int type and the builtin Int
@@ -198,21 +210,21 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
-  Var    _          -> []
-  Con    _          -> []
-  Hole   _          -> []
-  IntLit _          -> []
-  Abs [v     ] e    -> [e]
-  Abs (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
-  App a        b    -> [b]
-  LetA n sch e body -> [body]
-  Let  binds body   -> [body]
-  Case e     alts   -> [e] <> map snd alts
-  TupleLit es       -> (TupleLit <$> shrinkList1 es) <> es
-  ListLit  es       -> (ListLit <$> shrinkList es) <> es
-  StringLit p c     -> [StringLit p []]
-  Record fields     -> Record <$> shrinkList1 fields
-  Project r n       -> [r]
+  Var    _             -> []
+  Con    _             -> []
+  Hole   _             -> []
+  IntLit _             -> []
+  Abs (v : vs) e       -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
+  Abs _        e       -> [e]
+  App _        b       -> [b]
+  LetA _n _sch _e body -> [body]
+  Let  _binds body     -> [body]
+  Case e      alts     -> [e] <> map snd alts
+  TupleLit es          -> (TupleLit <$> shrinkList1 es) <> es
+  ListLit  es          -> (ListLit <$> shrinkList es) <> es
+  StringLit p _        -> [StringLit p []]
+  Record fields        -> Record <$> shrinkList1 fields
+  Project r _          -> [r]
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits
@@ -258,7 +270,7 @@ shrinkPattern = \case
   TuplePat pats  -> TuplePat <$> shrinkList1 pats
   ListPat  pats  -> ListPat <$> shrinkList pats
   ConsPat c pats -> ConsPat c <$> shrinkList pats
-  StringPat s    -> []
+  StringPat _    -> []
 
 genInt :: H.Gen Int
 genInt = Gen.int (Range.linear (-5) 5)
@@ -278,7 +290,7 @@ genUpperName =
 -- ?hi
 -- ?HI
 genHoleName :: H.Gen RawName
-genHoleName = Name <$> Gen.string (Range.linear 1 5) Gen.alphaNum
+genHoleName = Name <$> Gen.filter (`notElem` keywords) (Gen.string (Range.linear 1 5) Gen.alphaNum)
 
 genComment :: H.Gen String
 genComment = Gen.string (Range.linear 1 10) (Gen.filter (/= '\n') Gen.ascii)
