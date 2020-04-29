@@ -221,19 +221,27 @@ test = parallel $ do
     it "parses a simple string" $ do
       parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello" []
     it "parses a string with escaped double quotes" $ do
-      parse pExpr "" "\"hello quote: \\\"\"" `shouldParse` StringLit "hello quote: \"" []
+      parse pExpr "" "\"hello quote: \\\"\""
+        `shouldParse` StringLit "hello quote: \"" []
     it "parses a string with an escaped backslash" $ do
-      parse pExpr "" "\"hello backslash: \\\\\"" `shouldParse` StringLit "hello backslash: \\" []
+      parse pExpr "" "\"hello backslash: \\\\\""
+        `shouldParse` StringLit "hello backslash: \\" []
     it "parses a string with an escaped newline" $ do
-      parse pExpr "" "\"hello newline: \\n\"" `shouldParse` StringLit "hello newline: \n" []
+      parse pExpr "" "\"hello newline: \\n\""
+        `shouldParse` StringLit "hello newline: \n" []
     it "parses a string with an interpolation" $ do
-      parse pExpr "" "\"hello #{name}\"" `shouldParse` StringLit "hello " [(Var "name", "")]
+      parse pExpr "" "\"hello #{name}\""
+        `shouldParse` StringLit "hello " [(Var "name", "")]
     it "parses a string with more complex interpolation" $ do
-      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringLit "hello " [(App (App (Var "+") (Var "name")) (StringLit "!" []), "")]
+      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringLit
+        "hello "
+        [(App (App (Var "+") (Var "name")) (StringLit "!" []), "")]
     it "parses a string with a lone hash" $ do
-      parse pExpr "" "\"hello hash: #\"" `shouldParse` StringLit "hello hash: #" []
+      parse pExpr "" "\"hello hash: #\""
+        `shouldParse` StringLit "hello hash: #" []
     it "parses a string with an escaped hash bracket" $ do
-      parse pExpr "" "\"hello hash bracket: #\\{\"" `shouldParse` StringLit "hello hash bracket: #{" []
+      parse pExpr "" "\"hello hash bracket: #\\{\""
+        `shouldParse` StringLit "hello hash bracket: #{" []
     it "parses a string with several escaped backslashes" $ do
       parse pExpr "" "\"\\\\\\\\\"" `shouldParse` StringLit "\\\\" []
   describe "parsing types" $ do

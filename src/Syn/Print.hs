@@ -170,7 +170,7 @@ printPattern (VarPat n)       = printName n
 printPattern WildPat          = "_"
 printPattern (IntPat    i   ) = pretty i
 printPattern (StringPat s   ) = dquotes (pretty s)
-printPattern (TuplePat  pats) = align $ tupled (map printPattern pats)
+printPattern (TuplePat  pats) = align $ htupled (map printPattern pats)
 printPattern (ListPat   pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
 printPattern (ConsPat "::" [x, y]) =
@@ -333,3 +333,7 @@ size _         = 1
 printRecordSyntax :: Doc a -> [(Doc a, Doc a)] -> Doc a
 printRecordSyntax separator rec =
   braces $ hsep $ punctuate comma (map (\(n, t) -> n <+> separator <+> t) rec)
+
+-- Like tupled but will always print everything on the same line
+htupled :: [Doc a ] -> Doc a
+htupled elems = mconcat (zipWith (<>) (lparen : repeat comma) elems) <> rparen

@@ -312,18 +312,7 @@ pListPat :: Parser Pattern
 pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
 
 pTuplePat :: Parser Pattern
-pTuplePat = do
-  _     <- symbol "("
-  pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
-  pat1 <- pPattern
-  pats <- some $ do
-    _ <- indentGuard spaceConsumerN GT pos
-    _ <- comma
-    _ <- indentGuard spaceConsumerN GT pos
-    pPattern
-  spaceConsumerN
-  _ <- symbol ")"
-  pure $ TuplePat (pat1 : pats)
+pTuplePat = TuplePat <$> parens (pPattern `sepBy1` comma)
 
 pVarPat :: Parser Pattern
 pVarPat = VarPat <$> lowercaseName
@@ -548,7 +537,7 @@ pRecord = Record <$> braces (pField `sepBy1` comma)
 
 pComment :: Parser String
 pComment = do
-  void (symbol "-- " <|> symbol "--")
+  void (string "-- " <|> string "--")
   s <- takeWhileP (Just "comment") (/= '\n')
   spaceConsumerN
   pure s
