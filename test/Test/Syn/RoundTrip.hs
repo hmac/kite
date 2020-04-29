@@ -182,21 +182,17 @@ genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 genExpr :: H.Gen Syn
 genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   Gen.choice
-  [ Var <$> genLowerName
+  [ genVar
   , Con <$> genUpperName
   , Hole <$> genHoleName
   , IntLit <$> genInt
   ]
-  [ Gen.subtermM
-    (Gen.small genExpr)
-    (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
-  , Gen.subterm2 (Gen.small genExpr) (Gen.small genExpr) App
+  [ genAbs
+  , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
   , Gen.subtermM2 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
-  , Gen.subtermM2 (Gen.small genExpr)
-                  (Gen.small genExpr)
-                  (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
+  , genLet
   , Gen.subtermM3 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (Gen.small genExpr)
@@ -205,8 +201,29 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   <$> genString (Range.linear 0 10)
   <*> Gen.list (Range.linear 0 2) genStringInterpPair
   , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
-  , Project <$> (Var <$> genLowerName) <*> genLowerName
+  , genRecordProjection
   ]
+
+-- Generate an expression which could be on the LHS of an application.
+genFunExpr :: H.Gen Syn
+genFunExpr =
+  Gen.recursive Gen.choice [genVar, genRecordProjection] [genAbs, genLet]
+
+genAbs :: H.Gen Syn
+genAbs = Gen.subtermM
+  (Gen.small genExpr)
+  (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
+
+genVar :: H.Gen Syn
+genVar = Var <$> genLowerName
+
+genRecordProjection :: H.Gen Syn
+genRecordProjection = Project <$> (Var <$> genLowerName) <*> genLowerName
+
+genLet :: H.Gen Syn
+genLet = Gen.subtermM2 (Gen.small genExpr)
+                       (Gen.small genExpr)
+                       (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
@@ -229,9 +246,13 @@ shrinkExpr = \case
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits
 
--- | Shrinks a list, omitting the empty list
+-- | Shrinks a list to a minimum of 1 element
 shrinkList1 :: [a] -> [[a]]
 shrinkList1 = filter (not . null) . shrinkList
+
+-- | Shrinks a list to a minimum of 2 elements
+shrinkList2 :: [a] -> [[a]]
+shrinkList2 = filter ((> 1) . length) . shrinkList
 
 genRecord :: Syn -> Syn -> H.Gen Syn
 genRecord e1 e2 = do
@@ -267,7 +288,7 @@ shrinkPattern = \case
   VarPat _       -> []
   WildPat        -> []
   IntPat   _     -> []
-  TuplePat pats  -> TuplePat <$> shrinkList1 pats
+  TuplePat pats  -> TuplePat <$> shrinkList2 pats
   ListPat  pats  -> ListPat <$> shrinkList pats
   ConsPat c pats -> ConsPat c <$> shrinkList pats
   StringPat _    -> []
@@ -290,7 +311,9 @@ genUpperName =
 -- ?hi
 -- ?HI
 genHoleName :: H.Gen RawName
-genHoleName = Name <$> Gen.filter (`notElem` keywords) (Gen.string (Range.linear 1 5) Gen.alphaNum)
+genHoleName = Name <$> Gen.filter
+  (`notElem` keywords)
+  (Gen.string (Range.linear 1 5) Gen.alphaNum)
 
 genComment :: H.Gen String
 genComment = Gen.string (Range.linear 1 10) (Gen.filter (/= '\n') Gen.ascii)
