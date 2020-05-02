@@ -1,13 +1,15 @@
 module ModuleLoader
   ( ModuleGroup(..)
-  , UntypedModuleGroup
-  , loadFromPath
-  , loadFromPathAndRootDirectory
+  , module ModuleLoader
+  -- , UntypedModuleGroup
+  -- , loadFromPath
+  -- , loadFromPathAndRootDirectory
   )
 where
 
 import           System.Directory               ( getCurrentDirectory )
 
+import           Data.Name                      ( showModuleName )
 import           Syn.Parse                      ( parseLamFile )
 import           Syn
 import           Data.List                      ( nub
@@ -18,6 +20,7 @@ import           Data.List                      ( nub
 import           Canonicalise                   ( canonicaliseModule )
 import           ModuleGroup
 import           ExpandImports                  ( expandImports )
+import qualified ExpandImports
 import           ExpandExports                  ( expandExports )
 
 -- This module is responsible for loading Lam modules. It should attempt to
@@ -37,7 +40,6 @@ import           ExpandExports                  ( expandExports )
 -- For now, we ignore things like aliases, qualification and import lists.
 
 -- TODO: structured errors
-
 loadFromPath :: FilePath -> IO (Either String UntypedModuleGroup)
 loadFromPath path = do
   root <- getCurrentDirectory
@@ -56,11 +58,17 @@ loadFromPathAndRootDirectory path root = do
         Right deps' -> case sortModules (nub (concat deps')) of
           Left err -> pure (Left err)
           Right sortedDeps ->
-            let (expandedModule, expandedDeps) =
-                    expandImports (expandExports m) sortedDeps
-            in  pure $ pure $ ModuleGroup
-                  (canonicaliseModule expandedModule)
-                  (map canonicaliseModule expandedDeps)
+            case expandImports (expandExports m) sortedDeps of
+              Right (expandedModule, expandedDeps) -> pure $ pure $ ModuleGroup
+                (canonicaliseModule expandedModule)
+                (map canonicaliseModule expandedDeps)
+              Left (ExpandImports.CannotFindModule importingModule missingModule)
+                -> pure
+                  $  Left
+                  $  "In "
+                  <> showModuleName importingModule
+                  <> ", cannot find module "
+                  <> showModuleName missingModule
 
 loadAll :: FilePath -> ModuleName -> IO (Either String [Module Syn])
 loadAll root name = do

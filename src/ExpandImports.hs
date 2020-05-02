@@ -7,30 +7,41 @@ module ExpandImports where
 import           Syn
 import           Util
 
-expandImports :: Module Syn -> [Module Syn] -> (Module Syn, [Module Syn])
-expandImports m deps =
-  let expanded     = go (m : deps)
-      mExpanded    = head expanded
+data Error = CannotFindModule ModuleName -- ^ importing module
+                              ModuleName -- ^ module we can't find
+  deriving (Eq, Show)
+
+expandImports
+  :: Module Syn -> [Module Syn] -> Either Error (Module Syn, [Module Syn])
+expandImports m deps = do
+  expanded <- go (m : reverse deps)
+  let mExpanded    = head expanded
       depsExpanded = tail expanded
-  in  (mExpanded, depsExpanded)
+  pure (mExpanded, reverse depsExpanded)
  where
-  go []       = []
-  go (n : ns) = mapImports (expand ns) n : go ns
+  go []       = pure []
+  go (n : ns) = do
+    n'  <- expandAllImports n ns
+    ns' <- go ns
+    pure (n' : ns')
 
-mapImports :: (Import -> Import) -> Module Syn -> Module Syn
-mapImports f modul = modul { moduleImports = map f (moduleImports modul) }
+expandAllImports :: Module Syn -> [Module Syn] -> Either Error (Module Syn)
+expandAllImports modul deps = do
+  let imps = moduleImports modul
+  imps' <- mapM (expand (moduleName modul) deps) imps
+  pure modul { moduleImports = imps' }
 
-expand :: [Module Syn] -> Import -> Import
-expand deps imp =
+expand :: ModuleName -> [Module Syn] -> Import -> Either Error Import
+expand modulName deps imp =
   let matchingModule = find ((== importName imp) . moduleName) deps
   in  case matchingModule of
-        Just m  -> imp { importItems = map (expandItem m) (importItems imp) }
-        Nothing -> imp
+        Just m ->
+          Right imp { importItems = map (expandItem m) (importItems imp) }
+        Nothing -> Left $ CannotFindModule modulName (importName imp)
 
 expandItem :: Module Syn -> ImportItem -> ImportItem
 expandItem importedModule = \case
-  i@ImportSingle{}                 -> i
-  i@ImportSome{}                   -> i
-  ImportAll { importItemName = n } -> ImportSome
-    n
-    (fromMaybe [] (traceShowId (lookup n (moduleExports importedModule))))
+  i@ImportSingle{} -> i
+  i@ImportSome{}   -> i
+  ImportAll { importItemName = n } ->
+    ImportSome n (fromMaybe [] (lookup n (moduleExports importedModule)))

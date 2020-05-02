@@ -1,6 +1,5 @@
 module Lam.String
 
-import Lam.Primitive (appendString)
 import Lam.Semigroup (Semigroup)
 import Lam.Monoid (Monoid)
 

@@ -1,5 +1,6 @@
 module Data.Name where
 
+import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )
 import           Util
 
@@ -17,6 +18,9 @@ instance IsString RawName where
 
 newtype ModuleName = ModuleName [String]
   deriving (Eq, Show, Ord)
+
+showModuleName :: ModuleName -> String
+showModuleName (ModuleName names) = mconcat (intersperse "." names)
 
 instance IsString ModuleName where
   fromString s = ModuleName $ splitOn '.' s

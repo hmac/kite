@@ -26,29 +26,38 @@ import           Constraint.Print
 data Config =
       Repl
     | Format FilePath
-    | Run FilePath
+    | Run FilePath FilePath
     | Typecheck FilePath
-    | Parse FilePath
-    | DumpLc FilePath
-    | DumpElc FilePath
-    | DumpTypeEnv FilePath
+    | Dump DumpPhase FilePath FilePath
     deriving (Generic, Show)
 
 instance ParseRecord Config
+
+data DumpPhase =
+    AfterParse
+  | AfterTypecheck
+  | LC
+  | ELC
+  deriving (Read, Eq, Generic, Show)
+
+instance ParseField DumpPhase
+instance ParseRecord DumpPhase
+instance ParseFields DumpPhase
 
 -- Parse stdin as a Lam module and pretty print the result
 main :: IO ()
 main = do
   cfg <- getRecord "lam"
   case cfg of
-    Repl          -> Repl.run
-    Format      f -> format f
-    Run         f -> run f
-    Parse       f -> parse f
-    DumpLc      f -> dumpLC f
-    DumpElc     f -> dumpELC f
-    DumpTypeEnv f -> dumpTypeEnv f
-    Typecheck   f -> typecheck f
+    Repl                  -> Repl.run
+    Format f              -> format f
+    Run loadPath f        -> run loadPath f
+    Typecheck f           -> typecheck f
+    Dump phase loadPath f -> case phase of
+      AfterParse     -> parse f
+      AfterTypecheck -> dumpTypeEnv loadPath f
+      LC             -> dumpLC f
+      ELC            -> dumpELC f
 
 parse :: FilePath -> IO ()
 parse = withParsedFile pPrint
@@ -65,11 +74,14 @@ dumpELC = withParsedFile $ \g ->
     Left  err -> printNicely (printError err)
     Right g'  -> pPrint (ModuleGroupCompiler.compileToELC g')
 
-dumpTypeEnv :: FilePath -> IO ()
-dumpTypeEnv = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printError err)
-    Right g'  -> pPrint g'
+dumpTypeEnv :: FilePath -> FilePath -> IO ()
+dumpTypeEnv loadPath filePath = do
+  mgroup <- ModuleLoader.loadFromPathAndRootDirectory filePath loadPath
+  case mgroup of
+    Left  e -> putStrLn e
+    Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
+      Left  err -> printNicely (printError err)
+      Right g'  -> pPrint g'
 
 typecheck :: FilePath -> IO ()
 typecheck = withParsedFile $ \g ->
@@ -82,14 +94,17 @@ format fp = parseLamFile <$> readFile fp >>= \case
   Right m   -> printNicely (printModule m)
   Left  err -> putStrLn err
 
-run :: FilePath -> IO ()
-run = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left err -> print (printError err)
-    Right g' ->
-      let cm     = ModuleGroupCompiler.compileToLC g'
-          answer = evalMain (cModuleName cm) (cModuleEnv cm)
-      in  printNicely (LC.Print.print answer)
+run :: FilePath -> FilePath -> IO ()
+run loadPath filePath = do
+  mgroup <- ModuleLoader.loadFromPathAndRootDirectory filePath loadPath
+  case mgroup of
+    Left  e -> putStrLn e
+    Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
+      Left err -> print (printError err)
+      Right g' ->
+        let cm     = ModuleGroupCompiler.compileToLC g'
+            answer = evalMain (cModuleName cm) (cModuleEnv cm)
+        in  printNicely (LC.Print.print answer)
 
 withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
