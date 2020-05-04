@@ -57,39 +57,36 @@ main = do
     Repl         -> Repl.run
     Format    f  -> format f
     Run       f  -> run homeDir f
-    Typecheck f  -> typecheck f
+    Typecheck f  -> typecheck homeDir f
     Dump phase f -> case phase of
-      AfterParse     -> parse f
+      AfterParse     -> parse homeDir f
       AfterTypecheck -> dumpTypeEnv homeDir f
-      LC             -> dumpLC f
-      ELC            -> dumpELC f
+      LC             -> dumpLC homeDir f
+      ELC            -> dumpELC homeDir f
 
-parse :: FilePath -> IO ()
-parse = withParsedFile pPrint
+parse :: FilePath -> FilePath -> IO ()
+parse homeDir = withParsedFile homeDir pPrint
 
-dumpLC :: FilePath -> IO ()
-dumpLC = withParsedFile $ \g ->
+dumpLC :: FilePath -> FilePath -> IO ()
+dumpLC homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely (printLocatedError err)
     Right g'  -> pPrint (ModuleGroupCompiler.compileToLC g')
 
-dumpELC :: FilePath -> IO ()
-dumpELC = withParsedFile $ \g ->
+dumpELC :: FilePath -> FilePath -> IO ()
+dumpELC homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely (printLocatedError err)
     Right g'  -> pPrint (ModuleGroupCompiler.compileToELC g')
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()
-dumpTypeEnv loadPath filePath = do
-  mgroup <- ModuleLoader.loadFromPathAndRootDirectory filePath loadPath
-  case mgroup of
-    Left  e -> putStrLn e
-    Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left  err -> printNicely (printLocatedError err)
-      Right g'  -> pPrint g'
+dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left  err -> printNicely (printLocatedError err)
+    Right g'  -> pPrint g'
 
-typecheck :: FilePath -> IO ()
-typecheck = withParsedFile $ \g ->
+typecheck :: FilePath -> FilePath -> IO ()
+typecheck homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely (printLocatedError err)
     Right _   -> printNicely "Success."
@@ -100,20 +97,17 @@ format fp = parseLamFile <$> readFile fp >>= \case
   Left  err -> putStrLn err
 
 run :: FilePath -> FilePath -> IO ()
-run loadPath filePath = do
-  mgroup <- ModuleLoader.loadFromPathAndRootDirectory filePath loadPath
-  case mgroup of
-    Left  e -> putStrLn e
-    Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left err -> print (printLocatedError err)
-      Right g' ->
-        let cm     = ModuleGroupCompiler.compileToLC g'
-            answer = evalMain (cModuleName cm) (cModuleEnv cm)
-        in  printNicely (LC.Print.print answer)
+run homeDir = withParsedFile homeDir $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left err -> print (printLocatedError err)
+    Right g' ->
+      let cm     = ModuleGroupCompiler.compileToLC g'
+          answer = evalMain (cModuleName cm) (cModuleEnv cm)
+      in  printNicely (LC.Print.print answer)
 
-withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
-withParsedFile cb path = do
-  mgroup <- ModuleLoader.loadFromPath path
+withParsedFile :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
+withParsedFile homeDir cb path = do
+  mgroup <- ModuleLoader.loadFromPathAndRootDirectory path homeDir
   case mgroup of
     Left  e -> putStrLn e
     Right g -> cb g
