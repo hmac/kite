@@ -31,7 +31,11 @@ instance IsString ModuleName where
 data Name
   = Local RawName
   | TopLevel ModuleName RawName
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Ord)
+
+instance Show Name where
+  show (Local (Name name)              ) = "Local " ++ name
+  show (TopLevel moduleName (Name name)) = show moduleName ++ "." ++ name
 
 fromLocal :: Name -> RawName
 fromLocal (Local n) = n
