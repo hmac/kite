@@ -13,7 +13,7 @@ import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
 
-generate :: TypeEnv -> Exp -> GenerateM (ExpT, Type, CConstraint)
+generate :: TypeEnv -> Exp -> GenerateM Error (ExpT, Type, CConstraint)
 -- VARCON
 generate env (Var name) = case Map.lookup name env of
   Just (Forall tvars c t) -> do
@@ -130,7 +130,10 @@ generate env (Project record label) = do
 -- it turns out that typeclasses need the more complex version, this will need
 -- to be changed.
 generateCase
-  :: TypeEnv -> Exp -> [(Pattern, Exp)] -> GenerateM (ExpT, Type, CConstraint)
+  :: TypeEnv
+  -> Exp
+  -> [(Pattern, Exp)]
+  -> GenerateM Error (ExpT, Type, CConstraint)
 
 -- Lam doesn't support empty case expressions.
 generateCase _env _e        []   = throwError EmptyCase
@@ -162,7 +165,9 @@ generateCase env  scrutinee alts = do
 -- generateEquation ((x :: _), Just x)
 -- TODO: consider merging with Constraint.Generate.Bind.generateMultiEquation
 generateEquation
-  :: TypeEnv -> (Pattern, Exp) -> GenerateM (ExpT, Type, Type, CConstraint)
+  :: TypeEnv
+  -> (Pattern, Exp)
+  -> GenerateM Error (ExpT, Type, Type, CConstraint)
 generateEquation env (pat, expr) = do
   (patTy, patC , env') <- fresh >>= \t -> generatePattern env (TVar t) pat
   (e    , expTy, expC) <- generate env' expr

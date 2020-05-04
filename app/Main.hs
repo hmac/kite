@@ -70,13 +70,13 @@ parse = withParsedFile pPrint
 dumpLC :: FilePath -> IO ()
 dumpLC = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printError err)
+    Left  err -> printNicely (printLocatedError err)
     Right g'  -> pPrint (ModuleGroupCompiler.compileToLC g')
 
 dumpELC :: FilePath -> IO ()
 dumpELC = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printError err)
+    Left  err -> printNicely (printLocatedError err)
     Right g'  -> pPrint (ModuleGroupCompiler.compileToELC g')
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()
@@ -85,13 +85,13 @@ dumpTypeEnv loadPath filePath = do
   case mgroup of
     Left  e -> putStrLn e
     Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left  err -> printNicely (printError err)
+      Left  err -> printNicely (printLocatedError err)
       Right g'  -> pPrint g'
 
 typecheck :: FilePath -> IO ()
 typecheck = withParsedFile $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printError err)
+    Left  err -> printNicely (printLocatedError err)
     Right _   -> printNicely "Success."
 
 format :: FilePath -> IO ()
@@ -105,7 +105,7 @@ run loadPath filePath = do
   case mgroup of
     Left  e -> putStrLn e
     Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left err -> print (printError err)
+      Left err -> print (printLocatedError err)
       Right g' ->
         let cm     = ModuleGroupCompiler.compileToLC g'
             answer = evalMain (cModuleName cm) (cModuleEnv cm)

@@ -28,7 +28,7 @@ import qualified Data.Map.Strict               as Map
 -- Note: this code isn't taken from the Modular Type Inference paper - it's
 -- written by me instead. Treat it with caution and assume it has bugs.
 generatePattern
-  :: TypeEnv -> Type -> Pattern -> GenerateM (Type, CConstraint, TypeEnv)
+  :: TypeEnv -> Type -> Pattern -> GenerateM Error (Type, CConstraint, TypeEnv)
 generatePattern env st (IntPat _) = do
   let c = Simple (st :~: TInt)
   pure (TInt, c, env)
@@ -122,7 +122,7 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
         error $ "generatePattern(ConsPat): expected TCon, found " <> show other
 
 generateSubpatterns
-  :: TypeEnv -> [Pattern] -> GenerateM ([Type], CConstraint, TypeEnv)
+  :: TypeEnv -> [Pattern] -> GenerateM Error ([Type], CConstraint, TypeEnv)
 generateSubpatterns env pats = do
   freshPatTypes            <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
   (tys, constraints, envs) <-

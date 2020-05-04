@@ -9,8 +9,6 @@ import           Control.Monad                  ( guard )
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import           Text.Megaparsec.Char.Lexer     ( indentGuard
---                                                , indentBlock
---                                                , IndentOpt(..)
                                                 , indentLevel
                                                 )
 import qualified Text.Megaparsec.Char.Lexer    as L

@@ -22,6 +22,7 @@ module Constraint
   , modPrim
   , mkTupleType
   , Error(..)
+  , LocatedError(..)
   , Scheme
   , Scheme_(..)
   )
@@ -263,3 +264,9 @@ data Error = OccursCheckFailure Type Type
            | RecordDoesNotHaveLabel Type Name
            | ProjectionOfNonRecordType Type Name
   deriving (Show, Eq)
+
+-- An error paired with the name of the binding it originates from.
+-- Not as good as tying errors to specific source locations, but better than
+-- nothing.
+data LocatedError = LocatedError Name Error
+  deriving (Eq, Show)

@@ -100,3 +100,11 @@ printError (ProjectionOfNonRecordType ty name) =
     <+> "from the type"
     <+> printType ty
     <+> "because it is not a record type."
+
+printLocatedError :: LocatedError -> Doc a
+printLocatedError (LocatedError moduleName err) = vsep
+  [ "In the definition"
+  <+> printName moduleName
+  <+> "I encountered the following error:"
+  , printError err
+  ]

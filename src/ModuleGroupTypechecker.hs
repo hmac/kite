@@ -1,6 +1,6 @@
 module ModuleGroupTypechecker where
 
-import           Constraint                     ( Error )
+import           Constraint                     ( LocatedError )
 import           Constraint.Generate.M          ( run
                                                 , TypeEnv
                                                 )
@@ -17,7 +17,8 @@ import           Util
 -- the modules are in dependency order (this is handled by the ModuleLoader).
 
 
-typecheckModuleGroup :: UntypedModuleGroup -> Either Error TypedModuleGroup
+typecheckModuleGroup
+  :: UntypedModuleGroup -> Either LocatedError TypedModuleGroup
 typecheckModuleGroup (ModuleGroup m deps) = do
   -- Typecheck each module in order, so that definitions from imported modules
   -- are available when the module is typechecked.
@@ -32,7 +33,7 @@ typecheckModuleGroup (ModuleGroup m deps) = do
       pure $ TypedModuleGroup typedModule (reverse typedDeps)
     [] -> error "ModuleGroupTypechecker: empty list found"
 
-dumpEnv :: UntypedModuleGroup -> Either Error TypeEnv
+dumpEnv :: UntypedModuleGroup -> Either LocatedError TypeEnv
 dumpEnv (ModuleGroup m deps) = do
   let ms       = deps ++ [m]
   let (res, _) = run $ mapAccumLM generateModule Constraint.Primitive.env ms

@@ -9,6 +9,7 @@ where
 -- - A State part, generate fresh variables (like NameGen)
 -- - A Writer part, to log new variables to a set for use in solving
 
+import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 import           Data.Map.Strict                ( Map )
 import           Control.Monad.State.Strict
@@ -17,13 +18,15 @@ import           Control.Monad.Except
 
 import           Constraint
 import           Data.Name
+import           Util
 
 type TypeEnv = Map Name Scheme
 
-type GenerateM = ExceptT Error (WriterT (Set.Set Var) (State Int))
+-- @e@ is the type of error
+type GenerateM e = ExceptT e (WriterT (Set Var) (State Int))
 
 -- Generate a fresh rigid type variable
-freshR :: GenerateM Var
+freshR :: GenerateM e Var
 freshR = do
   k <- get
   put (k + 1)
@@ -32,7 +35,7 @@ freshR = do
   pure var
 
 -- Generate a fresh unification type variable
-fresh :: GenerateM Var
+fresh :: GenerateM e Var
 fresh = do
   k <- get
   put (k + 1)
@@ -40,8 +43,12 @@ fresh = do
   tell (Set.singleton var)
   pure var
 
-run :: GenerateM a -> (Either Error a, Set.Set Var)
+run :: GenerateM e a -> (Either e a, Set Var)
 run m = evalState (runWriterT (runExceptT m)) 0
+
+-- | Transform the error type of a GenerateM
+mapError :: (e -> e') -> GenerateM e a -> GenerateM e' a
+mapError = mapExceptT . fmap . first
 
 -- Converts a -> b -> c into [a, b, c]
 unfoldFnType :: Type -> [Type]

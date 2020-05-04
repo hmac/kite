@@ -21,11 +21,16 @@ data Bind = Bind Name (Maybe Scheme) [([Pattern], Exp)]
 data BindT = BindT Name [([Pattern], ExpT)] Scheme
   deriving (Show, Eq)
 
+withLocation :: Name -> GenerateM Error a -> GenerateM LocatedError a
+withLocation name = mapError (LocatedError name)
+
 -- Fig. 12
-generateBind :: AxiomScheme -> TypeEnv -> Bind -> GenerateM (TypeEnv, BindT)
-generateBind _ _ (Bind _ _ equations) | not (sameNumberOfPatterns equations) =
-  throwError EquationsHaveDifferentNumberOfPatterns
-generateBind axs env (Bind name annotation equations) = do
+generateBind
+  :: AxiomScheme -> TypeEnv -> Bind -> GenerateM LocatedError (TypeEnv, BindT)
+generateBind _ _ (Bind name _ equations)
+  | not (sameNumberOfPatterns equations) = throwError
+    (LocatedError name EquationsHaveDifferentNumberOfPatterns)
+generateBind axs env (Bind name annotation equations) = withLocation name $ do
   -- Firstly, generate a fresh type variable for the whole binding, and extend
   -- the environment with it. This means any recursive reference to the binding
   -- will be correctly in scope.
@@ -100,7 +105,7 @@ generateBind axs env (Bind name annotation equations) = do
 --   and True True = True
 --   and _    _    = False
 generateMultiEquation
-  :: TypeEnv -> ([Pattern], Exp) -> GenerateM (ExpT, Type, CConstraint)
+  :: TypeEnv -> ([Pattern], Exp) -> GenerateM Error (ExpT, Type, CConstraint)
 generateMultiEquation _ (pats, _) | hasDuplicates (patternVariables pats) =
   throwError DuplicatePatternVariables
 generateMultiEquation env (pats, expr) = do

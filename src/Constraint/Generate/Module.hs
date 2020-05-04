@@ -25,7 +25,8 @@ import           Constraint.Generate.Bind
 import qualified Constraint.Generate.Data
 import           Util
 
-generateModule :: TypeEnv -> Can.Module -> GenerateM (TypeEnv, T.Module)
+generateModule
+  :: TypeEnv -> Can.Module -> GenerateM LocatedError (TypeEnv, T.Module)
 generateModule env modul = do
   -- Extract data declarations
   let datas = map Constraint.Generate.Data.translate
