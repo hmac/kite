@@ -7,6 +7,8 @@ import           Text.Pretty.Simple             ( pPrint )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
+import           System.Environment             ( lookupEnv )
+import           System.Directory               ( getCurrentDirectory )
 
 import           ModuleGroup
 import           ModuleGroupCompiler            ( CompiledModule(..) )
@@ -26,9 +28,9 @@ import           Constraint.Print
 data Config =
       Repl
     | Format FilePath
-    | Run FilePath FilePath
+    | Run FilePath
     | Typecheck FilePath
-    | Dump DumpPhase FilePath FilePath
+    | Dump DumpPhase FilePath
     deriving (Generic, Show)
 
 instance ParseRecord Config
@@ -47,15 +49,18 @@ instance ParseFields DumpPhase
 -- Parse stdin as a Lam module and pretty print the result
 main :: IO ()
 main = do
+  homeDir <- lookupEnv "LAM_HOME" >>= \case
+    Nothing -> getCurrentDirectory
+    Just d  -> pure d
   cfg <- getRecord "lam"
   case cfg of
-    Repl                  -> Repl.run
-    Format f              -> format f
-    Run loadPath f        -> run loadPath f
-    Typecheck f           -> typecheck f
-    Dump phase loadPath f -> case phase of
+    Repl         -> Repl.run
+    Format    f  -> format f
+    Run       f  -> run homeDir f
+    Typecheck f  -> typecheck f
+    Dump phase f -> case phase of
       AfterParse     -> parse f
-      AfterTypecheck -> dumpTypeEnv loadPath f
+      AfterTypecheck -> dumpTypeEnv homeDir f
       LC             -> dumpLC f
       ELC            -> dumpELC f
 
