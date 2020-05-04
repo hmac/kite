@@ -20,7 +20,6 @@ module Constraint.Solve
 where
 
 import           Util
-import           Canonical                      ( Name(..) )
 import           Data.Name
 
 import qualified Data.Set                      as Set

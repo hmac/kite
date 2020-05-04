@@ -8,26 +8,8 @@ where
 -- This means all names are resolved to a specific scope, i.e. local or from a
 -- particular named module.
 
-import           Data.String                    ( IsString(fromString) )
-import           Data.Name                      ( RawName(..) )
+import           Data.Name
 import           Syn                     hiding ( Name )
-
--- TODO: move to Data.Name
-data Name
-  = Local RawName
-  | TopLevel ModuleName RawName
-  deriving (Eq, Show, Ord)
-
-fromLocal :: Name -> RawName
-fromLocal (Local n) = n
-fromLocal n         = error $ "Expected Local name, found " <> show n
-
-toRaw :: Name -> RawName
-toRaw (Local n     ) = n
-toRaw (TopLevel _ n) = n
-
-instance IsString Name where
-  fromString = Local . Name
 
 type Exp = Syn_ Name Name (Constraint_ Name) (Type_ Name)
 type Type = Type_ Name

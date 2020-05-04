@@ -17,8 +17,8 @@ import           Text.Megaparsec                ( parse
 import qualified LC.Eval                        ( evalVar )
 import qualified LC.Print                       ( print )
 import           Syn
+import           Data.Name
 import qualified Canonical                     as Can
-import           Canonical                      ( Name(..) )
 import           Canonicalise                   ( canonicaliseModule )
 import qualified ModuleGroupTypechecker
 import           ModuleGroupCompiler            ( CompiledModule(..) )

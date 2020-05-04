@@ -9,6 +9,7 @@ import qualified Data.Map.Strict               as Map
 import           Syn                     hiding ( Scheme
                                                 , fn
                                                 )
+import           Data.Name
 import qualified Canonical                     as Can
 import qualified Syn.Typed                     as T
 import           Constraint.Generate.M          ( TypeEnv )
@@ -39,14 +40,14 @@ generate d =
 
 translate :: Can.Data -> T.Data
 translate d =
-  let tyvars = map Can.Local (dataTyVars d)
+  let tyvars = map Local (dataTyVars d)
   in  T.Data
         { T.dataName   = dataName d
         , T.dataTyVars = tyvars
         , T.dataCons   = map (translateDataCon (dataName d) tyvars) (dataCons d)
         }
 
-translateDataCon :: Can.Name -> [Can.Name] -> Can.DataCon -> T.DataCon
+translateDataCon :: Name -> [Name] -> Can.DataCon -> T.DataCon
 translateDataCon typeName tyvars datacon = case datacon of
   DataCon { conName = name, conArgs = args } -> T.DataCon
     { T.conName = name
@@ -54,7 +55,7 @@ translateDataCon typeName tyvars datacon = case datacon of
     , T.conType = mkType typeName tyvars args
     }
 
-mkType :: Can.Name -> [Can.Name] -> [Can.Type] -> Scheme
+mkType :: Name -> [Name] -> [Can.Type] -> Scheme
 mkType dataTypeName tyvars args = T.Forall (map R tyvars)
                                            mempty
                                            (foldr (fn . tyToType) tycon args)

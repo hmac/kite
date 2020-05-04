@@ -5,7 +5,7 @@ where
 
 import           Constraint.Generate.M
 import           Constraint
-import           Canonical                      ( Name(..) )
+import           Data.Name                      ( Name(..) )
 
 import qualified Data.Map.Strict               as Map
 

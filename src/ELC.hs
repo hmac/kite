@@ -3,9 +3,8 @@ module ELC where
 -- The Enriched Lambda Calculus
 -- Taken from The Implementation of Functional Programming Languages, Chapter 3
 
-import           Canonical                      ( Name(..) )
-import qualified Canonical                     as Can
-import Data.Map.Strict (Map)
+import           Data.Name                      ( Name(..) )
+import           Data.Map.Strict                ( Map )
 
 data Exp = Const Constant [Exp]
          | Var Name
@@ -46,12 +45,12 @@ data Primitive = PrimStringAppend
          deriving (Show, Eq)
 
 data Pattern = ConstPat Constant
-             | VarPat Can.Name
+             | VarPat Name
              | ConPat Con [Pattern]
          deriving (Show, Eq)
 
-data Con = Prod { conName :: Can.Name, conArity :: Int }
-         | Sum { conName :: Can.Name, conArity :: Int, sumTag :: Int, sumFamily :: [Con] }
+data Con = Prod { conName :: Name, conArity :: Int }
+         | Sum { conName :: Name, conArity :: Int, sumTag :: Int, sumFamily :: [Con] }
 
 -- Because Sums contain infinite loops via family, we need to manually write Eq
 -- and Show instances.

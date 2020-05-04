@@ -8,7 +8,7 @@ import           Syn                     hiding ( Name
                                                 , Scheme
                                                 )
 import qualified Canonical                     as Can
-import           Canonical                      ( Name(..) )
+import           Data.Name                      ( Name(..) )
 import           Constraint.Generate.Module     ( generateModule )
 import           Constraint.Expr         hiding ( Exp(..) )
 import           Constraint                     ( Type(..)

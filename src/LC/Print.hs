@@ -5,7 +5,6 @@ import           Data.Text.Prettyprint.Doc
 
 import           LC
 import           Data.Name
-import           Canonical                      ( Name(..) )
 import           ELC                            ( Constant(..)
                                                 , Con(..)
                                                 )

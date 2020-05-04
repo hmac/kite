@@ -5,7 +5,6 @@ module Constraint.Print where
 import           Constraint
 import           Data.Text.Prettyprint.Doc
 import           Data.Name
-import           Canonical                      ( Name(..) )
 import           Data.List                      ( intersperse )
 import qualified Data.Set                      as Set
 

@@ -3,7 +3,6 @@ module ELC.Primitive where
 -- Definitions for primitive types, constructors and functions
 
 import           Data.Name
-import           Canonical
 import           ELC
 
 modPrim :: ModuleName

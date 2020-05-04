@@ -17,7 +17,6 @@ import           Control.Monad.Except
 
 import           Constraint
 import           Data.Name
-import           Canonical                      ( Name(..) )
 
 type TypeEnv = Map Name Scheme
 

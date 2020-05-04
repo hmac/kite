@@ -35,7 +35,6 @@ import           Data.Set                       ( Set
                                                 )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
-import           Canonical                      ( Name(..) )
 import           Syn                            ( Scheme_(..) )
 
 -- Simple constraints

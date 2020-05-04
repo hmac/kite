@@ -19,7 +19,6 @@ import           Data.Foldable                  ( foldlM
 
 import           ELC
 import           ELC.Primitive
-import           Canonical                      ( Name(..), toRaw)
 import           Data.Name
 import           NameGen                        ( NameGen
                                                 , freshM
@@ -34,8 +33,7 @@ defaultEnv :: Env
 defaultEnv = Env { envDefs = Map.fromList primConstructors }
 
 merge :: Env -> [(Name, Exp)] -> Env
-merge env newDefs = env
-  { envDefs = envDefs env <> Map.fromList newDefs }
+merge env newDefs = env { envDefs = envDefs env <> Map.fromList newDefs }
 
 collapseEnv :: Env -> [(Name, Exp)]
 collapseEnv = Map.toList . envDefs
@@ -217,7 +215,7 @@ translateExpr env (T.CaseT scrut alts _) = do
   let lams = foldr Fatbar (Bottom "pattern match failure") alts'
   pure $ Let (VarPat var) scrut' lams
 translateExpr env (T.RecordT fields _type) = translateRecord env fields
-translateExpr env (T.ProjectT e l _type) = translateRecordProjection env e l
+translateExpr env (T.ProjectT e l _type  ) = translateRecordProjection env e l
 
 -- "hi #{name}!" ==> "hi " <> show name <> "!"
 translateStringLit :: Env -> String -> [(T.Exp, String)] -> NameGen Exp
@@ -279,7 +277,8 @@ translateRecord env fields = do
   where unName (Name n) = n
 
 translateRecordProjection :: Env -> T.Exp -> Name -> NameGen Exp
-translateRecordProjection env expr label = RecordProject <$> translateExpr env expr <*> pure (unName (toRaw label))
+translateRecordProjection env expr label =
+  RecordProject <$> translateExpr env expr <*> pure (unName (toRaw label))
   where unName (Name n) = n
 
 binaryPrim :: Primitive -> NameGen Exp
@@ -310,12 +309,12 @@ subst a n (Fatbar x y) = Fatbar (subst a n x) (subst a n y)
 subst a n (Case v alts)
   | n == v    = Let (VarPat v) a (Case v (map (substClause a n) alts))
   | otherwise = Case v (map (substClause a n) alts)
-subst _a _n Fail             = Fail
-subst _a _n (Bottom s      ) = Bottom s
-subst a  n  (Project ar i e) = Project ar i (subst a n e)
-subst a  n  (Y e           ) = Y (subst a n e)
-subst _a _n (Record fields)  = Record fields
-subst a n   (RecordProject e l)  = RecordProject (subst a n e) l
+subst _a _n Fail                = Fail
+subst _a _n (Bottom s         ) = Bottom s
+subst a  n  (Project ar i e   ) = Project ar i (subst a n e)
+subst a  n  (Y      e         ) = Y (subst a n e)
+subst _a _n (Record fields    ) = Record fields
+subst a  n  (RecordProject e l) = RecordProject (subst a n e) l
 
 -- If the clause rebinds the variable, don't substitute inside it
 substClause :: Exp -> Name -> Clause -> Clause

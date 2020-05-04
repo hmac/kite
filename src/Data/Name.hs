@@ -17,10 +17,29 @@ instance IsString RawName where
   fromString = Name
 
 newtype ModuleName = ModuleName [String]
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Ord)
+
+instance Show ModuleName where
+  show = showModuleName
 
 showModuleName :: ModuleName -> String
 showModuleName (ModuleName names) = mconcat (intersperse "." names)
 
 instance IsString ModuleName where
   fromString s = ModuleName $ splitOn '.' s
+
+data Name
+  = Local RawName
+  | TopLevel ModuleName RawName
+  deriving (Eq, Show, Ord)
+
+fromLocal :: Name -> RawName
+fromLocal (Local n) = n
+fromLocal n         = error $ "Expected Local name, found " <> show n
+
+toRaw :: Name -> RawName
+toRaw (Local n     ) = n
+toRaw (TopLevel _ n) = n
+
+instance IsString Name where
+  fromString = Local . Name

@@ -8,7 +8,7 @@ where
 -- Converts a Syn AST to a Constraint.Expr AST
 
 import qualified Canonical                     as Can
-import           Canonical                      ( Name(..) )
+import           Data.Name                      ( Name(..) )
 import qualified Syn                           as S
 import qualified Constraint.Expr               as E
 import           Constraint

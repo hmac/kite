@@ -8,7 +8,7 @@ module Constraint.Expr
 where
 
 import           Constraint
-import           Canonical                      ( Name(..) )
+import           Data.Name                      ( Name(..) )
 import           Util
 
 import           Syn                            ( Pattern_

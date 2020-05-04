@@ -7,7 +7,7 @@ import           Test.Hspec
 import           Constraint
 import qualified Constraint.Expr               as E
 import qualified Syn                           as S
-import           Canonical                      ( Name(..) )
+import           Data.Name                      ( Name(..) )
 import           Constraint.FromSyn
 
 test :: Spec

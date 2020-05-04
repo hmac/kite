@@ -2,8 +2,8 @@ module LC where
 
 -- Simple lambda calculus
 
-import Data.Map.Strict (Map)
-import           Canonical                      ( Name(..) )
+import           Data.Map.Strict                ( Map )
+import           Data.Name                      ( Name(..) )
 import           ELC                            ( Constant(..)
                                                 , Con(..)
                                                 )

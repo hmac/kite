@@ -5,9 +5,8 @@ import           Prelude                 hiding ( mod )
 import qualified Data.Map.Strict               as Map
 
 import           Util
-import           Data.Name
 import           Syn
-import           Canonical                      ( Name(..) )
+import           Data.Name                      ( Name(..) )
 import qualified Canonical                     as Can
 import qualified Canonical.Primitive
 
@@ -68,7 +67,7 @@ canonicaliseModule m =
   let imports = buildImports m
       env     = (moduleName m, imports)
       exports =
-          [ (Can.Local export, map Can.Local subexports)
+          [ (Local export, map Local subexports)
           | (export, subexports) <- moduleExports m
           ]
   in  m { moduleExports = exports
@@ -200,7 +199,7 @@ canonicalisePattern env = \case
         vars = concatMap fst res
     in  (vars, map snd res)
 
-canonicaliseName :: Env -> RawName -> Can.Name
+canonicaliseName :: Env -> RawName -> Name
 canonicaliseName (thisModule, imps) n = case Map.lookup n imps of
   Just i  -> TopLevel i n
   Nothing -> TopLevel thisModule n

@@ -8,7 +8,6 @@ import           ModuleGroup
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
 import           Syn.Typed
-import qualified Canonical                     as Can
 import           Data.Name
 
 
@@ -29,7 +28,7 @@ import           Data.Name
 
 data CompiledModule a = CompiledModule { cModuleName :: ModuleName
                                        , cModuleImports :: [Import]
-                                       , cModuleExports :: [Can.Name]
+                                       , cModuleExports :: [Name]
                                        , cModuleEnv :: a
                                        , cModuleDeps :: [CompiledModule a]
                                        }

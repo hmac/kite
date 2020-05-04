@@ -12,8 +12,8 @@ import qualified Syn.Typed                     as T
 import           Syn                     hiding ( Name
                                                 , fn
                                                 )
+import           Data.Name
 import qualified Canonical                     as Can
-import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr                ( Exp
                                                 , ExpT

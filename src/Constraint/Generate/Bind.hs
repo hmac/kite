@@ -1,6 +1,6 @@
 module Constraint.Generate.Bind where
 
-import           Canonical                      ( Name )
+import           Data.Name                      ( Name )
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate

@@ -14,8 +14,8 @@ import qualified Data.Map.Strict               as Map
 import           Util
 import           Data.Name                      ( RawName(..)
                                                 , ModuleName(..)
+                                                , Name(..)
                                                 )
-import           Canonical                      ( Name(..) )
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Solve               ( solveC )
