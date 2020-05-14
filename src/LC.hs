@@ -36,7 +36,7 @@ data Exp = Const Constant [Exp]
          -- CASE-N inspects the tag of the expression (expected to be a sum
          -- constructor) and selects the corresponding branch.
          -- CASE-N n (si ...) b1...bn = bi
-         | CaseN Int Exp [Exp]
+         | CaseN Exp [Exp]
          | Record (Map String Exp)
          | RecordProject Exp String
          deriving (Eq, Show)

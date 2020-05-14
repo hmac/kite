@@ -233,11 +233,11 @@ pType' ctx = case ctx of
       f  <- lowercaseName
       xs <- some $ pType' Paren
       pure (f, xs)
-    pure $ TyCon f xs
+    pure $ TyConVar f xs
   var         = TyVar <$> lowercaseName
   con         = (`TyCon` []) <$> uppercaseName
   hole        = TyHole <$> (string "?" >> pHoleName)
-  list        = TyList <$> brackets (pType' Neutral)
+  list = (TyBareList <$ symbol "[]") <|> (TyList <$> brackets (pType' Neutral))
   tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
   record      = TyRecord <$> braces (recordField `sepBy1` comma)
   recordField = do

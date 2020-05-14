@@ -82,8 +82,9 @@ test = describe "typing simple modules" $ do
             , Forall
               [R "a"]
               mempty
-              (TCon "Maybe" [TVar (R "a")] `C.fn` TVar (R "a") `C.fn` TVar
-                (R "a")
+              (      TApp (TCon "Maybe") (TVar (R "a"))
+              `C.fn` TVar (R "a")
+              `C.fn` TVar (R "a")
               )
             )
           ]
@@ -103,7 +104,7 @@ infersType :: TypeEnv -> Can.Module -> [(Name, Scheme)] -> Expectation
 infersType env input outputs =
   let (res, _) = run (generateModule env input)
   in  case res of
-        Left err -> failure (printError err)
+        Left err -> failure (printLocatedError err)
         Right (env', _) ->
           mapM_ (\(n, s) -> Map.lookup n env' `shouldBe` Just s) outputs
 

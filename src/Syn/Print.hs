@@ -127,34 +127,41 @@ data Context = Root | AppL | AppR  | ArrL | ArrR
 printType' :: Context -> Type -> Document
 printType' ctx ty = case (ctx, ty) of
   -- top level arrows don't get parenthesised
-  (Root, TyFun a b ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
+  (Root, TyFun a b    ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
   -- top level applications don't get parenthesised either
-  (Root, TyCon n []) -> printName n
-  (Root, TyCon n ts) -> printName n <+> hsep (map (printType' AppR) ts)
+  (Root, TyCon n []   ) -> printName n
+  (Root, TyCon n ts   ) -> printName n <+> hsep (map (printType' AppR) ts)
+  (Root, TyConVar n []) -> printName n
+  (Root, TyConVar n ts) -> printName n <+> hsep (map (printType' AppR) ts)
 
   -- arrows on the left of arrows get parenthesised
-  (ArrL, TyFun a b ) -> parens $ printType' Root (a `fn` b)
+  (ArrL, TyFun a b    ) -> parens $ printType' Root (a `fn` b)
   -- arrows on the right of arrows don't
-  (ArrR, TyFun a b ) -> printType' Root (a `fn` b)
+  (ArrR, TyFun a b    ) -> printType' Root (a `fn` b)
   -- arrows on either side of applications get parenthesised
-  (AppR, TyFun a b ) -> parens $ printType' Root (a `fn` b)
-  (AppL, TyFun a b ) -> parens $ printType' Root (a `fn` b)
+  (AppR, TyFun a b    ) -> parens $ printType' Root (a `fn` b)
+  (AppL, TyFun a b    ) -> parens $ printType' Root (a `fn` b)
 
   -- applications on the left of applications don't get parenthesised
-  (AppL, TyCon n ts) -> printType' Root (TyCon n ts)
+  (AppL, t@TyCon{}    ) -> printType' Root t
+  (AppL, t@TyConVar{} ) -> printType' Root t
   -- applications on the right of applications get parenthesised
-  (AppR, TyCon n ts) -> parens $ printType' Root (TyCon n ts)
+  (AppR, t@TyCon{}    ) -> parens $ printType' Root t
+  (AppR, t@TyConVar{} ) -> parens $ printType' Root t
   -- applications on either side of arrows don't
-  (ArrL, TyCon n ts) -> printType' Root (TyCon n ts)
-  (ArrR, TyCon n ts) -> printType' Root (TyCon n ts)
+  (ArrL, t@TyCon{}    ) -> printType' Root t
+  (ArrR, t@TyCon{}    ) -> printType' Root t
+  (ArrL, t@TyConVar{} ) -> printType' Root t
+  (ArrR, t@TyConVar{} ) -> printType' Root t
 
   -- Basic cases
-  (_   , TyHole n  ) -> hole ("?" <> printName n)
-  (_   , TyVar n   ) -> printName n
-  (_   , TyList ts ) -> brackets (printType' Root ts)
-  (_   , TyTuple ts) -> tupled (map (printType' Root) ts)
-  (_   , TyInt     ) -> "Int"
-  (_   , TyString  ) -> "String"
+  (_   , TyHole n     ) -> hole ("?" <> printName n)
+  (_   , TyVar n      ) -> printName n
+  (_   , TyList ts    ) -> brackets (printType' Root ts)
+  (_   , TyBareList   ) -> "[]"
+  (_   , TyTuple ts   ) -> tupled (map (printType' Root) ts)
+  (_   , TyInt        ) -> "Int"
+  (_   , TyString     ) -> "String"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
 
@@ -218,12 +225,12 @@ printInterpolatedString prefix interps = dquotes str
   printInterp e = "#{" <> printExpr e <> "}"
 
 escape :: String -> String
-escape ('"'  : s) = '\\' : '"' : escape s
-escape ('\\' : s) = '\\' : '\\' : escape s
-escape ('\n' : s) = '\\' : 'n' : escape s
-escape ('#' : '{' : s) =  '#' : '\\' : '{' : escape s
-escape (x    : s) = x : escape s
-escape []         = []
+escape ('"'       : s) = '\\' : '"' : escape s
+escape ('\\'      : s) = '\\' : '\\' : escape s
+escape ('\n'      : s) = '\\' : 'n' : escape s
+escape ('#' : '{' : s) = '#' : '\\' : '{' : escape s
+escape (x         : s) = x : escape s
+escape []              = []
 
 -- Can we simplify this by introducting printExpr' which behaves like printExpr
 -- but always parenthesises applications?
@@ -310,14 +317,14 @@ prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 
 -- True if we would never need to parenthesise it
 singleton :: Syn -> Bool
-singleton (Var      _) = True
-singleton (Hole     _) = True
-singleton (Con      _) = True
-singleton (IntLit   _) = True
-singleton (TupleLit _) = True
-singleton (ListLit  _) = True
-singleton (StringLit _  _) = True
-singleton _            = False
+singleton (Var      _   ) = True
+singleton (Hole     _   ) = True
+singleton (Con      _   ) = True
+singleton (IntLit   _   ) = True
+singleton (TupleLit _   ) = True
+singleton (ListLit  _   ) = True
+singleton (StringLit _ _) = True
+singleton _               = False
 
 big :: Syn -> Bool
 big (Case _ _  ) = True
@@ -335,5 +342,5 @@ printRecordSyntax separator rec =
   braces $ hsep $ punctuate comma (map (\(n, t) -> n <+> separator <+> t) rec)
 
 -- Like tupled but will always print everything on the same line
-htupled :: [Doc a ] -> Doc a
+htupled :: [Doc a] -> Doc a
 htupled elems = mconcat (zipWith (<>) (lparen : repeat comma) elems) <> rparen

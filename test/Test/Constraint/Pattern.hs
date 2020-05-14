@@ -18,10 +18,10 @@ import           Util
 test :: Spec
 test = do
   let
-    bool = TCon "Bool" []
-    nat  = TCon "Nat" []
-    pair a b = TCon "Pair" [a, b]
-    wrap a = TCon "Wrap" [a]
+    bool = TCon "Bool"
+    nat  = TCon "Nat"
+    pair a = TApp (TApp (TCon "Pair") a)
+    wrap   = TApp (TCon "Wrap")
 
     true   = "True"
     false  = "False"
@@ -31,19 +31,17 @@ test = do
     mkwrap = "MkWrap"
 
     env    = Map.fromList
-      [ ("True" , Forall [] CNil (TCon "Bool" []))
-      , ("False", Forall [] CNil (TCon "Bool" []))
-      , ("Zero" , Forall [] CNil (TCon "Nat" []))
-      , ("Suc"  , Forall [] CNil (TCon "Nat" [] `fn` TCon "Nat" []))
-      , ( "MkWrap"
-        , Forall [R "a"] CNil (TVar (R "a") `fn` TCon "Wrap" [TVar (R "a")])
-        )
+      [ ("True"  , Forall [] CNil (TCon "Bool"))
+      , ("False" , Forall [] CNil (TCon "Bool"))
+      , ("Zero"  , Forall [] CNil (TCon "Nat"))
+      , ("Suc"   , Forall [] CNil (TCon "Nat" `fn` TCon "Nat"))
+      , ("MkWrap", Forall [R "a"] CNil (TVar (R "a") `fn` wrap (TVar (R "a"))))
       , ( "MkPair"
         , Forall
           [R "a", R "b"]
           CNil
           (    TVar (R "a")
-          `fn` (TVar (R "b") `fn` TCon "Pair" [TVar (R "a"), TVar (R "b")])
+          `fn` (TVar (R "b") `fn` pair (TVar (R "a")) (TVar (R "b")))
           )
         )
       ]
@@ -80,7 +78,7 @@ test = do
           "Expected type error but was successful"
         | otherwise -> pure ()
     generatesEnv
-      :: GenerateM (Type, CConstraint, TypeEnv)
+      :: GenerateM Error (Type, CConstraint, TypeEnv)
       -> (TypeEnv -> Expectation)
       -> Expectation
     generatesEnv gen f = case runGenerate gen of
@@ -193,7 +191,7 @@ test = do
         pat `infersError` Nothing
 
 runGenerate
-  :: GenerateM (Type, CConstraint, TypeEnv)
+  :: GenerateM Error (Type, CConstraint, TypeEnv)
   -> Either Error (Type, Constraint, TypeEnv)
 runGenerate g =
   let (res, touchables) = run g
@@ -203,7 +201,7 @@ runGenerate g =
         pure (sub s t, cs, sub s env')
 
 runGenerateMulti
-  :: GenerateM ([Type], CConstraint, TypeEnv)
+  :: GenerateM Error ([Type], CConstraint, TypeEnv)
   -> Either Error ([Type], Constraint, TypeEnv)
 runGenerateMulti g =
   let (res, touchables) = run g

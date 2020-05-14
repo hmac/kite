@@ -49,8 +49,3 @@ run m = evalState (runWriterT (runExceptT m)) 0
 -- | Transform the error type of a GenerateM
 mapError :: (e -> e') -> GenerateM e a -> GenerateM e' a
 mapError = mapExceptT . fmap . first
-
--- Converts a -> b -> c into [a, b, c]
-unfoldFnType :: Type -> [Type]
-unfoldFnType (TCon t [x, y]) | t == TopLevel modPrim "->" = x : unfoldFnType y
-unfoldFnType t = [t]

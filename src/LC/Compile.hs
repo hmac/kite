@@ -198,9 +198,8 @@ convertCase n [Clause p@Prod{} vars body] =
   unpackClause (Var n) (Clause p vars body)
 -- Sum types:
 convertCase varName clauses = do
-  let n = length clauses
   branches <- mapM (unpackClause (Var varName)) clauses
-  pure $ CaseN n (Var varName) branches
+  pure $ CaseN (Var varName) branches
 
 unpackClause :: Exp -> Clause -> NameGen Exp
 unpackClause scrut (Clause c vars body) = do

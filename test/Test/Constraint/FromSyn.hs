@@ -56,15 +56,14 @@ test = do
       fromSyn (S.IntLit 1) `shouldBe` E.IntLit 1
   describe "Converting Ty to Type" $ do
     it "Int -> String" $ do
-      tyToType (S.TyFun S.TyInt S.TyString)
-        `shouldBe` TCon (TopLevel modPrim "->") [TInt, TString]
+      tyToType (S.TyFun S.TyInt S.TyString) `shouldBe` (TInt `fn` TString)
     it "Either" $ do
-      tyToType (S.TyCon either []) `shouldBe` TCon either []
+      tyToType (S.TyCon either []) `shouldBe` TCon either
     it "a" $ do
       tyToType (S.TyVar "a") `shouldBe` TVar (R "a")
     it "(Int, String)" $ do
       tyToType (S.TyTuple [S.TyInt, S.TyString])
-        `shouldBe` TCon (TopLevel modPrim "Tuple2") [TInt, TString]
+        `shouldBe` TApp (TApp (TCon (TopLevel modPrim "Tuple2")) TInt) TString
     it "?t" $ do
       tyToType (S.TyHole "t") `shouldBe` THole "t"
     it "Int" $ do
@@ -72,10 +71,10 @@ test = do
     it "String" $ do
       tyToType S.TyString `shouldBe` TString
     it "Maybe Int" $ do
-      tyToType (S.TyCon maybe [S.TyInt]) `shouldBe` TCon maybe [TInt]
+      tyToType (S.TyCon maybe [S.TyInt]) `shouldBe` TApp (TCon maybe) TInt
     it "Either Int a" $ do
       tyToType (S.TyCon maybe [S.TyInt, S.TyVar "a"])
-        `shouldBe` TCon maybe [TInt, TVar (R "a")]
+        `shouldBe` TApp (TApp (TCon maybe) TInt) (TVar (R "a"))
     it "(a -> b) -> a -> b" $ do
       let synType =
             (S.TyVar "a" `S.fn` S.TyVar "b")
@@ -86,7 +85,7 @@ test = do
       tyToType synType `shouldBe` expType
     it "Maybe Int -> Int -> Int" $ do
       let synType = S.TyCon maybe [S.TyInt] `S.fn` (S.TyInt `S.fn` S.TyInt)
-      let expType = TCon maybe [TInt] `fn` (TInt `fn` TInt)
+      let expType = TApp (TCon maybe) TInt `fn` (TInt `fn` TInt)
       tyToType synType `shouldBe` expType
   describe "Converting Ty to Scheme" $ do
     it "(a -> b) -> a -> b" $ do

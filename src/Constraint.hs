@@ -7,6 +7,7 @@ module Constraint
   , Axiom(..)
   , AxiomScheme
   , Type(..)
+  , unfoldFnType
   , Var(..)
   , Vars(..)
   , Subst
@@ -107,7 +108,8 @@ instance Monoid CConstraint where
   mempty = Simple mempty
 
 data Type = TVar Var
-          | TCon Name [Type]
+          | TCon Name
+          | TApp Type Type
           | THole Name
           | TInt
           | TString
@@ -119,13 +121,13 @@ modPrim = "Lam.Primitive"
 
 infixr 4 `fn`
 fn :: Type -> Type -> Type
-a `fn` b = TCon (TopLevel modPrim "->") [a, b]
+a `fn` b = TApp (TApp (TCon (TopLevel modPrim "->")) a) b
 
 list :: Type -> Type
-list t = TCon (TopLevel modPrim "List") [t]
+list = TApp (TCon (TopLevel modPrim "List"))
 
 mkTupleType :: [Type] -> Type
-mkTupleType args = TCon (TopLevel modPrim name) args
+mkTupleType args = foldl TApp (TCon (TopLevel modPrim name)) args
  where
   name = case length args of
     0 -> "Unit"
@@ -136,6 +138,12 @@ mkTupleType args = TCon (TopLevel modPrim name) args
     6 -> "Tuple6"
     7 -> "Tuple7"
     n -> error $ "Unsupported tuple length: " <> show n
+
+-- | Converts a -> b -> c into [a, b, c]
+unfoldFnType :: Type -> [Type]
+unfoldFnType (TApp (TApp (TCon (TopLevel "Lam.Primitive" "->")) a) b) =
+  a : unfoldFnType b
+unfoldFnType t = [t]
 
 data Var = R Name
          | U Name
@@ -150,9 +158,10 @@ class Sub a where
   sub :: Subst -> a -> a
 
 instance Sub Type where
-  sub s (TVar v   )      = fromMaybe (TVar v) (lookup v s)
-  sub s (TCon n ts)      = TCon n (map (sub s) ts)
-  sub _ (THole n  )      = THole n
+  sub s (TVar v  )       = fromMaybe (TVar v) (lookup v s)
+  sub _ (TCon n  )       = TCon n
+  sub s (TApp a b)       = TApp (sub s a) (sub s b)
+  sub _ (THole n )       = THole n
   sub _ TInt             = TInt
   sub _ TString          = TString
   sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
@@ -193,15 +202,17 @@ class Vars a where
 instance Vars Type where
   fuv (TVar (U v))     = Set.singleton (U v)
   fuv (TVar _    )     = mempty
-  fuv (TCon _ ts )     = Set.unions (map fuv ts)
+  fuv (TCon _    )     = mempty
+  fuv (TApp a b  )     = fuv a <> fuv b
   fuv (THole _   )     = mempty
   fuv TInt             = mempty
   fuv TString          = mempty
   fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
 
-  ftv (TVar v   )      = Set.singleton v
-  ftv (TCon _ ts)      = Set.unions (map ftv ts)
-  ftv (THole _  )      = mempty
+  ftv (TVar v  )       = Set.singleton v
+  ftv (TCon _  )       = mempty
+  ftv (TApp a b)       = ftv a <> ftv b
+  ftv (THole _ )       = mempty
   ftv TInt             = mempty
   ftv TString          = mempty
   ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)

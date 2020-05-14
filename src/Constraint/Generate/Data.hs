@@ -30,10 +30,6 @@ import           Constraint.Expr                ( Scheme )
 --           data User = User { name : String, age : Int }
 -- generates
 --           User : String -> Int -> User
---           name : User -> String
---           age  : User -> Int
---
--- TODO: generate record field selectors
 generate :: T.Data -> TypeEnv
 generate d =
   Map.fromList $ map (\c -> (T.conName c, T.conType c)) (T.dataCons d)
@@ -59,4 +55,4 @@ mkType :: Name -> [Name] -> [Can.Type] -> Scheme
 mkType dataTypeName tyvars args = T.Forall (map R tyvars)
                                            mempty
                                            (foldr (fn . tyToType) tycon args)
-  where tycon = T.TCon dataTypeName (map (TVar . R) tyvars)
+  where tycon = foldl T.TApp (T.TCon dataTypeName) (map (TVar . R) tyvars)

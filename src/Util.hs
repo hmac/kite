@@ -49,7 +49,12 @@ second = Data.Bifunctor.second
 bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
 bimap = Data.Bifunctor.bimap
 
-bimapM :: (Data.Bitraversable.Bitraversable t, Applicative f) => (a -> f b) -> (c -> f d) -> t a c -> f (t b d)
+bimapM
+  :: (Data.Bitraversable.Bitraversable t, Applicative f)
+  => (a -> f b)
+  -> (c -> f d)
+  -> t a c
+  -> f (t b d)
 bimapM = Data.Bitraversable.bimapM
 
 bimapL :: (a -> b) -> (c -> d) -> [(a, c)] -> [(b, d)]
@@ -110,6 +115,12 @@ splitOn x xs = go xs []
 -- Pretty printing
 pShow :: Show a => a -> String
 pShow = unpack . Text.Pretty.Simple.pShow
+
+pTrace :: Show a => a -> b -> b
+pTrace x = Debug.Trace.trace (pShow x)
+
+pTraceId :: Show a => a -> a
+pTraceId x = pTrace x x
 
 hasDuplicates :: Eq a => [a] -> Bool
 hasDuplicates xs = Data.List.nub xs /= xs

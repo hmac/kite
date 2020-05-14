@@ -29,25 +29,27 @@ printConstraint (HasField r l t) =
 
 printVar :: Var -> Doc a
 printVar (U n) = "U" <> printName n
-printVar (R n) = "R" <> printName n
+printVar (R n) = printName n
 
 printType :: Type -> Doc a
-printType (TCon t [a, b]) | t == TopLevel modPrim "->" =
+printType (TApp (TApp (TCon t) a) b) | t == TopLevel modPrim "->" =
   printType' a <+> "->" <+> printType' b
-printType (TVar v     )    = printVar v
-printType (TCon c args)    = hsep (printName c : map printType' args)
-printType (THole n    )    = "?" <> printName n
+printType (TApp a b)       = printType a <+> printType b
+printType (TVar  v )       = printVar v
+printType (TCon  n )       = printName n
+printType (THole n )       = "?" <> printName n
 printType TInt             = "Int"
 printType TString          = "String"
 printType (TRecord fields) = printType' (TRecord fields)
 
 -- like printType but assume we're in a nested context, so add parentheses
 printType' :: Type -> Doc a
-printType' (TCon t [a, b]) | t == TopLevel modPrim "->" =
+printType' (TApp (TApp (TCon t) a) b) | t == TopLevel modPrim "->" =
   parens $ printType a <+> "->" <+> printType b
-printType' (TVar v     )    = printVar v
-printType' (TCon c args)    = parens $ hsep (printName c : map printType args)
-printType' (THole n    )    = "?" <> printName n
+printType' (TApp a b)       = parens $ printType a <+> printType b
+printType' (TVar  v )       = printVar v
+printType' (TCon  n )       = printName n
+printType' (THole n )       = "?" <> printName n
 printType' TInt             = "Int"
 printType' TString          = "String"
 printType' (TRecord fields) = braces $ hsep $ punctuate

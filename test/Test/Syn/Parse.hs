@@ -47,8 +47,8 @@ test = parallel $ do
                         , funName     = "map"
                         , funType     = Just
                                         $    (TyVar "a" `fn` TyVar "b")
-                                        `fn` TyCon "f" [TyVar "a"]
-                                        `fn` TyCon "f" [TyVar "b"]
+                                        `fn` TyConVar "f" [TyVar "a"]
+                                        `fn` TyConVar "f" [TyVar "b"]
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }

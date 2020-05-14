@@ -92,8 +92,8 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
           let ts = unfoldFnType kt
           in  (sub subst (last ts), map (sub subst) (init ts))
     case result of
-      (TCon tyname tyargs, tyconargs) -> do
-        let scrutConstraint = Simple (TCon tyname (map TVar ys) :~: st)
+      (resultTy, tyconargs) -> do
+        let scrutConstraint = Simple (resultTy :~: st)
         -- generate each subpattern and apply the substitution to each
         (patTypes, patConstraints, patEnvs) <- do
           freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
@@ -108,8 +108,7 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
               tyconargs
         -- generate a fresh variable for the type of the whole pattern
         beta <- TVar <$> fresh
-        let betaConstraint =
-              Simple $ beta :~: st <> beta :~: TCon tyname tyargs
+        let betaConstraint = Simple $ beta :~: st <> beta :~: resultTy
         pure
           ( beta
           , patEqualityConstraints
@@ -118,8 +117,6 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
           <> betaConstraint
           , env <> patEnvs
           )
-      other ->
-        error $ "generatePattern(ConsPat): expected TCon, found " <> show other
 
 generateSubpatterns
   :: TypeEnv -> [Pattern] -> GenerateM Error ([Type], CConstraint, TypeEnv)

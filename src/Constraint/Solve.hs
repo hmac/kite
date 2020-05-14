@@ -201,10 +201,23 @@ canon :: Constraint -> Either Error Constraint
 -- REFL: Reflexive equalities can be ignored
 canon (a :~: b) | a == b = pure mempty
 
--- TDEC: Equalities between identical constructors can be decomposed to
--- equalities on their arguments
-canon (TCon k as :~: TCon k' bs) | k == k' =
-  pure (foldl (:^:) CNil (zipWith (:~:) as bs))
+-- TAPP: Equalities between function types can be decomposed to equalities between
+-- their components
+canon (TApp (TCon k) as :~: TApp (TCon k') bs) | k == k' = pure (as :~: bs)
+-- Note: This is quite naive. It can't deal with cases where the number of
+-- nested applications differs between the types, which can happen if there's a
+-- variable in place of an application.
+canon (t1@TApp{} :~: t2@TApp{}) =
+  let t1s = unfoldTyApp t1
+      t2s = unfoldTyApp t2
+  in  pure $ if length t1s == length t2s
+        then foldl (:^:) CNil (zipWith (:~:) t1s t2s)
+        else t1 :~: t2
+
+-- TDEC: Equalities between identical constructors can be dropped
+-- FAILDEC: Equalities between constructor types must have the same constructor
+canon (TCon k :~: TCon k') =
+  if k == k' then pure CNil else Left (ConstructorMismatch (TCon k) (TCon k'))
 
 -- Equalities between records with identical field labels can be decomposed to
 -- equality on their fields
@@ -216,10 +229,6 @@ canon (TRecord fs1 :~: TRecord fs2) | map fst fs1 == map fst fs2 =
 canon (HasField (TRecord fields) l t) = case lookup l fields of
   Just t' -> pure (t :~: t')
   Nothing -> Left $ RecordDoesNotHaveLabel (TRecord fields) l
-
--- FAILDEC: Equalities between constructor types must have the same constructor
-canon (t@(TCon k _) :~: v@(TCon k' _)) | k /= k' =
-  Left (ConstructorMismatch t v)
 
 -- OCCCHECK: a type variable cannot be equal to a type containing that variable
 canon (v@(TVar _) :~: t) | v /= t && t `contains` v =
@@ -253,6 +262,11 @@ interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
 interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
   | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2
   = Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: sub [(v1, t1)] t2)
+
+-- EQAPP (invented): We can substitute an equality into any other equality
+interact c1@(TVar v1 :~: t1) (t2 :~: t3)
+  | ((v1 `member` ftv t2) || (v1 `member` ftv t3)) && isCanonical c1
+  = Just $ c1 :^: (sub [(v1, t1)] t2 :~: sub [(v1, t1)] t3)
 
 -- EQDICT: We can substitute an equality into a typeclass constraint.
 interact c1@(TVar v1 :~: t1) (Inst className tys)
@@ -367,16 +381,18 @@ topreactDINSTG (AForall as _q (Inst cn1 ts0)) (Inst cn2 ts1) | cn1 == cn2 = do
 topreactDINSTG _ _ = pure (Right ())
 
 contains :: Type -> Type -> Bool
-contains a b | a == b  = True
-contains (TCon _ ts) t = any (`contains` t) ts
-contains _           _ = False
+contains a b | a == b = True
+contains (TApp a b) t = any (`contains` t) [a, b]
+contains _          _ = False
 
 canonCompare :: Type -> Type -> Ordering
 canonCompare (TVar (U _)) (TVar (R _)) = LT
 canonCompare (TVar (R _)) (TVar (U _)) = GT
 canonCompare (TVar a    ) (TVar b    ) = compare a b
-canonCompare _            (TCon _ _  ) = LT
-canonCompare (TCon _ _)   _            = GT
+canonCompare _            (TCon _    ) = LT
+canonCompare (TCon _)     _            = GT
+canonCompare _            (TApp _ _)   = LT
+canonCompare (TApp _ _)   _            = GT
 canonCompare _            _            = EQ
 
 -- Fig. 20
@@ -395,9 +411,10 @@ isCanonical _ = False
 -- simultaneously until we find the variable in the left type, and return
 -- the corresponding part of the right type.
 findCounterpart :: Var -> Type -> Type -> Maybe Type
-findCounterpart v (TVar v') t | v == v' = Just t
-findCounterpart v (TCon _ ts1) (TCon _ ts2) =
-  firstJust (zipWith (findCounterpart v) ts1 ts2)
+findCounterpart v (TVar v') t | v == v'     = Just t
+findCounterpart v (TApp a1 b1) (TApp a2 b2) = case findCounterpart v a1 a2 of
+  Just t  -> Just t
+  Nothing -> findCounterpart v b1 b2
 findCounterpart _ _ _ = Nothing
 
 -- A list of each element in the given list paired with the remaining elements
@@ -422,3 +439,9 @@ firstLeft :: [Either a b] -> Maybe a
 firstLeft []            = Nothing
 firstLeft (Left x : _ ) = Just x
 firstLeft (_      : xs) = firstLeft xs
+
+-- | Unfold a nested type application
+-- f a b c ==> [f, a, b, c]
+unfoldTyApp :: Type -> [Type]
+unfoldTyApp (TApp a b) = unfoldTyApp a <> [b]
+unfoldTyApp t          = [t]

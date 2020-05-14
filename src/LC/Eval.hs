@@ -62,8 +62,8 @@ eval env expr = case expr of
   Project _a i (Cons _ args)      -> eval env (args !! i)
   Project a  i e                  -> eval env $ Project a i (eval env e)
   Y e                             -> eval env $ App e (Y e)
-  CaseN _ (Cons Sum { sumTag = t } _) branches -> eval env (branches !! t)
-  CaseN n e branches              -> eval env $ CaseN n (eval env e) branches
+  CaseN (Cons Sum { sumTag = t } _) branches -> eval env (branches !! t)
+  CaseN e branches                -> eval env $ CaseN (eval env e) branches
   Record fields                   -> Record fields
   RecordProject (Record fields) l -> case Map.lookup l fields of
     Just e -> eval env e
@@ -127,7 +127,7 @@ subst a  n  (If c t e           ) = If (subst a n c) (subst a n t) (subst a n e)
 subst a  n  (Eq x y             ) = Eq (subst a n x) (subst a n y)
 subst a  n  (UnpackProduct i x y) = UnpackProduct i (subst a n x) (subst a n y)
 subst a  n  (UnpackSum t i x y  ) = UnpackSum t i (subst a n x) (subst a n y)
-subst a  n  (CaseN i x ys       ) = CaseN i (subst a n x) (map (subst a n) ys)
+subst a  n  (CaseN x ys         ) = CaseN (subst a n x) (map (subst a n) ys)
 subst _a _n (Record fields      ) = Record fields
 subst a  n  (RecordProject e l  ) = RecordProject (subst a n e) l
 

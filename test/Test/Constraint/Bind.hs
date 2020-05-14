@@ -21,12 +21,12 @@ import           Util
 test :: Spec
 test = do
   let
-    bool = TCon "Bool" []
-    nat  = TCon "Nat" []
+    bool = TCon "Bool"
+    nat  = TCon "Nat"
     tuple2 a b = mkTupleType [a, b]
-    pair a b = TCon "Pair" [a, b]
-    either a b = TCon "Either" [a, b]
-    maybe a = TCon "Maybe" [a]
+    pair a = TApp (TApp (TCon "Pair") a)
+    either a = TApp (TApp (TCon "Either") a)
+    maybe   = TApp (TCon "Maybe")
 
     true    = "True"
     false   = "False"
@@ -40,10 +40,10 @@ test = do
     nothing = "Nothing"
 
     env     = Map.fromList
-      [ ("True" , Forall [] CNil (TCon "Bool" []))
-      , ("False", Forall [] CNil (TCon "Bool" []))
-      , ("Zero" , Forall [] CNil (TCon "Nat" []))
-      , ("Suc"  , Forall [] CNil (TCon "Nat" [] `fn` TCon "Nat" []))
+      [ ("True" , Forall [] CNil (TCon "Bool"))
+      , ("False", Forall [] CNil (TCon "Bool"))
+      , ("Zero" , Forall [] CNil (TCon "Nat"))
+      , ("Suc"  , Forall [] CNil (TCon "Nat" `fn` TCon "Nat"))
       , ( "::"
         , Forall
           [R "a"]
@@ -55,7 +55,7 @@ test = do
           [R "a", R "b"]
           CNil
           (    TVar (R "a")
-          `fn` (TVar (R "b") `fn` TCon "Pair" [TVar (R "a"), TVar (R "b")])
+          `fn` (TVar (R "b") `fn` pair (TVar (R "a")) (TVar (R "b")))
           )
         )
       , ( "Left"

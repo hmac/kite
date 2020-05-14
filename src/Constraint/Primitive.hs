@@ -16,9 +16,9 @@ env = Map.fromList
     , Forall
       [R "a"]
       mempty
-      (TVar (R "a") `fn` TCon (TopLevel modPrim "List") [TVar (R "a")] `fn` TCon
-        (TopLevel modPrim "List")
-        [TVar (R "a")]
+      (    TVar (R "a")
+      `fn` TApp (TCon (TopLevel modPrim "List")) (TVar (R "a"))
+      `fn` TApp (TCon (TopLevel modPrim "List")) (TVar (R "a"))
       )
     )
   , (TopLevel modPrim "+", Forall [] mempty (TInt `fn` TInt `fn` TInt))

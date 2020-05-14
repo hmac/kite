@@ -38,10 +38,10 @@ test = do
     (isLawfulMonoid genConstraint)
 
   let
-    bool = TCon "Bool" []
-    nat  = TCon "Nat" []
-    pair a b = TCon "Pair" [a, b]
-    wrap a = TCon "Wrap" [a]
+    bool = TCon "Bool"
+    nat  = TCon "Nat"
+    pair a = TApp (TApp (TCon "Pair") a)
+    wrap   = TApp (TCon "Wrap")
 
     true   = "True"
     false  = "False"
@@ -52,28 +52,32 @@ test = do
     mkwrap = "MkWrap"
 
     env    = Map.fromList
-      [ ("True" , Forall [] CNil (TCon "Bool" []))
-      , ("False", Forall [] CNil (TCon "Bool" []))
-      , ("Zero" , Forall [] CNil (TCon "Nat" []))
-      , ("Suc"  , Forall [] CNil (TCon "Nat" [] `fn` TCon "Nat" []))
+      [ ("True" , Forall [] CNil (TCon "Bool"))
+      , ("False", Forall [] CNil (TCon "Bool"))
+      , ("Zero" , Forall [] CNil (TCon "Nat"))
+      , ("Suc"  , Forall [] CNil (TCon "Nat" `fn` TCon "Nat"))
       , ( "::"
         , Forall
           [R "a"]
           CNil
-          (TVar (R "a") `fn` TCon "List" [TVar (R "a")] `fn` TCon
-            "List"
-            [TVar (R "a")]
+          (TVar (R "a") `fn` TApp (TCon "List") (TVar (R "a")) `fn` TApp
+            (TCon "List")
+            (TVar (R "a"))
           )
         )
       , ( "MkWrap"
-        , Forall [R "a"] CNil (TVar (R "a") `fn` TCon "Wrap" [TVar (R "a")])
+        , Forall [R "a"]
+                 CNil
+                 (TVar (R "a") `fn` TApp (TCon "Wrap") (TVar (R "a")))
         )
       , ( "MkPair"
         , Forall
           [R "a", R "b"]
           CNil
           (    TVar (R "a")
-          `fn` (TVar (R "b") `fn` TCon "Pair" [TVar (R "a"), TVar (R "b")])
+          `fn` (TVar (R "b") `fn` TApp (TApp (TCon "Pair") (TVar (R "a")))
+                                       (TVar (R "b"))
+               )
           )
         )
       ]
@@ -105,7 +109,7 @@ test = do
             [("x", ConT true), ("id", AbsT [("y", bool)] (VarT "y" bool))]
             (AppT (VarT "id" (bool `fn` bool)) (VarT "x" bool))
             bool
-      infersType env expr (TCon "Bool" [])
+      infersType env expr (TCon "Bool")
       inferAndZonk env expr annotatedExpr
     it "simple case expressions" $ do
       -- case True of
@@ -120,7 +124,7 @@ test = do
             , AltT (ConsPat false []) (ConT true)
             ]
             bool
-      infersType env expr (TCon "Bool" [])
+      infersType env expr (TCon "Bool")
       inferAndZonk env expr annotatedExpr
     it "combined case and let expressions" $ do
       -- case True of
@@ -144,7 +148,7 @@ test = do
             , AltT (ConsPat false []) (ConT true)
             ]
             bool
-      infersType env expr (TCon "Bool" [])
+      infersType env expr (TCon "Bool")
       inferAndZonk env expr annotatedExpr
     it "expressions with annotated lets" $ do
       -- let id : a -> a
@@ -159,7 +163,7 @@ test = do
             (AbsT [("x", TVar (R "a"))] (VarT "x" (TVar (R "a"))))
             (AppT (VarT "id" (bool `fn` bool)) (ConT true))
             bool
-      infersType env expr (TCon "Bool" [])
+      infersType env expr (TCon "Bool")
       inferAndZonk env expr annotatedExpr
     it "simultaneous let definitions" $ do
       -- let x = y
@@ -175,7 +179,7 @@ test = do
       --   x -> Zero
       let expr          = Case (Con true) [(VarPat "x", Con zero)]
       let annotatedExpr = CaseT (ConT true) [AltT (VarPat "x") (ConT zero)] nat
-      infersType env expr (TCon "Nat" [])
+      infersType env expr (TCon "Nat")
       inferAndZonk env expr annotatedExpr
     it "case expressions that use bound variables" $ do
       -- case True of
@@ -351,10 +355,9 @@ genConstraint = Gen.recursive Gen.choice
                               [Gen.subterm2 genConstraint genConstraint (<>)]
 
 genType :: H.Gen Type
-genType = Gen.recursive
-  Gen.choice
-  [TVar <$> genVar]
-  [Gen.subtermM genType (\t -> TCon <$> genName <*> pure [t])]
+genType = Gen.recursive Gen.choice
+                        [TVar <$> genVar, TCon <$> genName]
+                        [Gen.subterm2 genType genType TApp]
 
 genVar :: H.Gen Var
 genVar = Gen.choice [R <$> genName, U <$> genUVarName]
