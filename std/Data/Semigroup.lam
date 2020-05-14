@@ -1,14 +1,6 @@
 module Data.Semigroup
 
-import Lam.Semigroup (Semigroup(..))
-import Data.NonEmpty (NonEmpty)
+type Semigroup a = Semigroup { append : a -> a -> a }
 
-instance Semigroup Int where
-  append x y = x + y
-
-fold : Semigroup a => a -> [a] -> a
-fold x [] = x
-fold x (y :: ys) = append x (fold y ys)
-
-concat : Semigroup a => NonEmpty a -> a
-concat (NonEmpty x xs) = fold x xs
+append : Semigroup a -> a -> a -> a
+append (Semigroup d) = d.append

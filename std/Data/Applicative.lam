@@ -1,0 +1,17 @@
+module Data.Applicative
+
+import Data.Functor (Functor, map)
+
+type Applicative f = Applicative { functor : Functor f, pure : a -> f a, ap : f (a -> b) -> f a -> f b }
+
+pure : Applicative f -> a -> f a
+pure (Applicative d) = d.pure
+
+-- Sequential application.
+-- This is identical to <$> in Haskell.
+ap : Applicative f -> f (a -> b) -> f a -> f b
+ap (Applicative d) = d.ap
+
+-- Lift a binary function to actions.
+liftA2 : Applicative f -> (a -> b -> c) -> f a -> f b -> f c
+liftA2 (Applicative d) f x = ap (Applicative d) (map d.functor f x)

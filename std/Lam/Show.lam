@@ -1,7 +1,0 @@
-module Lam.Show
-
--- This class is built in to the compiler.
--- The code here is for documentation only.
-
--- class Show a where
---   show : a -> String

@@ -1,7 +1,7 @@
 module Lam.String
 
-import Lam.Semigroup (Semigroup)
-import Lam.Monoid (Monoid)
+import Data.Semigroup (Semigroup)
+import Data.Monoid (Monoid)
 
 semigroupString : Semigroup String
 semigroupString = Semigroup { append = appendString }

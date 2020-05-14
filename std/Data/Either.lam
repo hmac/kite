@@ -1,9 +1,29 @@
 module Data.Either
 
 import Data.Maybe (Just, Nothing, Maybe)
+import Data.Functor (Functor)
+import Data.Applicative (Applicative)
 
 fromLeft : Either a b -> Maybe a
 fromLeft (Left x) = Just x
 fromLeft (Right _) = Nothing
 
 type Either a b = Left a | Right b
+
+mapEither : (a -> b) -> Either c a -> Either c b
+mapEither _ (Left l) = Left l
+mapEither f (Right r) = Right (f r)
+
+functorEither : Functor (Either a)
+functorEither = Functor { map = mapEither }
+
+apEither : Either a (b -> c) -> Either a b -> Either a c
+apEither (Left e) _ = Left e
+apEither (Right f) r = mapEither f r
+
+applicativeEither : Applicative (Either c)
+applicativeEither = Applicative { functor = functorEither, pure = Right, ap = apEither }
+
+either : (a -> c) -> (b -> c) -> Either a b -> c
+either f _ (Left x) = f x
+either _ g (Right y) = g y

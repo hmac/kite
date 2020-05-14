@@ -1,0 +1,6 @@
+module Data.Functor
+
+type Functor f = Functor { map : (a -> b) -> f a -> f b }
+
+map : Functor f -> (a -> b) -> f a -> f b
+map (Functor d) = d.map

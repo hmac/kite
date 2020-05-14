@@ -1,8 +1,20 @@
 module Data.Bool
 
-import Lam.Semigroup (Semigroup(..))
+import Data.Semigroup (Semigroup(..))
 
 type Bool = True | False
+
+and : Bool -> Bool -> Bool
+and False _ = False
+and True b = b
+
+or : Bool -> Bool -> Bool
+or True _ = True
+or False b = b
+
+not : Bool -> Bool
+not False = True
+not True = False
 
 all : [Bool] -> Bool
 all [] = True

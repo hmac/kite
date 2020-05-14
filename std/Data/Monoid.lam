@@ -1,7 +1,7 @@
-module Lam.Monoid
+module Data.Monoid
 
 import Lam.List (foldr)
-import Lam.Semigroup (Semigroup, append)
+import Data.Semigroup (Semigroup, append)
 
 type Monoid a = Monoid { empty : a, semigroup : Semigroup a }
 

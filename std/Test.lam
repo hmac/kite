@@ -4,10 +4,10 @@ import Data.Bool (Bool(..), all)
 import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
 import Lam.Show (Show(..))
-import Lam.Monoid (Monoid(..), concat)
+import Data.Monoid (Monoid(..), concat)
 import Lam.String (monoidString)
-import Data.List (subsequences)
-import Lam.Functor (map)
+import Data.List (subsequences, functorList, mapList)
+import Data.Functor (Functor, map)
 
 e : Either Bool String
 e = Left True
@@ -29,7 +29,7 @@ inc : Int -> Int
 inc i = i + 1
 
 mapTest : [Int]
-mapTest = map inc [1,2,3]
+mapTest = map functorList inc [1,2,3]
 
-main : String
-main = "#{45 + 54} is a number"
+main : [Int]
+main = mapTest

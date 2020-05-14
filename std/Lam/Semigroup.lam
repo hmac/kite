@@ -1,6 +1,0 @@
-module Lam.Semigroup
-
-type Semigroup a = Semigroup { append : a -> a -> a }
-
-append : Semigroup a -> a -> a -> a
-append (Semigroup d) = d.append

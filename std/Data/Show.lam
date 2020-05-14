@@ -1,0 +1,10 @@
+module Data.Show
+
+-- This is the interface for converting types to String, typically for printing.
+-- The compiler has built in show functions for each base type (and eventually
+-- we will auto-generate instances for each user-defined type.
+
+type Show a = Show { show : a -> String }
+
+showInt : Show Int
+showInt = Show { show = primShowInt }

@@ -10,12 +10,12 @@ module Data.List
   , intersperse
   )
 
-import Lam.Semigroup (Semigroup(..))
+import Data.Semigroup (Semigroup(..))
 import Data.Maybe (Maybe(..))
 import Data.Bool (Bool(..))
-import Lam.Monoid (Monoid(..))
+import Data.Monoid (Monoid(..))
 import Lam.List (foldr)
-import Lam.Functor (Functor(..))
+import Data.Functor (Functor(..))
 
 semigroupList : Semigroup [a]
 semigroupList = Semigroup { append = listAppend }
@@ -27,14 +27,12 @@ listAppend (x :: xs) ys = x :: (listAppend xs ys)
 monoidList : Monoid [a]
 monoidList = Monoid { empty = [], semigroup = semigroupList }
 
--- TODO: Right now this doesn't typecheck, I think because the typechecker isn't
---       correctly handling higher kinded typeclass arguments.
-functorList : Functor [a]
+functorList : Functor []
 functorList = Functor { map = mapList }
 
 mapList : (a -> b) -> [a] -> [b]
 mapList _ [] = []
-mapList f (x :: xs) = mapList f xs
+mapList f (x :: xs) = (f x) :: (mapList f xs)
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.
