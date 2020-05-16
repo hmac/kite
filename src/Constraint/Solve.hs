@@ -5,13 +5,13 @@
 --   (Vytiniotis, Peyton Jones, Schrijvers, Sulzmann)
 --
 -- Currently only works with simple equalities, but that's enough to handle
--- everything in Lam except for typeclasses.
+-- everything in Lam.
 --
--- To deal with typeclasses, we need to add the following:
--- Two more cases for interact: EQDICT (done), DDICT (done)
--- Two more cases for canon:    DFLATW and DFLATG (done)
--- the SIMPLIFY rule (except for SEQFEQ and SFEQFEQ) (done)
--- the TOPREACT rule (except for FINST)
+-- Since Lam no longer supports typeclasses, this solver may be overkill.
+-- Specifically, we can probably remove:
+-- - wanted constraints
+-- - flattening substitutions
+-- - fresh type variable source
 
 module Constraint.Solve
   ( solveC
@@ -20,11 +20,8 @@ module Constraint.Solve
 where
 
 import           Util
-import           Data.Name
 
-import qualified Data.Set                      as Set
 import           Data.Set                       ( Set
-                                                , (\\)
                                                 , member
                                                 )
 
@@ -42,13 +39,6 @@ import           Prelude                 hiding ( interact )
 -- )
 type Quad = (Set Var, Subst, Constraint, Constraint, Int)
 type Solve = State Quad
-
-fresh :: Solve Var
-fresh = do
-  (t, s, g, w, k) <- get
-  put (t, s, g, w, k + 1)
-  let var = U (Local (Name (show k)))
-  pure var
 
 -- See fig. 14
 solveC
@@ -121,14 +111,12 @@ run f c = case runState f c of
 
 -- Apply a round of rewriting
 applyRewrite :: AxiomScheme -> Quad -> Either Error Quad
-applyRewrite axs = run
+applyRewrite _axs = run
   (  canonM Given
   >> canonM Wanted
   >> interactM Given
   >> interactM Wanted
   >> simplifyM
-  >> topreactM Given  axs
-  >> topreactM Wanted axs
   )
 
 data Domain = Given | Wanted deriving (Eq, Show)
@@ -274,12 +262,6 @@ interact c1@(TVar v1 :~: t1) (t2 :~: t3)
   | ((v1 `member` ftv t2) || (v1 `member` ftv t3)) && isCanonical c1
   = Just $ c1 :^: (sub [(v1, t1)] t2 :~: sub [(v1, t1)] t3)
 
--- EQDICT: We can substitute an equality into a typeclass constraint.
-interact c1@(TVar v1 :~: t1) (Inst className tys)
-  | v1 `member` ftv tys && isCanonical c1 = Just $ (TVar v1 :~: t1) :^: Inst
-    className
-    (sub [(v1, t1)] tys)
-
 -- EQRECORD (invented): We can substitute an equality into a HasField constraint
 interact c1@(TVar v1 :~: t1) (HasField r l t)
   | v1 `member` ftv r && isCanonical c1
@@ -287,15 +269,12 @@ interact c1@(TVar v1 :~: t1) (HasField r l t)
   | v1 `member` ftv t && isCanonical c1
   = Just $ (TVar v1 :~: t1) :^: HasField r l (sub [(v1, t1)] t)
 
--- DDICT: We can drop duplicate typeclass constraints.
-interact i1@(Inst _ _) i2@(Inst _ _) | i1 == i2 = Just i1
-
 -- Redundant cases: drop CNil
-interact CNil c                                 = Just c
-interact c    CNil                              = Just c
+interact CNil c    = Just c
+interact c    CNil = Just c
 
 -- If no rules match, signal failure
-interact _    _                                 = Nothing
+interact _    _    = Nothing
 
 -- Use a given constraint to simplify a wanted constraint
 -- e.g. given:   a ~ Int
@@ -312,79 +291,8 @@ simplify c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
   | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2
   = TVar v2 :~: sub [(v1, t1)] t2
 
--- SEQDICT
-simplify (TVar v1 :~: t1) (Inst className tys)
-  | isCanonical (TVar v1 :~: t1) && v1 `member` ftv tys = Inst
-    className
-    (sub [(v1, t1)] tys)
-
--- SDDICTG
-simplify i1@Inst{} i2@Inst{} | i1 == i2 = mempty
-
 -- If no rules match, return the wanted constraint unchanged
-simplify _ w                            = w
-
--- | Interact a constraint with an axiom from the top level axiom scheme
--- This is where typeclass instances start to get introduced.
-topreactM :: Domain -> AxiomScheme -> Solve (Either Error ())
-topreactM Given axs = do
-  (_, _, given, _, _) <- get
-  errors              <-
-    concat <$> mapM (\ax -> mapM (topreactDINSTG ax) (flatten given)) axs
-  case firstLeft errors of
-    Just err -> pure (Left err)
-    _        -> pure (Right ())
-topreactM Wanted axs = do
-  forM_ axs $ \ax -> do
-    (vars, subst, given, wanted, _) <- get
-    (wanted', vars')                <- unzip <$> forM
-      (flatten wanted)
-      (\w -> do
-        res <- topreactDINSTW ax w
-        case res of
-          Nothing      -> pure (w, mempty)
-          Just (v, w') -> pure (w', v)
-      )
-    -- topreactDINSTW may have incremented k, so refetch it
-    (_, _, _, _, k) <- get
-    put (vars <> mconcat vars', subst, given, mconcat wanted', k)
-  pure (Right ())
-
--- React wanted typeclass instances with top level axioms
-topreactDINSTW :: Axiom -> Constraint -> Solve (Maybe (Set Var, Constraint))
-topreactDINSTW (AForall as q (Inst cn1 ts0)) (Inst cn2 ts1) | cn1 == cn2 = do
-  -- In order to react, we must find a substitution mapping ts0 to ts1
-  -- For each variable b which is free in ts0 but not present in ts1, we must
-  -- find the type in ts1 which it corresponds to. E.g if ts0 is [b] and ts1 is
-  -- [Bool], then we want to find b->Bool.
-  -- From this we can construct a substitution that will convert ts0 into t1.
-  let bs = ftv ts0
-      cs = Set.toList (as \\ bs)
-  ys <- mapM (const fresh) cs
-  let btys = map
-        (\v -> (v, ) <$> firstJust (zipWith (findCounterpart v) ts0 ts1))
-        (Set.toList bs)
-  -- TODO: I don't think we should have any Nothings in btys - I think that's a
-  -- sign that we have two typeclass instances for the same class with different
-  -- structure, which probably indicates a bug.
-  let subst = zip cs (map TVar ys) <> catMaybes btys
-  if sub subst ts0 == ts1
-    then pure $ Just (Set.fromList ys, sub subst q)
-    else pure Nothing
-topreactDINSTW _ _ = pure Nothing
-
--- | React given typeclass instances with top level axioms
--- This is just a consistency check, really.
-topreactDINSTG :: Axiom -> Constraint -> Solve (Either Error ())
-topreactDINSTG (AForall as _q (Inst cn1 ts0)) (Inst cn2 ts1) | cn1 == cn2 = do
-  let atys = map
-        (\v -> (v, ) <$> firstJust (zipWith (findCounterpart v) ts0 ts1))
-        (Set.toList as)
-  let subst = catMaybes atys
-  if sub subst ts0 == ts1
-    then pure $ Left OverlappingTypeclassInstances
-    else pure $ Right ()
-topreactDINSTG _ _ = pure (Right ())
+simplify _ w = w
 
 contains :: Type -> Type -> Bool
 contains a b | a == b = True
@@ -404,26 +312,11 @@ canonCompare (TApp _ _)   _            = GT
 canonCompare _            _            = EQ
 
 -- Fig. 20
--- A constraint is canonical if either:
--- - it is a typeclass instance, or
--- - it has the form (v ~ t) and v is not free in t
+-- A constraint is canonical if it has the form (v ~ t) and v is not free in t
 isCanonical :: Constraint -> Bool
-isCanonical Inst{} = True
 isCanonical (TVar v :~: t) | v `member` ftv t = False
                            | otherwise        = True
 isCanonical _ = False
-
--- | Given a variable, a type containing that variable, and another
--- type which has had the variable substituted for a type, attempt to find
--- the type which was substituted. We do this by walking both types
--- simultaneously until we find the variable in the left type, and return
--- the corresponding part of the right type.
-findCounterpart :: Var -> Type -> Type -> Maybe Type
-findCounterpart v (TVar v') t | v == v'     = Just t
-findCounterpart v (TApp a1 b1) (TApp a2 b2) = case findCounterpart v a1 a2 of
-  Just t  -> Just t
-  Nothing -> findCounterpart v b1 b2
-findCounterpart _ _ _ = Nothing
 
 -- A list of each element in the given list paired with the remaining elements
 focus :: [a] -> [(a, [a])]
@@ -441,12 +334,6 @@ firstJust :: [Maybe a] -> Maybe a
 firstJust []             = Nothing
 firstJust (Just x  : _ ) = Just x
 firstJust (Nothing : xs) = firstJust xs
-
--- | Extract the first Left value from a list
-firstLeft :: [Either a b] -> Maybe a
-firstLeft []            = Nothing
-firstLeft (Left x : _ ) = Just x
-firstLeft (_      : xs) = firstLeft xs
 
 -- | Unfold a nested type application
 -- f a b c ==> [f, a, b, c]

@@ -22,8 +22,6 @@ printConstraint :: Constraint -> Doc a
 printConstraint CNil      = "ϵ"
 printConstraint (c :^: d) = printConstraint c <+> "^" <+> printConstraint d
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v
-printConstraint (Inst classname tys) =
-  printName classname <+> hsep (map printType tys)
 printConstraint (HasField r l t) =
   printType r <+> "~" <+> braces (printNameAsLocal l <+> colon <+> printType t)
 
@@ -83,13 +81,9 @@ printError (UnsolvedUnificationVariables vars constraints) = vsep
   , "In constraints:"
   , printConstraint constraints
   ]
-printError (UnknownVariable v)           = "Unknown variable" <+> printName v
-printError EmptyCase                     = "Empty case expression"
-printError DuplicatePatternVariables     = "Duplicate variables in pattern"
-printError OverlappingTypeclassInstances = "Overlapping typeclass instances"
-printError (UnknownTypeclass n)          = "Unknown typeclass " <> printName n
-printError (UnknownInstanceMethod n) =
-  "Unknown instance method " <> printName n
+printError (UnknownVariable v)       = "Unknown variable" <+> printName v
+printError EmptyCase                 = "Empty case expression"
+printError DuplicatePatternVariables = "Duplicate variables in pattern"
 printError (RecordDoesNotHaveLabel ty name) =
   "The record type"
     <+> printType ty
