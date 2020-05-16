@@ -211,7 +211,7 @@ canon (t1@TApp{} :~: t2@TApp{}) =
   let t1s = unfoldTyApp t1
       t2s = unfoldTyApp t2
   in  pure $ if length t1s == length t2s
-        then foldl (:^:) CNil (zipWith (:~:) t1s t2s)
+        then foldl (:^:) CNil (zipWith orient t1s t2s)
         else t1 :~: t2
 
 -- TDEC: Equalities between identical constructors can be dropped
@@ -222,7 +222,7 @@ canon (TCon k :~: TCon k') =
 -- Equalities between records with identical field labels can be decomposed to
 -- equality on their fields
 canon (TRecord fs1 :~: TRecord fs2) | map fst fs1 == map fst fs2 =
-  pure (foldl (:^:) CNil (zipWith (:~:) (map snd fs1) (map snd fs2)))
+  pure (foldl (:^:) CNil (zipWith orient (map snd fs1) (map snd fs2)))
 
 -- HasField constraints on a TRecord can be simplified into equality on the
 -- field type.
@@ -235,7 +235,7 @@ canon (v@(TVar _) :~: t) | v /= t && t `contains` v =
   Left $ OccursCheckFailure v t
 
 -- ORIENT: Flip an equality around if desirable
-canon (a :~: b) | canonCompare a b == GT = pure (b :~: a)
+canon (a    :~: b   ) = pure $ orient a b
 
 -- DFLATW, DFLATG, FFLATWL, FFLATWR, FFLATGL, FFLATGR: the flattening rules
 -- These are all omitted because they deal with type function application.
@@ -243,12 +243,18 @@ canon (a :~: b) | canonCompare a b == GT = pure (b :~: a)
 -- have these.
 
 -- Custom rule: CNil ^ c = c
-canon (CNil :^: c   )                    = pure c
-canon (c    :^: CNil)                    = pure c
+canon (CNil :^: c   ) = pure c
+canon (c    :^: CNil) = pure c
 
 -- Flattening rules only apply to type classes and type families, so are
 -- omitted.
-canon c                                  = pure c
+canon c               = pure c
+
+-- | Given an equality constraint, flip it around so it is oriented according to
+-- the canonical ordering (see canonCompare and ORIENT).
+orient :: Type -> Type -> Constraint
+orient a b | canonCompare a b == GT = b :~: a
+           | otherwise              = a :~: b
 
 -- Combine two canonical constraints into one
 interact :: Constraint -> Constraint -> Maybe Constraint
@@ -389,7 +395,9 @@ canonCompare :: Type -> Type -> Ordering
 canonCompare (TVar (U _)) (TVar (R _)) = LT
 canonCompare (TVar (R _)) (TVar (U _)) = GT
 canonCompare (TVar a    ) (TVar b    ) = compare a b
-canonCompare _            (TCon _    ) = LT
+canonCompare (TVar _    ) _            = LT
+canonCompare _            (TVar _)     = GT
+canonCompare _            (TCon _)     = LT
 canonCompare (TCon _)     _            = GT
 canonCompare _            (TApp _ _)   = LT
 canonCompare (TApp _ _)   _            = GT
