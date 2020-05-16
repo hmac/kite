@@ -15,7 +15,6 @@ import           Syn
 import           Data.List                      ( nub
                                                 , intercalate
                                                 , sortBy
-                                                , permutations
                                                 )
 import           Canonicalise                   ( canonicaliseModule )
 import           ModuleGroup
@@ -100,11 +99,12 @@ filePath root (ModuleName components) =
 -- Sorts a set of modules in dependency order. Each module will only depend on
 -- modules before it in the list. Returns an error if there are cyclic
 -- dependencies.
-sortModules :: [Module_ n e ty] -> Either String [Module_ n e ty]
+sortModules
+  :: (Eq n, Eq ty, Eq e) => [Module_ n e ty] -> Either String [Module_ n e ty]
 sortModules []  = Right []
 sortModules [m] = Right [m]
 sortModules ms =
-  let pairs = asPairs $ map (take 2) (permutations ms)
+  let pairs = asPairs $ permutationsOf2 ms
   in  if any (\(a, b) -> a `dependsOn` b && b `dependsOn` a) pairs
         then Left "Cyclic dependency detected"
         else Right $ sortBy compareModules ms
@@ -116,6 +116,10 @@ asPairs (x : _) =
   error
     $  "ModuleLoader.asPairs: Expected list of length 2, found list of length "
     <> show (length x)
+
+permutationsOf2 :: Eq a => [a] -> [[a]]
+permutationsOf2 xs =
+  filter ((== 2) . length . nub) $ mapM (const xs) [1 .. 2 :: Int]
 
 compareModules :: Module_ n e ty -> Module_ n e ty -> Ordering
 compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of
