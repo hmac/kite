@@ -1,6 +1,15 @@
 module Data.NonEmpty
 
+import Data.List(functorList)
+import Data.Functor (Functor(..), map)
+
 type NonEmpty a = NonEmpty a [a]
 
 head : NonEmpty a -> a
 head (NonEmpty x _) = x
+
+mapNonEmpty : (a -> b) -> NonEmpty a -> NonEmpty b
+mapNonEmpty f (NonEmpty x xs) = NonEmpty (f x) (map functorList f xs)
+
+functorNonEmpty : Functor NonEmpty
+functorNonEmpty = Functor { map = mapNonEmpty }

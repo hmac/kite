@@ -1,0 +1,11 @@
+module Data.Eq
+
+import Lam.Bool (Bool(..), not)
+
+type Eq a = Eq { eq : a -> a -> Bool }
+
+eq : Eq a -> a -> a -> Bool
+eq (Eq d) = d.eq
+
+notEq : Eq a -> a -> a -> Bool
+notEq e x y = not (eq e x y)

@@ -1,8 +1,10 @@
 module Data.Bool
 
-import Data.Semigroup (Semigroup(..))
+import Lam.Bool (Bool(..), not)
 
-type Bool = True | False
+import Data.Semigroup (Semigroup(..))
+import Data.Eq (Eq(..))
+import Data.Ord (Ord(..), Ordering(..))
 
 and : Bool -> Bool -> Bool
 and False _ = False
@@ -12,9 +14,13 @@ or : Bool -> Bool -> Bool
 or True _ = True
 or False b = b
 
-not : Bool -> Bool
-not False = True
-not True = False
+xor : Bool -> Bool -> Bool
+xor True False = True
+xor False True = True
+xor _ _ = False
+
+xnor : Bool -> Bool -> Bool
+xnor x y = not (xor x y)
 
 all : [Bool] -> Bool
 all [] = True
@@ -28,3 +34,14 @@ semigroupBool = Semigroup { append = appendBool }
 appendBool : Bool -> Bool -> Bool
 appendBool False _ = False
 appendBool True b = b
+
+eqBool : Eq Bool
+eqBool = Eq { eq = xnor }
+
+compareBool : Bool -> Bool -> Ordering
+compareBool True False = GT
+compareBool False True = LT
+compareBool _ _ = EQ
+
+ordBool : Ord Bool
+ordBool = Ord { eq = eqBool, compare = compareBool }

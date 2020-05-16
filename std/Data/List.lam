@@ -12,7 +12,8 @@ module Data.List
 
 import Data.Semigroup (Semigroup(..))
 import Data.Maybe (Maybe(..))
-import Data.Bool (Bool(..))
+import Lam.Bool (Bool(..))
+import Data.Bool (and)
 import Data.Monoid (Monoid(..))
 import Lam.List (foldr)
 import Data.Functor (Functor(..))
@@ -85,6 +86,11 @@ length (x :: xs) = 1 + (length xs)
 map : (a -> b) -> [a] -> [b]
 map _ [] = []
 map f (x :: xs) = (f x) :: (map f xs)
+
+-- True if all the elements satisfy the predicate
+all : (a -> Bool) -> [a] -> Bool
+all p [] = True
+all p (x :: xs) = and (p x) (all p xs)
 
 -- A helper function for reverse.
 -- TOOD: inline when we support pattern matching lets

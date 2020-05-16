@@ -1,8 +1,8 @@
 module Data.Maybe
 
-import Data.Functor (Functor)
+import Data.Functor (Functor(..))
 import Data.Applicative (Applicative)
-import Data.Bool (Bool(..))
+import Lam.Bool (Bool(..))
 
 type Maybe a = Just a | Nothing
 

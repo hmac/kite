@@ -1,6 +1,7 @@
 module Test
 
-import Data.Bool (Bool(..), all)
+import Lam.Bool (Bool(..))
+import Data.Bool (all)
 import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
 import Data.Show (show, showList, showInt)

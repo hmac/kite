@@ -1,7 +1,7 @@
 module Data.Either
 
 import Data.Maybe (Just, Nothing, Maybe)
-import Data.Functor (Functor)
+import Data.Functor (Functor(..))
 import Data.Applicative (Applicative)
 
 fromLeft : Either a b -> Maybe a

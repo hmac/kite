@@ -1,6 +1,13 @@
 module Data.Functor
 
+import Data.Unit (Unit(..))
+import Data.Function (const)
+
 type Functor f = Functor { map : (a -> b) -> f a -> f b }
 
 map : Functor f -> (a -> b) -> f a -> f b
 map (Functor d) = d.map
+
+-- Discard the result, replacing it with Unit
+void : Functor f -> f a -> f Unit
+void ftor x = map ftor (const Unit) x

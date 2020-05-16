@@ -1,0 +1,9 @@
+module Data.Unit
+
+import Data.Eq(Eq(..))
+import Lam.Bool (Bool(..))
+
+type Unit = Unit
+
+eqUnit : Eq Unit
+eqUnit = Eq { eq = \x y -> True }

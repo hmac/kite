@@ -1,0 +1,32 @@
+module Data.Ord
+
+import Lam.Bool (Bool(..), not)
+import Data.Eq (Eq, eq)
+
+type Ordering = LT | GT | EQ
+
+eqOrderingFn : Ordering -> Ordering -> Bool
+eqOrderingFn LT LT = True
+eqOrderingFn GT GT = True
+eqOrderingFn EQ EQ = True
+eqOrderingFn _ _ = False
+
+eqOrdering : Eq Ordering
+eqOrdering = Eq { eq = eqOrderingFn }
+
+type Ord a = Ord { eq : Eq a, compare : a -> a -> Ordering }
+
+compare : Ord a -> a -> a -> Ordering
+compare (Ord d) = d.compare
+
+lt : Ord a -> a -> a -> Bool
+lt ord x y = eq eqOrdering (compare ord x y) LT
+
+gt : Ord a -> a -> a -> Bool
+gt ord x y = eq eqOrdering (compare ord x y) GT
+
+lte : Ord a -> a -> a -> Bool
+lte ord x y = not (eq eqOrdering (compare ord x y) GT)
+
+gte : Ord a -> a -> a -> Bool
+gte ord x y = not (eq eqOrdering (compare ord x y) LT)
