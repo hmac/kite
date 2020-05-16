@@ -53,5 +53,8 @@ sub = TopLevel modPrim "-"
 primShow :: Name
 primShow = TopLevel modPrim "show"
 
+showInt :: Name
+showInt = TopLevel modPrim "$showInt"
+
 primAppendString :: Name
 primAppendString = TopLevel modPrim "appendString"

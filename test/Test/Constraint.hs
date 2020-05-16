@@ -283,7 +283,9 @@ test = do
       let expr = IntLit 6
       infersType env expr TInt
     it "a string literal" $ do
-      let expr = StringLit "Hello" [(Con true, " and "), (Con false, "")]
+      let expr = StringLit
+            "Hello"
+            [(StringLit "true" [], " and "), (StringLit "false" [], "")]
       infersType env expr TString
     it "a record" $ do
       let expr = Record [("five", IntLit 5), ("msg", StringLit "Hello" [])]

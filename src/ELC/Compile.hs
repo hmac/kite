@@ -163,6 +163,9 @@ translateExpr _ (T.VarT (TopLevel m "*") _) | m == modPrim = binaryPrim PrimMult
 translateExpr _ (T.VarT (TopLevel m "-") _) | m == modPrim = binaryPrim PrimSub
 translateExpr _ (T.VarT (TopLevel m "appendString") _) | m == modPrim =
   binaryPrim PrimStringAppend
+translateExpr _ (T.VarT (TopLevel m "$showInt") _) | m == modPrim = do
+  v <- fresh
+  pure $ Abs (VarPat v) (Const (Prim PrimShowInt) [Var v])
 translateExpr _ (T.VarT (TopLevel m "show") _) | m == modPrim = do
   v <- fresh
   pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
@@ -217,7 +220,8 @@ translateExpr env (T.CaseT scrut alts _) = do
 translateExpr env (T.RecordT fields _type) = translateRecord env fields
 translateExpr env (T.ProjectT e l _type  ) = translateRecordProjection env e l
 
--- "hi #{name}!" ==> "hi " <> show name <> "!"
+-- "hi #{name}!" ==> "hi " <> name <> "!"
+-- The typechecker ensures that name : String
 translateStringLit :: Env -> String -> [(T.Exp, String)] -> NameGen Exp
 translateStringLit _   prefix []    = pure $ Const (String prefix) []
 translateStringLit env prefix parts = do
@@ -240,11 +244,7 @@ translateStringLit env prefix parts = do
   go ((e, s) : is) = do
     e'   <- translateExpr env e
     rest <- go is
-    v    <- fresh
-    pure
-      $ App (Abs (VarPat v) (Const (Prim PrimShow) [Var v])) e'
-      : Const (String s) []
-      : rest
+    pure $ e' : Const (String s) [] : rest
 
 -- here we follow the same scheme as with normal constructors
 buildList :: [Exp] -> NameGen Exp

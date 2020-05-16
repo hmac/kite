@@ -95,12 +95,13 @@ generate env (ListLit elems) = do
 generate _env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
 -- String literal
 generate env  (StringLit p cs) = do
-  -- TODO: each expression's type should be in the Show typeclass
   (cs', constraints) <- unzip <$> forM
     cs
     (\(e, s) -> do
-      (e', _, c) <- generate env e
-      pure ((e', s), c)
+      (e', cty, c) <- generate env e
+      -- Each interpolated expression must have type String
+      let strConstraint = Simple (cty :~: TString)
+      pure ((e', s), c <> strConstraint)
     )
   pure (StringLitT p cs' TString, TString, mconcat constraints)
 -- Record

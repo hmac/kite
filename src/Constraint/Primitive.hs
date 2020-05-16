@@ -25,4 +25,5 @@ env = Map.fromList
   , ( TopLevel modPrim "appendString"
     , Forall [] mempty (TString `fn` TString `fn` TString)
     )
+  , (TopLevel modPrim "$showInt", Forall [] mempty (TInt `fn` TString))
   ]

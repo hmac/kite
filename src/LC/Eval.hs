@@ -84,10 +84,11 @@ evalPrim PrimStringAppend [] = Const (String "") []
 evalPrim PrimStringAppend [Const (String a) _, Const (String b) _] =
   Const (String (a <> b)) []
 
-evalPrim PrimAdd [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
-evalPrim PrimSub [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
-evalPrim PrimMult [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
-evalPrim PrimShow [e] = primShow e
+evalPrim PrimAdd     [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
+evalPrim PrimSub     [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
+evalPrim PrimMult    [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
+evalPrim PrimShow    [e              ]                  = primShow e
+evalPrim PrimShowInt [Const (Int x) _] = Const (String (show x)) []
 
 evalPrim p args =
   error $ "(LC.Eval) [" <> show p <> "] invalid args: " <> show args
