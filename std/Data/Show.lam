@@ -1,10 +1,26 @@
 module Data.Show
 
+import Lam.Primitive ($showInt)
+
 -- This is the interface for converting types to String, typically for printing.
--- The compiler has built in show functions for each base type (and eventually
--- we will auto-generate instances for each user-defined type.
+-- The compiler has built-in show functions for each base type (and eventually
+-- we will auto-generate instances for each user-defined type).
 
 type Show a = Show { show : a -> String }
 
+show : Show a -> a -> String
+show (Show d) x = d.show x
+
 showInt : Show Int
-showInt = Show { show = primShowInt }
+showInt = Show { show = $showInt }
+
+showString : Show String
+showString = Show { show = \x -> x }
+
+showList : Show a -> Show [a]
+showList (Show d) = Show { show = \xs -> "[#{showListHelper d.show xs}]" }
+
+showListHelper : (b -> String) -> [b] -> String
+showListHelper _ [] = ""
+showListHelper f [x] = "#{f x}"
+showListHelper f (x :: xs) = "#{f x}, #{showListHelper f xs}"
