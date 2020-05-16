@@ -55,8 +55,8 @@ constraintToConstraint (S.CTuple a b) =
 
 tyToType :: S.Type_ Name -> Type
 tyToType = \case
-  S.TyCon    n ts   -> foldl TApp (TCon n) (map tyToType ts)
-  S.TyConVar n ts   -> foldl TApp (TVar (R n)) (map tyToType ts)
+  S.TyCon n         -> (TCon n)
+  S.TyApp a b       -> TApp (tyToType a) (tyToType b)
   S.TyVar  n        -> TVar (R n)
   S.TyList t        -> list (tyToType t)
   S.TyBareList      -> TCon (TopLevel modPrim "List")

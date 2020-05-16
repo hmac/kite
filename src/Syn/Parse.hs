@@ -202,7 +202,7 @@ pDef name = do
 -- The context for parsing a type
 -- Paren means that compound types have to be in parens
 -- Neutral means anything goes
-data TypeCtx = Neutral | Paren
+data TypeCtx = Neutral | Paren | AppL | AppR
 
 -- Int
 -- Maybe Int
@@ -216,26 +216,20 @@ pType' :: TypeCtx -> Parser Type
 pType' ctx = case ctx of
   Neutral -> try arr <|> try app <|> atomic <|> parens (pType' Neutral)
   Paren   -> atomic <|> parens (pType' Neutral)
+  AppL    -> try app <|> atomic <|> parens (pType' Neutral)
+  AppR    -> atomic <|> parens (pType' Neutral)
  where
   atomic = con <|> var <|> hole <|> list <|> record <|> try tuple
   arr    = do
     a <- lexemeN (try app <|> pType' Paren)
     void $ symbolN "->"
     TyFun a <$> pType' Neutral
-  app    = conApp <|> varApp
-  conApp = do
-    f  <- uppercaseName
-    xs <- many $ pType' Paren
-    pure $ TyCon f xs
-  -- applications of type variables are treated (for some reason) as TyCon
-  varApp = do
-    (f, xs) <- try $ do
-      f  <- lowercaseName
-      xs <- some $ pType' Paren
-      pure (f, xs)
-    pure $ TyConVar f xs
+  app = do
+    l  <- pType' Paren
+    rs <- some (pType' AppR)
+    pure $ foldl TyApp l rs
   var         = TyVar <$> lowercaseName
-  con         = (`TyCon` []) <$> uppercaseName
+  con         = TyCon <$> uppercaseName
   hole        = TyHole <$> (string "?" >> pHoleName)
   list = (TyBareList <$ symbol "[]") <|> (TyList <$> brackets (pType' Neutral))
   tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)

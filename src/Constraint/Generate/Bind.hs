@@ -45,12 +45,11 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
   let touchables  = fuv eqTypes <> fuv beta <> fuv cs
   let constraints = mconcat cs <> Simple (allEqsEq <> annWanted)
   case solveC axs touchables annGiven constraints of
-    Left err -> throwError err
+    Left err                        -> throwError err
     -- At this point, q should only contain typeclass constraints.
     -- We should have solved all the equality constraints.
-    Right (q, _subst) | q /= mempty ->
-      trace (pShow q) $ throwError (UnsolvedConstraints q)
-    Right (q, subst) -> do
+    Right (q, _subst) | q /= mempty -> throwError (UnsolvedConstraints q)
+    Right (q, subst)                -> do
       -- apply the substitution to remove all resolved unification vars
       let eqTypes' = map (sub subst) eqTypes
       let exps'    = map (sub subst) es

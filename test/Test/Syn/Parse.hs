@@ -47,8 +47,8 @@ test = parallel $ do
                         , funName     = "map"
                         , funType     = Just
                                         $    (TyVar "a" `fn` TyVar "b")
-                                        `fn` TyConVar "f" [TyVar "a"]
-                                        `fn` TyConVar "f" [TyVar "b"]
+                                        `fn` TyApp (TyVar "f") (TyVar "a")
+                                        `fn` TyApp (TyVar "f") (TyVar "b")
                         , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
                                           , defExpr = Var "undefined"
                                           }
@@ -85,9 +85,11 @@ test = parallel $ do
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "fromLeft"
-                        , funType     = Just
-                                        $ TyCon "Either" [TyVar "a", TyVar "b"]
-                                        `fn` TyCon "Maybe" [TyVar "a"]
+                        , funType     =
+                          Just
+                          $    TyApp (TyApp (TyCon "Either") (TyVar "a"))
+                                     (TyVar "b")
+                          `fn` TyApp (TyCon "Maybe") (TyVar "a")
                         , funDefs     =
                           [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
                                 , defExpr = App (Con "Just") (Var "x")
@@ -111,30 +113,33 @@ test = parallel $ do
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
-                        , dataCons   = [ DataCon
-                                           { conName = "Foo"
-                                           , conArgs =
-                                             [ TyRecord
-                                                 [ ("unFoo", TyVar "a")
-                                                 , ("label", TyHole "b")
-                                                 , ("c", TyCon "A" [TyCon "A" []])
-                                                 ]
-                                             ]
-                                           }
-                                       ]
+                        , dataCons   =
+                          [ DataCon
+                              { conName = "Foo"
+                              , conArgs =
+                                [ TyRecord
+                                    [ ("unFoo", TyVar "a")
+                                    , ("label", TyHole "b")
+                                    , ("c"    , TyCon "A" `tyapp` TyCon "A")
+                                    ]
+                                ]
+                              }
+                          ]
                         }
     it "parses the definition of List" $ do
       parse pDecl "" "type List a = Nil | Cons a (List a)"
         `shouldParse` DataDecl Data
-                        { dataName   = "List"
+                        { dataName = "List"
                         , dataTyVars = ["a"]
-                        , dataCons   =
-                          [ DataCon { conName = "Nil", conArgs = [] }
-                          , DataCon
-                            { conName = "Cons"
-                            , conArgs = [TyVar "a", TyCon "List" [TyVar "a"]]
-                            }
-                          ]
+                        , dataCons = [ DataCon { conName = "Nil", conArgs = [] }
+                                     , DataCon
+                                       { conName = "Cons"
+                                       , conArgs = [ TyVar "a"
+                                                   , TyCon "List"
+                                                     `tyapp` TyVar "a"
+                                                   ]
+                                       }
+                                     ]
                         }
   describe "parsing modules" $ do
     it "parses a basic module with metadata" $ do
@@ -147,7 +152,7 @@ test = parallel $ do
                           [ FunDecl Fun
                               { funName     = "one"
                               , funComments = []
-                              , funType     = Just (TyCon "Int" [])
+                              , funType     = Just (TyCon "Int")
                               , funDefs     = [ Def { defArgs = []
                                                     , defExpr = IntLit 1
                                                     }
@@ -245,6 +250,36 @@ test = parallel $ do
     it "parses a string with several escaped backslashes" $ do
       parse pExpr "" "\"\\\\\\\\\"" `shouldParse` StringLit "\\\\" []
   describe "parsing types" $ do
+    it "basic applications" $ do
+      parse pType "" "f a" `shouldParse` (TyVar "f" `tyapp` TyVar "a")
+    it "applications on the left of applications" $ do
+      parse pType "" "f a b"
+        `shouldParse` (TyVar "f" `tyapp` TyVar "a" `tyapp` TyVar "b")
+    it "applications on the right of applications" $ do
+      parse pType "" "f (m a)"
+        `shouldParse` (TyVar "f" `tyapp` (TyVar "m" `tyapp` TyVar "a"))
+    it "applications on the left of arrows" $ do
+      parse pType "" "f a -> b"
+        `shouldParse` (TyVar "f" `tyapp` TyVar "a" `fn` TyVar "b")
+    it "applications on the right of arrows" $ do
+      parse pType "" "a -> f a"
+        `shouldParse` (TyVar "a" `fn` TyVar "f" `tyapp` TyVar "a")
+    -- This is not well-typed but should still parse
+    it "arrows on the left of applications" $ do
+      parse pType "" "(a -> b) f"
+        `shouldParse` ((TyVar "a" `fn` TyVar "b") `tyapp` TyVar "f")
+    it "arrows on the right of applications" $ do
+      parse pType "" "f (a -> b)"
+        `shouldParse` (TyVar "f" `tyapp` (TyVar "a" `fn` TyVar "b"))
+    it "arrows on the left of arrows" $ do
+      parse pType "" "(a -> b) -> c"
+        `shouldParse` ((TyVar "a" `fn` TyVar "b") `fn` TyVar "c")
+    it "arrows on the right of arrows" $ do
+      parse pType "" "a -> b -> c"
+        `shouldParse` (TyVar "a" `fn` TyVar "b" `fn` TyVar "c")
+    it "arrows on the right of arrows (with parens)" $ do
+      parse pType "" "a -> (b -> c)"
+        `shouldParse` (TyVar "a" `fn` TyVar "b" `fn` TyVar "c")
     it "parses basic function types" $ do
       parse pType "" "a -> b" `shouldParse` (TyVar "a" `fn` TyVar "b")
     it "parses multi arg function types" $ do
@@ -255,21 +290,26 @@ test = parallel $ do
         `shouldParse` ((TyVar "a" `fn` TyVar "b") `fn` TyVar "a" `fn` TyVar "b")
     it "parses multi parameter type constructors" $ do
       parse pType "" "Either a b -> Maybe a"
-        `shouldParse` (    TyCon "Either" [TyVar "a", TyVar "b"]
-                      `fn` TyCon "Maybe"  [TyVar "a"]
+        `shouldParse` (       TyCon "Either"
+                      `tyapp` TyVar "a"
+                      `tyapp` TyVar "b"
+                      `fn`    TyCon "Maybe"
+                      `tyapp` TyVar "a"
                       )
     it "parses parameterised constructors inside lists" $ do
       parse pType "" "[Maybe a]"
-        `shouldParse` TyList (TyCon "Maybe" [TyVar "a"])
+        `shouldParse` TyList (TyCon "Maybe" `tyapp` TyVar "a")
     it "parses function types in lists" $ do
       parse pType "" "[a -> b]" `shouldParse` TyList (TyVar "a" `fn` TyVar "b")
     it "parses function types in higher kinded types" $ do
       parse pType "" "A [a -> a]"
-        `shouldParse` TyCon "A" [TyList (TyVar "a" `fn` TyVar "a")]
+        `shouldParse` TyApp (TyCon "A") (TyList (TyVar "a" `fn` TyVar "a"))
       parse pType "" "A [B -> C]"
-        `shouldParse` TyCon "A" [TyList (TyCon "B" [] `fn` TyCon "C" [])]
+        `shouldParse` TyApp (TyCon "A") (TyList (TyCon "B" `fn` TyCon "C"))
     it "parses nested type constructors" $ do
-      parse pType "" "A B" `shouldParse` TyCon "A" [TyCon "B" []]
+      parse pType "" "A B" `shouldParse` TyApp (TyCon "A") (TyCon "B")
     it "parses record types" $ do
       parse pType "" "{x : a, y : b}"
         `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]
+    it "parses applications of holes to types" $ do
+      parse pType "" "?a A" `shouldParse` (TyHole "a" `tyapp` TyCon "A")

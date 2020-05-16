@@ -128,8 +128,8 @@ data Pattern_ a = VarPat a
 -- check that the rest of the compiler can handle higher kinded types properly.
 type Type = Type_ RawName
 data Type_ a =
-          TyCon a [Type_ a]
-        | TyConVar a [Type_ a]
+          TyCon a
+        | TyApp (Type_ a) (Type_ a)
         | TyVar a
         | TyBareList
         | TyList (Type_ a)
@@ -140,6 +140,10 @@ data Type_ a =
         | TyFun (Type_ a) (Type_ a)
         | TyRecord [(a, Type_ a)]
   deriving (Eq, Show, Ord)
+
+infixl 5 `tyapp`
+tyapp :: Type_ name -> Type_ name -> Type_ name
+tyapp = TyApp
 
 infixr 4 `fn`
 fn :: Type_ name -> Type_ name -> Type_ name

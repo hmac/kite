@@ -64,7 +64,7 @@ test = describe "typing simple modules" $ do
               }
             fromMaybe = mkDecl
               ( "fromMaybe"
-              , TyCon "Maybe" [TyVar "a"] `fn` (TyVar "a" `fn` TyVar "a")
+              , TyCon "Maybe" `tyapp` TyVar "a" `fn` (TyVar "a" `fn` TyVar "a")
               , [ ([ConsPat "Just" [VarPat "x"], WildPat], Var "x")
                 , ([WildPat, VarPat "y"]                 , Var "y")
                 ]

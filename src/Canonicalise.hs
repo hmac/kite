@@ -93,20 +93,20 @@ canonicaliseType env = \case
   -- corresponding primitive types.
   -- TODO: this is a bit of a hack and we do different things elsewhere. We
   -- should standardise on how to deal with primitives.
-  TyCon    "String" _  -> TyString
-  TyCon    "Int"    _  -> TyInt
+  TyCon "String"  -> TyString
+  TyCon "Int"     -> TyInt
   -- Note: type variables are assumed to be local to the type
   -- this may need rethinking when we support type aliases
-  TyCon n ts -> TyCon (canonicaliseName env n) (map (canonicaliseType env) ts)
-  TyConVar v        ts -> TyConVar (Local v) (map (canonicaliseType env) ts)
-  TyVar  v             -> TyVar (Local v)
-  TyList a             -> TyList (canonicaliseType env a)
-  TyBareList           -> TyBareList
-  TyTuple as           -> TyTuple $ fmap (canonicaliseType env) as
-  TyHole  n            -> TyHole n
-  TyInt                -> TyInt
-  TyString             -> TyString
-  TyFun a b -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyCon n         -> TyCon (canonicaliseName env n)
+  TyApp a b       -> TyApp (canonicaliseType env a) (canonicaliseType env b)
+  TyVar  v        -> TyVar (Local v)
+  TyList a        -> TyList (canonicaliseType env a)
+  TyBareList      -> TyBareList
+  TyTuple as      -> TyTuple $ fmap (canonicaliseType env) as
+  TyHole  n       -> TyHole n
+  TyInt           -> TyInt
+  TyString        -> TyString
+  TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
 
 canonicaliseScheme :: Env -> Syn.Scheme -> Can.Scheme

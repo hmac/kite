@@ -152,18 +152,10 @@ genFun =
 genType :: H.Gen Type
 genType = Gen.recursive
   Gen.choice
-  [ TyCon <$> genUpperName <*> pure []
-  , TyVar <$> genLowerName
-  , TyHole <$> genHoleName
-  ]
+  [TyCon <$> genUpperName, TyVar <$> genLowerName, TyHole <$> genHoleName]
   [ Gen.subterm (Gen.small genType) TyList
   , Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
-  , Gen.subtermM2
-    (Gen.small genType)
-    (Gen.small genType)
-    (\ty1 ty2 ->
-      TyCon <$> Gen.choice [genUpperName, genLowerName] <*> pure [ty1, ty2]
-    )
+  , Gen.subterm2 (Gen.small genType) (Gen.small genType) TyApp
   , Gen.subterm2 (Gen.small genType)
                  (Gen.small genType)
                  (\ty1 ty2 -> TyTuple [ty1, ty2])
@@ -182,11 +174,7 @@ genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 genExpr :: H.Gen Syn
 genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   Gen.choice
-  [ genVar
-  , Con <$> genUpperName
-  , Hole <$> genHoleName
-  , IntLit <$> genInt
-  ]
+  [genVar, Con <$> genUpperName, Hole <$> genHoleName, IntLit <$> genInt]
   [ genAbs
   , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
   , Gen.subtermM2 (Gen.small genExpr)
@@ -282,7 +270,7 @@ genPattern = Gen.shrink shrinkPattern $ Gen.recursive
   Gen.choice
   [genVarPattern, pure WildPat, IntPat <$> genInt]
   [Gen.small $ TuplePat <$> Gen.list (Range.linear 2 3) genVarPattern]
- where genVarPattern = VarPat <$> genLowerName
+  where genVarPattern = VarPat <$> genLowerName
 
 shrinkPattern :: (Pattern -> [Pattern])
 shrinkPattern = \case
