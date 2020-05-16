@@ -313,7 +313,7 @@ subst _a _n Fail                = Fail
 subst _a _n (Bottom s         ) = Bottom s
 subst a  n  (Project ar i e   ) = Project ar i (subst a n e)
 subst a  n  (Y      e         ) = Y (subst a n e)
-subst _a _n (Record fields    ) = Record fields
+subst a  n  (Record fields    ) = Record (fmap (subst a n) fields)
 subst a  n  (RecordProject e l) = RecordProject (subst a n e) l
 
 -- If the clause rebinds the variable, don't substitute inside it

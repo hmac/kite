@@ -26,7 +26,7 @@ eval env expr = case expr of
   App  (Abs n e) b  -> eval env $ subst (eval env b) n e
   App  a         b  -> eval env $ App (eval env a) b
   Abs  n         e  -> Abs n e
-  Let n v e         -> eval ((n, v) : env) e
+  Let n v e         -> eval env $ subst v n e
   Bottom s          -> Bottom s
   Fail              -> Fail
   Fatbar a b        -> case eval env a of
@@ -129,7 +129,7 @@ subst a  n  (Eq x y             ) = Eq (subst a n x) (subst a n y)
 subst a  n  (UnpackProduct i x y) = UnpackProduct i (subst a n x) (subst a n y)
 subst a  n  (UnpackSum t i x y  ) = UnpackSum t i (subst a n x) (subst a n y)
 subst a  n  (CaseN x ys         ) = CaseN (subst a n x) (map (subst a n) ys)
-subst _a _n (Record fields      ) = Record fields
+subst a  n  (Record fields      ) = Record (fmap (subst a n) fields)
 subst a  n  (RecordProject e l  ) = RecordProject (subst a n e) l
 
 buildApp :: Exp -> [Exp] -> Exp
