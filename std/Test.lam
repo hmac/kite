@@ -29,8 +29,14 @@ isfoo = case foo of
 inc : Int -> Int
 inc i = i + 1
 
+dec : Int -> Int
+dec i = i - 1
+
+square : Int -> Int
+square i = i * i
+
 mapTest : [Int]
-mapTest = map functorList inc [1,2,3]
+mapTest = map functorList square [1,2,3]
 
 main : String
 main = show (showList showInt) mapTest

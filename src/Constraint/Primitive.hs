@@ -22,6 +22,8 @@ env = Map.fromList
       )
     )
   , (TopLevel modPrim "+", Forall [] mempty (TInt `fn` TInt `fn` TInt))
+  , (TopLevel modPrim "-", Forall [] mempty (TInt `fn` TInt `fn` TInt))
+  , (TopLevel modPrim "*", Forall [] mempty (TInt `fn` TInt `fn` TInt))
   , ( TopLevel modPrim "appendString"
     , Forall [] mempty (TString `fn` TString `fn` TString)
     )
