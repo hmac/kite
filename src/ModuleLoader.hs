@@ -12,15 +12,17 @@ import           System.Directory               ( getCurrentDirectory )
 import           Data.Name                      ( showModuleName )
 import           Syn.Parse                      ( parseLamFile )
 import           Syn
-import           Data.List                      ( nub
-                                                , intercalate
-                                                , sortBy
-                                                )
+import           Data.List                      ( intercalate )
 import           Canonicalise                   ( canonicaliseModule )
 import           ModuleGroup
 import           ExpandImports                  ( expandImports )
 import qualified ExpandImports
 import           ExpandExports                  ( expandExports )
+import           Data.Graph                     ( stronglyConnCompR
+                                                , flattenSCCs
+                                                , SCC(..)
+                                                )
+import           Util
 
 -- This module is responsible for loading Lam modules. It should attempt to
 -- cache modules so they're not loaded multiple times.
@@ -99,36 +101,21 @@ filePath root (ModuleName components) =
 -- Sorts a set of modules in dependency order. Each module will only depend on
 -- modules before it in the list. Returns an error if there are cyclic
 -- dependencies.
-sortModules
-  :: (Eq n, Eq ty, Eq e) => [Module_ n e ty] -> Either String [Module_ n e ty]
-sortModules []  = Right []
-sortModules [m] = Right [m]
+sortModules :: [Module_ n e ty] -> Either String [Module_ n e ty]
 sortModules ms =
-  let pairs = asPairs $ permutationsOf2 ms
-  in  if any (\(a, b) -> a `dependsOn` b && b `dependsOn` a) pairs
-        then Left "Cyclic dependency detected"
-        else Right $ sortBy compareModules ms
+  let adjList =
+          map (\m -> (m, moduleName m, map importName (moduleImports m))) ms
+      graph          = stronglyConnCompR adjList
+      cycles         = flattenSCCs (filter isCyclic graph)
+      orderedModules = map fst3 (flattenSCCs graph)
+  in  case cycles of
+        [] -> Right orderedModules
+        _  -> Left "Cyclic dependency detected"
 
-asPairs :: [[a]] -> [(a, a)]
-asPairs []            = []
-asPairs ([x, y] : xs) = (x, y) : asPairs xs
-asPairs (x : _) =
-  error
-    $  "ModuleLoader.asPairs: Expected list of length 2, found list of length "
-    <> show (length x)
+isCyclic :: SCC a -> Bool
+isCyclic = \case
+  CyclicSCC  _ -> True
+  AcyclicSCC _ -> False
 
-permutationsOf2 :: Eq a => [a] -> [[a]]
-permutationsOf2 xs =
-  filter ((== 2) . length . nub) $ mapM (const xs) [1 .. 2 :: Int]
-
-compareModules :: Module_ n e ty -> Module_ n e ty -> Ordering
-compareModules m1 m2 = case (m1 `dependsOn` m2, m2 `dependsOn` m1) of
-  (True , False) -> GT
-  (False, True ) -> LT
-  (False, False) -> EQ
-  (True , True ) -> EQ
-
-dependsOn :: Module_ n e ty -> Module_ n e ty -> Bool
-m1 `dependsOn` m2
-  | any (\i -> importName i == moduleName m2) (moduleImports m1) = True
-  | otherwise = False
+fst3 :: (a, b, c) -> a
+fst3 (x, _, _) = x
