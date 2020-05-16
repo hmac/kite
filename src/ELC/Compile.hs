@@ -115,6 +115,7 @@ translateProdCon T.RecordCon { T.conName = n, T.conFields = fields } = do
 translatePattern :: Env -> T.Pattern -> NameGen Pattern
 translatePattern _   (T.VarPat    n ) = pure (VarPat n)
 translatePattern _   (T.IntPat    i ) = pure (ConstPat (Int i))
+translatePattern _   (T.BoolPat   b ) = pure (ConstPat (Bool b))
 translatePattern _   (T.StringPat s ) = pure (ConstPat (String s))
 translatePattern env (T.ListPat   es) = do
   pats <- mapM (translatePattern env) es
@@ -130,7 +131,7 @@ translatePattern _ T.WildPat = VarPat <$> fresh
 lookupCon :: Name -> Env -> Con
 lookupCon n env = case lookupDef n env of
   Just (Cons c _) -> c
-  _ -> error $ "unknown constructor: " <> show n <> "\n\n" <> pShow env
+  _               -> error $ "unknown constructor: " <> show n
 
 buildListPat :: [Pattern] -> Pattern
 buildListPat []       = ConPat listNil []
@@ -146,7 +147,8 @@ buildTuplePat elems = case length elems of
   n -> error $ "cannot handle tuples of length " <> show n
 
 translateExpr :: Env -> T.Exp -> NameGen Exp
-translateExpr _   (T.IntLitT i _         ) = pure (Const (Int i) [])
+translateExpr _   (T.IntLitT  i _        ) = pure (Const (Int i) [])
+translateExpr _   (T.BoolLitT b _        ) = pure (Const (Bool b) [])
 translateExpr env (T.StringLitT s parts _) = translateStringLit env s parts
 translateExpr env (T.ListLitT elems _    ) = do
   elems' <- mapM (translateExpr env) elems
@@ -169,6 +171,11 @@ translateExpr _ (T.VarT (TopLevel m "$showInt") _) | m == modPrim = do
 translateExpr _ (T.VarT (TopLevel m "show") _) | m == modPrim = do
   v <- fresh
   pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
+translateExpr _ (T.VarT (TopLevel m "$eqInt") _) | m == modPrim = do
+  v1 <- fresh
+  v2 <- fresh
+  pure $ Abs (VarPat v1)
+             (Abs (VarPat v2) (Const (Prim PrimEqInt) [Var v1, Var v2]))
 
 translateExpr _   (T.VarT n _) = pure (Var n)
 translateExpr env (T.AppT a b) = do
@@ -304,6 +311,7 @@ subst a n (LetRec alts e)
   | otherwise = LetRec (mapSnd (subst a n) alts) (subst a n e)
 
 subst a n (Fatbar x y) = Fatbar (subst a n x) (subst a n y)
+subst a n (If b t e  ) = If (subst a n b) (subst a n t) (subst a n e)
 -- if the case is scrutinising this variable, rebind it with a let and
 -- substitute inside the case.
 subst a n (Case v alts)
@@ -365,7 +373,16 @@ getCon c                   = error $ "not a con: " <> show c
 
 matchVarCon :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchVarCon us qs def =
-  let f = if isVar (head qs) then matchVar else matchCon in f us qs def
+  let f = case head qs of
+        (VarPat _            : _, _) -> matchVar
+        (ConPat _ _          : _, _) -> matchCon
+        (ConstPat (Int    _) : _, _) -> matchInt
+        (ConstPat (String _) : _, _) -> matchString
+        (ConstPat (Bool   _) : _, _) -> matchBool
+        (ConstPat (Prim _) : _, _) ->
+          error "ELC.Compile.matchVarCon: illegal primitive in pattern"
+        ([], _) -> error "ELC.Compile.matchVarCon: unexpected empty list"
+  in  f us qs def
 
 matchVar :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchVar (u : us) qs =
@@ -378,6 +395,27 @@ matchCon (u : us) qs def = do
   pure $ Case u clauses
   where cs = constructors (getCon (head qs))
 matchCon [] _ _ = error "ELC.Compile.matchCon: unexpected empty list"
+
+matchBool :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchBool (u : us) qs def = do
+  let (trueBranches, falseBranches) = foldl
+        (\(ts, fs) q -> case q of
+          (ConstPat (Bool True) : _, _) -> (ts <> [q], fs)
+          (ConstPat (Bool False) : _, _) -> (ts, fs <> [q])
+          _ -> error "ELC.Compile.matchBool: expected bool"
+        )
+        ([], [])
+        qs
+  trueClause  <- match us [ (ps, e) | (_ : ps, e) <- trueBranches ] def
+  falseClause <- match us [ (ps, e) | (_ : ps, e) <- falseBranches ] def
+  pure $ If (Var u) trueClause falseClause
+matchBool [] _ _ = error "ELC.Compile.matchBool: unexpected empty list"
+
+matchInt :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchInt = error "ELC.Compile.matchInt: not implemented yet"
+
+matchString :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchString = error "ELC.Compile.matchString: not implemented yet"
 
 matchClause :: Con -> [Name] -> [Equation] -> Exp -> NameGen Clause
 matchClause con (_u : us) qs def = do

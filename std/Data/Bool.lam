@@ -1,6 +1,6 @@
 module Data.Bool
 
-import Lam.Bool (Bool(..), not)
+import Lam.Bool (not)
 
 import Data.Semigroup (Semigroup(..))
 import Data.Eq (Eq(..))

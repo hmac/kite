@@ -1,0 +1,7 @@
+module Data.Int
+
+import Lam.Primitive ($eqInt)
+import Data.Eq (Eq(..))
+
+eqInt : Eq Int
+eqInt = Eq { eq = $eqInt }

@@ -152,7 +152,7 @@ test = parallel $ do
                           [ FunDecl Fun
                               { funName     = "one"
                               , funComments = []
-                              , funType     = Just (TyCon "Int")
+                              , funType     = Just TyInt
                               , funDefs     = [ Def { defArgs = []
                                                     , defExpr = IntLit 1
                                                     }

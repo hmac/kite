@@ -29,8 +29,9 @@ fromSyn = \case
   S.TupleLit es         -> E.TupleLit (map fromSyn es)
   S.ListLit  es         -> E.ListLit (map fromSyn es)
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)
-  S.IntLit i            -> E.IntLit i
-  S.Record fields       -> E.Record $ mapSnd fromSyn fields
+  S.IntLit  i           -> E.IntLit i
+  S.BoolLit b           -> E.BoolLit b
+  S.Record  fields      -> E.Record $ mapSnd fromSyn fields
   S.Project r l         -> E.Project (fromSyn r) l
 
 -- | Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
@@ -64,5 +65,6 @@ tyToType = \case
   S.TyHole  n       -> THole (Local n)
   S.TyInt           -> TInt
   S.TyString        -> TString
+  S.TyBool          -> TBool
   S.TyFun a b       -> tyToType a `fn` tyToType b
   S.TyRecord fields -> TRecord $ mapSnd tyToType fields

@@ -38,6 +38,7 @@ printType (TCon  n )       = printName n
 printType (THole n )       = "?" <> printName n
 printType TInt             = "Int"
 printType TString          = "String"
+printType TBool            = "Bool"
 printType (TRecord fields) = printType' (TRecord fields)
 
 -- like printType but assume we're in a nested context, so add parentheses
@@ -50,6 +51,7 @@ printType' (TCon  n )       = printName n
 printType' (THole n )       = "?" <> printName n
 printType' TInt             = "Int"
 printType' TString          = "String"
+printType' TBool            = "Bool"
 printType' (TRecord fields) = braces $ hsep $ punctuate
   comma
   (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)

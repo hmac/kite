@@ -89,12 +89,6 @@ canonicaliseFun (mod, imps) f = f
 
 canonicaliseType :: Env -> Syn.Type -> Can.Type
 canonicaliseType env = \case
-  -- The type names String and Int are reserved, so they always refer to the
-  -- corresponding primitive types.
-  -- TODO: this is a bit of a hack and we do different things elsewhere. We
-  -- should standardise on how to deal with primitives.
-  TyCon "String"  -> TyString
-  TyCon "Int"     -> TyInt
   -- Note: type variables are assumed to be local to the type
   -- this may need rethinking when we support type aliases
   TyCon n         -> TyCon (canonicaliseName env n)
@@ -106,6 +100,7 @@ canonicaliseType env = \case
   TyHole  n       -> TyHole n
   TyInt           -> TyInt
   TyString        -> TyString
+  TyBool          -> TyBool
   TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
 
@@ -150,9 +145,10 @@ canonicaliseExp env = go
     TupleLit es         -> TupleLit $ fmap (go locals) es
     ListLit  es         -> ListLit $ fmap (go locals) es
     StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
-    Hole   n            -> Hole (canonicaliseName env n)
-    IntLit i            -> IntLit i
-    Record fields       -> Record $ bimapL Local (go locals) fields
+    Hole    n           -> Hole (canonicaliseName env n)
+    IntLit  i           -> IntLit i
+    BoolLit b           -> BoolLit b
+    Record  fields      -> Record $ bimapL Local (go locals) fields
     Project r l         -> Project (go locals r) (Local l)
    where
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
@@ -189,6 +185,7 @@ canonicalisePattern env = \case
   VarPat n       -> ([n], VarPat (Local n))
   WildPat        -> ([], WildPat)
   IntPat    i    -> ([], IntPat i)
+  BoolPat   b    -> ([], BoolPat b)
   StringPat s    -> ([], StringPat s)
   TuplePat  pats -> second TuplePat (canonicalisePatternList pats)
   ListPat   pats -> second ListPat (canonicalisePatternList pats)

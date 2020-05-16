@@ -228,8 +228,14 @@ pType' ctx = case ctx of
     l  <- pType' Paren
     rs <- some (pType' AppR)
     pure $ foldl TyApp l rs
-  var         = TyVar <$> lowercaseName
-  con         = TyCon <$> uppercaseName
+  var = TyVar <$> lowercaseName
+  con = do
+    name <- uppercaseName
+    pure $ case name of
+      "String" -> TyString
+      "Int"    -> TyInt
+      "Bool"   -> TyBool
+      n        -> TyCon n
   hole        = TyHole <$> (string "?" >> pHoleName)
   list = (TyBareList <$ symbol "[]") <|> (TyList <$> brackets (pType' Neutral))
   tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
@@ -250,9 +256,14 @@ pConType = pType' Paren
 pPattern :: Parser Pattern
 pPattern = pPattern' <|> cons
  where
-  tyCon          = uppercaseName
-  cons           = try nullaryCon <|> try infixBinaryCon <|> con
-  nullaryCon     = ConsPat <$> tyCon <*> pure []
+  tyCon      = uppercaseName
+  cons       = try nullaryCon <|> try infixBinaryCon <|> con
+  nullaryCon = do
+    name <- tyCon
+    pure $ case name of
+      "True"  -> BoolPat True
+      "False" -> BoolPat False
+      n       -> ConsPat n []
   infixBinaryCon = parens $ do
     left  <- pPattern
     tycon <- binTyCon
@@ -286,8 +297,13 @@ pCasePattern =
     <|> con
     <|> pVarPat
  where
-  tuplePattern   = TuplePat <$> pPattern `sepBy` comma
-  con            = ConsPat <$> uppercaseName <*> many pPattern
+  tuplePattern = TuplePat <$> pPattern `sepBy` comma
+  con          = do
+    name <- uppercaseName
+    case name of
+      "True"  -> pure $ BoolPat True
+      "False" -> pure $ BoolPat False
+      n       -> ConsPat n <$> many pPattern
   infixBinaryCon = do
     left  <- pPattern
     tycon <- Name <$> symbol "::"
@@ -498,7 +514,12 @@ pList = ListLit
   <$> between (symbolN "[") (symbol "]") (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
-pCons = Con <$> uppercaseName
+pCons = do
+  name <- uppercaseName
+  pure $ case name of
+    "True"  -> BoolLit True
+    "False" -> BoolLit False
+    n       -> Con n
 
 pCase :: Parser Syn
 pCase = do

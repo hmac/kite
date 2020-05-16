@@ -20,8 +20,6 @@ data Exp = Const Constant [Exp]
          | Bottom String
          | Fail
          | Fatbar Exp Exp
-         | ETrue
-         | EFalse
          | If Exp Exp Exp
          | Eq Exp Exp
          -- UnpackProduct i f a  expects a to be a product of arity i, unpacks

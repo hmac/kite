@@ -33,16 +33,14 @@ eval env expr = case expr of
     Fail       -> eval env b
     (Bottom s) -> Bottom s
     e          -> e
-  ETrue    -> ETrue
-  EFalse   -> EFalse
   If c t e -> case eval env c of
-    ETrue  -> eval env t
-    EFalse -> eval env e
-    a      -> error $ "Expected boolean but got " <> show a
+    Const (Bool True ) _ -> eval env t
+    Const (Bool False) _ -> eval env e
+    a                    -> error $ "Expected boolean but got " <> show a
   Eq a b ->
     let a' = eval env a
         b' = eval env b
-    in  if a' == b' then ETrue else EFalse
+    in  if a' == b' then Const (Bool True) [] else Const (Bool False) []
   UnpackProduct i f (Cons c args) -> if conArity c == i
     then eval env (buildApp f args)
     else error $ "expected " <> show c <> " to have arity " <> show i
@@ -89,6 +87,9 @@ evalPrim PrimSub     [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
 evalPrim PrimMult    [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
 evalPrim PrimShow    [e              ]                  = primShow e
 evalPrim PrimShowInt [Const (Int x) _] = Const (String (show x)) []
+evalPrim PrimEqInt [Const (Int x) _, Const (Int y) _]
+  | x == y    = Const (Bool True) []
+  | otherwise = Const (Bool False) []
 
 evalPrim p args =
   error $ "(LC.Eval) [" <> show p <> "] invalid args: " <> show args
@@ -119,11 +120,9 @@ subst a n (Let p b e) | p == n    = Let p b e
                       | otherwise = Let p (subst a n b) (subst a n e)
 subst a  n  (Fatbar x y)          = Fatbar (subst a n x) (subst a n y)
 subst _a _n Fail                  = Fail
-subst _a _n (Bottom s      )      = Bottom s
-subst a  n  (Project ar i e)      = Project ar i (subst a n e)
-subst a  n  (Y e           )      = Y (subst a n e)
-subst _  _  ETrue                 = ETrue
-subst _  _  EFalse                = EFalse
+subst _a _n (Bottom s           ) = Bottom s
+subst a  n  (Project ar i e     ) = Project ar i (subst a n e)
+subst a  n  (Y e                ) = Y (subst a n e)
 subst a  n  (If c t e           ) = If (subst a n c) (subst a n t) (subst a n e)
 subst a  n  (Eq x y             ) = Eq (subst a n x) (subst a n y)
 subst a  n  (UnpackProduct i x y) = UnpackProduct i (subst a n x) (subst a n y)

@@ -14,6 +14,7 @@ data Exp = Const Constant [Exp]
          | Let Pattern Exp Exp
          | LetRec [(Pattern, Exp)] Exp
          | Fatbar Exp Exp
+         | If Exp Exp Exp
          | Case Name [Clause]
          | Fail
          | Bottom String
@@ -29,10 +30,12 @@ buildAbs = foldr Abs
 buildApp :: Exp -> [Exp] -> Exp
 buildApp = foldl App
 
-data Clause = Clause Con [Name] Exp deriving (Eq, Show)
+data Clause = Clause Con [Name] Exp
+            deriving (Eq, Show)
 
 data Constant = Int Int
               | String String
+              | Bool Bool
               | Prim Primitive
          deriving (Show, Eq)
 
@@ -43,6 +46,7 @@ data Primitive = PrimStringAppend
                | PrimMult
                | PrimShow -- TODO: this becomes PrimShowInt etc when we have a show typeclass
                | PrimShowInt
+               | PrimEqInt
          deriving (Show, Eq)
 
 data Pattern = ConstPat Constant

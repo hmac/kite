@@ -156,6 +156,7 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyTuple ts) -> tupled (map (printType' Root) ts)
   (_   , TyInt     ) -> "Int"
   (_   , TyString  ) -> "String"
+  (_   , TyBool    ) -> "Bool"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
 
@@ -171,6 +172,7 @@ printPattern (VarPat n)       = printName n
 printPattern WildPat          = "_"
 printPattern (IntPat    i   ) = pretty i
 printPattern (StringPat s   ) = dquotes (pretty s)
+printPattern (BoolPat   b   ) = pretty b
 printPattern (TuplePat  pats) = align $ htupled (map printPattern pats)
 printPattern (ListPat   pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
@@ -202,6 +204,8 @@ printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
+printExpr (BoolLit True            ) = "True"
+printExpr (BoolLit False           ) = "False"
 
 -- print an expression with unambiguous precendence
 printExpr' :: Syn -> Document

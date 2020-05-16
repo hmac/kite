@@ -106,6 +106,7 @@ type Pattern = Pattern_ RawName
 data Pattern_ a = VarPat a
              | WildPat
              | IntPat Int
+             | BoolPat Bool
              | TuplePat [Pattern_ a]
              | ListPat [Pattern_ a]
              | ConsPat a [Pattern_ a]
@@ -137,6 +138,9 @@ data Type_ a =
         | TyHole RawName
         | TyInt
         | TyString
+        -- Bool could be defined in library code, but it's a lot easier to write
+        -- primitives like $eqInt if it's a built-in type.
+        | TyBool
         | TyFun (Type_ a) (Type_ a)
         | TyRecord [(a, Type_ a)]
   deriving (Eq, Show, Ord)
@@ -190,6 +194,7 @@ data Syn_ n v c t = Var n
          | ListLit [Syn_ n v c t]
          | StringLit String [(Syn_ n v c t, String)]
          | IntLit Int
+         | BoolLit Bool
          -- Records
          | Record [(n, Syn_ n v c t)]
          | Project (Syn_ n v c t) n

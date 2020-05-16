@@ -1,6 +1,6 @@
 module Data.Ord
 
-import Lam.Bool (Bool(..), not)
+import Lam.Bool (not)
 import Data.Eq (Eq, eq)
 
 type Ordering = LT | GT | EQ

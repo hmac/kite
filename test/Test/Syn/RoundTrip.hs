@@ -145,14 +145,16 @@ genFun =
     <*> (Just <$> genType)
     <*> Gen.list (Range.linear 1 5) genDef
 
--- TyInt and TyString are omitted here because without parsing the whole module
--- we can't distinguish between a locally defined Int type and the builtin Int
--- type - therefore the roundtrip property can't straightforwardly hold for
--- these types.
 genType :: H.Gen Type
 genType = Gen.recursive
   Gen.choice
-  [TyCon <$> genUpperName, TyVar <$> genLowerName, TyHole <$> genHoleName]
+  [ pure TyString
+  , pure TyInt
+  , pure TyBool
+  , TyCon <$> genUpperName
+  , TyVar <$> genLowerName
+  , TyHole <$> genHoleName
+  ]
   [ Gen.subterm (Gen.small genType) TyList
   , Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
   , Gen.subterm2 (Gen.small genType) (Gen.small genType) TyApp
@@ -174,7 +176,12 @@ genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
 genExpr :: H.Gen Syn
 genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   Gen.choice
-  [genVar, Con <$> genUpperName, Hole <$> genHoleName, IntLit <$> genInt]
+  [ genVar
+  , Con <$> genUpperName
+  , Hole <$> genHoleName
+  , IntLit <$> genInt
+  , BoolLit <$> Gen.bool
+  ]
   [ genAbs
   , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
   , Gen.subtermM2 (Gen.small genExpr)
@@ -215,10 +222,11 @@ genLet = Gen.subtermM2 (Gen.small genExpr)
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
-  Var    _             -> []
-  Con    _             -> []
-  Hole   _             -> []
-  IntLit _             -> []
+  Var     _            -> []
+  Con     _            -> []
+  Hole    _            -> []
+  IntLit  _            -> []
+  BoolLit _            -> []
   Abs (v : vs) e       -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
   Abs _        e       -> [e]
   App _        b       -> [b]

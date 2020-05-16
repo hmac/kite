@@ -111,6 +111,7 @@ data Type = TVar Var
           | THole Name
           | TInt
           | TString
+          | TBool
           | TRecord [(Name, Type)]
           deriving (Eq, Show, Ord)
 
@@ -162,6 +163,7 @@ instance Sub Type where
   sub _ (THole n )       = THole n
   sub _ TInt             = TInt
   sub _ TString          = TString
+  sub _ TBool            = TBool
   sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
 
 instance Sub Constraint where
@@ -204,6 +206,7 @@ instance Vars Type where
   fuv (THole _   )     = mempty
   fuv TInt             = mempty
   fuv TString          = mempty
+  fuv TBool            = mempty
   fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
 
   ftv (TVar v  )       = Set.singleton v
@@ -212,6 +215,7 @@ instance Vars Type where
   ftv (THole _ )       = mempty
   ftv TInt             = mempty
   ftv TString          = mempty
+  ftv TBool            = mempty
   ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)
 
 instance Vars Constraint where

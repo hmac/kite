@@ -92,7 +92,9 @@ generate env (ListLit elems) = do
   let sameTypeConstraint = mconcat $ map (beta :~:) elemTypes
   pure (ListLitT elems' t, t, mconcat constraints <> Simple sameTypeConstraint)
 -- Int literal
-generate _env (IntLit i      ) = pure (IntLitT i TInt, TInt, mempty)
+generate _env (IntLit  i     ) = pure (IntLitT i TInt, TInt, mempty)
+-- Bool literal
+generate _env (BoolLit b     ) = pure (BoolLitT b TBool, TBool, mempty)
 -- String literal
 generate env  (StringLit p cs) = do
   (cs', constraints) <- unzip <$> forM

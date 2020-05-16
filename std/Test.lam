@@ -1,6 +1,5 @@
 module Test
 
-import Lam.Bool (Bool(..))
 import Data.Bool (all)
 import Data.Maybe (Maybe(..))
 import Data.Either (Either(..))
@@ -9,6 +8,8 @@ import Data.Monoid (Monoid(..), concat)
 import Lam.String (monoidString)
 import Data.List (subsequences, functorList, mapList)
 import Data.Functor (Functor, map)
+import Data.Eq (eq)
+import Data.Int (eqInt)
 
 e : Either Bool String
 e = Left True
@@ -38,5 +39,5 @@ square i = i * i
 mapTest : [Int]
 mapTest = map functorList square [1,2,3]
 
-main : String
-main = show (showList showInt) mapTest
+main : Int
+main = 0
