@@ -236,8 +236,9 @@ pType' ctx = case ctx of
       "Int"    -> TyInt
       "Bool"   -> TyBool
       n        -> TyCon n
-  hole        = TyHole <$> (string "?" >> pHoleName)
-  list = (TyBareList <$ symbol "[]") <|> (TyList <$> brackets (pType' Neutral))
+  hole = TyHole <$> (string "?" >> pHoleName)
+  list =
+    (TyList <$ symbol "[]") <|> (TyApp TyList <$> brackets (pType' Neutral))
   tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
   record      = TyRecord <$> braces (recordField `sepBy1` comma)
   recordField = do

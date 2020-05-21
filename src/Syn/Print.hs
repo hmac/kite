@@ -127,36 +127,37 @@ data Context = Root | AppL | AppR  | ArrL | ArrR
 printType' :: Context -> Type -> Document
 printType' ctx ty = case (ctx, ty) of
   -- top level arrows don't get parenthesised
-  (Root, TyFun a b ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
-  -- top level applications don't get parenthesised either
-  (Root, TyApp a b ) -> printType' AppL a <+> printType' AppR b
+  (Root, TyFun a b     ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
+  -- applications of TyList get special-cased
+  (Root, TyApp TyList a) -> brackets (printType' Root a)
+  -- top level applications don't get parenthesised
+  (Root, TyApp a b     ) -> printType' AppL a <+> printType' AppR b
 
   -- arrows on the left of arrows get parenthesised
-  (ArrL, TyFun a b ) -> parens $ printType' Root (a `fn` b)
+  (ArrL, TyFun a b     ) -> parens $ printType' Root (a `fn` b)
   -- arrows on the right of arrows don't
-  (ArrR, TyFun a b ) -> printType' Root (a `fn` b)
+  (ArrR, TyFun a b     ) -> printType' Root (a `fn` b)
   -- arrows on either side of applications get parenthesised
-  (AppR, TyFun a b ) -> parens $ printType' Root (a `fn` b)
-  (AppL, TyFun a b ) -> parens $ printType' Root (a `fn` b)
+  (AppR, TyFun a b     ) -> parens $ printType' Root (a `fn` b)
+  (AppL, TyFun a b     ) -> parens $ printType' Root (a `fn` b)
 
   -- applications on the left of applications don't get parenthesised
-  (AppL, t@TyApp{} ) -> printType' Root t
+  (AppL, t@TyApp{}     ) -> printType' Root t
   -- applications on the right of applications get parenthesised
-  (AppR, t@TyApp{} ) -> parens $ printType' Root t
+  (AppR, t@TyApp{}     ) -> parens $ printType' Root t
   -- applications on either side of arrows don't
-  (ArrL, t@TyApp{} ) -> printType' Root t
-  (ArrR, t@TyApp{} ) -> printType' Root t
+  (ArrL, t@TyApp{}     ) -> printType' Root t
+  (ArrR, t@TyApp{}     ) -> printType' Root t
 
   -- Basic cases
-  (_   , TyCon n   ) -> printName n
-  (_   , TyHole n  ) -> hole ("?" <> printName n)
-  (_   , TyVar n   ) -> printName n
-  (_   , TyList ts ) -> brackets (printType' Root ts)
-  (_   , TyBareList) -> "[]"
-  (_   , TyTuple ts) -> tupled (map (printType' Root) ts)
-  (_   , TyInt     ) -> "Int"
-  (_   , TyString  ) -> "String"
-  (_   , TyBool    ) -> "Bool"
+  (_   , TyCon n       ) -> printName n
+  (_   , TyHole n      ) -> hole ("?" <> printName n)
+  (_   , TyVar n       ) -> printName n
+  (_   , TyList        ) -> "[]"
+  (_   , TyTuple ts    ) -> tupled (map (printType' Root) ts)
+  (_   , TyInt         ) -> "Int"
+  (_   , TyString      ) -> "String"
+  (_   , TyBool        ) -> "Bool"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
 

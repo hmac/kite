@@ -151,12 +151,12 @@ genType = Gen.recursive
   [ pure TyString
   , pure TyInt
   , pure TyBool
+  , pure TyList
   , TyCon <$> genUpperName
   , TyVar <$> genLowerName
   , TyHole <$> genHoleName
   ]
-  [ Gen.subterm (Gen.small genType) TyList
-  , Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
+  [ Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
   , Gen.subterm2 (Gen.small genType) (Gen.small genType) TyApp
   , Gen.subterm2 (Gen.small genType)
                  (Gen.small genType)

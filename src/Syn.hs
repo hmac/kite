@@ -120,20 +120,12 @@ data Pattern_ a = VarPat a
 -- a -> b
 -- f a
 -- { a : A, b : B }
---
--- Note: to write higher kinded types like (raw) List and Maybe, which are
--- necessary for "typeclass" instances (i.e. records), we need to be able to
--- represent them without their applied arguments.
--- Perhaps we should drop TyCon in favour of a TyApp constructor?
--- For now, we add a special "TyBareList" constructor, which is a hack but will
--- check that the rest of the compiler can handle higher kinded types properly.
 type Type = Type_ RawName
 data Type_ a =
           TyCon a
         | TyApp (Type_ a) (Type_ a)
         | TyVar a
-        | TyBareList
-        | TyList (Type_ a)
+        | TyList
         | TyTuple [Type_ a]
         | TyHole RawName
         | TyInt

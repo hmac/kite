@@ -58,9 +58,8 @@ tyToType :: S.Type_ Name -> Type
 tyToType = \case
   S.TyCon n         -> (TCon n)
   S.TyApp a b       -> TApp (tyToType a) (tyToType b)
-  S.TyVar  n        -> TVar (R n)
-  S.TyList t        -> list (tyToType t)
-  S.TyBareList      -> TCon (TopLevel modPrim "List")
+  S.TyVar n         -> TVar (R n)
+  S.TyList          -> TCon (TopLevel modPrim "List")
   S.TyTuple ts      -> mkTupleType (map tyToType ts)
   S.TyHole  n       -> THole (Local n)
   S.TyInt           -> TInt

@@ -93,9 +93,8 @@ canonicaliseType env = \case
   -- this may need rethinking when we support type aliases
   TyCon n         -> TyCon (canonicaliseName env n)
   TyApp a b       -> TyApp (canonicaliseType env a) (canonicaliseType env b)
-  TyVar  v        -> TyVar (Local v)
-  TyList a        -> TyList (canonicaliseType env a)
-  TyBareList      -> TyBareList
+  TyVar v         -> TyVar (Local v)
+  TyList          -> TyList
   TyTuple as      -> TyTuple $ fmap (canonicaliseType env) as
   TyHole  n       -> TyHole n
   TyInt           -> TyInt
