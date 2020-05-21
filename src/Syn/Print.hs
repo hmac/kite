@@ -92,9 +92,10 @@ printModDecls []    = Nothing
 printModDecls decls = Just $ vsep (intersperse mempty (map printDecl decls))
 
 printDecl :: Decl Syn -> Document
-printDecl (Comment  c) = printComment c
-printDecl (FunDecl  f) = printFun f
-printDecl (DataDecl d) = printData d
+printDecl (Comment   c) = printComment c
+printDecl (FunDecl   f) = printFun f
+printDecl (DataDecl  d) = printData d
+printDecl (AliasDecl a) = printAlias a
 
 printFun :: Fun Syn -> Document
 printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty }
@@ -301,6 +302,14 @@ printData d =
     <+> hsep (map printName (dataTyVars d))
     <+> equals
     <+> hsep (punctuate pipe (map printCon (dataCons d)))
+
+printAlias :: Alias -> Document
+printAlias a =
+  keyword "type alias"
+    <+> printName (aliasName a)
+    <+> hsep (map printName (aliasTyVars a))
+    <+> equals
+    <+> printType (aliasType a)
 
 printCon :: DataCon -> Document
 printCon DataCon { conName = name, conArgs = args } =

@@ -142,6 +142,18 @@ test = parallel $ do
                                        }
                                      ]
                         }
+    it "parses a simple type alias definition" $ do
+      parse pDecl "" "type alias Foo = Int" `shouldParse` AliasDecl Alias
+        { aliasName   = "Foo"
+        , aliasTyVars = []
+        , aliasType   = TyInt
+        }
+    it "parses a type alias definition with type variables" $ do
+      parse pDecl "" "type alias MyList a = [a]" `shouldParse` AliasDecl Alias
+        { aliasName   = "MyList"
+        , aliasTyVars = ["a"]
+        , aliasType   = TyApp TyList (TyVar "a")
+        }
   describe "parsing modules" $ do
     it "parses a basic module with metadata" $ do
       parse pModule "" "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"

@@ -76,9 +76,10 @@ canonicaliseModule m =
 
 canonicaliseDecl :: Env -> Syn.Decl Syn.Syn -> Can.Decl Can.Exp
 canonicaliseDecl env = \case
-  FunDecl  f -> FunDecl $ canonicaliseFun env f
-  DataDecl d -> DataDecl $ canonicaliseData env d
-  Comment  s -> Comment s
+  FunDecl   f -> FunDecl $ canonicaliseFun env f
+  DataDecl  d -> DataDecl $ canonicaliseData env d
+  AliasDecl a -> AliasDecl $ canonicaliseAlias env a
+  Comment   s -> Comment s
 
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f = f
@@ -111,6 +112,12 @@ canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
   { dataName = TopLevel mod (dataName d)
   , dataCons = fmap (canonicaliseDataCon (mod, imps)) (dataCons d)
+  }
+
+canonicaliseAlias :: Env -> Syn.Alias -> Can.Alias
+canonicaliseAlias (mod, imps) a = a
+  { aliasName = TopLevel mod (aliasName a)
+  , aliasType = canonicaliseType (mod, imps) (aliasType a)
   }
 
 canonicaliseDataCon :: Env -> Syn.DataCon -> Can.DataCon

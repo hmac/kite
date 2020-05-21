@@ -143,7 +143,24 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
 -- reduces performance, so we keep it simple here. In a later stage of the
 -- compiler we merge adjacent comment and function declarations.
 pDecl :: Parser (Decl Syn)
-pDecl = Comment <$> pComment <|> DataDecl <$> pData <|> FunDecl <$> pFun
+pDecl =
+  Comment
+    <$> pComment
+    <|> AliasDecl
+    <$> pAlias
+    <|> DataDecl
+    <$> pData
+    <|> FunDecl
+    <$> pFun
+
+pAlias :: Parser Alias
+pAlias = do
+  void (symbol' "type alias")
+  alias  <- uppercaseName
+  tyvars <- many lowercaseName
+  void (symbolN "=")
+  ty <- pType
+  pure Alias { aliasName = alias, aliasTyVars = tyvars, aliasType = ty }
 
 pData :: Parser Data
 pData = do

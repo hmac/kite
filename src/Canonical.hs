@@ -17,6 +17,7 @@ type Scheme = Scheme_ Name (Type_ Name)
 type Pattern = Pattern_ Name
 type DataCon = DataCon_ Name
 type Data = Data_ Name
+type Alias = Alias_ Name
 type Def = Def_ Name
 type Fun a = Fun_ Name a (Type_ Name)
 type Constraint = Constraint_ Name

@@ -55,9 +55,10 @@ unName (Name n) = n
 -- foo x []       _         = ...
 type Decl a = Decl_ RawName a Type
 data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
-                    | DataDecl (Data_ name)
-                    | Comment String
-                  deriving (Eq, Show)
+                       | DataDecl (Data_ name)
+                       | AliasDecl (Alias_ name)
+                       | Comment String
+                       deriving (Eq, Show)
 
 -- TODO: I think it'll simplify things down the line if we have a single
 -- funScheme field that contains both the constraint and the type, instead of
@@ -86,6 +87,16 @@ data Data_ name = Data { dataName :: name
                        , dataCons :: [DataCon_ name]
                        }
                        deriving (Eq, Show)
+
+-- A type alias in its raw form. The variables in aliasTyVars are free in the
+-- type. This is later converted into a Scheme, so they get quantified over
+-- properly.
+type Alias = Alias_ RawName
+data Alias_ name = Alias { aliasName :: name
+                         , aliasTyVars :: [RawName]
+                         , aliasType :: Type_ name
+                         }
+                         deriving (Eq, Show)
 
 type DataCon = DataCon_ RawName
 -- Left a
