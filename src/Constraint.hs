@@ -113,6 +113,7 @@ data Type = TVar Var
           | TString
           | TBool
           | TRecord [(Name, Type)]
+          | TAlias Name Type
           deriving (Eq, Show, Ord)
 
 modPrim :: ModuleName
@@ -165,6 +166,7 @@ instance Sub Type where
   sub _ TString          = TString
   sub _ TBool            = TBool
   sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
+  sub s (TAlias n a    ) = TAlias n (sub s a)
 
 instance Sub Constraint where
   sub _ CNil             = CNil
@@ -208,6 +210,7 @@ instance Vars Type where
   fuv TString          = mempty
   fuv TBool            = mempty
   fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
+  fuv (TAlias _ a    ) = fuv a
 
   ftv (TVar v  )       = Set.singleton v
   ftv (TCon _  )       = mempty
@@ -217,6 +220,7 @@ instance Vars Type where
   ftv TString          = mempty
   ftv TBool            = mempty
   ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)
+  ftv (TAlias _ a    ) = ftv a
 
 instance Vars Constraint where
   fuv CNil             = mempty

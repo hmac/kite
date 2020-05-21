@@ -135,6 +135,7 @@ data Type_ a =
         | TyBool
         | TyFun (Type_ a) (Type_ a)
         | TyRecord [(a, Type_ a)]
+        | TyAlias a (Type_ a)
   deriving (Eq, Show, Ord)
 
 infixl 5 `tyapp`

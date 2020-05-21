@@ -102,6 +102,7 @@ canonicaliseType env = \case
   TyBool          -> TyBool
   TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
+  TyAlias n a     -> TyAlias (canonicaliseName env n) (canonicaliseType env a)
 
 canonicaliseScheme :: Env -> Syn.Scheme -> Can.Scheme
 canonicaliseScheme _env _ = error "canonicaliseScheme: not implemented yet"

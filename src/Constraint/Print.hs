@@ -40,6 +40,7 @@ printType TInt             = "Int"
 printType TString          = "String"
 printType TBool            = "Bool"
 printType (TRecord fields) = printType' (TRecord fields)
+printType (TAlias n _    ) = printName n
 
 -- like printType but assume we're in a nested context, so add parentheses
 printType' :: Type -> Doc a
@@ -55,6 +56,7 @@ printType' TBool            = "Bool"
 printType' (TRecord fields) = braces $ hsep $ punctuate
   comma
   (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)
+printType' (TAlias n _) = printName n
 
 printName :: Name -> Doc a
 printName (Local (Name n)) = pretty n
