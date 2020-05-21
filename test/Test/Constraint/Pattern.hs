@@ -31,15 +31,15 @@ test = do
     mkwrap = "MkWrap"
 
     env    = Map.fromList
-      [ ("True"  , Forall [] CNil (TCon "Bool"))
-      , ("False" , Forall [] CNil (TCon "Bool"))
-      , ("Zero"  , Forall [] CNil (TCon "Nat"))
-      , ("Suc"   , Forall [] CNil (TCon "Nat" `fn` TCon "Nat"))
-      , ("MkWrap", Forall [R "a"] CNil (TVar (R "a") `fn` wrap (TVar (R "a"))))
+      [ ("True"  , Forall [] (TCon "Bool"))
+      , ("False" , Forall [] (TCon "Bool"))
+      , ("Zero"  , Forall [] (TCon "Nat"))
+      , ("Suc"   , Forall [] (TCon "Nat" `fn` TCon "Nat"))
+      , ("MkWrap", Forall [R "a"] (TVar (R "a") `fn` wrap (TVar (R "a"))))
       , ( "MkPair"
         , Forall
           [R "a", R "b"]
-          CNil
+
           (    TVar (R "a")
           `fn` (TVar (R "b") `fn` pair (TVar (R "a")) (TVar (R "b")))
           )
@@ -90,9 +90,7 @@ test = do
       let pat = VarPat "x"
       pat `infersTypeA` bool
       generatePattern mempty bool pat
-        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just
-                         (Forall [] mempty bool)
-                       )
+        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just (Forall [] bool))
     it "x" $ do
       let gen = do
             u <- TVar <$> fresh
@@ -102,7 +100,7 @@ test = do
         Right (ty, constraint, env') -> do
           ty `shouldBe` TVar (U "1")
           constraint `shouldBe` mempty
-          Map.lookup "x" env' `shouldBe` Just (Forall [] mempty ty)
+          Map.lookup "x" env' `shouldBe` Just (Forall [] ty)
     it "5" $ IntPat 5 `infersType` TInt
     it "_ : Bool" $ infersTypeA WildPat bool
     it "True : Bool" $ ConsPat true [] `infersTypeA` bool
@@ -111,9 +109,7 @@ test = do
       let pat = ConsPat mkwrap [VarPat "x"]
       pat `infersTypeA` wrap bool
       generatePattern env (wrap bool) pat
-        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just
-                         (Forall [] mempty bool)
-                       )
+        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just (Forall [] bool))
     it "MkWrap True : Wrap Bool" $ do
       let pat = ConsPat mkwrap [ConsPat true []]
       pat `infersTypeA` wrap bool
@@ -121,16 +117,12 @@ test = do
       let pat = ConsPat suc [VarPat "n"]
       pat `infersTypeA` nat
       generatePattern env nat pat
-        `generatesEnv` (\e -> Map.lookup "n" e `shouldBe` Just
-                         (Forall [] mempty nat)
-                       )
+        `generatesEnv` (\e -> Map.lookup "n" e `shouldBe` Just (Forall [] nat))
     it "MkPair x Zero : Pair Bool Nat" $ do
       let pat = ConsPat mkpair [VarPat "x", ConsPat zero []]
       pat `infersTypeA` pair bool nat
       generatePattern env (pair bool nat) pat
-        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just
-                         (Forall [] mempty bool)
-                       )
+        `generatesEnv` (\e -> Map.lookup "x" e `shouldBe` Just (Forall [] bool))
     it "MkPair x Zero; MkPair True y" $ do
       let pat1 = ConsPat mkpair [VarPat "x", ConsPat zero []]
       let pat2 = ConsPat mkpair [ConsPat true [], VarPat "y"]
@@ -149,8 +141,8 @@ test = do
           constraint `shouldBe` mempty
           t1 `shouldBe` pair bool nat
           t2 `shouldBe` pair bool nat
-          Map.lookup "x" env' `shouldBe` Just (Forall [] mempty bool)
-          Map.lookup "y" env' `shouldBe` Just (Forall [] mempty nat)
+          Map.lookup "x" env' `shouldBe` Just (Forall [] bool)
+          Map.lookup "y" env' `shouldBe` Just (Forall [] nat)
     it "()" $ do
       let pat          = TuplePat []
       let expectedType = mkTupleType []
@@ -161,10 +153,8 @@ test = do
       pat `infersTypeA` expectedType
       generatePattern env expectedType pat
         `generatesEnv` (\e -> do
-                         Map.lookup "x" e
-                           `shouldBe` Just (Forall [] mempty bool)
-                         Map.lookup "y" e
-                           `shouldBe` Just (Forall [] mempty bool)
+                         Map.lookup "x" e `shouldBe` Just (Forall [] bool)
+                         Map.lookup "y" e `shouldBe` Just (Forall [] bool)
                        )
     it "(Zero, False)" $ do
       let pat          = TuplePat [ConsPat zero [], ConsPat false []]

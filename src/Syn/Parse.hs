@@ -472,7 +472,7 @@ pAbs = do
   void (string "\\")
   args <- many lowercaseName
   void (symbol "->")
-  Abs <$> pure args <*> pExpr
+  Abs args <$> pExpr
 
 -- let foo = 1
 --     bar = 2

@@ -112,8 +112,7 @@ printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
 printConstraint CNil         = "ϵ"
 
 printScheme :: Scheme -> Document
-printScheme (Forall _ CNil t) = printType t
-printScheme (Forall _ c    t) = printConstraint c <+> "=>" <+> printType t
+printScheme (Forall _ t) = printType t
 
 -- a -> b
 -- f a -> f b

@@ -150,8 +150,8 @@ fn = TyFun
 -- v: the type of type variables
 -- c: the type of constraints
 -- t: the type of types
-type Scheme = Scheme_ RawName Constraint Type
-data Scheme_ v c t = Forall [v] c t
+type Scheme = Scheme_ RawName Type
+data Scheme_ v t = Forall [v] t
   deriving (Eq, Show, Ord)
 
 -- Syn: the surface syntax
@@ -172,25 +172,26 @@ data Scheme_ v c t = Forall [v] c t
 -- TODO: type sigs in let bindings
 -- TODO: multi-definition functions in let bindings
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
-type Syn = Syn_ RawName RawName Constraint Type
-data Syn_ n v c t = Var n
+type Syn = Syn_ RawName RawName Type
+-- TODO: remove c?
+data Syn_ n v t = Var n
          | Con n
          | Hole n
-         | Abs [n] (Syn_ n v c t)
-         | App (Syn_ n v c t) (Syn_ n v c t)
+         | Abs [n] (Syn_ n v t)
+         | App (Syn_ n v t) (Syn_ n v t)
          -- Note: the parser can't currently produce LetAs but the typechecker
          -- can nonetheless handle them.
-         | LetA n (Scheme_ v c t) (Syn_ n v c t) (Syn_ n v c t)
-         | Let [(n, Syn_ n v c t)] (Syn_ n v c t)
-         | Case (Syn_ n v c t) [(Pattern_ n, Syn_ n v c t)]
-         | TupleLit [Syn_ n v c t]
-         | ListLit [Syn_ n v c t]
-         | StringLit String [(Syn_ n v c t, String)]
+         | LetA n (Scheme_ v t) (Syn_ n v t) (Syn_ n v t)
+         | Let [(n, Syn_ n v t)] (Syn_ n v t)
+         | Case (Syn_ n v t) [(Pattern_ n, Syn_ n v t)]
+         | TupleLit [Syn_ n v t]
+         | ListLit [Syn_ n v t]
+         | StringLit String [(Syn_ n v t, String)]
          | IntLit Int
          | BoolLit Bool
          -- Records
-         | Record [(n, Syn_ n v c t)]
-         | Project (Syn_ n v c t) n
+         | Record [(n, Syn_ n v t)]
+         | Project (Syn_ n v t) n
          deriving (Eq, Show)
 
 -- Supported binary operators

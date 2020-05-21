@@ -35,16 +35,16 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
   -- the environment with it. This means any recursive reference to the binding
   -- will be correctly in scope.
   beta <- TVar <$> fresh
-  let env' = Map.insert name (Forall [] CNil beta) env
+  let env' = Map.insert name (Forall [] beta) env
   (es, eqTypes, cs) <- unzip3 <$> mapM (generateMultiEquation env') equations
   let allEqsEq = generateAllEqualConstraint beta eqTypes
-  let (annGiven, annWanted) = case annotation of
-        (Just (Forall _tvars q t)) -> (q, beta :~: t)
-        Nothing                    -> mempty
+  let annWanted = case annotation of
+        (Just (Forall _tvars t)) -> beta :~: t
+        Nothing                  -> mempty
   -- TODO: is it ok for all of these to be touchable?
   let touchables  = fuv eqTypes <> fuv beta <> fuv cs
   let constraints = mconcat cs <> Simple (allEqsEq <> annWanted)
-  case solveC axs touchables annGiven constraints of
+  case solveC axs touchables mempty constraints of
     Left err                        -> throwError err
     -- At this point, q should only contain typeclass constraints.
     -- We should have solved all the equality constraints.
@@ -83,9 +83,8 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
                 error
                   $  "Constraint.Generate.Bind: expected TVar, found "
                   <> show t'
-          let bindTy = Forall (map (getTVar . snd) tysubst)
-                              (sub tysubst q)
-                              (sub tysubst eqType)
+          let bindTy =
+                Forall (map (getTVar . snd) tysubst) (sub tysubst eqType)
           let exps'' = map (sub tysubst) exps'
           let
             bind = BindT name

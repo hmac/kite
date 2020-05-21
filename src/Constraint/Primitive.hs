@@ -15,18 +15,17 @@ env = Map.fromList
   [ ( TopLevel modPrim "::"
     , Forall
       [R "a"]
-      mempty
       (    TVar (R "a")
       `fn` TApp (TCon (TopLevel modPrim "List")) (TVar (R "a"))
       `fn` TApp (TCon (TopLevel modPrim "List")) (TVar (R "a"))
       )
     )
-  , (TopLevel modPrim "+", Forall [] mempty (TInt `fn` TInt `fn` TInt))
-  , (TopLevel modPrim "-", Forall [] mempty (TInt `fn` TInt `fn` TInt))
-  , (TopLevel modPrim "*", Forall [] mempty (TInt `fn` TInt `fn` TInt))
+  , (TopLevel modPrim "+", Forall [] (TInt `fn` TInt `fn` TInt))
+  , (TopLevel modPrim "-", Forall [] (TInt `fn` TInt `fn` TInt))
+  , (TopLevel modPrim "*", Forall [] (TInt `fn` TInt `fn` TInt))
   , ( TopLevel modPrim "appendString"
-    , Forall [] mempty (TString `fn` TString `fn` TString)
+    , Forall [] (TString `fn` TString `fn` TString)
     )
-  , (TopLevel modPrim "$showInt", Forall [] mempty (TInt `fn` TString))
-  , (TopLevel modPrim "$eqInt"  , Forall [] mempty (TInt `fn` TInt `fn` TBool))
+  , (TopLevel modPrim "$showInt", Forall [] (TInt `fn` TString))
+  , (TopLevel modPrim "$eqInt"  , Forall [] (TInt `fn` TInt `fn` TBool))
   ]

@@ -37,7 +37,7 @@ generatePattern env st (BoolPat _) = do
   pure (TBool, c, env)
 generatePattern env st (VarPat x) = do
   u <- TVar <$> fresh
-  let env' = Map.insert x (Forall [] mempty u) env
+  let env' = Map.insert x (Forall [] u) env
   let c    = Simple (u :~: st)
   pure (u, c, env')
 generatePattern env st WildPat = do
@@ -84,7 +84,7 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
   Nothing -> do
     u <- TVar <$> fresh
     pure (u, mempty, env)
-  Just (Forall as _cs kt) -> do -- TODO: should we be using cs?
+  Just (Forall as kt) -> do
     -- generate new uvars for each a in as
     ys <- mapM (const fresh) as
     -- construct tyvar substitution

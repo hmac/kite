@@ -34,10 +34,10 @@ test = do
       fromSyn (S.Let [("x", S.Var mx)] (S.App (S.Con left) (S.Var "e")))
         `shouldBe` E.Let [("x", E.Var mx)] (E.App (E.Con left) (E.Var "e"))
     it "let x : Int; x = mx in Left e" $ do
-      let int = S.Forall [] S.CNil S.TyInt
+      let int = S.Forall [] S.TyInt
       fromSyn (S.LetA "x" int (S.Var mx) (S.App (S.Con left) (S.Var "e")))
         `shouldBe` E.LetA "x"
-                          (E.Forall [] mempty TInt)
+                          (E.Forall [] TInt)
                           (E.Var mx)
                           (E.App (E.Con left) (E.Var "e"))
     it "case s of; p -> e" $ do
@@ -95,7 +95,7 @@ test = do
             (S.TyVar "a" `S.fn` S.TyVar "b")
               `S.fn` (S.TyVar "a" `S.fn` S.TyVar "b")
       let scheme =
-            E.Forall [R "a", R "b"] mempty
+            E.Forall [R "a", R "b"]
               $    (TVar (R "a") `fn` TVar (R "b"))
               `fn` (TVar (R "a") `fn` TVar (R "b"))
-      tyToScheme Nothing synType `shouldBe` scheme
+      tyToScheme synType `shouldBe` scheme

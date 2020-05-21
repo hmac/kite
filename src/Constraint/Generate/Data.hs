@@ -53,6 +53,5 @@ translateDataCon typeName tyvars datacon = case datacon of
 
 mkType :: Name -> [Name] -> [Can.Type] -> Scheme
 mkType dataTypeName tyvars args = T.Forall (map R tyvars)
-                                           mempty
                                            (foldr (fn . tyToType) tycon args)
   where tycon = foldl T.TApp (T.TCon dataTypeName) (map (TVar . R) tyvars)

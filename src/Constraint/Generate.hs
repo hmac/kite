@@ -16,11 +16,10 @@ import           Constraint.Generate.Pattern
 generate :: TypeEnv -> Exp -> GenerateM Error (ExpT, Type, CConstraint)
 -- VARCON
 generate env (Var name) = case Map.lookup name env of
-  Just (Forall tvars c t) -> do
+  Just (Forall tvars t) -> do
     subst <- mapM (\tv -> (tv, ) . TVar <$> fresh) tvars
     let t' = sub subst t
-    let q' = sub subst c
-    pure (VarT name t', t', Simple q')
+    pure (VarT name t', t', mempty)
   Nothing -> throwError (UnknownVariable name)
 -- Data constructors are treated identically to variables
 generate env (Con n) = do
@@ -36,8 +35,7 @@ generate env (App e1 e2) = do
 -- ABS
 generate env (Abs xs e) = do
   binds <- mapM (\x -> (x, ) . TVar <$> fresh) xs
-  let env' =
-        foldl (\env_ (x, t) -> Map.insert x (Forall [] CNil t) env_) env binds
+  let env' = foldl (\env_ (x, t) -> Map.insert x (Forall [] t) env_) env binds
   (e', t, c) <- generate env' e
   let ty = foldr (\(_, a) b -> a `fn` b) t binds
   pure (AbsT binds e', ty, c)
@@ -45,8 +43,7 @@ generate env (Abs xs e) = do
 generate env (Let binds body) = do
   -- extend the environment simultaneously with all variables
   binds' <- mapM (\(x, e) -> (x, , e) . TVar <$> fresh) binds
-  let env' =
-        foldl (\e (x, t, _) -> Map.insert x (Forall [] CNil t) e) env binds'
+  let env' = foldl (\e (x, t, _) -> Map.insert x (Forall [] t) e) env binds'
   -- infer each bound expression with the extended environment
   (xs, _ts, es, cs) <-
     unzip4
@@ -61,16 +58,15 @@ generate env (Let binds body) = do
   (body', bodyT, bodyC) <- generate env' body
   pure (LetT (zip xs es) body' bodyT, bodyT, bodyC <> mconcat cs)
 -- LETA: let with a monomorphic annotation
-generate env (LetA x (Forall [] CNil t1) e1 e2) = do
+generate env (LetA x (Forall [] t1) e1 e2) = do
   (e1', t , c1) <- generate env e1
-  (e2', t2, c2) <- generate (Map.insert x (Forall [] CNil t1) env) e2
-  pure
-    (LetAT x (Forall [] CNil t1) e1' e2' t2, t2, c1 <> c2 <> Simple (t :~: t1))
+  (e2', t2, c2) <- generate (Map.insert x (Forall [] t1) env) e2
+  pure (LetAT x (Forall [] t1) e1' e2' t2, t2, c1 <> c2 <> Simple (t :~: t1))
 -- GLETA: let with a polymorphic annotation
-generate env (LetA x s1@(Forall _ q1 t1) e1 e2) = do
+generate env (LetA x s1@(Forall _ t1) e1 e2) = do
   (e1', t, c) <- generate env e1
   let betas = Set.toList $ (fuv t <> fuv c) \\ fuv env
-  let c1    = E betas q1 (c :^^: Simple (t :~: t1))
+  let c1    = E betas CNil (c :^^: Simple (t :~: t1))
   (e2', t2, c2) <- generate (Map.insert x s1 env) e2
   pure (LetAT x s1 e1' e2' t2, t2, c1 <> c2)
 -- CASE: case expression

@@ -35,24 +35,17 @@ fromSyn = \case
   S.Project r l         -> E.Project (fromSyn r) l
 
 -- | Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
-tyToScheme :: Maybe (S.Constraint_ Name) -> S.Type_ Name -> E.Scheme
-tyToScheme c t =
-  let t'         = tyToType t
-      vars       = Set.toList (ftv t')
-      constraint = maybe mempty constraintToConstraint c
-  in  E.Forall vars constraint t'
+tyToScheme :: S.Type_ Name -> E.Scheme
+tyToScheme t =
+  let t'   = tyToType t
+      vars = Set.toList (ftv t')
+  in  E.Forall vars t'
 
 schemeToScheme :: Can.Scheme -> E.Scheme
-schemeToScheme (S.Forall vs c t) =
-  let t'         = tyToType t
-      vars       = Set.toList (ftv t') <> map R vs
-      constraint = constraintToConstraint c
-  in  E.Forall vars constraint t'
-
-constraintToConstraint :: S.Constraint_ Name -> Constraint
-constraintToConstraint S.CNil = CNil
-constraintToConstraint (S.CTuple a b) =
-  constraintToConstraint a :^: constraintToConstraint b
+schemeToScheme (S.Forall vs t) =
+  let t'   = tyToType t
+      vars = Set.toList (ftv t') <> map R vs
+  in  E.Forall vars t'
 
 tyToType :: S.Type_ Name -> Type
 tyToType = \case

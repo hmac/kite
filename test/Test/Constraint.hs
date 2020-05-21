@@ -52,28 +52,26 @@ test = do
     mkwrap = "MkWrap"
 
     env    = Map.fromList
-      [ ("True" , Forall [] CNil (TCon "Bool"))
-      , ("False", Forall [] CNil (TCon "Bool"))
-      , ("Zero" , Forall [] CNil (TCon "Nat"))
-      , ("Suc"  , Forall [] CNil (TCon "Nat" `fn` TCon "Nat"))
+      [ ("True" , Forall [] (TCon "Bool"))
+      , ("False", Forall [] (TCon "Bool"))
+      , ("Zero" , Forall [] (TCon "Nat"))
+      , ("Suc"  , Forall [] (TCon "Nat" `fn` TCon "Nat"))
       , ( "::"
         , Forall
           [R "a"]
-          CNil
+
           (TVar (R "a") `fn` TApp (TCon "List") (TVar (R "a")) `fn` TApp
             (TCon "List")
             (TVar (R "a"))
           )
         )
       , ( "MkWrap"
-        , Forall [R "a"]
-                 CNil
-                 (TVar (R "a") `fn` TApp (TCon "Wrap") (TVar (R "a")))
+        , Forall [R "a"] (TVar (R "a") `fn` TApp (TCon "Wrap") (TVar (R "a")))
         )
       , ( "MkPair"
         , Forall
           [R "a", R "b"]
-          CNil
+
           (    TVar (R "a")
           `fn` (TVar (R "b") `fn` TApp (TApp (TCon "Pair") (TVar (R "a")))
                                        (TVar (R "b"))
@@ -154,7 +152,7 @@ test = do
       -- let id : a -> a
       --     id = \x -> x
       --  in id True
-      let idType = Forall [R "a"] CNil (TVar (R "a") `fn` TVar (R "a"))
+      let idType = Forall [R "a"] (TVar (R "a") `fn` TVar (R "a"))
       let expr =
             LetA "id" idType (Abs ["x"] (Var "x")) (App (Var "id") (Con true))
       let annotatedExpr = LetAT

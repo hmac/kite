@@ -30,12 +30,12 @@ test = describe "typing simple modules" $ do
   it "five : Int; five = 5" $ do
     infersType mempty
                (mkModule [("foo", TyInt, [([], IntLit 5)])])
-               [("foo", Forall [] mempty TInt)]
+               [("foo", Forall [] TInt)]
   it "id : a -> a; id x = x" $ do
     infersType
       mempty
       (mkModule [("id", TyVar "a" `fn` TyVar "a", [([VarPat "x"], Var "x")])])
-      [("id", Forall [R "a"] mempty (TVar (R "a") `C.fn` TVar (R "a")))]
+      [("id", Forall [R "a"] (TVar (R "a") `C.fn` TVar (R "a")))]
   it "const : a -> b -> a; const x y = x" $ do
     infersType
       mempty
@@ -48,7 +48,7 @@ test = describe "typing simple modules" $ do
       )
       [ ( "const"
         , Forall [R "a", R "b"]
-                 mempty
+
                  (TVar (R "a") `C.fn` (TVar (R "b") `C.fn` TVar (R "a")))
         )
       ]
@@ -81,7 +81,7 @@ test = describe "typing simple modules" $ do
           [ ( "fromMaybe"
             , Forall
               [R "a"]
-              mempty
+
               (      TApp (TCon "Maybe") (TVar (R "a"))
               `C.fn` TVar (R "a")
               `C.fn` TVar (R "a")

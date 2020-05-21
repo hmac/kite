@@ -11,9 +11,9 @@ where
 import           Data.Name
 import           Syn                     hiding ( Name )
 
-type Exp = Syn_ Name Name (Constraint_ Name) (Type_ Name)
+type Exp = Syn_ Name Name (Type_ Name)
 type Type = Type_ Name
-type Scheme = Scheme_ Name (Constraint_ Name) (Type_ Name)
+type Scheme = Scheme_ Name (Type_ Name)
 type Pattern = Pattern_ Name
 type DataCon = DataCon_ Name
 type Data = Data_ Name

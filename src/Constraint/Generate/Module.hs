@@ -38,8 +38,7 @@ generateModule env modul = do
       binds = map funToBind funs
 
   -- Generate uvars for each bind upfront so they can be typechecked in any order
-  bindEnv <- mapM (\(Bind n _ _) -> (n, ) . Forall [] mempty . TVar <$> fresh)
-                  binds
+  bindEnv <- mapM (\(Bind n _ _) -> (n, ) . Forall [] . TVar <$> fresh) binds
   let env'' = Map.fromList bindEnv <> env'
 
   -- Typecheck each bind
@@ -77,7 +76,7 @@ getDeclBy extract (d : rest) = case extract d of
 funToBind :: Fun_ Name Can.Exp (Type_ Name) -> Bind
 funToBind fun = Bind (funName fun) scheme equations
  where
-  scheme    = tyToScheme Nothing <$> funType fun
+  scheme    = tyToScheme <$> funType fun
   equations = map defToEquation (funDefs fun)
 
 bindToFun :: BindT -> T.Fun

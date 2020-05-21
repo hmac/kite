@@ -15,7 +15,7 @@ import           Syn                            ( Pattern_
                                                 , Syn_(..)
                                                 )
 
-type Exp = Syn_ Name Var Constraint Type
+type Exp = Syn_ Name Var Type
 
 -- Exp with type annotations
 data ExpT = VarT Name Type

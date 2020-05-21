@@ -68,7 +68,7 @@ instance Semigroup Constraint where
 instance Monoid Constraint where
   mempty = CNil
 
-type Scheme = Scheme_ Var Constraint Type
+type Scheme = Scheme_ Var Type
 
 flattenConstraint :: Constraint -> [Constraint]
 flattenConstraint (c :^: d) = flattenConstraint c <> flattenConstraint d
@@ -185,9 +185,8 @@ instance Sub a => Sub [a] where
   sub s = map (sub s)
 
 instance Sub Scheme where
-  sub s (Forall vars c t) =
-    let s' = filter (\(v, _) -> v `notElem` vars) s
-    in  Forall vars (sub s' c) (sub s' t)
+  sub s (Forall vars t) =
+    let s' = filter (\(v, _) -> v `notElem` vars) s in Forall vars (sub s' t)
 
 instance Sub (Map Name Scheme) where
   sub s = fmap (sub s)
@@ -251,8 +250,8 @@ instance Vars a => Vars [a] where
   ftv = mconcat . map ftv
 
 instance Vars Scheme where
-  fuv (Forall tvars c t) = fuv c <> fuv t \\ Set.fromList tvars
-  ftv (Forall tvars c t) = ftv c <> ftv t \\ Set.fromList tvars
+  fuv (Forall tvars t) = fuv t \\ Set.fromList tvars
+  ftv (Forall tvars t) = ftv t \\ Set.fromList tvars
 
 simple :: CConstraint -> Constraint
 simple E{}        = mempty
