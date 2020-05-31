@@ -1,5 +1,5 @@
-{ mkDerivation, base, containers, directory, extra, filepath
-, hedgehog, hlint, hpack, hspec, hspec-megaparsec
+{ mkDerivation, base, containers, criterion, directory, extra
+, filepath, hedgehog, hlint, hpack, hspec, hspec-megaparsec
 , hw-hspec-hedgehog, megaparsec, mtl, optparse-generic
 , pretty-simple, prettyprinter, prettyprinter-ansi-terminal
 , QuickCheck, semigroupoids, stdenv, text, transformers
@@ -11,16 +11,14 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    base containers directory extra filepath hedgehog hspec
-    hspec-megaparsec hw-hspec-hedgehog megaparsec mtl optparse-generic
-    pretty-simple prettyprinter prettyprinter-ansi-terminal QuickCheck
+    base containers directory extra megaparsec mtl optparse-generic
+    pretty-simple prettyprinter prettyprinter-ansi-terminal
     semigroupoids text transformers
   ];
   libraryToolDepends = [ hpack ];
   executableHaskellDepends = [
-    base containers directory extra filepath hedgehog hspec
-    hspec-megaparsec hw-hspec-hedgehog megaparsec mtl optparse-generic
-    pretty-simple prettyprinter prettyprinter-ansi-terminal QuickCheck
+    base containers directory extra megaparsec mtl optparse-generic
+    pretty-simple prettyprinter prettyprinter-ansi-terminal
     semigroupoids text transformers
   ];
   testHaskellDepends = [
@@ -28,6 +26,11 @@ mkDerivation {
     hspec-megaparsec hw-hspec-hedgehog megaparsec mtl optparse-generic
     pretty-simple prettyprinter prettyprinter-ansi-terminal QuickCheck
     semigroupoids text transformers
+  ];
+  benchmarkHaskellDepends = [
+    base containers criterion directory extra filepath megaparsec mtl
+    optparse-generic pretty-simple prettyprinter
+    prettyprinter-ansi-terminal semigroupoids text transformers
   ];
   prePatch = "hpack";
   homepage = "https://github.com/hmac/lam#readme";

@@ -1,0 +1,6 @@
+module T8
+
+type alias Foo = Int
+
+main : Foo
+main = 1

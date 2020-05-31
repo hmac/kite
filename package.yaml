@@ -44,13 +44,6 @@ dependencies:
 - optparse-generic
 - semigroupoids
 - directory
-# Testing - here so hoogle picks them up
-- QuickCheck
-- hspec
-- hspec-megaparsec
-- hedgehog
-- hw-hspec-hedgehog
-- filepath
 
 library:
   source-dirs: src
@@ -85,6 +78,12 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - lam
+    - QuickCheck
+    - hspec
+    - hspec-megaparsec
+    - hedgehog
+    - hw-hspec-hedgehog
+    - filepath
   lam-hlint:
     main: hlint.hs
     source-dirs:
@@ -93,3 +92,13 @@ tests:
     dependencies:
     - lam
     - hlint
+
+benchmarks:
+  lam-bench:
+    source-dirs: benchmarks
+    main: Main.hs
+    dependencies:
+    - lam
+    - criterion
+    - filepath
+    - extra
