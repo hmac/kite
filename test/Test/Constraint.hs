@@ -34,8 +34,6 @@ test :: Spec
 test = do
   describe "CConstraint Monoid" $ it "obeys the monoid laws" $ require
     (isLawfulMonoid genCConstraint)
-  describe "Constraint Monoid" $ it "obeys the monoid laws" $ require
-    (isLawfulMonoid genConstraint)
 
   let
     bool = TCon "Bool"
@@ -344,15 +342,18 @@ genCConstraint = Gen.recursive
   [pure mempty]
   [ Gen.subtermM
     genCConstraint
-    (\c -> E <$> Gen.list (Range.linear 0 5) genVar <*> genConstraint <*> pure c
+    (\c ->
+      E
+        <$> Gen.list (Range.linear 0 5) genVar
+        <*> (Gen.list (Range.linear 0 5) genConstraint)
+        <*> pure c
     )
   , Gen.subterm2 genCConstraint genCConstraint (<>)
   ]
 
+-- TODO: add HasField
 genConstraint :: H.Gen Constraint
-genConstraint = Gen.recursive Gen.choice
-                              [pure mempty, (:~:) <$> genType <*> genType]
-                              [Gen.subterm2 genConstraint genConstraint (<>)]
+genConstraint = (:~:) <$> genType <*> genType
 
 genType :: H.Gen Type
 genType = Gen.recursive Gen.choice

@@ -37,16 +37,16 @@ import           Prelude                 hiding ( interact )
 -- , wanted constraints
 -- , fresh type variable source
 -- )
-type Quad = (Set Var, Subst, Constraint, Constraint, Int)
+type Quad = (Set Var, Subst, Constraints, Constraints, Int)
 type Solve = State Quad
 
 -- See fig. 14
 solveC
   :: AxiomScheme
   -> Set Var
-  -> Constraint
+  -> Constraints
   -> CConstraint
-  -> Either Error (Constraint, Subst)
+  -> Either Error (Constraints, Subst)
 solveC axs touchables given wanted =
   case solve axs (touchables, mempty, given, simple wanted, 0) of
     Left err -> Left err
@@ -61,13 +61,13 @@ solveC axs touchables given wanted =
               )
               implications
             case mconcat (map fst results) of
-              CNil  -> Right (residual, subst <> mconcat (map snd results))
+              []    -> Right (residual, subst <> mconcat (map snd results))
               impls -> Left (UnsolvedConstraints impls)
 
 -- This is the actual top level solver function
 -- Given a set of simple constraints it returns a substitution and any residual
 -- constraints
-solve :: AxiomScheme -> Quad -> Either Error (Constraint, Subst)
+solve :: AxiomScheme -> Quad -> Either Error (Constraints, Subst)
 solve axs input = case rewriteAll axs input of
   Left err -> Left err
   -- See §7.5 for details
@@ -75,12 +75,12 @@ solve axs input = case rewriteAll axs input of
     let partitionPred (TVar b :~: t     ) = b `elem` vars && b `notElem` fuv t
         partitionPred (t      :~: TVar b) = b `elem` vars && b `notElem` fuv t
         partitionPred _                   = False
-        (epsilon, residual) = partitionConstraint partitionPred wanted
+        (epsilon, residual) = partition partitionPred wanted
 
         toTuple (TVar b :~: t     ) = (b, t)
         toTuple (t      :~: TVar b) = (b, t)
         toTuple q                   = error $ "Unexpected constraint " <> show q
-        subst = nubOrdOn fst $ mapConstraint toTuple epsilon
+        subst = nubOrdOn fst $ map toTuple epsilon
     in  Right (sub subst residual, subst)
 
 -- Solve a set of constraints
@@ -89,20 +89,17 @@ rewriteAll :: AxiomScheme -> Quad -> Either Error Quad
 rewriteAll axs quad@(_, _, _, wanted, _) = case applyRewrite axs quad of
   Left err -> Left err
   Right quad'@(_, _, _, wanted', _) ->
-    if sortConstraint wanted == sortConstraint wanted'
-      then Right quad'
-      else rewriteAll axs quad'
+    if sort wanted == sort wanted' then Right quad' else rewriteAll axs quad'
 
 -- Like solve but shows the solving history
 solveDebug :: AxiomScheme -> Quad -> Either Error [Quad]
 solveDebug axs q = go [q] q
  where
   go hist quad@(_, _, _, wanted, _) = case applyRewrite axs quad of
-    Left err -> Left err
-    Right quad'@(_, _, _, wanted', _) ->
-      if sortConstraint wanted == sortConstraint wanted'
-        then Right (quad' : hist)
-        else go (quad' : hist) quad'
+    Left  err                         -> Left err
+    Right quad'@(_, _, _, wanted', _) -> if sort wanted == sort wanted'
+      then Right (quad' : hist)
+      else go (quad' : hist) quad'
 
 run :: Solve (Either Error ()) -> Quad -> Either Error Quad
 run f c = case runState f c of
@@ -129,23 +126,21 @@ interactM dom = do
   let constraints = case dom of
         Given  -> given
         Wanted -> wanted
-  case
-      firstJust (map interactEach (focusPairs (flattenConstraint constraints)))
-    of
-      Just constraints' -> do
-        case dom of
-          Given  -> put (vars, subst, mconcat constraints', wanted, k)
-          Wanted -> put (vars, subst, given, mconcat constraints', k)
-        pure $ Right ()
-      Nothing -> pure $ Right ()
+  case firstJust (map interactEach (focusPairs constraints)) of
+    Just constraints' -> do
+      case dom of
+        Given  -> put (vars, subst, constraints', wanted, k)
+        Wanted -> put (vars, subst, given, constraints', k)
+      pure $ Right ()
+    Nothing -> pure $ Right ()
  where
   -- Try to interact the constraint with each one in the list.
   -- If a match is found, replace the two reactants with the result
   -- If no match is found, return the original list of constraints
-  interactEach :: (Constraint, Constraint, [Constraint]) -> Maybe [Constraint]
+  interactEach :: (Constraint, Constraint, Constraints) -> Maybe Constraints
   interactEach (a, b, cs) = case interact a b of
     Nothing -> Nothing
-    Just c  -> Just (c : cs)
+    Just c  -> Just (c ++ cs)
 
 -- | Use each given constraint to attempt to simplify each wanted constraint
 simplifyM :: Solve (Either Error ())
@@ -154,44 +149,44 @@ simplifyM = do
   let wanteds  = flatten wanted
       givens   = flatten given
       wanteds' = foldl (\ws g -> map (simplify g) ws) wanteds givens
-  put (vars, subst, given, mconcat wanteds', k)
+  put (vars, subst, given, wanteds', k)
   pure (Right ())
 
 -- | Run canon on each given constraint, then the same on each wanted constraint.
 canonM :: Domain -> Solve (Either Error ())
 canonM Given = do
   (vars, subst, given, wanted, k) <- get
-  case canonAll (flattenConstraint given) of
+  case canonAll given of
     Left  err    -> pure $ Left err
     Right given' -> do
-      put (vars, subst, mconcat given', wanted, k)
+      put (vars, subst, given', wanted, k)
       pure $ Right ()
 canonM Wanted = do
   (vars, subst, given, wanted, k) <- get
-  case canonAll (flattenConstraint wanted) of
+  case canonAll wanted of
     Left  err     -> pure $ Left err
     Right wanted' -> do
-      put (vars, subst, given, mconcat wanted', k)
+      put (vars, subst, given, wanted', k)
       pure $ Right ()
 
-canonAll :: [Constraint] -> Either Error [Constraint]
+canonAll :: Constraints -> Either Error Constraints
 canonAll []       = Right []
 canonAll (c : cs) = case canon c of
   Left  err -> Left err
-  Right c'  -> (flatten c' ++) <$> canonAll cs
+  Right c'  -> (c' ++) <$> canonAll cs
 
-flatten :: Constraint -> [Constraint]
-flatten (a :^: b) = a : flatten b
-flatten c         = [c]
+-- TODO: I think this can be removed
+flatten :: Constraints -> Constraints
+flatten = id
 
 -- Canonicalise a constraint
-canon :: Constraint -> Either Error Constraint
+canon :: Constraint -> Either Error Constraints
 -- REFL: Reflexive equalities can be ignored
 canon (a :~: b) | a == b = pure mempty
 
 -- TAPP: Equalities between function types can be decomposed to equalities between
 -- their components
-canon (TApp (TCon k) as :~: TApp (TCon k') bs) | k == k' = pure (as :~: bs)
+canon (TApp (TCon k) as :~: TApp (TCon k') bs) | k == k' = pure [as :~: bs]
 -- Note: This is quite naive. It can't deal with cases where the number of
 -- nested applications differs between the types, which can happen if there's a
 -- variable in place of an application.
@@ -199,23 +194,23 @@ canon (t1@TApp{} :~: t2@TApp{}) =
   let t1s = unfoldTyApp t1
       t2s = unfoldTyApp t2
   in  pure $ if length t1s == length t2s
-        then foldl (:^:) CNil (zipWith orient t1s t2s)
-        else t1 :~: t2
+        then zipWith orient t1s t2s
+        else [t1 :~: t2]
 
 -- TDEC: Equalities between identical constructors can be dropped
 -- FAILDEC: Equalities between constructor types must have the same constructor
 canon (TCon k :~: TCon k') =
-  if k == k' then pure CNil else Left (ConstructorMismatch (TCon k) (TCon k'))
+  if k == k' then pure [] else Left (ConstructorMismatch (TCon k) (TCon k'))
 
 -- Equalities between records with identical field labels can be decomposed to
 -- equality on their fields
 canon (TRecord fs1 :~: TRecord fs2) | map fst fs1 == map fst fs2 =
-  pure (foldl (:^:) CNil (zipWith orient (map snd fs1) (map snd fs2)))
+  pure $ zipWith orient (map snd fs1) (map snd fs2)
 
 -- HasField constraints on a TRecord can be simplified into equality on the
 -- field type.
 canon (HasField (TRecord fields) l t) = case lookup l fields of
-  Just t' -> pure (t :~: t')
+  Just t' -> pure [t :~: t']
   Nothing -> Left $ RecordDoesNotHaveLabel (TRecord fields) l
 
 -- OCCCHECK: a type variable cannot be equal to a type containing that variable
@@ -223,20 +218,16 @@ canon (v@(TVar _) :~: t) | v /= t && t `contains` v =
   Left $ OccursCheckFailure v t
 
 -- ORIENT: Flip an equality around if desirable
-canon (a    :~: b   ) = pure $ orient a b
+canon (a :~: b) = pure [orient a b]
 
 -- DFLATW, DFLATG, FFLATWL, FFLATWR, FFLATGL, FFLATGR: the flattening rules
 -- These are all omitted because they deal with type function application.
 -- Type level functions arise from type families and the like, and Lam does not
 -- have these.
 
--- Custom rule: CNil ^ c = c
-canon (CNil :^: c   ) = pure c
-canon (c    :^: CNil) = pure c
-
 -- Flattening rules only apply to type classes and type families, so are
 -- omitted.
-canon c               = pure c
+canon c         = pure [c]
 
 -- | Given an equality constraint, flip it around so it is oriented according to
 -- the canonical ordering (see canonCompare and ORIENT).
@@ -245,36 +236,32 @@ orient a b | canonCompare a b == GT = b :~: a
            | otherwise              = a :~: b
 
 -- Combine two canonical constraints into one
-interact :: Constraint -> Constraint -> Maybe Constraint
+interact :: Constraint -> Constraint -> Maybe Constraints
 -- EQSAME: Two equalities with the same LHS are combined to equate the RHS.
 interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
-  | v1 == v2 && isCanonical c1 && isCanonical c2
-  = Just $ (TVar v1 :~: t1) :^: (t1 :~: t2)
+  | v1 == v2 && isCanonical c1 && isCanonical c2 = Just
+    [TVar v1 :~: t1, t1 :~: t2]
 
 -- EQDIFF: One equality can be substituted into the other. We rely the ORIENT
 -- rule in prior canonicalisation to ensure this makes progress.
 interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
-  | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2
-  = Just $ (TVar v1 :~: t1) :^: (TVar v2 :~: sub [(v1, t1)] t2)
+  | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2 = Just
+    [TVar v1 :~: t1, TVar v2 :~: sub [(v1, t1)] t2]
 
 -- EQAPP (invented): We can substitute an equality into any other equality
 interact c1@(TVar v1 :~: t1) (t2 :~: t3)
-  | ((v1 `member` ftv t2) || (v1 `member` ftv t3)) && isCanonical c1
-  = Just $ c1 :^: (sub [(v1, t1)] t2 :~: sub [(v1, t1)] t3)
+  | ((v1 `member` ftv t2) || (v1 `member` ftv t3)) && isCanonical c1 = Just
+    [c1, sub [(v1, t1)] t2 :~: sub [(v1, t1)] t3]
 
 -- EQRECORD (invented): We can substitute an equality into a HasField constraint
 interact c1@(TVar v1 :~: t1) (HasField r l t)
-  | v1 `member` ftv r && isCanonical c1
-  = Just $ (TVar v1 :~: t1) :^: HasField (sub [(v1, t1)] r) l t
-  | v1 `member` ftv t && isCanonical c1
-  = Just $ (TVar v1 :~: t1) :^: HasField r l (sub [(v1, t1)] t)
-
--- Redundant cases: drop CNil
-interact CNil c    = Just c
-interact c    CNil = Just c
+  | v1 `member` ftv r && isCanonical c1 = Just
+    [TVar v1 :~: t1, HasField (sub [(v1, t1)] r) l t]
+  | v1 `member` ftv t && isCanonical c1 = Just
+    [TVar v1 :~: t1, HasField r l (sub [(v1, t1)] t)]
 
 -- If no rules match, signal failure
-interact _    _    = Nothing
+interact _ _ = Nothing
 
 -- Use a given constraint to simplify a wanted constraint
 -- e.g. given:   a ~ Int

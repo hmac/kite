@@ -3,24 +3,22 @@ module Constraint.Print where
 -- A printer for constraints
 
 import           Constraint
-import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc     as PP
 import           Data.Name
 import           Data.List                      ( intersperse )
 import qualified Data.Set                      as Set
 
 printCConstraint :: CConstraint -> Doc a
-printCConstraint (Simple c) = printConstraint c
-printCConstraint (c :^^: d) = printCConstraint c <+> "^" <+> printCConstraint d
-printCConstraint (E vars q c) =
+printCConstraint (Simple cs) = PP.list (map printConstraint cs)
+printCConstraint (c :^^: d ) = printCConstraint c <+> "^" <+> printCConstraint d
+printCConstraint (E vars qs c) =
   "∃"
     <+> parens (hsep (map printVar vars))
-    <+> printConstraint q
+    <+> PP.list (map printConstraint qs)
     <+> "⊃"
     <+> printCConstraint c
 
 printConstraint :: Constraint -> Doc a
-printConstraint CNil      = "ϵ"
-printConstraint (c :^: d) = printConstraint c <+> "^" <+> printConstraint d
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v
 printConstraint (HasField r l t) =
   printType r <+> "~" <+> braces (printNameAsLocal l <+> colon <+> printType t)
@@ -75,15 +73,15 @@ printError (OccursCheckFailure t v) =
   "Occurs check failure between" <+> printType t <+> "and" <+> printType v
 printError (ConstructorMismatch t v) =
   "Constructors do not match between" <+> printType t <+> "and" <+> printType v
-printError (UnsolvedConstraints c) =
-  "Unsolved constraints:" <+> printConstraint c
+printError (UnsolvedConstraints cs) =
+  "Unsolved constraints:" <+> PP.list (map printConstraint cs)
 printError EquationsHaveDifferentNumberOfPatterns =
   "Equations have different number of patterns"
 printError (UnsolvedUnificationVariables vars constraints) = vsep
   [ "Unsolved unification variables:"
   , hsep (map printVar (Set.toList vars))
   , "In constraints:"
-  , printConstraint constraints
+  , PP.list (map printConstraint constraints)
   ]
 printError (UnknownVariable v)       = "Unknown variable" <+> printName v
 printError EmptyCase                 = "Empty case expression"

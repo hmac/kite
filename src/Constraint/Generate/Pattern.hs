@@ -30,51 +30,49 @@ import qualified Data.Map.Strict               as Map
 generatePattern
   :: TypeEnv -> Type -> Pattern -> GenerateM Error (Type, CConstraint, TypeEnv)
 generatePattern env st (IntPat _) = do
-  let c = Simple (st :~: TInt)
+  let c = Simple [st :~: TInt]
   pure (TInt, c, env)
 generatePattern env st (BoolPat _) = do
-  let c = Simple (st :~: TBool)
+  let c = Simple [st :~: TBool]
   pure (TBool, c, env)
 generatePattern env st (VarPat x) = do
   u <- TVar <$> fresh
   let env' = Map.insert x (Forall [] u) env
-  let c    = Simple (u :~: st)
+  let c    = Simple [u :~: st]
   pure (u, c, env')
 generatePattern env st WildPat = do
   -- The wildcard can't be used, so we don't need to extend the environment.
   u <- TVar <$> fresh
-  let c = Simple (u :~: st)
+  let c = Simple [u :~: st]
   pure (u, c, env)
 generatePattern env st (StringPat _) = do
-  let c = Simple (st :~: TString)
+  let c = Simple [st :~: TString]
   pure (TString, c, env)
 generatePattern env st (TuplePat pats) = do
   -- generate each subpattern
   (patTypes, patConstraints, patEnvs) <- generateSubpatterns env pats
   -- generate a fresh variable for the type of the whole tuple pattern
   beta <- TVar <$> fresh
-  let betaConstraints =
-        Simple $ mconcat [beta :~: st, beta :~: mkTupleType patTypes]
+  let betaConstraints = Simple [beta :~: st, beta :~: mkTupleType patTypes]
   pure (beta, patConstraints <> betaConstraints, patEnvs <> env)
 generatePattern env st (ListPat []) = do
   -- generate a fresh variable for the (unknown) type of the list elements
   elemType <- TVar <$> fresh
   -- generate a fresh variable for the type of the whole list pattern
   beta     <- TVar <$> fresh
-  let betaConstraints = Simple $ mconcat [beta :~: st, beta :~: list elemType]
+  let betaConstraints = Simple [beta :~: st, beta :~: list elemType]
   pure (beta, betaConstraints, env)
 generatePattern env st (ListPat pats) = do
   -- generate each subpattern
   (patTypes, patConstraints, patEnvs) <- generateSubpatterns env pats
   -- the type of each pattern must be the same
   -- N.B. it's guaranteed that patTypes has at least one element
-  let (listConstraints, _) = foldl (\(c, t') t -> (c <> t' :~: t, t))
+  let (listConstraints, _) = foldl (\(c, t') t -> ((t' :~: t) : c, t))
                                    (mempty, head patTypes)
                                    (tail patTypes)
   -- generate a fresh variable for the type of the whole list pattern
   beta <- TVar <$> fresh
-  let betaConstraints =
-        Simple $ mconcat [beta :~: st, beta :~: list (head patTypes)]
+  let betaConstraints = Simple [beta :~: st, beta :~: list (head patTypes)]
   pure
     ( beta
     , patConstraints <> betaConstraints <> Simple listConstraints
@@ -96,7 +94,7 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
           in  (sub subst (last ts), map (sub subst) (init ts))
     case result of
       (resultTy, tyconargs) -> do
-        let scrutConstraint = Simple (resultTy :~: st)
+        let scrutConstraint = Simple [resultTy :~: st]
         -- generate each subpattern and apply the substitution to each
         (patTypes, patConstraints, patEnvs) <- do
           freshPatTypes <- mapM (\p -> fresh >>= \v -> pure (TVar v, p)) pats
@@ -106,12 +104,12 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
         -- Each pattern type should be equal to the corresponding type from the type
         -- constructor
         let patEqualityConstraints = mconcat $ zipWith
-              (\patTy argTy -> Simple (patTy :~: argTy))
+              (\patTy argTy -> Simple [patTy :~: argTy])
               patTypes
               tyconargs
         -- generate a fresh variable for the type of the whole pattern
         beta <- TVar <$> fresh
-        let betaConstraint = Simple $ beta :~: st <> beta :~: resultTy
+        let betaConstraint = Simple [beta :~: st, beta :~: resultTy]
         pure
           ( beta
           , patEqualityConstraints

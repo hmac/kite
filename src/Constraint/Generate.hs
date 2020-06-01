@@ -30,7 +30,7 @@ generate env (App e1 e2) = do
   (e1', t1, c1) <- generate env e1
   (e2', t2, c2) <- generate env e2
   a             <- TVar <$> fresh
-  let funcConstraint = Simple $ t1 :~: (t2 `fn` a)
+  let funcConstraint = Simple [t1 :~: (t2 `fn` a)]
   pure (AppT e1' e2', a, c1 <> (c2 <> funcConstraint))
 -- ABS
 generate env (Abs xs e) = do
@@ -50,7 +50,7 @@ generate env (Let binds body) = do
       <$> mapM
             (\(x, t, e) -> do
               (e', t', c) <- generate env' e
-              let c' = Simple (t :~: t')
+              let c' = Simple [t :~: t']
               pure (x, t, e', c <> c')
             )
             binds'
@@ -61,12 +61,12 @@ generate env (Let binds body) = do
 generate env (LetA x (Forall [] t1) e1 e2) = do
   (e1', t , c1) <- generate env e1
   (e2', t2, c2) <- generate (Map.insert x (Forall [] t1) env) e2
-  pure (LetAT x (Forall [] t1) e1' e2' t2, t2, c1 <> c2 <> Simple (t :~: t1))
+  pure (LetAT x (Forall [] t1) e1' e2' t2, t2, c1 <> c2 <> Simple [t :~: t1])
 -- GLETA: let with a polymorphic annotation
 generate env (LetA x s1@(Forall _ t1) e1 e2) = do
   (e1', t, c) <- generate env e1
   let betas = Set.toList $ (fuv t <> fuv c) \\ fuv env
-  let c1    = E betas CNil (c :^^: Simple (t :~: t1))
+  let c1    = E betas mempty (c :^^: Simple [t :~: t1])
   (e2', t2, c2) <- generate (Map.insert x s1 env) e2
   pure (LetAT x s1 e1' e2' t2, t2, c1 <> c2)
 -- CASE: case expression
@@ -85,7 +85,7 @@ generate env (ListLit elems) = do
   beta <- TVar <$> fresh
   let t = list beta
   (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
-  let sameTypeConstraint = mconcat $ map (beta :~:) elemTypes
+  let sameTypeConstraint = map (beta :~:) elemTypes
   pure (ListLitT elems' t, t, mconcat constraints <> Simple sameTypeConstraint)
 -- Int literal
 generate _env (IntLit  i     ) = pure (IntLitT i TInt, TInt, mempty)
@@ -98,7 +98,7 @@ generate env  (StringLit p cs) = do
     (\(e, s) -> do
       (e', cty, c) <- generate env e
       -- Each interpolated expression must have type String
-      let strConstraint = Simple (cty :~: TString)
+      let strConstraint = Simple [cty :~: TString]
       pure ((e', s), c <> strConstraint)
     )
   pure (StringLitT p cs' TString, TString, mconcat constraints)
@@ -120,7 +120,7 @@ generate env (Project record label) = do
   pure
     ( ProjectT record' label recordType
     , beta
-    , recordConstraints <> Simple fieldConstraint
+    , recordConstraints <> Simple [fieldConstraint]
     )
 
 -- Case expressions
@@ -174,6 +174,6 @@ generateEquation env (pat, expr) = do
 
 -- Generates a constraint requiring all the given types to be equal to each
 -- other
-generateAllEqualConstraint :: Type -> [Type] -> Constraint
+generateAllEqualConstraint :: Type -> [Type] -> Constraints
 generateAllEqualConstraint t ts =
-  fst $ foldl (\(c, t') u -> (c <> t' :~: u, t)) (mempty, t) ts
+  fst $ foldl (\(c, t') u -> ((t' :~: u) : c, t)) (mempty, t) ts

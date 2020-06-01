@@ -182,7 +182,7 @@ test = do
 
 runGenerate
   :: GenerateM Error (Type, CConstraint, TypeEnv)
-  -> Either Error (Type, Constraint, TypeEnv)
+  -> Either Error (Type, Constraints, TypeEnv)
 runGenerate g =
   let (res, touchables) = run g
   in  do
@@ -192,7 +192,7 @@ runGenerate g =
 
 runGenerateMulti
   :: GenerateM Error ([Type], CConstraint, TypeEnv)
-  -> Either Error ([Type], Constraint, TypeEnv)
+  -> Either Error ([Type], Constraints, TypeEnv)
 runGenerateMulti g =
   let (res, touchables) = run g
   in  do

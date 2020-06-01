@@ -39,7 +39,7 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
   (es, eqTypes, cs) <- unzip3 <$> mapM (generateMultiEquation env') equations
   let allEqsEq = generateAllEqualConstraint beta eqTypes
   let annWanted = case annotation of
-        (Just (Forall _tvars t)) -> beta :~: t
+        (Just (Forall _tvars t)) -> [beta :~: t]
         Nothing                  -> mempty
   -- TODO: is it ok for all of these to be touchable?
   let touchables  = fuv eqTypes <> fuv beta <> fuv cs
