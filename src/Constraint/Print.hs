@@ -10,13 +10,12 @@ import qualified Data.Set                      as Set
 
 printCConstraint :: CConstraint -> Doc a
 printCConstraint (Simple cs) = PP.list (map printConstraint cs)
-printCConstraint (c :^^: d ) = printCConstraint c <+> "^" <+> printCConstraint d
-printCConstraint (E vars qs c) =
+printCConstraint (E vars qs cs) =
   "∃"
     <+> parens (hsep (map printVar vars))
     <+> PP.list (map printConstraint qs)
     <+> "⊃"
-    <+> printCConstraint c
+    <+> PP.list (map printCConstraint cs)
 
 printConstraint :: Constraint -> Doc a
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v

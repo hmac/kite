@@ -78,7 +78,7 @@ test = do
           "Expected type error but was successful"
         | otherwise -> pure ()
     generatesEnv
-      :: GenerateM Error (Type, CConstraint, TypeEnv)
+      :: GenerateM Error (Type, CConstraints, TypeEnv)
       -> (TypeEnv -> Expectation)
       -> Expectation
     generatesEnv gen f = case runGenerate gen of
@@ -181,7 +181,7 @@ test = do
         pat `infersError` Nothing
 
 runGenerate
-  :: GenerateM Error (Type, CConstraint, TypeEnv)
+  :: GenerateM Error (Type, CConstraints, TypeEnv)
   -> Either Error (Type, Constraints, TypeEnv)
 runGenerate g =
   let (res, touchables) = run g
@@ -191,7 +191,7 @@ runGenerate g =
         pure (sub s t, cs, sub s env')
 
 runGenerateMulti
-  :: GenerateM Error ([Type], CConstraint, TypeEnv)
+  :: GenerateM Error ([Type], CConstraints, TypeEnv)
   -> Either Error ([Type], Constraints, TypeEnv)
 runGenerateMulti g =
   let (res, touchables) = run g

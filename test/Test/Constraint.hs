@@ -32,9 +32,6 @@ import           Syn                            ( Pattern
 
 test :: Spec
 test = do
-  describe "CConstraint Monoid" $ it "obeys the monoid laws" $ require
-    (isLawfulMonoid genCConstraint)
-
   let
     bool = TCon "Bool"
     nat  = TCon "Nat"
@@ -334,26 +331,7 @@ isLawfulMonoid gen = H.property $ do
   mempty <> c H.=== c
   c <> (d <> e) H.=== (c <> d) <> e
 
--- Property test generators for Constraint, CConstraint, Type
-
-genCConstraint :: H.Gen CConstraint
-genCConstraint = Gen.recursive
-  Gen.choice
-  [pure mempty]
-  [ Gen.subtermM
-    genCConstraint
-    (\c ->
-      E
-        <$> Gen.list (Range.linear 0 5) genVar
-        <*> (Gen.list (Range.linear 0 5) genConstraint)
-        <*> pure c
-    )
-  , Gen.subterm2 genCConstraint genCConstraint (<>)
-  ]
-
--- TODO: add HasField
-genConstraint :: H.Gen Constraint
-genConstraint = (:~:) <$> genType <*> genType
+-- Property test generators for Type
 
 genType :: H.Gen Type
 genType = Gen.recursive Gen.choice

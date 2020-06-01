@@ -47,14 +47,14 @@ solveC
   :: AxiomScheme
   -> Set Var
   -> Constraints
-  -> CConstraint
+  -> CConstraints
   -> Either Error (Constraints, Subst)
 solveC axs touchables given wanted =
-  case solve axs (touchables, mempty, given, simple wanted, 0) of
+  case solve axs (touchables, mempty, given, concatMap simple wanted, 0) of
     Left err -> Left err
     Right (residual, subst) ->
       -- All implication constraints should be completely solvable
-      let implications = implic (sub subst wanted)
+      let implications = concatMap implic (sub subst wanted)
       in  do
             results <- mapM
               (\(vars, q, cc) -> do
