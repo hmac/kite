@@ -8,19 +8,16 @@ import           Data.Name
 import           Data.List                      ( intersperse )
 import qualified Data.Set                      as Set
 
-printCConstraint :: CConstraint -> Doc a
-printCConstraint (Simple cs) = PP.list (map printConstraint cs)
-printCConstraint (E vars qs cs) =
-  "∃"
-    <+> parens (hsep (map printVar vars))
-    <+> PP.list (map printConstraint qs)
-    <+> "⊃"
-    <+> PP.list (map printCConstraint cs)
-
 printConstraint :: Constraint -> Doc a
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v
 printConstraint (HasField r l t) =
   printType r <+> "~" <+> braces (printNameAsLocal l <+> colon <+> printType t)
+printConstraint (E vars qs cs) =
+  "∃"
+    <+> parens (hsep (map printVar vars))
+    <+> PP.list (map printConstraint qs)
+    <+> "⊃"
+    <+> PP.list (map printConstraint cs)
 
 printVar :: Var -> Doc a
 printVar (U n) = "U" <> printName n

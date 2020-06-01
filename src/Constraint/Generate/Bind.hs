@@ -43,7 +43,7 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
         Nothing                  -> mempty
   -- TODO: is it ok for all of these to be touchable?
   let touchables  = fuv eqTypes <> fuv beta <> fuv cs
-  let constraints = Simple (allEqsEq <> annWanted) : mconcat cs
+  let constraints = allEqsEq <> annWanted <> mconcat cs
   case solveC axs touchables mempty constraints of
     Left err                        -> throwError err
     -- At this point, q should only contain typeclass constraints.
@@ -105,7 +105,7 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
 --   and True True = True
 --   and _    _    = False
 generateMultiEquation
-  :: TypeEnv -> ([Pattern], Exp) -> GenerateM Error (ExpT, Type, CConstraints)
+  :: TypeEnv -> ([Pattern], Exp) -> GenerateM Error (ExpT, Type, Constraints)
 generateMultiEquation _ (pats, _) | hasDuplicates (patternVariables pats) =
   throwError DuplicatePatternVariables
 generateMultiEquation env (pats, expr) = do
