@@ -86,6 +86,7 @@ tests:
     - filepath
   lam-hlint:
     main: hlint.hs
+    other-modules: []
     source-dirs:
     - test
     - src
