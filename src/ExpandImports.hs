@@ -11,8 +11,7 @@ data Error = CannotFindModule ModuleName -- ^ importing module
                               ModuleName -- ^ module we can't find
   deriving (Eq, Show)
 
-expandImports
-  :: Module Syn -> [Module Syn] -> Either Error (Module Syn, [Module Syn])
+expandImports :: Module -> [Module] -> Either Error (Module, [Module])
 expandImports m deps = do
   expanded <- go (m : reverse deps)
   let mExpanded    = head expanded
@@ -25,7 +24,7 @@ expandImports m deps = do
     ns' <- go ns
     pure (n' : ns')
 
-expandAllImports :: Module Syn -> [Module Syn] -> Either Error (Module Syn)
+expandAllImports :: Module -> [Module] -> Either Error (Module)
 expandAllImports modul deps = do
   let imps = moduleImports modul
   imps' <- mapM (expand (moduleName modul) deps) imps
@@ -33,7 +32,7 @@ expandAllImports modul deps = do
 
 -- We don't support expanding imports for Lam.Primitive, since it's not a "real"
 -- module.
-expand :: ModuleName -> [Module Syn] -> Import -> Either Error Import
+expand :: ModuleName -> [Module] -> Import -> Either Error Import
 expand _ _ imp | importName imp == "Lam.Primitive" = Right imp
 expand modulName deps imp =
   let matchingModule = find ((== importName imp) . moduleName) deps
@@ -42,7 +41,7 @@ expand modulName deps imp =
           Right imp { importItems = map (expandItem m) (importItems imp) }
         Nothing -> Left $ CannotFindModule modulName (importName imp)
 
-expandItem :: Module Syn -> ImportItem -> ImportItem
+expandItem :: Module -> ImportItem -> ImportItem
 expandItem importedModule = \case
   i@ImportSingle{} -> i
   i@ImportSome{}   -> i

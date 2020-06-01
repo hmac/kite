@@ -71,7 +71,7 @@ loadFromPathAndRootDirectory path root = do
                   <> ", cannot find module "
                   <> showModuleName missingModule
 
-loadAll :: FilePath -> ModuleName -> IO (Either String [Module Syn])
+loadAll :: FilePath -> ModuleName -> IO (Either String [Module])
 loadAll root name = do
   modul <- load root name
   case modul of
@@ -84,7 +84,7 @@ loadAll root name = do
           let m' = expandExports m
           pure $ Right $ m' : concat deps'
 
-load :: FilePath -> ModuleName -> IO (Either String (Module Syn))
+load :: FilePath -> ModuleName -> IO (Either String Module)
 load root name = parseLamFile <$> readFile (filePath root name)
 
 -- We skip any references to Lam.Primitive because it's not a normal module.

@@ -32,7 +32,7 @@ hole = annotate HoleStyle
 
 type Document = Doc Style
 
-printModule :: Module Syn -> Document
+printModule :: Module -> Document
 printModule mod = vsep $ catMaybes
   [ printMetadata (moduleMetadata mod)
   , Just $ printModName (moduleName mod)

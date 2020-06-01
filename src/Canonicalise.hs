@@ -32,7 +32,7 @@ import qualified Canonical.Primitive
 type Imports = Map.Map RawName Syn.ModuleName
 type Env = (ModuleName, Imports)
 
-buildImports :: Syn.Module Syn.Syn -> Imports
+buildImports :: Syn.Module -> Imports
 buildImports m =
   let imports =
           [ (subitem, importName imp)
@@ -46,7 +46,7 @@ buildImports m =
 -- flatten it to a list of names: [Either, Left, Right]
 -- TODO: at what point do we check that the import names actually exist in the
 -- imported module?
-flattenImportItem :: Syn.Module Syn.Syn -> Syn.ImportItem -> [RawName]
+flattenImportItem :: Syn.Module -> Syn.ImportItem -> [RawName]
 flattenImportItem modul = \case
   ImportSingle { importItemName = n } -> [n]
   ImportAll { importItemName = n } -> n : constructorsForType modul n
@@ -55,14 +55,14 @@ flattenImportItem modul = \case
 -- Given a name of a data type, find all the names that would be
 -- imported by a (..) style import.
 -- For data types, this is all the constructor names.
-constructorsForType :: Syn.Module Syn.Syn -> RawName -> [RawName]
+constructorsForType :: Syn.Module -> RawName -> [RawName]
 constructorsForType modul tyname =
   let datas = dataDecls modul
   in  case find ((== tyname) . dataName) datas of
         Just d  -> map conName (dataCons d)
         Nothing -> []
 
-canonicaliseModule :: Syn.Module Syn.Syn -> Can.Module
+canonicaliseModule :: Syn.Module -> Can.Module
 canonicaliseModule m =
   let imports = buildImports m
       env     = (moduleName m, imports)

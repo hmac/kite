@@ -57,12 +57,12 @@ instance ShowErrorComponent Error where
   showErrorComponent (VarKeyword v) =
     show v <> " is a reserved keyword and cannot be used as a variable name."
 
-parseLamFile :: String -> Either String (Module Syn)
+parseLamFile :: String -> Either String Module
 parseLamFile input = case parse (pModule <* eof) "" input of
   Left  e -> Left (errorBundlePretty e)
   Right e -> Right e
 
-pModule :: Parser (Module Syn)
+pModule :: Parser Module
 pModule = do
   metadata <- optional pMetadata
   void $ symbol "module"

@@ -11,7 +11,7 @@ import           Data.Name                      ( ModuleName(..)
 import           Util
 
 -- module Foo
-type Module a = Module_ RawName a Type
+type Module = Module_ RawName Syn Type
 data Module_ name a ty = Module { moduleName :: ModuleName
                                 , moduleImports :: [Import]
                                 , moduleExports :: [(name, [name])]

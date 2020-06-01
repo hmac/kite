@@ -8,11 +8,11 @@ where
 
 import           Syn
 
-expandExports :: Module Syn -> Module Syn
+expandExports :: Module -> Module
 expandExports modul | not (null (moduleExports modul)) = modul
                     | otherwise = modul { moduleExports = topLevelDecls modul }
 
-topLevelDecls :: Module Syn -> [(RawName, [RawName])]
+topLevelDecls :: Module -> [(RawName, [RawName])]
 topLevelDecls modul =
   let datas = [ (dataName d, map conName (dataCons d)) | d <- dataDecls modul ]
       funs  = [ (funName f, []) | f <- funDecls modul ]

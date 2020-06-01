@@ -68,7 +68,7 @@ roundtrip gen printer parser = H.withTests 100 $ H.property $ do
 
 -- Hedgehog generators
 
-genModule :: H.Gen (Module Syn)
+genModule :: H.Gen Module
 genModule =
   Module
     <$> genModuleName
