@@ -42,7 +42,7 @@ main = defaultMain
     "typecheck"
     [ bench "Data.List" $ nfIO $ typecheckFromPathAndRoot "std/Data/List.lam"
                                                           "std"
-    , bench "Data.List.Null" $ nfIO $ typecheckModule exampleModule
+    , bench "Data.List.Intersperse" $ nfIO $ typecheckModule exampleModule
     ]
   , bgroup
     "eval"
@@ -87,37 +87,12 @@ parseFromPath path modName = do
 
 exampleModule :: Module
 exampleModule = Module
-  { moduleName     = "Data.List.Null"
+  { moduleName     = "Data.List.Intersperse"
   , moduleImports  = []
   , moduleExports  = []
   , moduleMetadata = []
   , moduleDecls    =
-    [ FunDecl Fun
-      { funComments = []
-      , funName     = "null"
-      , funType     = Just $ TyList `tyapp` TyVar "a" `fn` TyBool
-      , funDefs     = [ Def { defArgs = [ListPat []], defExpr = BoolLit True }
-                      , Def { defArgs = [WildPat], defExpr = BoolLit False }
-                      ]
-      }
-    , FunDecl
-      (Fun
-        { funComments = []
-        , funName     = Name "length"
-        , funType     = Just (TyFun (TyApp TyList (TyVar (Name "a"))) TyInt)
-        , funDefs     =
-          [ Def { defArgs = [ListPat []], defExpr = IntLit 0 }
-          , Def
-            { defArgs = [ ConsPat (Name "::")
-                                  [VarPat (Name "x"), VarPat (Name "xs")]
-                        ]
-            , defExpr = App (App (Var (Name "+")) (IntLit 1))
-                            (App (Var (Name "length")) (Var (Name "xs")))
-            }
-          ]
-        }
-      )
-      FunDecl
+    [ FunDecl
       (Fun
         { funComments = []
         , funName     = "intersperse"
