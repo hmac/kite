@@ -1,0 +1,6 @@
+module ListTest
+
+import Data.List (subsequences)
+
+main : [[Int]]
+main = subsequences [1,2,3]
