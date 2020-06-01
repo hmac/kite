@@ -9,12 +9,25 @@ import           System.FilePath.Posix          ( takeFileName )
 import           System.Directory.Extra         ( listFilesRecursive )
 
 import           Syn.Parse                      ( parseLamFile )
-import           Syn                            ( Module_(moduleName) )
-import           Data.Name                      ( ModuleName )
+import           Syn
+import           Canonicalise                   ( canonicaliseModule )
 
-import           ModuleGroup                    ( TypedModuleGroup(..) )
+import           ModuleGroup                    ( ModuleGroup(..)
+                                                , TypedModuleGroup(..)
+                                                )
 import           ModuleLoader                   ( loadFromPathAndRootDirectory )
 import           ModuleGroupTypechecker         ( typecheckModuleGroup )
+import           ModuleGroupCompiler            ( compileToLC
+                                                , CompiledModule(..)
+                                                )
+import           LC.Eval                        ( evalMain )
+import qualified LC
+
+import           Constraint.Generate.M          ( run )
+import           Constraint.Generate.Module     ( generateModule )
+import qualified Constraint.Primitive
+
+import           Util
 
 -- We benchmark parsing and typechecking performance by parsing and typechecking
 -- the Data.List module from the standard library. Note that the typechecking
@@ -29,29 +42,24 @@ main = defaultMain
     "typecheck"
     [ bench "Data.List" $ nfIO $ typecheckFromPathAndRoot "std/Data/List.lam"
                                                           "std"
+    , bench "Data.List.Null" $ nfIO $ typecheckModule exampleModule
     ]
+  , bgroup
+    "eval"
+    [bench "Data.ListTest" $ nfIO $ runFromPathAndRoot "std/ListTest.lam" "std"]
   ]
 
-parseAndTypecheckAllStdModules :: IO [Benchmark]
-parseAndTypecheckAllStdModules = do
-  mods <- mapMaybe (stripSuffix ".lam") <$> listFilesRecursive "std"
-  pure $ map
-    (\path ->
-      let modName = fromString (takeFileName path)
-      in  bench modName (nfIO (typecheckFromPathAndRoot (path <> ".lam") "std"))
-    )
-    mods
-
-
-parseAllStdModules :: IO [Benchmark]
-parseAllStdModules = do
-  mods <- mapMaybe (stripSuffix ".lam") <$> listFilesRecursive "std"
-  pure $ map
-    (\path ->
-      let modName = fromString (takeFileName path)
-      in  bench (show modName) (nfIO (parseFromPath (path <> ".lam") modName))
-    )
-    mods
+runFromPathAndRoot path root = do
+  group <- loadFromPathAndRootDirectory path root
+  case group of
+    Left  err -> error $ path <> ":\n" <> err
+    Right g   -> case typecheckModuleGroup g of
+      Left err -> error $ path <> ":\n" <> show err
+      Right typedGroup ->
+        let compiled = compileToLC typedGroup
+        in  case evalMain (cModuleName compiled) (cModuleEnv compiled) of
+              LC.Var "notARealVariable" -> pure True
+              _                         -> pure False
 
 typecheckFromPathAndRoot :: String -> String -> IO Bool
 typecheckFromPathAndRoot path root = do
@@ -62,9 +70,106 @@ typecheckFromPathAndRoot path root = do
       Left  err                       -> error $ path <> ":\n" <> show err
       Right (TypedModuleGroup m deps) -> pure True
 
+typecheckModule :: Module -> IO Bool
+typecheckModule m =
+  let (res, _) =
+          run $ generateModule Constraint.Primitive.env (canonicaliseModule m)
+  in  case res of
+        Left err -> error $ show (moduleName m) <> ":\n" <> show err
+        Right (_env, typedModule) -> pure True
+
 parseFromPath :: String -> ModuleName -> IO Bool
 parseFromPath path modName = do
   contents <- readFile path
   case parseLamFile contents of
     Left  err -> error $ path <> ": expected parse success but failed\n" <> err
     Right m   -> pure $ moduleName m == modName
+
+exampleModule :: Module
+exampleModule = Module
+  { moduleName     = "Data.List.Null"
+  , moduleImports  = []
+  , moduleExports  = []
+  , moduleMetadata = []
+  , moduleDecls    =
+    [ FunDecl Fun
+      { funComments = []
+      , funName     = "null"
+      , funType     = Just $ TyList `tyapp` TyVar "a" `fn` TyBool
+      , funDefs     = [ Def { defArgs = [ListPat []], defExpr = BoolLit True }
+                      , Def { defArgs = [WildPat], defExpr = BoolLit False }
+                      ]
+      }
+    , FunDecl
+      (Fun
+        { funComments = []
+        , funName     = Name "length"
+        , funType     = Just (TyFun (TyApp TyList (TyVar (Name "a"))) TyInt)
+        , funDefs     =
+          [ Def { defArgs = [ListPat []], defExpr = IntLit 0 }
+          , Def
+            { defArgs = [ ConsPat (Name "::")
+                                  [VarPat (Name "x"), VarPat (Name "xs")]
+                        ]
+            , defExpr = App (App (Var (Name "+")) (IntLit 1))
+                            (App (Var (Name "length")) (Var (Name "xs")))
+            }
+          ]
+        }
+      )
+      FunDecl
+      (Fun
+        { funComments = []
+        , funName     = "intersperse"
+        , funType     =
+          Just
+          $       TyVar "a"
+          `fn`    TyList
+          `tyapp` TyVar "a"
+          `fn`    TyList
+          `tyapp` TyVar "a"
+        , funDefs     =
+          [ Def { defArgs = [WildPat, ListPat []], defExpr = ListLit [] }
+          , Def
+            { defArgs = [VarPat "e", ConsPat "::" [VarPat "x", VarPat "xs"]]
+            , defExpr = App
+                          (App (Con "::") (Var "x"))
+                          (App (App (Var "intersperseHelper") (Var "e"))
+                               (Var "xs")
+                          )
+            }
+          ]
+        }
+      )
+    , FunDecl
+      (Fun
+        { funComments = []
+        , funName     = "intersperseHelper"
+        , funType     =
+          Just
+          $       TyVar "a"
+          `fn`    TyList
+          `tyapp` TyVar "a"
+          `fn`    TyList
+          `tyapp` TyVar "a"
+        , funDefs     = [ Def { defArgs = [WildPat, ListPat []]
+                              , defExpr = ListLit []
+                              }
+                        , Def
+                          { defArgs = [ VarPat "e"
+                                      , ConsPat "::" [VarPat "x", VarPat "xs"]
+                                      ]
+                          , defExpr = App
+                            (App (Con "::") (Var "e"))
+                            (App
+                              (App (Con "::") (Var "x"))
+                              (App (App (Var "intersperseHelper") (Var "e"))
+                                   (Var "xs")
+                              )
+                            )
+                          }
+                        ]
+        }
+      )
+    ]
+  }
