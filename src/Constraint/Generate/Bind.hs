@@ -71,8 +71,9 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
           -- bind all the free unification vars in the types and residual as
           -- rigid vars in the type of the function
           -- this is the reverse of the usual substitutions: uvar -> tvar
-          tysubst <- mapM (\v -> (v, ) . TVar <$> freshR)
-                          (Set.toList (fuv eqTypes' <> fuv exps' <> fuv q))
+          tysubst <- Map.fromList <$> mapM
+            (\v -> (v, ) . TVar <$> freshR)
+            (Set.toList (fuv eqTypes' <> fuv exps' <> fuv q))
           -- Since everything is solved, we can take the first equation type
           -- and use that
           let eqType = head eqTypes'
@@ -84,7 +85,7 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
                   $  "Constraint.Generate.Bind: expected TVar, found "
                   <> show t'
           let bindTy =
-                Forall (map (getTVar . snd) tysubst) (sub tysubst eqType)
+                Forall (map getTVar (Map.elems tysubst)) (sub tysubst eqType)
           let exps'' = map (sub tysubst) exps'
           let
             bind = BindT name

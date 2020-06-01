@@ -21,6 +21,8 @@ where
 
 import           Util
 
+import qualified Data.Map                      as Map
+import           Data.Map                       ( singleton )
 import           Data.Set                       ( Set
                                                 , member
                                                 )
@@ -80,7 +82,7 @@ solve axs input = case rewriteAll axs input of
         toTuple (TVar b :~: t     ) = (b, t)
         toTuple (t      :~: TVar b) = (b, t)
         toTuple q                   = error $ "Unexpected constraint " <> show q
-        subst = nubOrdOn fst $ map toTuple epsilon
+        subst = Map.fromList $ nubOrdOn fst $ map toTuple epsilon
     in  Right (sub subst residual, subst)
 
 -- Solve a set of constraints
@@ -146,9 +148,7 @@ interactM dom = do
 simplifyM :: Solve (Either Error ())
 simplifyM = do
   (vars, subst, given, wanted, k) <- get
-  let wanteds  = flatten wanted
-      givens   = flatten given
-      wanteds' = foldl (\ws g -> map (simplify g) ws) wanteds givens
+  let wanteds' = foldl (\ws g -> map (simplify g) ws) wanted given
   put (vars, subst, given, wanteds', k)
   pure (Right ())
 
@@ -174,10 +174,6 @@ canonAll []       = Right []
 canonAll (c : cs) = case canon c of
   Left  err -> Left err
   Right c'  -> (c' ++) <$> canonAll cs
-
--- TODO: I think this can be removed
-flatten :: Constraints -> Constraints
-flatten = id
 
 -- Canonicalise a constraint
 canon :: Constraint -> Either Error Constraints
@@ -246,19 +242,19 @@ interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
 -- rule in prior canonicalisation to ensure this makes progress.
 interact c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
   | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2 = Just
-    [TVar v1 :~: t1, TVar v2 :~: sub [(v1, t1)] t2]
+    [TVar v1 :~: t1, TVar v2 :~: sub (singleton v1 t1) t2]
 
 -- EQAPP (invented): We can substitute an equality into any other equality
 interact c1@(TVar v1 :~: t1) (t2 :~: t3)
   | ((v1 `member` ftv t2) || (v1 `member` ftv t3)) && isCanonical c1 = Just
-    [c1, sub [(v1, t1)] t2 :~: sub [(v1, t1)] t3]
+    [c1, sub (singleton v1 t1) t2 :~: sub (singleton v1 t1) t3]
 
 -- EQRECORD (invented): We can substitute an equality into a HasField constraint
 interact c1@(TVar v1 :~: t1) (HasField r l t)
   | v1 `member` ftv r && isCanonical c1 = Just
-    [TVar v1 :~: t1, HasField (sub [(v1, t1)] r) l t]
+    [TVar v1 :~: t1, HasField (sub (singleton v1 t1) r) l t]
   | v1 `member` ftv t && isCanonical c1 = Just
-    [TVar v1 :~: t1, HasField r l (sub [(v1, t1)] t)]
+    [TVar v1 :~: t1, HasField r l (sub (singleton v1 t1) t)]
 
 -- If no rules match, signal failure
 interact _ _ = Nothing
@@ -276,7 +272,7 @@ simplify c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
 -- SEQDIFF
 simplify c1@(TVar v1 :~: t1) c2@(TVar v2 :~: t2)
   | v1 `member` ftv t2 && isCanonical c1 && isCanonical c2
-  = TVar v2 :~: sub [(v1, t1)] t2
+  = TVar v2 :~: sub (singleton v1 t1) t2
 
 -- If no rules match, return the wanted constraint unchanged
 simplify _ w = w

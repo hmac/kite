@@ -86,7 +86,7 @@ generatePattern env st (ConsPat k pats) = case Map.lookup k env of
     -- generate new uvars for each a in as
     ys <- mapM (const fresh) as
     -- construct tyvar substitution
-    let subst = zip as (map TVar ys)
+    let subst = Map.fromList $ zip as (map TVar ys)
 
     -- TODO: make it clearer what this is doing - could it be an aux function?
     let result =

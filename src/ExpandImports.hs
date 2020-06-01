@@ -24,7 +24,7 @@ expandImports m deps = do
     ns' <- go ns
     pure (n' : ns')
 
-expandAllImports :: Module -> [Module] -> Either Error (Module)
+expandAllImports :: Module -> [Module] -> Either Error Module
 expandAllImports modul deps = do
   let imps = moduleImports modul
   imps' <- mapM (expand (moduleName modul) deps) imps

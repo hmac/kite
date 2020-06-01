@@ -121,14 +121,14 @@ data Var = R Name
 
 -- The type of substitutions
 -- TODO: use Map
-type Subst = [(Var, Type)]
+type Subst = Map Var Type
 
 -- A typeclass for applying substitutions
 class Sub a where
   sub :: Subst -> a -> a
 
 instance Sub Type where
-  sub s (TVar v  )       = fromMaybe (TVar v) (lookup v s)
+  sub s (TVar v  )       = fromMaybe (TVar v) (Map.lookup v s)
   sub _ (TCon n  )       = TCon n
   sub s (TApp a b)       = TApp (sub s a) (sub s b)
   sub _ (THole n )       = THole n
@@ -154,7 +154,7 @@ instance Sub a => Sub [a] where
 
 instance Sub Scheme where
   sub s (Forall vars t) =
-    let s' = filter (\(v, _) -> v `notElem` vars) s in Forall vars (sub s' t)
+    let s' = Map.withoutKeys s (Set.fromList vars) in Forall vars (sub s' t)
 
 instance Sub (Map Name Scheme) where
   sub s = fmap (sub s)

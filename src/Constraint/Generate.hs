@@ -17,7 +17,7 @@ generate :: TypeEnv -> Exp -> GenerateM Error (ExpT, Type, CConstraint)
 -- VARCON
 generate env (Var name) = case Map.lookup name env of
   Just (Forall tvars t) -> do
-    subst <- mapM (\tv -> (tv, ) . TVar <$> fresh) tvars
+    subst <- Map.fromList <$> mapM (\tv -> (tv, ) . TVar <$> fresh) tvars
     let t' = sub subst t
     pure (VarT name t', t', mempty)
   Nothing -> throwError (UnknownVariable name)
