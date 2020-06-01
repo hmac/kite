@@ -32,6 +32,8 @@ mkDerivation {
     optparse-generic pretty-simple prettyprinter
     prettyprinter-ansi-terminal semigroupoids text transformers
   ];
+  enableLibraryProfiling = true;
+  enableExecutableProfiling = true;
   prePatch = "hpack";
   homepage = "https://github.com/hmac/lam#readme";
   description = "A Haskell-like language for scripting and web apps";

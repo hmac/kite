@@ -67,6 +67,12 @@ executables:
     dependencies:
     - lam
     - pretty-simple
+  lam-profiling:
+    main: Main.hs
+    source-dirs:         app
+    ghc-options: -O2 -threaded -fprof-auto "-with-rtsopts=-N -p -s -h -i0.1"
+    dependencies:
+    - lam
 
 tests:
   lam-test:
@@ -98,6 +104,12 @@ benchmarks:
   lam-bench:
     source-dirs: benchmarks
     main: Main.hs
+    ghc-options:
+    - -Wall
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
     dependencies:
     - lam
     - criterion
