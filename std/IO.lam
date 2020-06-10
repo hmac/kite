@@ -1,0 +1,20 @@
+module IO
+
+import Data.Unit (Unit(..))
+import Data.Function (const)
+
+-- Combinators
+
+bind : IO a -> (a -> IO b) -> IO b
+bind x y = $fcall bindIO x y
+
+sequence : IO a -> IO b -> IO b
+sequence x y = bind x (const y)
+
+-- IO functions
+
+getLine : IO String
+getLine = $fcall getLine
+
+puts : String -> IO Unit
+puts s = $fcall putStrLn s

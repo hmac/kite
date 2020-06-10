@@ -9,6 +9,7 @@ import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout )
 import           System.Environment             ( lookupEnv )
 import           System.Directory               ( getCurrentDirectory )
+import           Control.Monad                  ( void )
 
 import           ModuleGroup
 import           ModuleGroupCompiler            ( CompiledModule(..) )
@@ -19,6 +20,7 @@ import qualified ModuleGroupCompiler
 import qualified Repl                           ( run )
 import qualified LC.Print                       ( print )
 import           LC.Eval                        ( evalMain )
+import           LC.Execute                     ( executeMain )
 import           Options.Generic
 
 import           Syn.Parse                      ( parseLamFile )
@@ -28,6 +30,7 @@ import           Constraint.Print
 data Config =
       Repl
     | Format FilePath
+    | Eval FilePath
     | Run FilePath
     | Typecheck FilePath
     | Dump DumpPhase FilePath
@@ -56,6 +59,7 @@ main = do
   case cfg of
     Repl         -> Repl.run
     Format    f  -> format f
+    Eval      f  -> eval homeDir f
     Run       f  -> run homeDir f
     Typecheck f  -> typecheck homeDir f
     Dump phase f -> case phase of
@@ -96,14 +100,22 @@ format fp = parseLamFile <$> readFile fp >>= \case
   Right m   -> printNicely (printModule m)
   Left  err -> putStrLn err
 
-run :: FilePath -> FilePath -> IO ()
-run homeDir = withParsedFile homeDir $ \g ->
+eval :: FilePath -> FilePath -> IO ()
+eval homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> print (printLocatedError err)
     Right g' ->
       let cm     = ModuleGroupCompiler.compileToLC g'
           answer = evalMain (cModuleName cm) (cModuleEnv cm)
       in  printNicely (LC.Print.print answer)
+
+run :: FilePath -> FilePath -> IO ()
+run homeDir = withParsedFile homeDir $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left err -> print (printLocatedError err)
+    Right g' ->
+      let cm = ModuleGroupCompiler.compileToLC g'
+      in  void $ executeMain (cModuleName cm) (cModuleEnv cm)
 
 withParsedFile :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile homeDir cb path = do

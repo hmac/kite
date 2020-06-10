@@ -1,0 +1,16 @@
+module IOTest
+
+import Lam.String (semigroupString)
+import Data.Semigroup (append)
+import Data.Unit (Unit)
+import Data.Function (const)
+import IO (bind, sequence, getLine, puts)
+
+makeGreeting : String -> String
+makeGreeting name = append semigroupString "Hello, " name
+
+greet : String -> IO Unit
+greet name = puts (makeGreeting name)
+
+main : IO Unit
+main = sequence (puts "What is your name?") (bind getLine greet)
