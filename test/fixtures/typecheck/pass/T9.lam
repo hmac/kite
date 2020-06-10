@@ -1,0 +1,7 @@
+module SomeIOFunctions
+
+returnsNothing : IO ()
+returnsNothing = $fcall putStrLn "hi"
+
+returnsSomething : IO String
+returnsSomething = $fcall getLine

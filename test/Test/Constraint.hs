@@ -291,9 +291,7 @@ test = do
     -- putStrLn : String -> IO Unit
     it "a foreign call" $ do
       let expr = FCall "putStrLn" [StringLit "Hello" []]
-      let
-        ty = TApp (TCon (TopLevel modPrim "IO"))
-                  (TCon (TopLevel "Data.Unit" "Unit"))
+      let ty   = TApp (TCon (TopLevel modPrim "IO")) TUnit
       infersType env expr ty
 
 infersType :: TypeEnv -> Exp -> Type -> Expectation

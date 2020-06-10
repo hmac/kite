@@ -12,4 +12,4 @@ fib n = case eq eqInt n 0 of
                                 True -> 1
                                 False -> (fib (n - 1)) + (fib (n - 2))
 main : Int
-main = fib 30
+main = fib 15

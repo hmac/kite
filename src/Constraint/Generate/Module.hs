@@ -33,6 +33,8 @@ generateModule env modul = do
                   (getDataDecls (moduleDecls modul))
       env' = env <> mconcat (map Constraint.Generate.Data.generate datas)
 
+  -- TODO: check that all types are in scope/exist
+
   -- Extract function declarations
   let funs  = getFunDecls (moduleDecls modul)
       binds = map funToBind funs

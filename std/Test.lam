@@ -10,6 +10,7 @@ import Data.List (subsequences, functorList, mapList)
 import Data.Functor (Functor, map)
 import Data.Eq (eq)
 import Data.Int (eqInt)
+import IO (bind, sequence, puts, getLine)
 
 e : Either Bool String
 e = Left True
@@ -39,5 +40,5 @@ square i = i * i
 mapTest : [Int]
 mapTest = map functorList square [1,2,3]
 
-main : Int
-main = 0
+main : IO ()
+main = puts (show (showList showInt) mapTest)

@@ -10,9 +10,7 @@ import           Constraint.Generate.M
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
-import           Constraint.Primitive           ( unit
-                                                , io
-                                                )
+import           Constraint.Primitive           ( io )
 import           Data.String                    ( IsString(fromString) )
 
 import           Util
@@ -132,7 +130,7 @@ generate env (Project record label) = do
 -- FFI calls
 -- In the future we will support syntax to declare the types of foreign calls,
 -- like this:
---     foreign putStrLn : String -> IO Unit
+--     foreign putStrLn : String -> IO ()
 --     foreign getLine : IO String
 --     foreign bindIO : IO a -> (a -> IO b) -> IO b
 -- Until then, we hard-code the types here.
@@ -142,7 +140,7 @@ generate env (FCall "putStrLn" someArgs) = do
     as  -> throwError $ WrongNumberOfArgsToForeignCall "putStrLn" 1 (length as)
   (arg', argTy, constraints) <- generate env arg
   let argIsString = argTy :~: TString
-  let resTy       = TApp io unit
+  let resTy       = TApp io TUnit
   pure (FCallT "putStrLn" [arg'] resTy, resTy, argIsString : constraints)
 generate _env (FCall "getLine" someArgs) = do
   _ <- case someArgs of

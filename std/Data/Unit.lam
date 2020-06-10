@@ -2,7 +2,5 @@ module Data.Unit
 
 import Data.Eq(Eq(..))
 
-type Unit = Unit
-
 eqUnit : Eq Unit
 eqUnit = Eq { eq = \x y -> True }

@@ -1,6 +1,5 @@
 module IO
 
-import Data.Unit (Unit(..))
 import Data.Function (const)
 
 -- Combinators
@@ -16,5 +15,5 @@ sequence x y = bind x (const y)
 getLine : IO String
 getLine = $fcall getLine
 
-puts : String -> IO Unit
+puts : String -> IO ()
 puts s = $fcall putStrLn s

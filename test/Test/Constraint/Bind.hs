@@ -258,10 +258,9 @@ test = do
         Left  err        -> expectationFailure (show err)
         Right (_, bind') -> bind' `shouldBe` bindT
     it "A foreign call" $ do
-      let body = [([VarPat "s"], FCall "putStrLn" [Var "s"])]
-      let resTy = TApp (TCon (TopLevel modPrim "IO"))
-                       (TCon (TopLevel "Data.Unit" "Unit"))
-      let bind = Bind "f" (Just (Forall [] (TString `fn` resTy))) body
+      let body  = [([VarPat "s"], FCall "putStrLn" [Var "s"])]
+      let resTy = TApp (TCon (TopLevel modPrim "IO")) TUnit
+      let bind  = Bind "f" (Just (Forall [] (TString `fn` resTy))) body
       let bindT = BindT
             "f"
             [([VarPat "s"], FCallT "putStrLn" [VarT "s" TString] resTy)]

@@ -1,7 +1,6 @@
 module Constraint.Primitive
   ( env
   , io
-  , unit
   )
 where
 
@@ -34,8 +33,3 @@ env = Map.fromList
 
 io :: Type
 io = TCon (TopLevel modPrim "IO")
-
--- TODO: I think the empty tuple is nicer to use than an explicit Unit type,
--- and it can be built-in.
-unit :: Type
-unit = TCon (TopLevel "Data.Unit" "Unit")
