@@ -2,16 +2,20 @@
 
 module Constraint.Generate where
 
-import           Util
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
-
 import qualified Data.Map.Strict               as Map
 
 import           Constraint.Generate.M
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
+import           Constraint.Primitive           ( unit
+                                                , io
+                                                )
+import           Data.String                    ( IsString(fromString) )
+
+import           Util
 
 generate :: TypeEnv -> Exp -> GenerateM Error (ExpT, Type, Constraints)
 -- VARCON
@@ -123,6 +127,39 @@ generate env (Project record label) = do
     , beta
     , fieldConstraint : recordConstraints
     )
+-- FFI calls
+-- In the future we will support syntax to declare the types of foreign calls,
+-- like this:
+--     foreign putStrLn : String -> IO Unit
+--     foreign getLine : IO String
+--     foreign bindIO : IO a -> (a -> IO b) -> IO b
+-- Until then, we hard-code the types here.
+generate env (FCall "putStrLn" someArgs) = do
+  arg <- case someArgs of
+    [a] -> pure a
+    as  -> throwError $ WrongNumberOfArgsToForeignCall "putStrLn" 1 (length as)
+  (arg', argTy, constraints) <- generate env arg
+  let argIsString = argTy :~: TString
+  let resTy       = TApp io unit
+  pure (FCallT "putStrLn" [arg'] resTy, resTy, argIsString : constraints)
+generate _env (FCall "getLine" someArgs) = do
+  _ <- case someArgs of
+    [] -> pure ()
+    as -> throwError $ WrongNumberOfArgsToForeignCall "getLine" 0 (length as)
+  let resTy = TApp io TString
+  pure (FCallT "getLine" [] resTy, resTy, mempty)
+generate env (FCall "bindIO" someArgs) = do
+  (arg1, arg2) <- case someArgs of
+    [a, b] -> pure (a, b)
+    as     -> throwError $ WrongNumberOfArgsToForeignCall "bindIO" 2 (length as)
+  (arg1', arg1Ty, c1) <- generate env arg1
+  (arg2', arg2Ty, c2) <- generate env arg2
+  a                   <- TVar <$> fresh
+  b                   <- TVar <$> fresh
+  let resTy       = TApp io b
+  let constraints = [TApp io a :~: arg1Ty, (a `fn` TApp io b) :~: arg2Ty]
+  pure (FCallT "bindIO" [arg1', arg2'] resTy, resTy, constraints <> c1 <> c2)
+generate _env (FCall other _) = throwError $ UnknownVariable (fromString other)
 
 -- Case expressions
 -------------------

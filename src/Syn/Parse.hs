@@ -362,6 +362,7 @@ pExpr' =
     <|> try (IntLit <$> pInt)
     <|> try pRecordProject
     <|> pVar
+    <|> pFCall
     <|> pAbs
     <|> pLet
     <|> pList
@@ -483,6 +484,13 @@ pStringLit = do
 
 pVar :: Parser Syn
 pVar = Var <$> lowercaseName
+
+pFCall :: Parser Syn
+pFCall = do
+  void (symbol "$fcall")
+  name <- lowercaseName
+  args <- many pExpr'
+  pure $ FCall (unName name) args
 
 pAbs :: Parser Syn
 pAbs = do
@@ -617,6 +625,7 @@ keywords =
   , "where"
   , "module"
   , "import"
+  , "$fcall"
   ]
 
 -- Consumes spaces and tabs

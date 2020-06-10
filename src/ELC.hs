@@ -22,6 +22,7 @@ data Exp = Const Constant [Exp]
          | Y Exp                 -- the Y combinator
          | Record (Map String Exp)
          | RecordProject Exp String
+         | FCall String [Exp]
          deriving (Show, Eq)
 
 buildAbs :: Exp -> [Pattern] -> Exp

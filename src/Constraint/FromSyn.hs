@@ -32,7 +32,8 @@ fromSyn = \case
   S.IntLit  i           -> E.IntLit i
   S.BoolLit b           -> E.BoolLit b
   S.Record  fields      -> E.Record $ mapSnd fromSyn fields
-  S.Project r l         -> E.Project (fromSyn r) l
+  S.Project r    l      -> E.Project (fromSyn r) l
+  S.FCall   proc args   -> E.FCall proc (map fromSyn args)
 
 -- | Extract all free ty vars in Forall, then convert Syn.Ty to Constraint.Type
 tyToScheme :: S.Type_ Name -> E.Scheme

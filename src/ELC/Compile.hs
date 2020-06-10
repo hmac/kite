@@ -225,7 +225,10 @@ translateExpr env (T.CaseT scrut alts _) = do
   let lams = foldr Fatbar (Bottom "pattern match failure") alts'
   pure $ Let (VarPat var) scrut' lams
 translateExpr env (T.RecordT fields _type) = translateRecord env fields
-translateExpr env (T.ProjectT e l _type  ) = translateRecordProjection env e l
+translateExpr env (T.ProjectT e l _type) = translateRecordProjection env e l
+translateExpr env (T.FCallT proc args _type) = do
+  args' <- mapM (translateExpr env) args
+  pure $ FCall proc args'
 
 -- "hi #{name}!" ==> "hi " <> name <> "!"
 -- The typechecker ensures that name : String
@@ -317,12 +320,13 @@ subst a n (If b t e  ) = If (subst a n b) (subst a n t) (subst a n e)
 subst a n (Case v alts)
   | n == v    = Let (VarPat v) a (Case v (map (substClause a n) alts))
   | otherwise = Case v (map (substClause a n) alts)
-subst _a _n Fail                = Fail
-subst _a _n (Bottom s         ) = Bottom s
-subst a  n  (Project ar i e   ) = Project ar i (subst a n e)
-subst a  n  (Y      e         ) = Y (subst a n e)
-subst a  n  (Record fields    ) = Record (fmap (subst a n) fields)
-subst a  n  (RecordProject e l) = RecordProject (subst a n e) l
+subst _a _n Fail                      = Fail
+subst _a _n (Bottom s               ) = Bottom s
+subst a  n  (Project ar i e         ) = Project ar i (subst a n e)
+subst a  n  (Y      e               ) = Y (subst a n e)
+subst a  n  (Record fields          ) = Record (fmap (subst a n) fields)
+subst a  n  (RecordProject e    l   ) = RecordProject (subst a n e) l
+subst a  n  (FCall         proc args) = FCall proc (map (subst a n) args)
 
 -- If the clause rebinds the variable, don't substitute inside it
 substClause :: Exp -> Name -> Clause -> Clause

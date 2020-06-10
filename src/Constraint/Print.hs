@@ -94,6 +94,14 @@ printError (ProjectionOfNonRecordType ty name) =
     <+> "from the type"
     <+> printType ty
     <+> "because it is not a record type."
+printError (WrongNumberOfArgsToForeignCall name expected actual) =
+  "In the call to the foreign function"
+    <+> pretty name
+    <+> ", I require"
+    <+> pretty expected
+    <+> "args to be provided but only"
+    <+> pretty actual
+    <+> "have been given"
 
 printLocatedError :: LocatedError -> Doc a
 printLocatedError (LocatedError moduleName err) = vsep

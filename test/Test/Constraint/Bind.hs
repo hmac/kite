@@ -14,6 +14,7 @@ import           Constraint.Generate.M          ( run
                                                 )
 import           Constraint.Generate.Bind
 import           Syn                            ( Pattern_(..) )
+import           Data.Name                      ( Name(..) )
 import           Util
 
 -- Tests the constraint solver
@@ -252,6 +253,19 @@ test = do
             , ([ConsPat nothing []]       , ConT false)
             ]
             (Forall [] (maybe bool `fn` bool))
+      let (res, _) = run (generateBind mempty env bind)
+      case res of
+        Left  err        -> expectationFailure (show err)
+        Right (_, bind') -> bind' `shouldBe` bindT
+    it "A foreign call" $ do
+      let body = [([VarPat "s"], FCall "putStrLn" [Var "s"])]
+      let resTy = TApp (TCon (TopLevel modPrim "IO"))
+                       (TCon (TopLevel "Data.Unit" "Unit"))
+      let bind = Bind "f" (Just (Forall [] (TString `fn` resTy))) body
+      let bindT = BindT
+            "f"
+            [([VarPat "s"], FCallT "putStrLn" [VarT "s" TString] resTy)]
+            (Forall [] (TString `fn` resTy))
       let (res, _) = run (generateBind mempty env bind)
       case res of
         Left  err        -> expectationFailure (show err)

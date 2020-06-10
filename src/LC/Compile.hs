@@ -35,22 +35,23 @@ convertEnv env = mapSndM convert (ELC.Compile.collapseEnv env)
 convert :: ELC.Exp -> NameGen Exp
 convert = go
  where
-  go (ELC.Var n         )    = pure (Var n)
-  go (ELC.Cons  c es    )    = Cons c <$> mapM go es
-  go (ELC.Const c es    )    = Const c <$> mapM go es
-  go (ELC.App   a b     )    = App <$> go a <*> go b
-  go (ELC.Abs   p e     )    = convertAbs p e
-  go (ELC.Let pat bind e)    = convertLet pat bind e
-  go (ELC.LetRec alts e )    = convertLetRec alts e
-  go (ELC.Fatbar a    b )    = Fatbar <$> go a <*> go b
-  go (ELC.If b t e      )    = If <$> go b <*> go t <*> go e
-  go (ELC.Case n alts   )    = convertCase n alts
-  go ELC.Fail                = pure Fail
-  go (ELC.Bottom s         ) = pure (Bottom s)
-  go (ELC.Project a i e    ) = Project a i <$> go e
-  go (ELC.Y      e         ) = Y <$> go e
-  go (ELC.Record fields    ) = Record <$> traverse go fields
-  go (ELC.RecordProject e l) = RecordProject <$> go e <*> pure l
+  go (ELC.Var n         )          = pure (Var n)
+  go (ELC.Cons  c es    )          = Cons c <$> mapM go es
+  go (ELC.Const c es    )          = Const c <$> mapM go es
+  go (ELC.App   a b     )          = App <$> go a <*> go b
+  go (ELC.Abs   p e     )          = convertAbs p e
+  go (ELC.Let pat bind e)          = convertLet pat bind e
+  go (ELC.LetRec alts e )          = convertLetRec alts e
+  go (ELC.Fatbar a    b )          = Fatbar <$> go a <*> go b
+  go (ELC.If b t e      )          = If <$> go b <*> go t <*> go e
+  go (ELC.Case n alts   )          = convertCase n alts
+  go ELC.Fail                      = pure Fail
+  go (ELC.Bottom s               ) = pure (Bottom s)
+  go (ELC.Project a i e          ) = Project a i <$> go e
+  go (ELC.Y      e               ) = Y <$> go e
+  go (ELC.Record fields          ) = Record <$> traverse go fields
+  go (ELC.RecordProject e    l   ) = RecordProject <$> go e <*> pure l
+  go (ELC.FCall         proc args) = FCall proc <$> traverse go args
 
 convertAbs :: Pattern -> ELC.Exp -> NameGen Exp
 -- constant patterns

@@ -14,6 +14,7 @@ evalMain mn = evalVar (TopLevel mn "main")
 evalVar :: Name -> Env -> Exp
 evalVar n env = eval env (Var n)
 
+-- TODO: this might be nicer if we have a new type for normal forms
 eval :: Env -> Exp -> Exp
 eval env expr = case expr of
   Const c es -> evalConst env c es
@@ -71,7 +72,8 @@ eval env expr = case expr of
         <> show (Record fields)
         <> "to have field "
         <> show l
-  RecordProject e l -> eval env $ RecordProject (eval env e) l
+  RecordProject e    l    -> eval env $ RecordProject (eval env e) l
+  FCall         proc args -> FCall proc (map (eval env) args)
 
 evalConst :: Env -> Constant -> [Exp] -> Exp
 evalConst _ (Prim f) args = evalPrim f args
@@ -118,18 +120,19 @@ subst a n (Abs p e) | p == n    = Abs p e
                     | otherwise = Abs p (subst a n e)
 subst a n (Let p b e) | p == n    = Let p b e
                       | otherwise = Let p (subst a n b) (subst a n e)
-subst a  n  (Fatbar x y)          = Fatbar (subst a n x) (subst a n y)
-subst _a _n Fail                  = Fail
-subst _a _n (Bottom s           ) = Bottom s
-subst a  n  (Project ar i e     ) = Project ar i (subst a n e)
-subst a  n  (Y e                ) = Y (subst a n e)
-subst a  n  (If c t e           ) = If (subst a n c) (subst a n t) (subst a n e)
-subst a  n  (Eq x y             ) = Eq (subst a n x) (subst a n y)
-subst a  n  (UnpackProduct i x y) = UnpackProduct i (subst a n x) (subst a n y)
-subst a  n  (UnpackSum t i x y  ) = UnpackSum t i (subst a n x) (subst a n y)
-subst a  n  (CaseN x ys         ) = CaseN (subst a n x) (map (subst a n) ys)
-subst a  n  (Record fields      ) = Record (fmap (subst a n) fields)
-subst a  n  (RecordProject e l  ) = RecordProject (subst a n e) l
+subst a  n  (Fatbar x y)              = Fatbar (subst a n x) (subst a n y)
+subst _a _n Fail                      = Fail
+subst _a _n (Bottom s               ) = Bottom s
+subst a  n  (Project ar i e         ) = Project ar i (subst a n e)
+subst a  n  (Y e                    ) = Y (subst a n e)
+subst a n (If c t e) = If (subst a n c) (subst a n t) (subst a n e)
+subst a  n  (Eq x y                 ) = Eq (subst a n x) (subst a n y)
+subst a n (UnpackProduct i x y) = UnpackProduct i (subst a n x) (subst a n y)
+subst a n (UnpackSum t i x y) = UnpackSum t i (subst a n x) (subst a n y)
+subst a  n  (CaseN x ys             ) = CaseN (subst a n x) (map (subst a n) ys)
+subst a  n  (Record fields          ) = Record (fmap (subst a n) fields)
+subst a  n  (RecordProject e    l   ) = RecordProject (subst a n e) l
+subst a  n  (FCall         proc args) = FCall proc (map (subst a n) args)
 
 buildApp :: Exp -> [Exp] -> Exp
 buildApp = foldl App

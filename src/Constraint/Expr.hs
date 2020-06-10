@@ -33,6 +33,7 @@ data ExpT = VarT Name Type
           | StringLitT String [(ExpT, String)] Type
           | RecordT [(Name, ExpT)] Type
           | ProjectT ExpT Name Type
+          | FCallT String [ExpT] Type
          deriving (Eq, Show)
 
 instance Sub ExpT where
@@ -43,15 +44,16 @@ instance Sub ExpT where
   sub s (CaseT e alts t) = CaseT (sub s e) (map (sub s) alts) (sub s t)
   sub s (LetT binds body t) =
     LetT (mapSnd (sub s) binds) (sub s body) (sub s t)
-  sub s (LetAT x sch e b t) = LetAT x sch (sub s e) (sub s b) (sub s t)
-  sub s (HoleT     n  t   ) = HoleT n (sub s t)
-  sub s (TupleLitT es t   ) = TupleLitT (map (sub s) es) (sub s t)
-  sub s (ListLitT  es t   ) = ListLitT (map (sub s) es) (sub s t)
-  sub s (IntLitT   i  t   ) = IntLitT i (sub s t)
-  sub s (BoolLitT  b  t   ) = BoolLitT b (sub s t)
-  sub s (StringLitT p cs t) = StringLitT p (mapFst (sub s) cs) (sub s t)
-  sub s (RecordT fields t ) = RecordT (mapSnd (sub s) fields) (sub s t)
-  sub s (ProjectT r l t   ) = ProjectT (sub s r) l (sub s t)
+  sub s (LetAT x sch e b t   ) = LetAT x sch (sub s e) (sub s b) (sub s t)
+  sub s (HoleT     n  t      ) = HoleT n (sub s t)
+  sub s (TupleLitT es t      ) = TupleLitT (map (sub s) es) (sub s t)
+  sub s (ListLitT  es t      ) = ListLitT (map (sub s) es) (sub s t)
+  sub s (IntLitT   i  t      ) = IntLitT i (sub s t)
+  sub s (BoolLitT  b  t      ) = BoolLitT b (sub s t)
+  sub s (StringLitT p cs t   ) = StringLitT p (mapFst (sub s) cs) (sub s t)
+  sub s (RecordT fields t    ) = RecordT (mapSnd (sub s) fields) (sub s t)
+  sub s (ProjectT r    l    t) = ProjectT (sub s r) l (sub s t)
+  sub s (FCallT   proc args t) = FCallT proc (map (sub s) args) (sub s t)
 
 instance Vars ExpT where
   fuv (VarT _ t          ) = fuv t
@@ -68,7 +70,8 @@ instance Vars ExpT where
   fuv (BoolLitT  _  t    ) = fuv t
   fuv (StringLitT _ cs t ) = fuv (map fst cs) <> fuv t
   fuv (RecordT fields t  ) = fuv (map snd fields) <> fuv t
-  fuv (ProjectT r _ t    ) = fuv r <> fuv t
+  fuv (ProjectT r _    t ) = fuv r <> fuv t
+  fuv (FCallT   _ args t ) = fuv args <> fuv t
 
   ftv (VarT _ t          ) = ftv t
   ftv (ConT _            ) = mempty
@@ -84,7 +87,8 @@ instance Vars ExpT where
   ftv (BoolLitT  _  t    ) = ftv t
   ftv (StringLitT _ cs t ) = ftv (map fst cs) <> ftv t
   ftv (RecordT fields t  ) = ftv (map snd fields) <> ftv t
-  ftv (ProjectT r _ t    ) = ftv r <> ftv t
+  ftv (ProjectT r _    t ) = ftv r <> ftv t
+  ftv (FCallT   _ args t ) = ftv args <> fuv t
 
 -- TODO: replace with a tuple?
 data AltT = AltT Pattern ExpT

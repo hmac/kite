@@ -209,6 +209,8 @@ printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
 printExpr (BoolLit True            ) = "True"
 printExpr (BoolLit False           ) = "False"
+printExpr (FCall proc args) =
+  "$fcall" <+> pretty proc <+> hsep (map printExpr args)
 
 -- print an expression with unambiguous precendence
 printExpr' :: Syn -> Document

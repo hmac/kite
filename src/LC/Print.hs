@@ -31,7 +31,8 @@ print' ctx expr = case (ctx, expr) of
   (_   , Let{}      ) -> "<let>"
   (_   , Fail       ) -> "<pattern match failure>"
   (_   , Fatbar a b ) -> print' Root a <+> "|" <+> print' Root b
-  (_   , _          ) -> "<invalid expression>"
+  (_   , FCall _ _  ) -> "<foreign call>"
+  (_   , e          ) -> "<invalid expression> :" <+> pretty (show e)
 
 printConstant :: Constant -> Doc a
 printConstant = \case

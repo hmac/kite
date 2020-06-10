@@ -37,6 +37,7 @@ data Exp = Const Constant [Exp]
          | CaseN Exp [Exp]
          | Record (Map String Exp)
          | RecordProject Exp String
+         | FCall String [Exp]
          deriving (Eq, Show)
 
 type Env = [(Name, Exp)]

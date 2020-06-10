@@ -4,12 +4,14 @@ import           ELC.Primitive                  ( modPrim )
 import           Syn
 
 primitives :: [(RawName, ModuleName)]
-primitives = map (, modPrim) $ miscFunctions <> numFunctions <> list <> types
+primitives = map (, modPrim) $ miscFunctions <> numFunctions <> list <> io
 
 miscFunctions :: [RawName]
 miscFunctions = ["error", "appendString"]
 
-numFunctions, list, types :: [RawName]
+numFunctions, list :: [RawName]
 numFunctions = ["+", "*", "-"]
 list = ["::", "[]"]
-types = ["Int", "String"]
+
+io :: [RawName]
+io = ["IO"]

@@ -287,6 +287,14 @@ test = do
       let record = Record [("five", IntLit 5), ("msg", StringLit "Hello" [])]
       let expr   = Project record "five"
       infersType env expr TInt
+    -- fcalls have hardcoded types:
+    -- putStrLn : String -> IO Unit
+    it "a foreign call" $ do
+      let expr = FCall "putStrLn" [StringLit "Hello" []]
+      let
+        ty = TApp (TCon (TopLevel modPrim "IO"))
+                  (TCon (TopLevel "Data.Unit" "Unit"))
+      infersType env expr ty
 
 infersType :: TypeEnv -> Exp -> Type -> Expectation
 infersType env expr expectedType = case run (generate env expr) of

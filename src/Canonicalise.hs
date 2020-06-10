@@ -156,7 +156,8 @@ canonicaliseExp env = go
     IntLit  i           -> IntLit i
     BoolLit b           -> BoolLit b
     Record  fields      -> Record $ bimapL Local (go locals) fields
-    Project r l         -> Project (go locals r) (Local l)
+    Project r    l      -> Project (go locals r) (Local l)
+    FCall   proc args   -> FCall proc (map (go locals) args)
    where
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =

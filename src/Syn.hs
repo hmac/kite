@@ -203,6 +203,9 @@ data Syn_ n v t = Var n
          -- Records
          | Record [(n, Syn_ n v t)]
          | Project (Syn_ n v t) n
+         -- FFI calls
+         -- FCall stands for "foreign call"
+         | FCall String [Syn_ n v t]
          deriving (Eq, Show)
 
 -- Supported binary operators

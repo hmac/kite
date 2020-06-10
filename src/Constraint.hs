@@ -215,6 +215,8 @@ data Error = OccursCheckFailure Type Type
            | DuplicatePatternVariables
            | RecordDoesNotHaveLabel Type Name
            | ProjectionOfNonRecordType Type Name
+           -- foreign call name, expected number of args, actual number given
+           | WrongNumberOfArgsToForeignCall String Int Int
   deriving (Show, Eq)
 
 -- An error paired with the name of the binding it originates from.
