@@ -152,6 +152,7 @@ genType = Gen.recursive
   , pure TyInt
   , pure TyBool
   , pure TyList
+  , pure TyUnit
   , TyCon <$> genUpperName
   , TyVar <$> genLowerName
   , TyHole <$> genHoleName
@@ -181,6 +182,7 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   , Hole <$> genHoleName
   , IntLit <$> genInt
   , BoolLit <$> Gen.bool
+  , pure UnitLit
   ]
   [ genAbs
   , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
@@ -227,6 +229,7 @@ shrinkExpr = \case
   Hole    _            -> []
   IntLit  _            -> []
   BoolLit _            -> []
+  UnitLit              -> []
   Abs (v : vs) e       -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
   Abs _        e       -> [e]
   App _        b       -> [b]
@@ -276,7 +279,7 @@ genCaseAlts e1 e2 = do
 genPattern :: H.Gen Pattern
 genPattern = Gen.shrink shrinkPattern $ Gen.recursive
   Gen.choice
-  [genVarPattern, pure WildPat, IntPat <$> genInt]
+  [genVarPattern, pure WildPat, IntPat <$> genInt, pure UnitPat]
   [Gen.small $ TuplePat <$> Gen.list (Range.linear 2 3) genVarPattern]
   where genVarPattern = VarPat <$> genLowerName
 
@@ -284,7 +287,8 @@ shrinkPattern :: (Pattern -> [Pattern])
 shrinkPattern = \case
   VarPat _       -> []
   WildPat        -> []
-  IntPat   _     -> []
+  IntPat _       -> []
+  UnitPat        -> []
   TuplePat pats  -> TuplePat <$> shrinkList2 pats
   ListPat  pats  -> ListPat <$> shrinkList pats
   ConsPat c pats -> ConsPat c <$> shrinkList pats

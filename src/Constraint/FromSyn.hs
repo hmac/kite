@@ -31,7 +31,8 @@ fromSyn = \case
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)
   S.IntLit  i           -> E.IntLit i
   S.BoolLit b           -> E.BoolLit b
-  S.Record  fields      -> E.Record $ mapSnd fromSyn fields
+  S.UnitLit             -> E.UnitLit
+  S.Record fields       -> E.Record $ mapSnd fromSyn fields
   S.Project r    l      -> E.Project (fromSyn r) l
   S.FCall   proc args   -> E.FCall proc (map fromSyn args)
 
@@ -60,5 +61,6 @@ tyToType = \case
   S.TyInt           -> TInt
   S.TyString        -> TString
   S.TyBool          -> TBool
+  S.TyUnit          -> TUnit
   S.TyFun a b       -> tyToType a `fn` tyToType b
   S.TyRecord fields -> TRecord $ mapSnd tyToType fields

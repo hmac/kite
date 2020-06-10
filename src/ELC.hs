@@ -37,6 +37,7 @@ data Clause = Clause Con [Name] Exp
 data Constant = Int Int
               | String String
               | Bool Bool
+              | Unit
               | Prim Primitive
          deriving (Show, Eq)
 

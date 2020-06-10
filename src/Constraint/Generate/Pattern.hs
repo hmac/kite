@@ -35,6 +35,9 @@ generatePattern env st (IntPat _) = do
 generatePattern env st (BoolPat _) = do
   let c = st :~: TBool
   pure (TBool, [c], env)
+generatePattern env st UnitPat = do
+  let c = st :~: TUnit
+  pure (TUnit, [c], env)
 generatePattern env st (VarPat x) = do
   u <- TVar <$> fresh
   let env' = Map.insert x (Forall [] u) env

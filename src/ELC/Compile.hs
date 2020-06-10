@@ -113,9 +113,10 @@ translateProdCon T.RecordCon { T.conName = n, T.conFields = fields } = do
   pure $ (n, Cons constructor []) : selectors
 
 translatePattern :: Env -> T.Pattern -> NameGen Pattern
-translatePattern _   (T.VarPat    n ) = pure (VarPat n)
-translatePattern _   (T.IntPat    i ) = pure (ConstPat (Int i))
-translatePattern _   (T.BoolPat   b ) = pure (ConstPat (Bool b))
+translatePattern _   (T.VarPat  n)    = pure (VarPat n)
+translatePattern _   (T.IntPat  i)    = pure (ConstPat (Int i))
+translatePattern _   (T.BoolPat b)    = pure (ConstPat (Bool b))
+translatePattern _   T.UnitPat        = pure (ConstPat Unit)
 translatePattern _   (T.StringPat s ) = pure (ConstPat (String s))
 translatePattern env (T.ListPat   es) = do
   pats <- mapM (translatePattern env) es
@@ -147,12 +148,13 @@ buildTuplePat elems = case length elems of
   n -> error $ "cannot handle tuples of length " <> show n
 
 translateExpr :: Env -> T.Exp -> NameGen Exp
-translateExpr _   (T.IntLitT  i _        ) = pure (Const (Int i) [])
-translateExpr _   (T.BoolLitT b _        ) = pure (Const (Bool b) [])
+translateExpr _   (T.IntLitT  i _        ) = pure $ Const (Int i) []
+translateExpr _   (T.BoolLitT b _        ) = pure $ Const (Bool b) []
 translateExpr env (T.StringLitT s parts _) = translateStringLit env s parts
 translateExpr env (T.ListLitT elems _    ) = do
   elems' <- mapM (translateExpr env) elems
   buildList elems'
+translateExpr _   (T.UnitLitT _       ) = pure $ Const Unit []
 translateExpr env (T.TupleLitT elems _) = do
   elems' <- mapM (translateExpr env) elems
   pure (buildTuple elems')
@@ -383,6 +385,7 @@ matchVarCon us qs def =
         (ConstPat (Int    _) : _, _) -> matchInt
         (ConstPat (String _) : _, _) -> matchString
         (ConstPat (Bool   _) : _, _) -> matchBool
+        (ConstPat Unit       : _, _) -> matchUnit
         (ConstPat (Prim _) : _, _) ->
           error "ELC.Compile.matchVarCon: illegal primitive in pattern"
         ([], _) -> error "ELC.Compile.matchVarCon: unexpected empty list"
@@ -420,6 +423,9 @@ matchInt = error "ELC.Compile.matchInt: not implemented yet"
 
 matchString :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchString = error "ELC.Compile.matchString: not implemented yet"
+
+matchUnit :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchUnit = error "ELC.Compile.matchUnit: not implemented yet"
 
 matchClause :: Con -> [Name] -> [Equation] -> Exp -> NameGen Clause
 matchClause con (_u : us) qs def = do

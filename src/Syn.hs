@@ -118,6 +118,7 @@ data Pattern_ a = VarPat a
              | WildPat
              | IntPat Int
              | BoolPat Bool
+             | UnitPat
              | TuplePat [Pattern_ a]
              | ListPat [Pattern_ a]
              | ConsPat a [Pattern_ a]
@@ -144,6 +145,7 @@ data Type_ a =
         -- Bool could be defined in library code, but it's a lot easier to write
         -- primitives like $eqInt if it's a built-in type.
         | TyBool
+        | TyUnit
         | TyFun (Type_ a) (Type_ a)
         | TyRecord [(a, Type_ a)]
         | TyAlias a (Type_ a)
@@ -195,6 +197,7 @@ data Syn_ n v t = Var n
          | LetA n (Scheme_ v t) (Syn_ n v t) (Syn_ n v t)
          | Let [(n, Syn_ n v t)] (Syn_ n v t)
          | Case (Syn_ n v t) [(Pattern_ n, Syn_ n v t)]
+         | UnitLit
          | TupleLit [Syn_ n v t]
          | ListLit [Syn_ n v t]
          | StringLit String [(Syn_ n v t, String)]

@@ -129,8 +129,9 @@ patternVariables = concatMap f
     IntPat    _  -> []
     StringPat _  -> []
     BoolPat   _  -> []
-    TuplePat  ps -> patternVariables ps
-    ListPat   ps -> patternVariables ps
+    UnitPat      -> []
+    TuplePat ps  -> patternVariables ps
+    ListPat  ps  -> patternVariables ps
     ConsPat _ ps -> patternVariables ps
 
 allEqual :: Eq a => [a] -> Bool

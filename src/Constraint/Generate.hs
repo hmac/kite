@@ -80,8 +80,10 @@ generate env (Case e alts) = generateCase env e alts
 generate _   (Hole name  ) = do
   a <- TVar <$> fresh
   pure (HoleT name a, a, mempty)
+-- Unit literal
+generate _env UnitLit          = pure (UnitLitT TUnit, TUnit, mempty)
 -- Tuple literal
-generate env (TupleLit elems) = do
+generate env  (TupleLit elems) = do
   (elems', elemTypes, constraints) <- unzip3 <$> mapM (generate env) elems
   let t = mkTupleType elemTypes
   pure (TupleLitT elems' t, t, mconcat constraints)

@@ -40,6 +40,7 @@ printConstant = \case
   String s -> "\"" <> pretty s <> "\""
   Bool   b -> pretty b
   Prim   _ -> "<builtin>"
+  Unit     -> "()"
 
 printName :: Name -> Doc a
 printName (Local (Name n)) = pretty n

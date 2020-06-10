@@ -71,6 +71,7 @@ data Type = TVar Var
           | TInt
           | TString
           | TBool
+          | TUnit
           | TRecord [(Name, Type)]
           | TAlias Name Type
           deriving (Eq, Show, Ord)
@@ -124,6 +125,7 @@ instance Sub Type where
   sub _ TInt             = TInt
   sub _ TString          = TString
   sub _ TBool            = TBool
+  sub _ TUnit            = TUnit
   sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
   sub s (TAlias n a    ) = TAlias n (sub s a)
 
@@ -161,6 +163,7 @@ instance Vars Type where
   fuv TInt             = mempty
   fuv TString          = mempty
   fuv TBool            = mempty
+  fuv TUnit            = mempty
   fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
   fuv (TAlias _ a    ) = fuv a
 
@@ -171,6 +174,7 @@ instance Vars Type where
   ftv TInt             = mempty
   ftv TString          = mempty
   ftv TBool            = mempty
+  ftv TUnit            = mempty
   ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)
   ftv (TAlias _ a    ) = ftv a
 

@@ -33,6 +33,7 @@ printType (THole n )       = "?" <> printName n
 printType TInt             = "Int"
 printType TString          = "String"
 printType TBool            = "Bool"
+printType TUnit            = "()"
 printType (TRecord fields) = printType' (TRecord fields)
 printType (TAlias n _    ) = printName n
 
@@ -47,6 +48,7 @@ printType' (THole n )       = "?" <> printName n
 printType' TInt             = "Int"
 printType' TString          = "String"
 printType' TBool            = "Bool"
+printType' TUnit            = "()"
 printType' (TRecord fields) = braces $ hsep $ punctuate
   comma
   (map (\(n, t) -> printName n <+> ":" <+> printType t) fields)

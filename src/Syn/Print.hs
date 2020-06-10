@@ -160,6 +160,7 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyInt          ) -> "Int"
   (_   , TyString       ) -> "String"
   (_   , TyBool         ) -> "Bool"
+  (_   , TyUnit         ) -> "()"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
 
@@ -171,13 +172,14 @@ printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
   where lhs = printName name <+> hsep (map printPattern (defArgs d)) <+> equals
 
 printPattern :: Pattern -> Document
-printPattern (VarPat n)       = printName n
-printPattern WildPat          = "_"
-printPattern (IntPat    i   ) = pretty i
-printPattern (StringPat s   ) = dquotes (pretty s)
-printPattern (BoolPat   b   ) = pretty b
-printPattern (TuplePat  pats) = align $ htupled (map printPattern pats)
-printPattern (ListPat   pats) = list (map printPattern pats)
+printPattern (VarPat n)      = printName n
+printPattern WildPat         = "_"
+printPattern (IntPat    i)   = pretty i
+printPattern (StringPat s)   = dquotes (pretty s)
+printPattern (BoolPat   b)   = pretty b
+printPattern UnitPat         = "()"
+printPattern (TuplePat pats) = align $ htupled (map printPattern pats)
+printPattern (ListPat  pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
 printPattern (ConsPat "::" [x, y]) =
   parens $ printPattern x <+> "::" <+> printPattern y
@@ -209,6 +211,7 @@ printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
 printExpr (BoolLit True            ) = "True"
 printExpr (BoolLit False           ) = "False"
+printExpr UnitLit                    = "()"
 printExpr (FCall proc args) =
   "$fcall" <+> pretty proc <+> hsep (map printExpr args)
 

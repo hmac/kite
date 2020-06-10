@@ -236,7 +236,7 @@ pType' ctx = case ctx of
   AppL    -> try app <|> atomic <|> parens (pType' Neutral)
   AppR    -> atomic <|> parens (pType' Neutral)
  where
-  atomic = con <|> var <|> hole <|> list <|> record <|> try tuple
+  atomic = unit <|> con <|> var <|> hole <|> list <|> record <|> try tuple
   arr    = do
     a <- lexemeN (try app <|> pType' Paren)
     void $ symbolN "->"
@@ -245,8 +245,9 @@ pType' ctx = case ctx of
     l  <- pType' Paren
     rs <- some (pType' AppR)
     pure $ foldl TyApp l rs
-  var = TyVar <$> lowercaseName
-  con = do
+  var  = TyVar <$> lowercaseName
+  unit = symbol "()" >> pure TyUnit
+  con  = do
     name <- uppercaseName
     pure $ case name of
       "String" -> TyString
@@ -295,7 +296,13 @@ pPattern = pPattern' <|> cons
     pure $ ConsPat c args
 
 pPattern' :: Parser Pattern
-pPattern' = try pIntPat <|> pWildPat <|> pListPat <|> try pTuplePat <|> pVarPat
+pPattern' =
+  try pIntPat
+    <|> pWildPat
+    <|> pListPat
+    <|> pUnitPat
+    <|> try pTuplePat
+    <|> pVarPat
 
 -- Case patterns differ from function patterns in that a constructor pattern
 -- doesn't have to be in parentheses (because we are only scrutinising a single
@@ -308,14 +315,15 @@ pPattern' = try pIntPat <|> pWildPat <|> pListPat <|> try pTuplePat <|> pVarPat
 -- foo (Just x) = ...
 pCasePattern :: Parser Pattern
 pCasePattern =
-  parens (try infixBinaryCon <|> tuplePattern <|> pPattern)
+  pUnitPat
+    <|> parens (try infixBinaryCon <|> tuplePattern <|> pPattern)
     <|> pIntPat
     <|> pWildPat
     <|> pListPat
     <|> con
     <|> pVarPat
  where
-  tuplePattern = TuplePat <$> pPattern `sepBy` comma
+  tuplePattern = TuplePat <$> pPattern `sepBy2` comma
   con          = do
     name <- uppercaseName
     case name of
@@ -337,8 +345,11 @@ pWildPat = symbol "_" >> pure WildPat
 pListPat :: Parser Pattern
 pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
 
+pUnitPat :: Parser Pattern
+pUnitPat = symbol "()" >> pure UnitPat
+
 pTuplePat :: Parser Pattern
-pTuplePat = TuplePat <$> parens (pPattern `sepBy1` comma)
+pTuplePat = TuplePat <$> parens (pPattern `sepBy2` comma)
 
 pVarPat :: Parser Pattern
 pVarPat = VarPat <$> lowercaseName
@@ -354,7 +365,8 @@ pExpr = try pBinApp <|> try pApp <|> pExpr'
 
 pExpr' :: Parser Syn
 pExpr' =
-  try pTuple
+  pUnitLit
+    <|> try pTuple
     <|> parens pExpr
     <|> pRecord
     <|> pHole
@@ -368,6 +380,11 @@ pExpr' =
     <|> pList
     <|> pCons
     <|> pCase
+
+pUnitLit :: Parser Syn
+pUnitLit = do
+  void $ symbol "()"
+  pure UnitLit
 
 -- Application of a binary operator
 -- e.g. x + y

@@ -101,6 +101,7 @@ canonicaliseType env = \case
   TyInt           -> TyInt
   TyString        -> TyString
   TyBool          -> TyBool
+  TyUnit          -> TyUnit
   TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
   TyAlias n a     -> TyAlias (canonicaliseName env n) (canonicaliseType env a)
@@ -155,7 +156,8 @@ canonicaliseExp env = go
     Hole    n           -> Hole (canonicaliseName env n)
     IntLit  i           -> IntLit i
     BoolLit b           -> BoolLit b
-    Record  fields      -> Record $ bimapL Local (go locals) fields
+    UnitLit             -> UnitLit
+    Record fields       -> Record $ bimapL Local (go locals) fields
     Project r    l      -> Project (go locals r) (Local l)
     FCall   proc args   -> FCall proc (map (go locals) args)
    where
@@ -192,8 +194,9 @@ canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case
   VarPat n       -> ([n], VarPat (Local n))
   WildPat        -> ([], WildPat)
-  IntPat    i    -> ([], IntPat i)
-  BoolPat   b    -> ([], BoolPat b)
+  IntPat  i      -> ([], IntPat i)
+  BoolPat b      -> ([], BoolPat b)
+  UnitPat        -> ([], UnitPat)
   StringPat s    -> ([], StringPat s)
   TuplePat  pats -> second TuplePat (canonicalisePatternList pats)
   ListPat   pats -> second ListPat (canonicalisePatternList pats)
