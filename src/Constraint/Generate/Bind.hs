@@ -10,6 +10,7 @@ import           Constraint.Solve
 import           Util
 import           Syn                            ( Pattern_(..) )
 
+import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 
@@ -66,7 +67,14 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
                   name
                   (zipWith (\e' (p, _) -> (p, e')) exps' equations)
                   bindTy
-              in  pure (Map.insert name bindTy env, bind)
+                holes = concatMap findHoles exps'
+              in
+                case holes of
+                  ((holeName, holeType) : _) -> throwError $ HoleFound
+                    holeName
+                    holeType
+                    (bindingsWithType holeType env)
+                  _ -> pure (Map.insert name bindTy env, bind)
         Nothing -> do
           -- bind all the free unification vars in the types and residual as
           -- rigid vars in the type of the function
@@ -76,7 +84,6 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
             (Set.toList (fuv eqTypes' <> fuv exps' <> fuv q))
           -- Since everything is solved, we can take the first equation type
           -- and use that
-          let eqType = head eqTypes'
           let
             getTVar t = case t of
               TVar v -> v
@@ -84,14 +91,17 @@ generateBind axs env (Bind name annotation equations) = withLocation name $ do
                 error
                   $  "Constraint.Generate.Bind: expected TVar, found "
                   <> show t'
-          let bindTy =
-                Forall (map getTVar (Map.elems tysubst)) (sub tysubst eqType)
-          let exps'' = map (sub tysubst) exps'
-          let
-            bind = BindT name
-                         (zipWith (\e' (p, _) -> (p, e')) exps'' equations)
-                         bindTy
-          pure (Map.insert name bindTy env, bind)
+            bindTy = Forall (map getTVar (Map.elems tysubst))
+                            (sub tysubst (head eqTypes'))
+            exps'' = map (sub tysubst) exps'
+            bind   = BindT name
+                           (zipWith (\e' (p, _) -> (p, e')) exps'' equations)
+                           bindTy
+            holes = concatMap findHoles exps''
+          case holes of
+            ((holeName, holeType) : _) -> throwError
+              $ HoleFound holeName holeType (bindingsWithType holeType env)
+            _ -> pure (Map.insert name bindTy env, bind)
 
 -- Generate constraints for a single branch of a multi-equation function
 -- definition. Branches can have 0+ patterns.
@@ -137,3 +147,29 @@ patternVariables = concatMap f
 allEqual :: Eq a => [a] -> Bool
 allEqual []       = True
 allEqual (x : xs) = all (== x) xs
+
+-- | Get all the holes in an expression
+findHoles :: ExpT -> [(Name, Type)]
+findHoles = go
+ where
+  go = \case
+    HoleT name ty      -> [(name, ty)]
+    AbsT  _    e       -> go e
+    AppT  a    b       -> go a <> go b
+    -- TODO: support holes in patterns
+    CaseT s     alts _ -> go s <> concatMap (\(AltT _pat e) -> go e) alts
+    LetT  binds e    _ -> go e <> concatMap (\(_, a) -> go a) binds
+    LetAT _ _ a e _    -> go a <> go e
+    TupleLitT es _     -> concatMap go es
+    ListLitT  es _     -> concatMap go es
+    StringLitT _ cs _  -> concatMap (\(e, _) -> go e) cs
+    RecordT fs _       -> concatMap (\(_, e) -> go e) fs
+    ProjectT e _  _    -> go e
+    FCallT   _ es _    -> concatMap go es
+    _                  -> mempty
+
+-- | Return all the bindings in the environment with the given type
+-- Currently only works for monomorphic bindings (i.e. types that don't bind any
+-- type variables)
+bindingsWithType :: Type -> TypeEnv -> Map Name Scheme
+bindingsWithType ty = Map.filter (\(Forall _ t) -> t == ty)

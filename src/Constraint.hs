@@ -22,6 +22,7 @@ module Constraint
   , Scheme
   , Scheme_(..)
   , Constraints
+  , TypeEnv
   )
 where
 
@@ -209,6 +210,8 @@ implic :: Constraint -> [(Set Var, Constraints, Constraints)]
 implic (E vars qs cs) = [(Set.fromList vars, qs, cs)]
 implic _              = mempty
 
+type TypeEnv = Map Name Scheme
+
 data Error = OccursCheckFailure Type Type
            | ConstructorMismatch Type Type
            | UnsolvedConstraints Constraints
@@ -221,6 +224,8 @@ data Error = OccursCheckFailure Type Type
            | ProjectionOfNonRecordType Type Name
            -- foreign call name, expected number of args, actual number given
            | WrongNumberOfArgsToForeignCall String Int Int
+           -- name of hole, type of hole, in-scope candidates
+           | HoleFound Name Type TypeEnv
   deriving (Show, Eq)
 
 -- An error paired with the name of the binding it originates from.

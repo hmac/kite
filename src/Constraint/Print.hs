@@ -7,6 +7,7 @@ import           Data.Text.Prettyprint.Doc     as PP
 import           Data.Name
 import           Data.List                      ( intersperse )
 import qualified Data.Set                      as Set
+import qualified Data.Map                      as Map
 
 printConstraint :: Constraint -> Doc a
 printConstraint (t :~: v) = printType t <+> "~" <+> printType v
@@ -36,6 +37,9 @@ printType TBool            = "Bool"
 printType TUnit            = "()"
 printType (TRecord fields) = printType' (TRecord fields)
 printType (TAlias n _    ) = printName n
+
+printScheme :: Scheme -> Doc a
+printScheme (Forall _ t) = printType t
 
 -- like printType but assume we're in a nested context, so add parentheses
 printType' :: Type -> Doc a
@@ -104,6 +108,15 @@ printError (WrongNumberOfArgsToForeignCall name expected actual) =
     <+> "args to be provided but only"
     <+> pretty actual
     <+> "have been given"
+printError (HoleFound name ty candidates) = vsep
+  [ "I found a hole:"
+  , indent 4 $ printName name <+> colon <+> printType ty
+  , "These functions are in scope and have the right type:"
+  , indent 4 $ vsep
+    (map (\(n, sch) -> printName n <+> colon <+> printScheme sch)
+         (Map.toList candidates)
+    )
+  ]
 
 printLocatedError :: LocatedError -> Doc a
 printLocatedError (LocatedError moduleName err) = vsep

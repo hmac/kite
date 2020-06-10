@@ -6,6 +6,6 @@
 - [ ] Implement FFI definition syntax: `foreign someFunc : SomeType`
 - [ ] Clean up show primitives
 - [ ] Implement type aliases
-- [ ] Implement typed holes
+- [x] Implement typed holes
 - [ ] Add do-notation
 - [ ] Consider adding idiom brackets

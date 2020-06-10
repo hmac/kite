@@ -2,6 +2,7 @@
 module Constraint.Generate.M
   ( module Constraint.Generate.M
   , throwError
+  , TypeEnv
   )
 where
 
@@ -11,7 +12,6 @@ where
 
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
-import           Data.Map.Strict                ( Map )
 import           Control.Monad.State.Strict
 import           Control.Monad.Writer.Strict
 import           Control.Monad.Except
@@ -19,8 +19,6 @@ import           Control.Monad.Except
 import           Constraint
 import           Data.Name
 import           Util
-
-type TypeEnv = Map Name Scheme
 
 -- @e@ is the type of error
 type GenerateM e = ExceptT e (WriterT (Set Var) (State Int))
