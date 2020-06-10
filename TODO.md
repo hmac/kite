@@ -1,0 +1,11 @@
+- [ ] Check that type constructors exist when typechecking modules
+- [ ] Implement pattern matching for integers
+- [ ] Implement pattern matching for strings
+- [ ] Implement pattern matching for unit
+- [ ] Fix bug where the order of definitions affects typechecking
+- [ ] Implement FFI definition syntax: `foreign someFunc : SomeType`
+- [ ] Clean up show primitives
+- [ ] Implement type aliases
+- [ ] Implement typed holes
+- [ ] Add do-notation
+- [ ] Consider adding idiom brackets
