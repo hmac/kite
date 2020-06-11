@@ -30,8 +30,8 @@ type User = User { name : String, age : Int }
 
 main : IO ()
 main = do
-  name <- readLine
-  age <- fmap read readLine
+  name <- getLine
+  age <- fmap read getLine
   let user = User { name, age }
   greet name
 
@@ -60,14 +60,14 @@ the current state of progress:
 - [x] Source code formatting
 - [x] Typeclasses
 - [x] Interpreter
-- [ ] Typed holes
+- [x] Typed holes
 - [ ] Standard library
 - [ ] Totality checker
 - [ ] Safety checker
 - [ ] Errors & warnings
 - [ ] Automatic typeclass deriving
 - [ ] Generics
-- [ ] Ergonomic records
+- [x] Ergonomic records
 - [ ] Markdown support in comments
 - [ ] Multiline strings
 - [ ] Overloaded string literals
@@ -81,9 +81,9 @@ the current state of progress:
 
 ## Type system
 
-Lam's type system is Hindley-Milner plus typeclasses. It should be entirely
-unexciting for anyone coming from Haskell, but the addition of typeclasses makes
-it more powerful than Elm.
+Lam's type system is basically Hindley-Milner plus extensible records. In this
+sense it's quite similar to Elm. However Lam's type system provides some
+additional tools, including typed holes and implicit arguments.
 
 ### Typed Holes
 
@@ -179,12 +179,54 @@ either. A module is safe if none of the functions defined in it use IO or FFI.
 
 ### Typeclasses
 
-Lam supports multi-parameter typeclassesm but there is no support for functional
-dependencies. Haskell 98 has quite strict rules on the permitted form of
-instance delcarations, whereas Lam intends to be as relaxed as possible whilst
-guaranteeing:
-- there is an unambiguous instance for each typeclass constraint
-- typechecking always terminates
+Lam doesn't support typeclasses in the traditional sense. Instead, it takes the
+[Scrap Your Typeclasses](http://www.haskellforall.com/2012/05/scrap-your-type-classes.html)
+philosophy and extends it with some extra tooling.  Typeclasses in Lam are just
+record types, like this:
+```haskell
+type Eq a = Eq { eq : a -> a -> Bool }
+
+eq : Eq a -> a -> a -> Bool
+eq (Eq r) = r.eq
+```
+Typeclass instances are records:
+```haskell
+eqBool = Eq { eq = \b1 b2 -> ... }
+```
+Functions with typeclass constraints just take records as extra arguments:
+```
+nub : Eq a -> [a] -> [a]
+nub _ [] = []
+nub r [x] = [x]
+nub r (x:y:xs) = case eq r x y of
+                   True -> nub (y:xs)
+                   False -> x : (nub (y:xs))
+```
+
+## Implicit Arguments
+
+It's quite a drag to write these typeclass instances everywhere, so Lam supports
+implicit arguments to automate this. You can declare a function with an implicit
+argument as follows:
+```haskell
+eq : {{Eq a}} -> a -> a -> Bool
+eq (Eq r) = r.eq
+```
+
+The syntax `{{_}}` around an argument in a type signature indicates that the
+argument can be omitted in a call site, and Lam will attempt to infer a value
+for it. `eq` is then used like this:
+
+```haskell
+eq True True
+```
+
+Lam will search the current scope for a value of type `Eq Bool`. If it finds
+_exactly one_ match, it will insert it into the call site. If it finds zero or
+more than one match, it will report an error.
+
+This provides most of the ergonomics of Haskell typeclasses without introducing
+new syntactic forms, new namespaces, or complex resolution logic.
 
 ### Typeclass deriving
 
