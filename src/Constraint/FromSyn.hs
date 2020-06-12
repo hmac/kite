@@ -60,6 +60,7 @@ tyToType = \case
   S.TyHole  n       -> THole (Local n)
   S.TyInt           -> TInt
   S.TyString        -> TString
+  S.TyChar          -> TChar
   S.TyBool          -> TBool
   S.TyUnit          -> TUnit
   S.TyFun a b       -> tyToType a `fn` tyToType b

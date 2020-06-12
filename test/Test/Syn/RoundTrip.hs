@@ -149,6 +149,7 @@ genType :: H.Gen Type
 genType = Gen.recursive
   Gen.choice
   [ pure TyString
+  , pure TyChar
   , pure TyInt
   , pure TyBool
   , pure TyList

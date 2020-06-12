@@ -142,6 +142,7 @@ data Type_ a =
         | TyHole RawName
         | TyInt
         | TyString
+        | TyChar
         -- Bool could be defined in library code, but it's a lot easier to write
         -- primitives like $eqInt if it's a built-in type.
         | TyBool

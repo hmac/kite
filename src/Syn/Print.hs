@@ -159,6 +159,7 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyTuple ts     ) -> tupled (map (printType' Root) ts)
   (_   , TyInt          ) -> "Int"
   (_   , TyString       ) -> "String"
+  (_   , TyChar         ) -> "Char"
   (_   , TyBool         ) -> "Bool"
   (_   , TyUnit         ) -> "()"
   (_, TyRecord fields) ->

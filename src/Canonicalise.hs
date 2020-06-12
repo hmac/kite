@@ -100,6 +100,7 @@ canonicaliseType env = \case
   TyHole  n       -> TyHole n
   TyInt           -> TyInt
   TyString        -> TyString
+  TyChar          -> TyChar
   TyBool          -> TyBool
   TyUnit          -> TyUnit
   TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)

@@ -253,6 +253,7 @@ pType' ctx = case ctx of
       "String" -> TyString
       "Int"    -> TyInt
       "Bool"   -> TyBool
+      "Char"   -> TyChar
       n        -> TyCon n
   hole = TyHole <$> (string "?" >> pHoleName)
   list =

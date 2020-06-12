@@ -71,6 +71,7 @@ data Type = TVar Var
           | THole Name
           | TInt
           | TString
+          | TChar
           | TBool
           | TUnit
           | TRecord [(Name, Type)]
@@ -125,6 +126,7 @@ instance Sub Type where
   sub _ (THole n )       = THole n
   sub _ TInt             = TInt
   sub _ TString          = TString
+  sub _ TChar            = TChar
   sub _ TBool            = TBool
   sub _ TUnit            = TUnit
   sub s (TRecord fields) = TRecord $ mapSnd (sub s) fields
@@ -163,6 +165,7 @@ instance Vars Type where
   fuv (THole _   )     = mempty
   fuv TInt             = mempty
   fuv TString          = mempty
+  fuv TChar            = mempty
   fuv TBool            = mempty
   fuv TUnit            = mempty
   fuv (TRecord fields) = Set.unions (map (fuv . snd) fields)
@@ -174,6 +177,7 @@ instance Vars Type where
   ftv (THole _ )       = mempty
   ftv TInt             = mempty
   ftv TString          = mempty
+  ftv TChar            = mempty
   ftv TBool            = mempty
   ftv TUnit            = mempty
   ftv (TRecord fields) = Set.unions (map (ftv . snd) fields)
