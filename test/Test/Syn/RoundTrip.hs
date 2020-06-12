@@ -183,6 +183,7 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   , Hole <$> genHoleName
   , IntLit <$> genInt
   , BoolLit <$> Gen.bool
+  , CharLit <$> Gen.unicode
   , pure UnitLit
   ]
   [ genAbs

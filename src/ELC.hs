@@ -36,6 +36,7 @@ data Clause = Clause Con [Name] Exp
 
 data Constant = Int Int
               | String String
+              | Char Char
               | Bool Bool
               | Unit
               | Prim Primitive

@@ -154,6 +154,7 @@ canonicaliseExp env = go
     TupleLit es         -> TupleLit $ fmap (go locals) es
     ListLit  es         -> ListLit $ fmap (go locals) es
     StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
+    CharLit c           -> CharLit c
     Hole    n           -> Hole (canonicaliseName env n)
     IntLit  i           -> IntLit i
     BoolLit b           -> BoolLit b

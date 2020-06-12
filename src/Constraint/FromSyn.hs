@@ -29,6 +29,7 @@ fromSyn = \case
   S.TupleLit es         -> E.TupleLit (map fromSyn es)
   S.ListLit  es         -> E.ListLit (map fromSyn es)
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)
+  S.CharLit c           -> E.CharLit c
   S.IntLit  i           -> E.IntLit i
   S.BoolLit b           -> E.BoolLit b
   S.UnitLit             -> E.UnitLit

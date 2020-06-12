@@ -371,6 +371,7 @@ pExpr' =
     <|> parens pExpr
     <|> pRecord
     <|> pHole
+    <|> pCharLit
     <|> try pStringLit
     <|> try (IntLit <$> pInt)
     <|> try pRecordProject
@@ -425,6 +426,11 @@ pHole :: Parser Syn
 pHole = do
   void (string "?")
   Hole <$> pHoleName
+
+pCharLit :: Parser Syn
+pCharLit = do
+  [c] <- between (string "'") (symbol "'") (takeP (Just "char") 1)
+  pure $ CharLit c
 
 -- String literals are quite complex. These are some of the variations we need
 -- to handle:

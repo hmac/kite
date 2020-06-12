@@ -210,6 +210,7 @@ printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
+printExpr (CharLit c               ) = squotes $ pretty c
 printExpr (BoolLit True            ) = "True"
 printExpr (BoolLit False           ) = "False"
 printExpr UnitLit                    = "()"

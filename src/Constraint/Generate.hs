@@ -97,6 +97,8 @@ generate env (ListLit elems) = do
 generate _env (IntLit  i     ) = pure (IntLitT i TInt, TInt, mempty)
 -- Bool literal
 generate _env (BoolLit b     ) = pure (BoolLitT b TBool, TBool, mempty)
+-- Char literal
+generate _env (CharLit c     ) = pure (CharLitT c TChar, TChar, mempty)
 -- String literal
 generate env  (StringLit p cs) = do
   (cs', constraints) <- unzip <$> forM

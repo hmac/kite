@@ -202,6 +202,7 @@ data Syn_ n v t = Var n
          | TupleLit [Syn_ n v t]
          | ListLit [Syn_ n v t]
          | StringLit String [(Syn_ n v t, String)]
+         | CharLit Char
          | IntLit Int
          | BoolLit Bool
          -- Records

@@ -38,6 +38,7 @@ printConstant :: Constant -> Doc a
 printConstant = \case
   Int    i -> pretty i
   String s -> "\"" <> pretty s <> "\""
+  Char   c -> squotes (pretty c)
   Bool   b -> pretty b
   Prim   _ -> "<builtin>"
   Unit     -> "()"

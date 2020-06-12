@@ -150,6 +150,7 @@ buildTuplePat elems = case length elems of
 translateExpr :: Env -> T.Exp -> NameGen Exp
 translateExpr _   (T.IntLitT  i _        ) = pure $ Const (Int i) []
 translateExpr _   (T.BoolLitT b _        ) = pure $ Const (Bool b) []
+translateExpr _   (T.CharLitT c _        ) = pure $ Const (Char c) []
 translateExpr env (T.StringLitT s parts _) = translateStringLit env s parts
 translateExpr env (T.ListLitT elems _    ) = do
   elems' <- mapM (translateExpr env) elems
@@ -385,6 +386,7 @@ matchVarCon us qs def =
         (ConstPat (Int    _) : _, _) -> matchInt
         (ConstPat (String _) : _, _) -> matchString
         (ConstPat (Bool   _) : _, _) -> matchBool
+        (ConstPat (Char   _) : _, _) -> matchChar
         (ConstPat Unit       : _, _) -> matchUnit
         (ConstPat (Prim _) : _, _) ->
           error "ELC.Compile.matchVarCon: illegal primitive in pattern"
@@ -417,6 +419,9 @@ matchBool (u : us) qs def = do
   falseClause <- match us [ (ps, e) | (_ : ps, e) <- falseBranches ] def
   pure $ If (Var u) trueClause falseClause
 matchBool [] _ _ = error "ELC.Compile.matchBool: unexpected empty list"
+
+matchChar :: [Name] -> [Equation] -> Exp -> NameGen Exp
+matchChar = error "ELC.Compile.matchChar: not implemented yet"
 
 matchInt :: [Name] -> [Equation] -> Exp -> NameGen Exp
 matchInt = error "ELC.Compile.matchInt: not implemented yet"
