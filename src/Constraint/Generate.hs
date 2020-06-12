@@ -159,6 +159,13 @@ generate env (FCall "bindIO" someArgs) = do
   let resTy       = TApp io b
   let constraints = [TApp io a :~: arg1Ty, (a `fn` TApp io b) :~: arg2Ty]
   pure (FCallT "bindIO" [arg1', arg2'] resTy, resTy, constraints <> c1 <> c2)
+generate env (FCall "pureIO" someArgs) = do
+  arg <- case someArgs of
+    [a] -> pure a
+    as  -> throwError $ WrongNumberOfArgsToForeignCall "pureIO" 1 (length as)
+  (arg', argTy, c) <- generate env arg
+  let resTy = TApp io argTy
+  pure (FCallT "pureIO" [arg'] resTy, resTy, c)
 generate _env (FCall other _) = throwError $ UnknownVariable (fromString other)
 
 -- Case expressions

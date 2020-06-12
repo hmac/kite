@@ -39,6 +39,7 @@ executeFCall env name args = case (name, args) of
   ("bindIO", [mx, f]) -> do
     x <- execute env mx
     execute env (App f x)
+  ("pureIO", [x]) -> pure x
   _ ->
     error
       $  "Cannot execute foreign call '"
