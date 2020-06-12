@@ -5,12 +5,13 @@ module Constraint.Generate where
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
 import qualified Data.Map.Strict               as Map
+import           Control.Monad                  ( when )
 
 import           Constraint.Generate.M
 import           Constraint
 import           Constraint.Expr
 import           Constraint.Generate.Pattern
-import           Constraint.Primitive           ( io )
+import           Constraint.Primitive           ( fcallInfo )
 import           Data.String                    ( IsString(fromString) )
 
 import           Util
@@ -128,45 +129,30 @@ generate env (Project record label) = do
     , fieldConstraint : recordConstraints
     )
 -- FFI calls
--- In the future we will support syntax to declare the types of foreign calls,
--- like this:
---     foreign putStrLn : String -> IO ()
---     foreign getLine : IO String
---     foreign bindIO : IO a -> (a -> IO b) -> IO b
--- Until then, we hard-code the types here.
-generate env (FCall "putStrLn" someArgs) = do
-  arg <- case someArgs of
-    [a] -> pure a
-    as  -> throwError $ WrongNumberOfArgsToForeignCall "putStrLn" 1 (length as)
-  (arg', argTy, constraints) <- generate env arg
-  let argIsString = argTy :~: TString
-  let resTy       = TApp io TUnit
-  pure (FCallT "putStrLn" [arg'] resTy, resTy, argIsString : constraints)
-generate _env (FCall "getLine" someArgs) = do
-  _ <- case someArgs of
-    [] -> pure ()
-    as -> throwError $ WrongNumberOfArgsToForeignCall "getLine" 0 (length as)
-  let resTy = TApp io TString
-  pure (FCallT "getLine" [] resTy, resTy, mempty)
-generate env (FCall "bindIO" someArgs) = do
-  (arg1, arg2) <- case someArgs of
-    [a, b] -> pure (a, b)
-    as     -> throwError $ WrongNumberOfArgsToForeignCall "bindIO" 2 (length as)
-  (arg1', arg1Ty, c1) <- generate env arg1
-  (arg2', arg2Ty, c2) <- generate env arg2
-  a                   <- TVar <$> fresh
-  b                   <- TVar <$> fresh
-  let resTy       = TApp io b
-  let constraints = [TApp io a :~: arg1Ty, (a `fn` TApp io b) :~: arg2Ty]
-  pure (FCallT "bindIO" [arg1', arg2'] resTy, resTy, constraints <> c1 <> c2)
-generate env (FCall "pureIO" someArgs) = do
-  arg <- case someArgs of
-    [a] -> pure a
-    as  -> throwError $ WrongNumberOfArgsToForeignCall "pureIO" 1 (length as)
-  (arg', argTy, c) <- generate env arg
-  let resTy = TApp io argTy
-  pure (FCallT "pureIO" [arg'] resTy, resTy, c)
-generate _env (FCall other _) = throwError $ UnknownVariable (fromString other)
+generate env (FCall fcallName fcallArgs) = case lookup fcallName fcallInfo of
+  Just (vars, argTypes, resTy) -> do
+    -- check number of args
+    when (length argTypes /= length fcallArgs)
+      $ throwError
+      $ WrongNumberOfArgsToForeignCall fcallName
+                                       (length argTypes)
+                                       (length fcallArgs)
+    let argsAndTypes = zip fcallArgs argTypes
+
+    -- generate uvars for rvars
+    uvars <- forM vars $ const $ TVar <$> fresh
+    let varSubst = Map.fromList $ zip vars uvars
+
+    -- check arg types (substituting vars)
+    (args, _, cs) <- fmap unzip3 $ forM argsAndTypes $ \(arg, ty) -> do
+      let expectedType = sub varSubst ty
+      (arg', argTy, argC) <- generate env arg
+      pure (arg', argTy, argTy :~: expectedType : argC)
+
+    -- return result type (substituting vars)
+    let resTy' = sub varSubst resTy
+    pure (FCallT fcallName args resTy', resTy', mconcat cs)
+  Nothing -> throwError $ UnknownVariable (fromString fcallName)
 
 -- Case expressions
 -------------------
