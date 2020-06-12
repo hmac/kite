@@ -1,14 +1,34 @@
 module IO
 
 import Data.Function (const)
+import Data.Functor (Functor(..))
+import Data.Applicative (Applicative(..))
+import Data.Monad (Monad(..))
 
 -- Combinators
 
-bind : IO a -> (a -> IO b) -> IO b
-bind x y = $fcall bindIO x y
+bindIO : IO a -> (a -> IO b) -> IO b
+bindIO x y = $fcall bindIO x y
 
-sequence : IO a -> IO b -> IO b
-sequence x y = bind x (const y)
+pureIO : a -> IO a
+pureIO x = $fcall pureIO x
+
+mapIO : (a -> b) -> IO a -> IO b
+mapIO f m = bindIO m (\x -> pureIO (f x))
+
+apIO : IO (a -> b) -> IO a -> IO b
+apIO mf mx = bindIO mf (\f -> bindIO mx (\x -> pureIO (f x)))
+
+-- Typeclass instances
+
+functorIO : Functor IO
+functorIO = Functor { map = mapIO }
+
+applicativeIO : Applicative IO
+applicativeIO = Applicative { functor = functorIO, pure = pureIO, ap = apIO }
+
+monadIO : Monad IO
+monadIO = Monad { applicative = applicativeIO, bind = bindIO }
 
 -- IO functions
 

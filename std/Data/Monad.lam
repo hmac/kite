@@ -1,0 +1,12 @@
+module Data.Monad
+
+import Data.Applicative (Applicative)
+import Data.Function (const)
+
+type Monad m = Monad { applicative : Applicative m, bind : m a -> (a -> m b) -> m b }
+
+bind : Monad m -> m a -> (a -> m b) -> m b
+bind (Monad d) = d.bind
+
+sequence : Monad m -> m a -> m b -> m b
+sequence (Monad d) x y = d.bind x (const y)
