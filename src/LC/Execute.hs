@@ -33,6 +33,7 @@ execute env expr = case expr of
 executeFCall :: Env -> String -> [Exp] -> IO Exp
 executeFCall env name args = case (name, args) of
   ("putStrLn", [Const (String s) _]) -> putStrLn s $> unit
+  ("putStr"  , [Const (String s) _]) -> putStr s $> unit
   ("getLine" , []                  ) -> do
     str <- getLine
     pure $ Const (String str) []

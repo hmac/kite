@@ -35,5 +35,8 @@ monadIO = Monad { applicative = applicativeIO, bind = bindIO }
 getLine : IO String
 getLine = $fcall getLine
 
-puts : String -> IO ()
-puts s = $fcall putStrLn s
+putLine : String -> IO ()
+putLine s = $fcall putStrLn s
+
+putStr : String -> IO ()
+putStr s = $fcall putStr s

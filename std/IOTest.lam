@@ -4,13 +4,13 @@ import Lam.String (semigroupString)
 import Data.Semigroup (append)
 import Data.Function (const)
 import Data.Monad (bind, sequence)
-import IO (getLine, puts, monadIO)
+import IO (getLine, putLine, monadIO)
 
 makeGreeting : String -> String
 makeGreeting name = append semigroupString "Hello, " name
 
 greet : String -> IO ()
-greet name = puts (makeGreeting name)
+greet name = putLine (makeGreeting name)
 
 main : IO ()
-main = sequence monadIO (puts "What is your name?") (bind monadIO getLine greet)
+main = sequence monadIO (putLine "What is your name?") (bind monadIO getLine greet)

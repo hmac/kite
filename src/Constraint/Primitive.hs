@@ -41,11 +41,14 @@ io = TCon (TopLevel modPrim "IO")
 --     foreign getLine : IO String
 --     foreign bindIO : IO a -> (a -> IO b) -> IO b
 -- Until then, we hard-code the types here.
+-- If you add a new fcall here, you also need to add its implementation in
+-- LC.Execute.
 type FCallInfo = ([Var], [Type], Type)
 
 fcallInfo :: [(String, FCallInfo)]
 fcallInfo =
   [ ("putStrLn", ([], [TString], TApp io TUnit))
+  , ("putStr"  , ([], [TString], TApp io TUnit))
   , ("getLine" , ([], [], TApp io TString))
   , ("pureIO"  , ([R "a"], [TVar (R "a")], TApp io (TVar (R "a"))))
   , ( "bindIO"
