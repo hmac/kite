@@ -137,6 +137,7 @@ patternVariables = concatMap f
     VarPat x     -> [x]
     WildPat      -> []
     IntPat    _  -> []
+    CharPat   _  -> []
     StringPat _  -> []
     BoolPat   _  -> []
     UnitPat      -> []

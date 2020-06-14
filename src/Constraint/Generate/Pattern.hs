@@ -32,6 +32,9 @@ generatePattern
 generatePattern env st (IntPat _) = do
   let c = st :~: TInt
   pure (TInt, [c], env)
+generatePattern env st (CharPat _) = do
+  let c = st :~: TChar
+  pure (TChar, [c], env)
 generatePattern env st (BoolPat _) = do
   let c = st :~: TBool
   pure (TBool, [c], env)

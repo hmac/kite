@@ -39,6 +39,8 @@ roundtripSyn = roundtrip genExpr printExpr pExpr
 roundtripType :: H.Property
 roundtripType = roundtrip genType printType pType
 
+-- TODO: roundtrip patterns
+
 roundtripFun :: H.Property
 roundtripFun = roundtrip genFun printFun pFun
 

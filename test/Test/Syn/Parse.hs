@@ -12,6 +12,7 @@ import           Syn.Parse                      ( pModule
                                                 , pDecl
                                                 , pExpr
                                                 , pType
+                                                , pPattern
                                                 )
 
 import           Syn
@@ -202,6 +203,22 @@ test = parallel $ do
                         , moduleDecls    = []
                         , moduleMetadata = []
                         }
+  describe "parsing patterns" $ do
+    it "parses an int pattern" $ do
+      parse pPattern "" "1" `shouldParse` IntPat 1
+    it "parses a wildcard pattern" $ do
+      parse pPattern "" "_" `shouldParse` WildPat
+    it "parses a char pattern" $ do
+      parse pPattern "" "'c'" `shouldParse` CharPat 'c'
+    it "parses a list pattern" $ do
+      parse pPattern "" "[1,_,3]"
+        `shouldParse` ListPat [IntPat 1, WildPat, IntPat 3]
+    it "parses a unit pattern" $ do
+      parse pPattern "" "()" `shouldParse` UnitPat
+    it "parses a tuple pattern" $ do
+      parse pPattern "" "(1, _)" `shouldParse` TuplePat [IntPat 1, WildPat]
+    it "parses a variable pattern" $ do
+      parse pPattern "" "foo" `shouldParse` VarPat "foo"
   describe "parsing expressions" $ do
     it "parses an application" $ do
       parse pExpr "" "foo x y z"

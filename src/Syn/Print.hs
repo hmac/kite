@@ -176,6 +176,7 @@ printPattern :: Pattern -> Document
 printPattern (VarPat n)      = printName n
 printPattern WildPat         = "_"
 printPattern (IntPat    i)   = pretty i
+printPattern (CharPat   c)   = squotes (pretty c)
 printPattern (StringPat s)   = dquotes (pretty s)
 printPattern (BoolPat   b)   = pretty b
 printPattern UnitPat         = "()"

@@ -300,6 +300,7 @@ pPattern' :: Parser Pattern
 pPattern' =
   try pIntPat
     <|> pWildPat
+    <|> pCharPat
     <|> pListPat
     <|> pUnitPat
     <|> try pTuplePat
@@ -319,6 +320,7 @@ pCasePattern =
   pUnitPat
     <|> parens (try infixBinaryCon <|> tuplePattern <|> pPattern)
     <|> pIntPat
+    <|> pCharPat
     <|> pWildPat
     <|> pListPat
     <|> con
@@ -339,6 +341,9 @@ pCasePattern =
 
 pIntPat :: Parser Pattern
 pIntPat = IntPat <$> pInt
+
+pCharPat :: Parser Pattern
+pCharPat = CharPat <$> pChar
 
 pWildPat :: Parser Pattern
 pWildPat = symbol "_" >> pure WildPat

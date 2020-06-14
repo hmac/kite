@@ -117,6 +117,7 @@ type Pattern = Pattern_ RawName
 data Pattern_ a = VarPat a
              | WildPat
              | IntPat Int
+             | CharPat Char
              | BoolPat Bool
              | UnitPat
              | TuplePat [Pattern_ a]

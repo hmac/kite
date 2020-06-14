@@ -197,6 +197,7 @@ canonicalisePattern env = \case
   VarPat n       -> ([n], VarPat (Local n))
   WildPat        -> ([], WildPat)
   IntPat  i      -> ([], IntPat i)
+  CharPat c      -> ([], CharPat c)
   BoolPat b      -> ([], BoolPat b)
   UnitPat        -> ([], UnitPat)
   StringPat s    -> ([], StringPat s)

@@ -115,6 +115,7 @@ translateProdCon T.RecordCon { T.conName = n, T.conFields = fields } = do
 translatePattern :: Env -> T.Pattern -> NameGen Pattern
 translatePattern _   (T.VarPat  n)    = pure (VarPat n)
 translatePattern _   (T.IntPat  i)    = pure (ConstPat (Int i))
+translatePattern _   (T.CharPat c)    = pure (ConstPat (Char c))
 translatePattern _   (T.BoolPat b)    = pure (ConstPat (Bool b))
 translatePattern _   T.UnitPat        = pure (ConstPat Unit)
 translatePattern _   (T.StringPat s ) = pure (ConstPat (String s))
