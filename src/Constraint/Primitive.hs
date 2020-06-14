@@ -57,4 +57,7 @@ fcallInfo =
       , TApp io (TVar (R "b"))
       )
     )
+  -- chars : String -> [Char]
+  , ("chars"   , ([], [TString], list TChar))
+  , ("showChar", ([], [TChar], TString))
   ]

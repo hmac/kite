@@ -428,9 +428,10 @@ pHole = do
   Hole <$> pHoleName
 
 pCharLit :: Parser Syn
-pCharLit = do
-  [c] <- between (string "'") (symbol "'") (takeP (Just "char") 1)
-  pure $ CharLit c
+pCharLit = CharLit <$> pChar
+
+pChar :: Parser Char
+pChar = head <$> between (string "'") (symbol "'") (takeP (Just "char") 1)
 
 -- String literals are quite complex. These are some of the variations we need
 -- to handle:

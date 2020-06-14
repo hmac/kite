@@ -3,8 +3,13 @@ module IOTest
 import Lam.String (semigroupString)
 import Data.Semigroup (append)
 import Data.Function (const)
+import Data.Functor (map)
+import Data.List (functorList)
 import Data.Monad (bind, sequence)
+import Data.Monoid (concat)
 import IO (getLine, putLine, monadIO)
+import Data.String (chars, fromChars)
+import Lam.String (monoidString)
 
 makeGreeting : String -> String
 makeGreeting name = append semigroupString "Hello, " name

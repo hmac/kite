@@ -13,6 +13,9 @@ import           ELC                            ( Con(..)
                                                 )
 import           LC
 import           LC.Eval                        ( eval )
+import           ELC.Primitive                  ( listNil
+                                                , listCons
+                                                )
 import           Data.Name
 
 executeMain :: ModuleName -> Env -> IO Exp
@@ -40,7 +43,12 @@ executeFCall env name args = case (name, args) of
   ("bindIO", [mx, f]) -> do
     x <- execute env mx
     execute env (App f x)
-  ("pureIO", [x]) -> pure x
+  ("pureIO", [x]                 ) -> pure x
+  ("chars" , [Const (String s) _]) -> pure $ foldl
+    (\cs c -> Cons listCons [Const (Char c) [], cs])
+    (Cons listNil [])
+    s
+  ("showChar", [Const (Char c) _]) -> pure $ Const (String [c]) []
   _ ->
     error
       $  "Cannot execute foreign call '"

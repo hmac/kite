@@ -1,0 +1,6 @@
+module Data.Char
+
+import Data.Show (Show(..))
+
+showChar : Show Char
+showChar = Show { show = \c -> $fcall showChar c }
