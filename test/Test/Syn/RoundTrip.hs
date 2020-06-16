@@ -22,39 +22,40 @@ import           Data.Text.Prettyprint.Doc.Render.String
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
-import           HaskellWorks.Hspec.Hedgehog
+import           Test.Hspec.Hedgehog     hiding ( Var )
 
 test :: Spec
-test = describe "round trip property" $ do
-  it "holds for function declarations" $ require roundtripFun
-  it "holds for expressions" $ require roundtripSyn
-  it "holds for types" $ require roundtripType
-  it "holds for data declarations" $ require roundtripData
-  it "holds for import statements" $ require roundtripImport
-  it "holds for modules" $ require roundtripModule
+test = describe "round trip property" $ modifyMaxSuccess (const 200) $ do
+  it "holds for function declarations" roundtripFun
+  it "holds for expressions"           roundtripSyn
+  it "holds for types"                 roundtripType
+  it "holds for data declarations"     roundtripData
+  it "holds for import statements"     roundtripImport
+  it "holds for modules"               roundtripModule
 
-roundtripSyn :: H.Property
+roundtripSyn :: H.PropertyT IO ()
 roundtripSyn = roundtrip genExpr printExpr pExpr
 
-roundtripType :: H.Property
+roundtripType :: H.PropertyT IO ()
 roundtripType = roundtrip genType printType pType
 
 -- TODO: roundtrip patterns
 
-roundtripFun :: H.Property
+roundtripFun :: H.PropertyT IO ()
 roundtripFun = roundtrip genFun printFun pFun
 
-roundtripData :: H.Property
+roundtripData :: H.PropertyT IO ()
 roundtripData = roundtrip genData printData pData
 
-roundtripImport :: H.Property
+roundtripImport :: H.PropertyT IO ()
 roundtripImport = roundtrip genImport printImport pImport
 
-roundtripModule :: H.Property
+roundtripModule :: H.PropertyT IO ()
 roundtripModule = roundtrip genModule printModule pModule
 
-roundtrip :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.Property
-roundtrip gen printer parser = H.withTests 100 $ H.property $ do
+roundtrip
+  :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.PropertyT IO ()
+roundtrip gen printer parser = hedgehog $ do
   e <- H.forAll gen
   let printed  = renderString (layoutSmart defaultLayoutOptions (printer e))
       reparsed = first errorBundlePretty $ parse (parser <* eof) "" printed

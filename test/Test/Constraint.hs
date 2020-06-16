@@ -7,7 +7,6 @@ import           Test.Hspec
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
-import           HaskellWorks.Hspec.Hedgehog
 
 import qualified Data.Map.Strict               as Map
 

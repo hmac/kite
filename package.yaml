@@ -88,7 +88,7 @@ tests:
     - hspec
     - hspec-megaparsec
     - hedgehog
-    - hw-hspec-hedgehog
+    - hspec-hedgehog
     - filepath
   lam-hlint:
     main: hlint.hs
