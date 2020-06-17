@@ -346,41 +346,22 @@ subtype ctx typeA typeB = case (typeA, typeB) of
     instantiateL ctx e a
   (a, EType e) -> do
     guard (e `notElem` fv a)
-    instantiateR ctx a e
+    instantiateR ctx e a
   _ -> liftMaybe Nothing
 
 -- Instantiation
 -- Existential vars are written e, f
 -- Types are written a, b
 instantiateL :: Ctx -> E -> Type -> TypeM Ctx
-instantiateL ctx e = \case
-  EType f -> do
-    -- e must occur before f in the context
-    -- to check this, we look for e after splitting the context at f
-    let (l, r) = splitAt (EVar f) ctx
-    void $ lookupE e l
-    pure $ l <> [ESolved f (EType e)] <> r
-  Fn a b -> do
-    let (l, r) = splitAt (EVar e) ctx
-    a1   <- newE
-    a2   <- newE
-    ctx' <- instantiateR
-      (l <> [EVar a2, EVar a1, ESolved e (Fn (EType a1) (EType a2))] <> r)
-      a
-      a1
-    instantiateL ctx' a2 (subst ctx' b)
-  Forall u a -> do
-    ctx'  <- extendU u ctx
-    ctx'' <- instantiateL ctx' e a
-    let (l, _) = splitAt (UVar u) ctx''
-    pure l
-  a -> do
-    let (l, r) = splitAt (EVar e) ctx
-    void $ wellFormedType l a
-    pure $ l <> [ESolved e a] <> r
+instantiateL = instantiate (Left ())
 
-instantiateR :: Ctx -> Type -> E -> TypeM Ctx
-instantiateR ctx ty e = case ty of
+instantiateR :: Ctx -> E -> Type -> TypeM Ctx
+instantiateR = instantiate (Right ())
+
+-- Either is used here as a cheap way of indicating if we're instantiating left
+-- or right. This affects the rules for Fn and Forall.
+instantiate :: Either () () -> Ctx -> E -> Type -> TypeM Ctx
+instantiate dir ctx e ty = case ty of
   EType f -> do
     -- e must occur before f in the context
     -- to check this, we look for e after splitting the context at f
@@ -391,21 +372,32 @@ instantiateR ctx ty e = case ty of
     let (l, r) = splitAt (EVar e) ctx
     a1   <- newE
     a2   <- newE
-    ctx' <- instantiateL
+    ctx' <- instantiate
+      (flipDir dir)
       (l <> [EVar a2, EVar a1, ESolved e (Fn (EType a1) (EType a2))] <> r)
       a1
       a
-    instantiateR ctx' (subst ctx' b) a2
-  Forall u a -> do
-    beta  <- newE
-    ctx'  <- extendMarker beta ctx >>= extendE beta
-    ctx'' <- instantiateR ctx' (substEForU beta u a) e
-    let (l, _) = splitAt (Marker beta) ctx''
-    pure l
+    instantiate (flipDir dir) ctx' a2 (subst ctx' b)
+  Forall u a -> case dir of
+    Left _ -> do
+      ctx'  <- extendU u ctx
+      ctx'' <- instantiate dir ctx' e a
+      let (l, _) = splitAt (UVar u) ctx''
+      pure l
+    Right _ -> do
+      beta  <- newE
+      ctx'  <- extendMarker beta ctx >>= extendE beta
+      ctx'' <- instantiate dir ctx' e (substEForU beta u a)
+      let (l, _) = splitAt (Marker beta) ctx''
+      pure l
   a -> do
     let (l, r) = splitAt (EVar e) ctx
     void $ wellFormedType l a
     pure $ l <> [ESolved e a] <> r
+ where
+  flipDir :: Either () () -> Either () ()
+  flipDir (Left  _) = Right ()
+  flipDir (Right _) = Left ()
 
 -- Typing
 check :: Ctx -> Exp -> Type -> TypeM Ctx
