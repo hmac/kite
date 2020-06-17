@@ -106,11 +106,6 @@ data Exp =
 
 
 -- | Contexts
-type Ctx = [CtxElem]
-
-genCtx :: Gen Ctx
-genCtx = G.list (R.linear 1 10) genCtxElem
-
 data CtxElem =
   -- Bound variable
     Var V Type
@@ -132,6 +127,45 @@ genCtxElem = G.choice
   , ESolved <$> genE <*> genType
   , Marker <$> genE
   ]
+
+data Ctx = List [CtxElem]
+         | Branch Ctx CtxElem Ctx
+         deriving (Eq, Show)
+-- TODO: functor, foldable, traversable instances
+
+instance Semigroup Ctx where
+  List l       <> List r        = List (l <> r)
+  List l       <> Branch l' e r = Branch (List l <> l') e r
+  Branch l e r <> ctx           = Branch l e (r <> ctx)
+
+instance Monoid Ctx where
+  mempty = List []
+
+genCtx :: Gen Ctx
+genCtx = G.recursive
+  G.choice
+  [List <$> G.list (R.linear 1 10) genCtxElem]
+  [ G.subtermM2 genCtx
+                genCtx
+                (\c1 c2 -> Branch <$> pure c1 <*> genCtxElem <*> pure c2)
+  ]
+
+flattenCtx :: Ctx -> [CtxElem]
+flattenCtx = \case
+  List cs      -> cs
+  Branch l c r -> flattenCtx l ++ [c] ++ flattenCtx r
+
+filterCtx :: (CtxElem -> Maybe a) -> Ctx -> [a]
+filterCtx f (List cs     ) = mapMaybe f cs
+filterCtx f (Branch l c r) = filterCtx f l <> mapMaybe f [c] <> filterCtx f r
+
+findCtx :: (CtxElem -> Maybe a) -> Ctx -> Maybe a
+findCtx f (List cs     ) = firstJust f cs
+findCtx f (Branch l c r) = findCtx f l <|> f c <|> findCtx f r
+
+-- Form a branched ctx, with a particular element in the middle
+branch :: Ctx -> CtxElem -> Ctx -> Ctx
+branch = Branch
 
 -- | The free (existential) variables of the type
 fv :: Type -> [E]
@@ -155,9 +189,9 @@ subst ctx = \case
   Unit       -> Unit
   Fn     a b -> Fn (subst ctx a) (subst ctx b)
   Forall u a -> Forall u (subst ctx a)
-  EType e    -> substE ctx
+  EType e    -> substE (flattenCtx ctx)
    where
-    substE :: Ctx -> Type
+    substE :: [CtxElem] -> Type
     substE = \case
       []                           -> EType e
       (ESolved e' t : _) | e == e' -> t
@@ -194,25 +228,25 @@ prop_substEForU_commutes = property $ do
 
 -- | The bound variables in a context
 domV :: Ctx -> [V]
-domV = mapMaybe $ \case
+domV = filterCtx $ \case
   Var v _ -> Just v
   _       -> Nothing
 
 -- | The universal variables in a context
 domU :: Ctx -> [U]
-domU = mapMaybe $ \case
+domU = filterCtx $ \case
   UVar u -> Just u
   _      -> Nothing
 
 -- | The existential variables in a context
 domE :: Ctx -> [E]
-domE = mapMaybe $ \case
+domE = filterCtx $ \case
   EVar e -> Just e
   _      -> Nothing
 
 -- | The markers in a context
 markers :: Ctx -> [E]
-markers = mapMaybe $ \case
+markers = filterCtx $ \case
   Marker e -> Just e
   _        -> Nothing
 
@@ -220,65 +254,89 @@ markers = mapMaybe $ \case
 
 -- | Lookup a universal variable in the context
 lookupU :: U -> Ctx -> TypeM U
-lookupU u = liftMaybe1 . firstJust $ \case
+lookupU u = liftMaybe1 . findCtx $ \case
   (UVar u') | u' == u -> Just u
   _                   -> Nothing
 
 -- | Lookup an existential variable in the context
 lookupE :: E -> Ctx -> TypeM E
-lookupE e = liftMaybe1 . firstJust $ \case
+lookupE e = liftMaybe1 . findCtx $ \case
   (EVar e') | e' == e -> Just e
   _                   -> Nothing
 
 lookupSolved :: E -> Ctx -> TypeM (E, Type)
-lookupSolved e = liftMaybe1 . firstJust $ \case
+lookupSolved e = liftMaybe1 . findCtx $ \case
   (ESolved e' t) | e' == e -> Just (e', t)
   _                        -> Nothing
 
 lookupV :: V -> Ctx -> TypeM Type
-lookupV v = liftMaybe1 . firstJust $ \case
+lookupV v = liftMaybe1 . findCtx $ \case
   (Var v' t) | v' == v -> Just t
   _                    -> Nothing
 
 -- Context construction
 
 emptyCtx :: Ctx
-emptyCtx = []
+emptyCtx = List []
+
+-- | Extend the context with an element without branching
+-- Used if we don't need to split the context on that element
+extendCtx :: CtxElem -> Ctx -> Ctx
+extendCtx e (List cs     ) = List (e : cs)
+extendCtx e (Branch l c r) = Branch (extendCtx e l) c r
 
 -- | Extend a context with a universal variable
 extendU :: U -> Ctx -> TypeM Ctx
-extendU u ctx | u `notElem` domU ctx = pure $ UVar u : ctx
+extendU u ctx | u `notElem` domU ctx = pure $ Branch emptyCtx (UVar u) ctx
               | otherwise            = liftMaybe Nothing
 
 -- | Extend a context with a bound variable
 extendV :: V -> Type -> Ctx -> TypeM Ctx
 extendV v t ctx
-  | v `notElem` domV ctx = wellFormedType ctx t >> pure (Var v t : ctx)
-  | otherwise            = liftMaybe Nothing
+  | v `notElem` domV ctx =  wellFormedType ctx t
+  >> pure (Branch emptyCtx (Var v t) ctx)
+  | otherwise = liftMaybe Nothing
 
 -- | Extend a context with an existential variable
 extendE :: E -> Ctx -> TypeM Ctx
-extendE e ctx | e `notElem` domE ctx = pure $ EVar e : ctx
+extendE e ctx | e `notElem` domE ctx = pure $ Branch emptyCtx (EVar e) ctx
               | otherwise            = liftMaybe Nothing
 
 -- | Extend a context with a solved existential variable
 extendSolved :: E -> Type -> Ctx -> TypeM Ctx
 extendSolved e t ctx
-  | e `notElem` domE ctx = wellFormedType ctx t >> pure (ESolved e t : ctx)
-  | otherwise            = liftMaybe Nothing
+  | e `notElem` domE ctx =  wellFormedType ctx t
+  >> pure (extendCtx (ESolved e t) ctx)
+  | otherwise = liftMaybe Nothing
 
 -- | Extend a context with an existential marker
 extendMarker :: E -> Ctx -> TypeM Ctx
 extendMarker e ctx
-  | e `notElem` (domE ctx <> markers ctx) = pure $ Marker e : ctx
-  | otherwise                             = liftMaybe Nothing
+  | e `notElem` (domE ctx <> markers ctx) = pure
+  $ Branch emptyCtx (Marker e) ctx
+  | otherwise = liftMaybe Nothing
 
 -- | Split a context at a given element, dropping that element
-splitAt :: CtxElem -> Ctx -> (Ctx, Ctx)
-splitAt e = \case
-  []                   -> ([], [])
-  (e' : ctx) | e' == e -> ([], ctx)
-  (c : ctx)            -> let (l, r) = splitAt e ctx in (c : l, r)
+-- Fails if the element isn't in the context
+splitAt :: CtxElem -> Ctx -> TypeM (Ctx, Ctx)
+splitAt e ctx = case splitAtMaybe e ctx of
+  Just r  -> pure r
+  Nothing -> mzero
+
+-- | Split a context at a given element, if the element exists
+splitAtMaybe :: CtxElem -> Ctx -> Maybe (Ctx, Ctx)
+splitAtMaybe e = \case
+  Branch l e' r
+    | e' == e
+    -> Just (l, r)
+    | otherwise
+    -> (splitAtMaybe e l >>= \(l', l'') -> Just (l', Branch l'' e' r))
+      <|> (splitAtMaybe e r >>= (\(r', r'') -> Just (Branch l e' r', r'')))
+  List [] -> Nothing
+  List (c : cs)
+    | c == e -> Just (List [], List cs)
+    | otherwise ->  splitAtMaybe e (List cs)
+    >>= \(cs', cs'') -> Just (List [c] <> cs', cs'')
 
 -- Check if a type is well-formed
 wellFormedType :: Ctx -> Type -> TypeM Type
@@ -331,15 +389,15 @@ subtype ctx typeA typeB = case (typeA, typeB) of
     ctx' <- subtype ctx b1 a1
     subtype ctx' (subst ctx' a2) (subst ctx' b2)
   (Forall u a, b) -> do
-    alpha <- newE
-    ctx'  <- extendMarker alpha ctx >>= extendE alpha
-    ctx'' <- subtype ctx' (substEForU alpha u a) b
-    let (beforeMarker, _) = splitAt (EVar alpha) ctx''
+    alpha             <- newE
+    ctx'              <- extendMarker alpha ctx >>= extendE alpha
+    ctx''             <- subtype ctx' (substEForU alpha u a) b
+    (beforeMarker, _) <- splitAt (Marker alpha) ctx''
     pure beforeMarker
   (a, Forall u b) -> do
-    ctx'  <- extendU u ctx
-    ctx'' <- subtype ctx' a b
-    let (beforeU, _) = splitAt (UVar u) ctx''
+    ctx'         <- extendU u ctx
+    ctx''        <- subtype ctx' a b
+    (beforeU, _) <- splitAt (UVar u) ctx''
     pure beforeU
   (EType e, a) -> do
     guard (e `notElem` fv a)
@@ -357,69 +415,70 @@ instantiateL ctx e = \case
   EType f -> do
     -- e must occur before f in the context
     -- to check this, we look for e after splitting the context at f
-    let (l, r) = splitAt (EVar f) ctx
+    (l, r) <- splitAt (EVar f) ctx
     void $ lookupE e l
-    pure $ l <> [ESolved f (EType e)] <> r
+    pure $ branch l (ESolved f (EType e)) r
   Fn a b -> do
-    let (l, r) = splitAt (EVar e) ctx
-    a1   <- newE
-    a2   <- newE
-    ctx' <- instantiateR
-      (l <> [EVar a2, EVar a1, ESolved e (Fn (EType a1) (EType a2))] <> r)
+    (l, r) <- splitAt (EVar e) ctx
+    a1     <- newE
+    a2     <- newE
+    ctx'   <- instantiateR
+      (l <> (List [EVar a2, EVar a1, ESolved e (Fn (EType a1) (EType a2))]) <> r
+      )
       a
       a1
     instantiateL ctx' a2 (subst ctx' b)
   Forall u a -> do
-    ctx'  <- extendU u ctx
-    ctx'' <- instantiateL ctx' e a
-    let (l, _) = splitAt (UVar u) ctx''
+    ctx'   <- extendU u ctx
+    ctx''  <- instantiateL ctx' e a
+    (l, _) <- splitAt (UVar u) ctx''
     pure l
   a -> do
-    let (l, r) = splitAt (EVar e) ctx
+    (l, r) <- splitAt (EVar e) ctx
     void $ wellFormedType l a
-    pure $ l <> [ESolved e a] <> r
+    pure $ branch l (ESolved e a) r
 
 instantiateR :: Ctx -> Type -> E -> TypeM Ctx
 instantiateR ctx ty e = case ty of
   EType f -> do
     -- e must occur before f in the context
     -- to check this, we look for e after splitting the context at f
-    let (l, r) = splitAt (EVar f) ctx
+    (l, r) <- splitAt (EVar f) ctx
     void $ lookupE e l
-    pure $ l <> [ESolved f (EType e)] <> r
+    pure $ branch l (ESolved f (EType e)) r
   Fn a b -> do
-    let (l, r) = splitAt (EVar e) ctx
-    a1   <- newE
-    a2   <- newE
-    ctx' <- instantiateL
-      (l <> [EVar a2, EVar a1, ESolved e (Fn (EType a1) (EType a2))] <> r)
+    (l, r) <- splitAt (EVar e) ctx
+    a1     <- newE
+    a2     <- newE
+    ctx'   <- instantiateL
+      (l <> List [EVar a2, EVar a1, ESolved e (Fn (EType a1) (EType a2))] <> r)
       a1
       a
     instantiateR ctx' (subst ctx' b) a2
   Forall u a -> do
-    beta  <- newE
-    ctx'  <- extendMarker beta ctx >>= extendE beta
-    ctx'' <- instantiateR ctx' (substEForU beta u a) e
-    let (l, _) = splitAt (Marker beta) ctx''
+    beta   <- newE
+    ctx'   <- extendMarker beta ctx >>= extendE beta
+    ctx''  <- instantiateR ctx' (substEForU beta u a) e
+    (l, _) <- splitAt (Marker beta) ctx''
     pure l
   a -> do
-    let (l, r) = splitAt (EVar e) ctx
+    (l, r) <- splitAt (EVar e) ctx
     void $ wellFormedType l a
-    pure $ l <> [ESolved e a] <> r
+    pure $ l <> List [ESolved e a] <> r
 
 -- Typing
 check :: Ctx -> Exp -> Type -> TypeM Ctx
 check ctx expr ty = case (expr, ty) of
   (Lam x e, Fn a b) -> do
-    ctx'  <- extendV x a ctx
-    ctx'' <- check ctx' e b
-    let (l, _) = splitAt (Var x a) ctx''
+    ctx'   <- extendV x a ctx
+    ctx''  <- check ctx' e b
+    (l, _) <- splitAt (Var x a) ctx''
     pure l
   (UVal, Unit      ) -> pure ctx
   (e   , Forall u a) -> do
-    ctx'  <- extendU u ctx
-    ctx'' <- check ctx' e a
-    let (l, _) = splitAt (UVar u) ctx''
+    ctx'   <- extendU u ctx
+    ctx''  <- check ctx' e a
+    (l, _) <- splitAt (UVar u) ctx''
     pure l
   (e, b) -> do
     (a, ctx') <- infer ctx e
@@ -440,11 +499,11 @@ infer ctx = \case
     (c, ctx'') <- inferApp ctx' (subst ctx' a) e2
     pure (c, ctx'')
   Lam x e -> do
-    alpha <- newE
-    beta  <- newE
-    ctx'  <- extendE alpha ctx >>= extendE beta >>= extendV x (EType alpha)
-    ctx'' <- check ctx' e (EType beta)
-    let (l, _) = splitAt (Var x (EType alpha)) ctx''
+    alpha  <- newE
+    beta   <- newE
+    ctx'   <- extendE alpha ctx >>= extendE beta >>= extendV x (EType alpha)
+    ctx''  <- check ctx' e (EType beta)
+    (l, _) <- splitAt (Var x (EType alpha)) ctx''
     pure (Fn (EType alpha) (EType beta), l)
 
 inferApp :: Ctx -> Type -> Exp -> TypeM (Type, Ctx)
@@ -482,7 +541,7 @@ prop_infers_simple_app = property $ do
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
-  let ctx  = [Var (V 0) (Fn Unit Unit)]
+  let ctx  = List [Var (V 0) (Fn Unit Unit)]
   -- The expression is id UVal
   let expr = App (VarExp (V 0)) UVal
   -- The inferred type should be Unit
@@ -492,7 +551,7 @@ prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
-  let ctx =
+  let ctx = List
         [ Var (V 0) (Forall (U 0) (Fn (UType (U 0)) (UType (U 0))))
         , Var (V 1) (Fn Unit Unit)
         ]
