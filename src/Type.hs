@@ -9,11 +9,9 @@ import           Prelude                 hiding ( splitAt )
 import           Data.Maybe                     ( mapMaybe
                                                 , listToMaybe
                                                 )
-import           Control.Applicative            ( (<|>) )
 import           Control.Monad                  ( void
                                                 , MonadPlus
                                                 , mzero
-                                                , guard
                                                 )
 import           Data.Functor                   ( ($>) )
 
@@ -23,8 +21,9 @@ import           Control.Monad.Trans.State.Strict
                                                 , get
                                                 , put
                                                 )
-import           Control.Monad.Trans.Maybe      ( MaybeT(..)
-                                                , runMaybeT
+import           Control.Monad.Except           ( ExceptT(..)
+                                                , runExceptT
+                                                , throwError
                                                 )
 import           Control.Monad.Trans.Class      ( lift )
 
@@ -220,23 +219,24 @@ markers = mapMaybe $ \case
 
 -- | Lookup a universal variable in the context
 lookupU :: U -> Ctx -> TypeM U
-lookupU u = liftMaybe1 . firstJust $ \case
+lookupU u = liftMaybe1 (todoError "lookupU failed") . firstJust $ \case
   (UVar u') | u' == u -> Just u
   _                   -> Nothing
 
 -- | Lookup an existential variable in the context
 lookupE :: E -> Ctx -> TypeM E
-lookupE e = liftMaybe1 . firstJust $ \case
+lookupE e = liftMaybe1 (todoError "lookupE failed") . firstJust $ \case
   (EVar e') | e' == e -> Just e
   _                   -> Nothing
 
 lookupSolved :: E -> Ctx -> TypeM (E, Type)
-lookupSolved e = liftMaybe1 . firstJust $ \case
-  (ESolved e' t) | e' == e -> Just (e', t)
-  _                        -> Nothing
+lookupSolved e =
+  liftMaybe1 (todoError "lookupSolved failed") . firstJust $ \case
+    (ESolved e' t) | e' == e -> Just (e', t)
+    _                        -> Nothing
 
 lookupV :: V -> Ctx -> TypeM Type
-lookupV v = liftMaybe1 . firstJust $ \case
+lookupV v = liftMaybe1 (todoError "lookupV failed") . firstJust $ \case
   (Var v' t) | v' == v -> Just t
   _                    -> Nothing
 
@@ -248,30 +248,30 @@ emptyCtx = []
 -- | Extend a context with a universal variable
 extendU :: U -> Ctx -> TypeM Ctx
 extendU u ctx | u `notElem` domU ctx = pure $ UVar u : ctx
-              | otherwise            = liftMaybe Nothing
+              | otherwise            = todoError "extendU failed"
 
 -- | Extend a context with a bound variable
 extendV :: V -> Type -> Ctx -> TypeM Ctx
 extendV v t ctx
   | v `notElem` domV ctx = wellFormedType ctx t >> pure (Var v t : ctx)
-  | otherwise            = liftMaybe Nothing
+  | otherwise            = todoError "extendV failed"
 
 -- | Extend a context with an existential variable
 extendE :: E -> Ctx -> TypeM Ctx
 extendE e ctx | e `notElem` domE ctx = pure $ EVar e : ctx
-              | otherwise            = liftMaybe Nothing
+              | otherwise            = todoError "extendE failed"
 
 -- | Extend a context with a solved existential variable
 extendSolved :: E -> Type -> Ctx -> TypeM Ctx
 extendSolved e t ctx
   | e `notElem` domE ctx = wellFormedType ctx t >> pure (ESolved e t : ctx)
-  | otherwise            = liftMaybe Nothing
+  | otherwise            = todoError "extendSolved failed"
 
 -- | Extend a context with an existential marker
 extendMarker :: E -> Ctx -> TypeM Ctx
 extendMarker e ctx
   | e `notElem` (domE ctx <> markers ctx) = pure $ Marker e : ctx
-  | otherwise                             = liftMaybe Nothing
+  | otherwise                             = todoError "extendMarker failed"
 
 -- | Split a context at a given element, dropping that element
 splitAt :: CtxElem -> Ctx -> (Ctx, Ctx)
@@ -291,14 +291,14 @@ wellFormedType ctx = \case
     pure $ Forall u t
   UType u -> lookupU u ctx >> pure (UType u)
   EType e -> do
-    void (lookupE e ctx) <|> void (lookupSolved e ctx)
+    void (lookupE e ctx)
     pure (EType e)
 
 -- Typechecking monad
-type TypeM = MaybeT (State Int)
+type TypeM = ExceptT Error (State Int)
 
-runTypeM :: TypeM a -> Maybe a
-runTypeM m = evalState (runMaybeT m) 0
+runTypeM :: TypeM a -> Either Error a
+runTypeM m = evalState (runExceptT m) 0
 
 newInt :: TypeM Int
 newInt = do
@@ -313,8 +313,9 @@ newE = E <$> newInt
 liftMaybe :: MonadPlus m => Maybe a -> m a
 liftMaybe = maybe mzero return
 
-liftMaybe1 :: MonadPlus m => (a -> Maybe b) -> a -> m b
-liftMaybe1 m x = liftMaybe (m x)
+-- Lift a function returning Maybe into TypeM
+liftMaybe1 :: TypeM b -> (a -> Maybe b) -> a -> TypeM b
+liftMaybe1 err m x = maybe err pure (m x)
 
 -- Contexts with holes
 -- TODO
@@ -341,13 +342,11 @@ subtype ctx typeA typeB = case (typeA, typeB) of
     ctx'' <- subtype ctx' a b
     let (beforeU, _) = splitAt (UVar u) ctx''
     pure beforeU
-  (EType e, a) -> do
-    guard (e `notElem` fv a)
-    instantiateL ctx e a
-  (a, EType e) -> do
-    guard (e `notElem` fv a)
-    instantiateR ctx e a
-  _ -> liftMaybe Nothing
+  (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
+               | otherwise     -> instantiateL ctx e a
+  (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
+               | otherwise     -> instantiateR ctx e a
+  (a, b) -> throwError $ SubtypingFailure a b
 
 -- Instantiation
 -- Existential vars are written e, f
@@ -456,20 +455,37 @@ inferApp ctx ty e = case ty of
   Fn a b -> do
     ctx' <- check ctx e a
     pure (b, ctx')
-  _ -> mzero
+  _ -> throwError $ InfAppFailure ty e
+
+-- Type errors
+data Error = TodoError String
+           | OccursCheck E Type
+           | OtherError Error
+           | SubtypingFailure Type Type
+           | InfAppFailure Type Exp
+           deriving (Eq, Show)
+
+todoError :: String -> TypeM a
+todoError = throwError . TodoError
 
 -- Tests
 
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
   ctx <- forAll genCtx
-  runTypeM (infer ctx UVal) === Just (Unit, ctx)
+  runTypeM (infer ctx UVal) === Right (Unit, ctx)
+
+prop_checks_bad_unit_annotation :: Property
+prop_checks_bad_unit_annotation = property $ do
+  ctx <- forAll genCtx
+  runTypeM (check ctx UVal (Fn Unit Unit))
+    === Left (SubtypingFailure Unit (Fn Unit Unit))
 
 prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- forAll genV
   let expr = App (Ann (Lam v UVal) (Fn Unit Unit)) UVal
-  runTypeM (infer emptyCtx expr) === Just (Unit, emptyCtx)
+  runTypeM (infer emptyCtx expr) === Right (Unit, emptyCtx)
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
@@ -478,7 +494,7 @@ prop_infers_app_with_context = property $ do
   -- The expression is id UVal
   let expr = App (VarExp (V 0)) UVal
   -- The inferred type should be Unit
-  runTypeM (infer ctx expr) === Just (Unit, ctx)
+  runTypeM (infer ctx expr) === Right (Unit, ctx)
 
 prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
@@ -491,7 +507,7 @@ prop_infers_polymorphic_app = property $ do
   -- The expression is idUnit (id UVal)
   let expr = App (VarExp (V 1)) (App (VarExp (V 0)) UVal)
   -- The inferred type should be Unit
-  runTypeM (infer ctx expr) === Just (Unit, ctx)
+  runTypeM (infer ctx expr) === Right (Unit, ESolved (E 0) Unit : ctx)
 
 tests :: Hedgehog.Group
 tests = $$(Hedgehog.discover)
