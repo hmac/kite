@@ -62,9 +62,7 @@ unit = TCon "Unit" []
 list :: Type -> Type
 list a = TCon "List" [a]
 
-tuple2 :: Type -> Type -> Type
-tuple2 a b = TCon "Tuple2" [a, b]
-
+-- Primitive constructors
 primitiveConstructors :: Ctx
 primitiveConstructors =
   [ Var (Free "Unit")  (TCon "Unit" [])
@@ -79,7 +77,14 @@ primitiveConstructors =
           (Fn (TCon "List" [UType (U 0)]) (TCon "List" [UType (U 0)]))
       )
     )
+  , Var (Free "Tuple2") (mkTupleCon (map U [0 .. 1]) "Tuple2")
+  , Var (Free "Tuple3") (mkTupleCon (map U [0 .. 2]) "Tuple3")
+  , Var (Free "Tuple4") (mkTupleCon (map U [0 .. 3]) "Tuple4")
   ]
+
+mkTupleCon :: [U] -> Name -> Type
+mkTupleCon us tcon =
+  foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
 
 -- | Types
 data Type =
@@ -352,6 +357,7 @@ wellFormedType ctx = \case
   EType e -> do
     void (lookupE e ctx)
     pure (EType e)
+  -- TODO: check that c exists
   TCon c as -> TCon c <$> mapM (wellFormedType ctx) as
   TRecord fields ->
     TRecord <$> traverse (\(n, t) -> (n, ) <$> wellFormedType ctx t) fields
@@ -538,8 +544,19 @@ checkPattern ctx pat ty = case pat of
         pure ctx''
       (_, (_, t)) -> throwError $ ExpectedConstructorType t
   -- TODO: do subpats and list pats. convert them to conspats before checking
-  ListPat  _ -> undefined
-  TuplePat _ -> undefined
+  ListPat _ -> undefined
+  TuplePat subpats ->
+    let con = case subpats of
+          []           -> error "Type.checkPattern: empty tuple"
+          [_]          -> error "Type.checkPattern: single-element tuple"
+          [_, _]       -> Free "Tuple2"
+          [_, _, _]    -> Free "Tuple3"
+          [_, _, _, _] -> Free "Tuple4"
+          _ ->
+            error
+              $  "Type.checkPattern: cannot (yet) handle tuples of length > 4: "
+              <> show subpats
+    in  checkPattern ctx (ConsPat con subpats) ty
 
 -- | unfoldForall (Forall a (Forall b t)) == ([a, b], t)
 unfoldForall :: Type -> ([U], Type)
