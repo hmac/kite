@@ -1,6 +1,23 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Type
   ( tests
+  , Ctx
+  , Exp(..)
+  , Type(..)
+  , V(..)
+  , Pattern
+  , unfoldFn
+  , foldFn
+  , wellFormedType
+  , check
+  , infer
+  , TypeM
+  , throwError
+  , Error(..)
+  , checkPattern
   )
 where
 
@@ -82,6 +99,14 @@ primitiveConstructors =
   , Var (Free "Tuple4") (mkTupleCon (map U [0 .. 3]) "Tuple4")
   ]
 
+-- Primitive functions
+primitiveFns :: Ctx
+primitiveFns =
+  [(Var (Free "Lam.Primitive.appendString") (Fn string (Fn string string)))]
+
+primCtx :: Ctx
+primCtx = primitiveConstructors <> primitiveFns
+
 mkTupleCon :: [U] -> Name -> Type
 mkTupleCon us tcon =
   foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
@@ -127,11 +152,11 @@ newtype E = E Int
 genE :: Gen E
 genE = E <$> G.int (R.linear 0 100)
 
--- Bound variable
+-- Free or bound variable
 -- Guaranteed to be unique.
 -- Contains a name hint for conversion back to source.
 data V = Free Name
-       | Bound Int
+       | Bound Int -- Not currently used, but should be for lambda bindings
   deriving (Eq, Show)
 
 genV :: Gen V
@@ -153,6 +178,22 @@ data Exp =
   | Hole String
   -- -- Case expression
   | Case Exp [(Pattern, Exp)]
+  -- Let expression
+  | Let1 V Exp Exp
+  -- String literal
+  | String String
+  -- Char literal
+  | Char Char
+  -- Int literal
+  | Int Int
+  -- Bool literal
+  | Bool Bool
+  -- Record
+  | Record [(String, Exp)]
+  -- Record projection
+  | Project Exp String
+  -- FFI Call
+  | FCall String [Exp]
   deriving (Eq, Show)
 
 type Pattern = Pattern_ V
@@ -470,8 +511,17 @@ check ctx expr ty = case (expr, ty) of
     ctx'  <- extendU u ctx
     ctx'' <- check ctx' e a
     pure $ dropAfter (UVar u) ctx''
-  (Hole n, a) -> throwError $ CannotCheckHole (Hole n) a
-  (e     , b) -> trace2 "check.default" ctx $ do
+  (Hole n       , a) -> throwError $ CannotCheckHole (Hole n) a
+  (Let1 x e body, c) -> do
+    (a, ctx') <- infer ctx e
+    ctx''     <- extendV x a ctx'
+    check ctx'' body c
+  (FCall _name args, _) -> do
+    -- For now, just typecheck the arguments by inferring their types, and then
+    -- assume the type we're checking against is the correct one.
+    mapM_ (infer ctx) args
+    pure ctx
+  (e, b) -> trace2 "check.default" ctx $ do
     (a, ctx') <- infer ctx e
     subtype ctx' (subst ctx' a) (subst ctx' b)
 
@@ -504,6 +554,34 @@ infer ctx = \case
     (altTy  , ctx'') <- inferAlt scrutTy ctx' alt
     ctx'''           <- foldM (checkAlt altTy scrutTy) ctx'' alts
     pure (altTy, ctx''')
+  Let1 _x _e _body -> error "not implemented"
+  String _         -> pure (string, ctx)
+  Char   _         -> pure (char, ctx)
+  Int    _         -> pure (int, ctx)
+  Bool   _         -> pure (bool, ctx)
+  Record fields    -> do
+    -- To infer the type of a record, we must be able to infer types for all its
+    -- fields
+    (ctx', fTypes) <- mapAccumLM
+      (\ctx_ (name, expr) -> do
+        (ty, ctx_') <- infer ctx_ expr
+        pure (ctx_', (name, ty))
+      )
+      ctx
+      fields
+    pure (TRecord fTypes, ctx')
+  Project record fieldName -> do
+    -- To infer the type of a record projection, we must know the type of the
+    -- record.
+    (recordTy, ctx') <- infer ctx record
+    -- Check if the record contains this field
+    case recordTy of
+      TRecord fields -> case lookup fieldName fields of
+        Just fieldTy -> pure (fieldTy, ctx')
+        Nothing      -> throwError $ RecordDoesNotHaveField recordTy fieldName
+      _ -> throwError $ NotARecordType recordTy
+  e@(FCall _name _args) -> throwError $ CannotInferFCall e
+
 
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
@@ -568,6 +646,12 @@ unfoldFn :: Type -> ([Type], Type)
 unfoldFn (Fn a b) = let (ts, t) = unfoldFn b in (a : ts, t)
 unfoldFn t        = ([], t)
 
+-- | foldFn [a, b, c] d = (Fn a (Fn b (Fn c d)))
+foldFn :: [Type] -> Type -> Type
+foldFn []       t = t
+foldFn [a     ] t = Fn a t
+foldFn (a : as) t = Fn a (foldFn as t)
+
 checkAlt :: Type -> Type -> Ctx -> (Pattern, Exp) -> TypeM Ctx
 checkAlt expectedAltTy scrutTy ctx alt = do
   (inferredAltTy, ctx') <- inferAlt scrutTy ctx alt
@@ -603,6 +687,10 @@ data Error = TodoError String
            | UnknownVariable Ctx V
            | EmptyCase Exp
            | ExpectedConstructorType Type
+           | RecordDoesNotHaveField Type String
+           | NotARecordType Type
+           | CannotInferFCall Exp
+           | TooManyPatterns
            deriving (Eq, Show)
 
 todoError :: String -> TypeM a
@@ -612,21 +700,21 @@ todoError = throwError . TodoError
 
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
-  ctx <- (primitiveConstructors <>) <$> forAll genCtx
+  ctx <- (primCtx <>) <$> forAll genCtx
   let expr = Con (Free "Unit")
       ty   = TCon "Unit" []
   runTypeM (infer ctx expr) === Right (ty, ctx)
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
-  ctx <- (primitiveConstructors <>) <$> forAll genCtx
+  ctx <- (primCtx <>) <$> forAll genCtx
   let expr = Con (Free "Unit")
       ty   = Fn unit unit
   runTypeM (check ctx expr ty) === Left (SubtypingFailure unit (Fn unit unit))
 
 prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
-  let ctx = primitiveConstructors
+  let ctx = primCtx
   v <- forAll genV
   let uval = Con (Free "Unit")
   let expr = App (Ann (Lam v uval) (Fn unit unit)) uval
@@ -636,7 +724,7 @@ prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
   let uval = Con (Free "Unit")
-      ctx  = [Var (Free "id") (Fn unit unit)] <> primitiveConstructors
+      ctx  = [Var (Free "id") (Fn unit unit)] <> primCtx
   -- The expression is id Unit
   let expr = App (VarExp (Free "id")) uval
   -- The inferred type should be Unit
@@ -651,7 +739,7 @@ prop_infers_polymorphic_app = property $ do
         [ Var (Free "id") (Forall (U 0) (Fn (UType (U 0)) (UType (U 0))))
           , Var (Free "idUnit") (Fn unit unit)
           ]
-          <> primitiveConstructors
+          <> primCtx
   -- The expression is idUnit (id Unit)
   let expr = App (VarExp (Free "idUnit")) (App (VarExp (Free "id")) uval)
   -- The inferred type should be Unit
@@ -667,7 +755,7 @@ prop_infers_list_app = property $ do
 
 prop_infers_bool_case :: Property
 prop_infers_bool_case = property $ do
-  let ctx   = primitiveConstructors
+  let ctx   = primCtx
       expr1 = Case
         (Con (Free "True"))
         [(BoolPat True, Con (Free "Unit")), (BoolPat False, Con (Free "Unit"))]

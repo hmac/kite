@@ -7,7 +7,10 @@ import           Util
 -- Shared types of name
 
 newtype RawName = Name String
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Ord)
+
+instance Show RawName where
+  show (Name s) = s
 
 instance IsString RawName where
   fromString = Name
@@ -24,6 +27,7 @@ showModuleName (ModuleName names) = mconcat (intersperse "." names)
 instance IsString ModuleName where
   fromString s = ModuleName $ splitOn '.' s
 
+-- TODO: change these RawNames to Text/String?
 data Name
   = Local RawName
   | TopLevel ModuleName RawName
@@ -41,5 +45,10 @@ toRaw :: Name -> RawName
 toRaw (Local n     ) = n
 toRaw (TopLevel _ n) = n
 
+-- If the name contains no dots, interpret it as local
+-- If it contains dots, interpret it as a top level name qualified with a
+-- module.
 instance IsString Name where
-  fromString = Local . Name
+  fromString s = case splitOn '.' s of
+    [n] -> Local (Name n)
+    ns  -> TopLevel (ModuleName (init ns)) (Name (last ns))
