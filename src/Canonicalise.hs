@@ -4,6 +4,7 @@ import           Prelude                 hiding ( mod )
 
 import qualified Data.Map.Strict               as Map
 
+import           Data.List                      ( mapAccumL )
 import           Util
 import           Syn
 import           Data.Name                      ( Name(..) )
@@ -151,6 +152,7 @@ canonicaliseExp env = go
                               (go locals e)
                               (go (n : locals) body)
     Case e alts         -> canonicaliseCase (e, alts)
+    MCase    alts       -> canonicaliseMCase alts
     TupleLit es         -> TupleLit $ fmap (go locals) es
     ListLit  es         -> ListLit $ fmap (go locals) es
     StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
@@ -191,6 +193,19 @@ canonicaliseExp env = go
             )
             alts
       in  Case (go locals e) alts'
+    canonicaliseMCase :: [([Pattern], Syn)] -> Can.Exp
+    canonicaliseMCase alts =
+      let alts' = map
+            (\(pats, e) ->
+              let (vars, pats') = mapAccumL
+                    (\vs pat -> first (vs <>) (canonicalisePattern env pat))
+                    []
+                    pats
+                  e' = go (vars <> locals) e
+              in  (pats', e')
+            )
+            alts
+      in  MCase alts'
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case

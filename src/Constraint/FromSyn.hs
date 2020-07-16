@@ -26,6 +26,7 @@ fromSyn = \case
   S.LetA x sch e body ->
     E.LetA x (schemeToScheme sch) (fromSyn e) (fromSyn body)
   S.Case scrut alts     -> E.Case (fromSyn scrut) (mapSnd fromSyn alts)
+  S.MCase    _          -> error "Constraint.FromSyn: MCase not implemented"
   S.TupleLit es         -> E.TupleLit (map fromSyn es)
   S.ListLit  es         -> E.ListLit (map fromSyn es)
   S.StringLit pre comps -> E.StringLit pre (mapFst fromSyn comps)

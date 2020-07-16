@@ -75,8 +75,9 @@ generate env (LetA x s1@(Forall _ t1) e1 e2) = do
   pure (LetAT x s1 e1' e2' t2, t2, c1 : c2)
 -- CASE: case expression
 generate env (Case e alts) = generateCase env e alts
+generate _   (MCase _    ) = error "Constraint.Generate: MCase not implemented"
 -- Expression hole
-generate _   (Hole name  ) = do
+generate _   (Hole  name ) = do
   a <- TVar <$> fresh
   pure (HoleT name a, a, mempty)
 -- Unit literal

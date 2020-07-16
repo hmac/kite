@@ -35,7 +35,7 @@ dec : Int -> Int
 dec i = i - 1
 
 square : Int -> Int
-square i = i * i
+square = mcase i -> i * i
 
 mapTest : [Int]
 mapTest = map functorList square [1,2,3]

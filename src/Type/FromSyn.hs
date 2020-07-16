@@ -22,6 +22,7 @@ fromSyn = \case
   S.App a b -> T.App (fromSyn a) (fromSyn b)
   S.Case scrut alts ->
     T.Case (fromSyn scrut) (map (bimap convertPattern fromSyn) alts)
+  S.MCase _  -> error "Type.fromSyn: MCase not implemented"
   S.Abs xs a -> foldr (T.Lam . T.Free) (fromSyn a) xs
   S.Let binds body ->
     foldr (\(x, e) b -> T.Let1 (T.Free x) (fromSyn e) b) (fromSyn body) binds

@@ -206,6 +206,7 @@ printExpr (App a     b           ) = printApp a b
 printExpr (Let binds e           ) = printLet binds e
 printExpr (LetA name sch val body) = printLetA name sch val body
 printExpr (Case e alts           ) = printCase e alts
+printExpr (MCase    alts         ) = printMCase alts
 printExpr (TupleLit es           ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
@@ -302,6 +303,15 @@ printCase :: Syn -> [(Pattern, Syn)] -> Document
 printCase e alts = keyword "case"
   <+> hang (-3) (vsep ((printExpr e <+> keyword "of") : map printAlt alts))
   where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
+
+-- mcase
+--  pat1 pat2 -> e1
+--  pat3 pat4 -> e2
+printMCase :: [([Pattern], Syn)] -> Document
+printMCase alts = nest 2 $ vsep $ keyword "mcase" : map printAlt alts
+ where
+  printAlt (pats, expr) =
+    hsep (map printPattern pats) <+> "->" <+> printExpr expr
 
 printData :: Data -> Document
 printData d =

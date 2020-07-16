@@ -188,7 +188,6 @@ data Scheme_ v t = Forall [v] t
 -- TODO: multi-definition functions in let bindings
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
 type Syn = Syn_ RawName RawName Type
--- TODO: remove c?
 data Syn_ n v t = Var n
          | Con n
          | Hole n
@@ -199,6 +198,7 @@ data Syn_ n v t = Var n
          | LetA n (Scheme_ v t) (Syn_ n v t) (Syn_ n v t)
          | Let [(n, Syn_ n v t)] (Syn_ n v t)
          | Case (Syn_ n v t) [(Pattern_ n, Syn_ n v t)]
+         | MCase [([Pattern_ n], Syn_ n v t)]
          | UnitLit
          | TupleLit [Syn_ n v t]
          | ListLit [Syn_ n v t]

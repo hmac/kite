@@ -175,7 +175,9 @@ pData = do
   pCon = DataCon <$> uppercaseName <*> many pConType
 
 -- Parse a function definition
--- Type signatures are mandatory
+-- Functions consist of a type signature, a newline, and an implementation
+-- Unlike Haskell, functions only have a single equation.
+-- Pattern matching happens on the RHS
 pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
@@ -387,6 +389,7 @@ pExpr' =
     <|> pList
     <|> pCons
     <|> pCase
+    <|> pMultiCase
 
 pUnitLit :: Parser Syn
 pUnitLit = do
@@ -595,6 +598,44 @@ pCase = do
     expr <- pExpr
     pure (pat, expr)
 
+-- A multi-case is a lambda-case expression which can scrutinise multiple things
+-- at once. It looks like this:
+--   mcase
+--     [] -> 1
+--     _  -> 2
+--
+-- or this (first branch on the same line as the 'mcase'):
+--
+--   mcase [] -> 1
+--         _  -> 2
+--
+-- These are both equivalent to this haskell expression:
+--
+--   \case
+--     [] -> 1
+--     _  -> 2
+--
+-- Note that constructor patterns must be parenthesised to distinguish them from
+-- multiple independent patterns. This is why we use pPattern rather than
+-- pCasePattern.
+pMultiCase :: Parser Syn
+pMultiCase = do
+  void (symbolN' "mcase")
+  pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
+  first <- pAlt
+  rest  <- many $ do
+    void $ indentGuard spaceConsumerN GT pos
+    pAlt
+  pure $ MCase (first : rest)
+ where
+  pAlt :: Parser ([Pattern], Syn)
+  pAlt = do
+    pats <- some pPattern
+    void (symbol "->")
+    expr <- pExpr
+    pure (pats, expr)
+
+
 pRecord :: Parser Syn
 pRecord = Record <$> braces (pField `sepBy1` comma)
  where
@@ -658,27 +699,39 @@ keywords =
   , "$fcall"
   ]
 
--- Consumes spaces and tabs
+-- Consumes spaces
 spaceConsumer :: Parser ()
 spaceConsumer = L.space (skipSome (char ' ')) empty empty
 
--- Consumes spaces, tabs and newlines
+-- Fails unless it can consume at least one space
+spaceConsumer' :: Parser ()
+spaceConsumer' = char ' ' >> spaceConsumer
+
+-- Consumes spaces and newlines
 spaceConsumerN :: Parser ()
 spaceConsumerN = L.space (skipSome spaceChar) empty empty
 
--- Parses a specific string, skipping trailing spaces and tabs
+-- Fails unless it consumes at least one space or newline
+spaceConsumerN' :: Parser ()
+spaceConsumerN' = spaceChar >> spaceConsumerN
+
+-- Parses a specific string, skipping trailing spaces
 symbol :: String -> Parser String
 symbol = L.symbol spaceConsumer
 
 -- Parses a specific string, requiring at least one trailing space
 symbol' :: String -> Parser String
-symbol' = L.symbol spaceConsumer
+symbol' = L.symbol spaceConsumer'
 
 -- Like symbol but also skips trailing newlines
 symbolN :: String -> Parser String
 symbolN = L.symbol spaceConsumerN
 
--- Runs the given parser, skipping trailing spaces and tabs
+-- Like symbol' but also skips trailing newlines
+symbolN' :: String -> Parser String
+symbolN' = L.symbol spaceConsumerN
+
+-- Runs the given parser, skipping trailing spaces
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme spaceConsumer
 
