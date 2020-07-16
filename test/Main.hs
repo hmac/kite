@@ -1,5 +1,7 @@
 module Main where
 
+import           Control.Monad                  ( void )
+
 import           Test.Hspec
 import qualified Test.Syn.Parse
 import qualified Test.Syn.Print
@@ -12,14 +14,20 @@ import qualified Test.Constraint.Module
 
 import qualified Integration.Typecheck
 
+import           Hedgehog
+import           Test.Hspec.Hedgehog
+import qualified Type                           ( tests )
+
 main :: IO ()
-main = hspec $ do
-  Test.Syn.Parse.test
-  Test.Syn.Print.test
-  Test.Constraint.test
-  Test.Constraint.Pattern.test
-  Test.Constraint.Bind.test
-  Test.Constraint.FromSyn.test
-  Test.Constraint.Module.test
-  Integration.Typecheck.test
-  Test.Syn.RoundTrip.test
+main = do
+  hspec $ do
+    Test.Syn.Parse.test
+    Test.Syn.Print.test
+    Test.Constraint.test
+    Test.Constraint.Pattern.test
+    Test.Constraint.Bind.test
+    Test.Constraint.FromSyn.test
+    Test.Constraint.Module.test
+    Integration.Typecheck.test
+    Test.Syn.RoundTrip.test
+  void $ checkParallel Type.tests
