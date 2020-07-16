@@ -3,6 +3,7 @@ module Data.Either
 import Data.Maybe (Just, Nothing, Maybe)
 import Data.Functor (Functor(..))
 import Data.Applicative (Applicative)
+import Data.Eq (Eq, eq)
 
 fromLeft : Either a b -> Maybe a
 fromLeft (Left x) = Just x
@@ -27,3 +28,7 @@ applicativeEither = Applicative { functor = functorEither, pure = Right, ap = ap
 either : (a -> c) -> (b -> c) -> Either a b -> c
 either f _ (Left x) = f x
 either _ g (Right y) = g y
+
+eqEither : Eq a -> Eq b -> Either a b -> Either a b -> Bool
+eqEither eqa eqb (Left x) (Left y) = eq eqa x y
+eqEither eqa eqb (Right x) (Right y) = eq eqb x y
