@@ -1,12 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
 module Type
   ( tests
   , Ctx
-  , Exp(..)
   , Type(..)
+  , Exp(..)
   , V(..)
   , Pattern
   , unfoldFn
@@ -97,12 +94,16 @@ primitiveConstructors =
   , Var (Free "Tuple2") (mkTupleCon (map U [0 .. 1]) "Tuple2")
   , Var (Free "Tuple3") (mkTupleCon (map U [0 .. 2]) "Tuple3")
   , Var (Free "Tuple4") (mkTupleCon (map U [0 .. 3]) "Tuple4")
+  , Var (Free "Tuple5") (mkTupleCon (map U [0 .. 4]) "Tuple5")
+  , Var (Free "Tuple6") (mkTupleCon (map U [0 .. 5]) "Tuple6")
+  , Var (Free "Tuple7") (mkTupleCon (map U [0 .. 6]) "Tuple7")
+  , Var (Free "Tuple8") (mkTupleCon (map U [0 .. 7]) "Tuple8")
   ]
 
 -- Primitive functions
 primitiveFns :: Ctx
 primitiveFns =
-  [(Var (Free "Lam.Primitive.appendString") (Fn string (Fn string string)))]
+  [Var (Free "Lam.Primitive.appendString") (Fn string (Fn string string))]
 
 primCtx :: Ctx
 primCtx = primitiveConstructors <> primitiveFns
@@ -621,18 +622,28 @@ checkPattern ctx pat ty = case pat of
         -- Nothing else to be done?
         pure ctx''
       (_, (_, t)) -> throwError $ ExpectedConstructorType t
-  -- TODO: do subpats and list pats. convert them to conspats before checking
-  ListPat _ -> undefined
+  ListPat []      -> checkPattern ctx (ConsPat (Free "[]") []) ty
+  ListPat subpats -> checkPattern
+    ctx
+    (foldr (\s acc -> ConsPat (Free "::") [s, acc])
+           (ConsPat (Free "[]") [])
+           subpats
+    )
+    ty
   TuplePat subpats ->
     let con = case subpats of
-          []           -> error "Type.checkPattern: empty tuple"
-          [_]          -> error "Type.checkPattern: single-element tuple"
-          [_, _]       -> Free "Tuple2"
-          [_, _, _]    -> Free "Tuple3"
-          [_, _, _, _] -> Free "Tuple4"
+          []                       -> error "Type.checkPattern: empty tuple"
+          [_] -> error "Type.checkPattern: single-element tuple"
+          [_, _]                   -> Free "Tuple2"
+          [_, _, _]                -> Free "Tuple3"
+          [_, _, _, _]             -> Free "Tuple4"
+          [_, _, _, _, _]          -> Free "Tuple5"
+          [_, _, _, _, _, _]       -> Free "Tuple6"
+          [_, _, _, _, _, _, _]    -> Free "Tuple7"
+          [_, _, _, _, _, _, _, _] -> Free "Tuple8"
           _ ->
             error
-              $  "Type.checkPattern: cannot (yet) handle tuples of length > 4: "
+              $  "Type.checkPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
     in  checkPattern ctx (ConsPat con subpats) ty
 

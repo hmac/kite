@@ -64,5 +64,7 @@ convertPattern = \case
   S.BoolPat   b       -> S.BoolPat b
   S.StringPat s       -> S.StringPat s
 
+-- TODO: we may need to generate unique U variables here, but also keep hold of
+-- the original names to provide useful errors.
 convertScheme :: Can.Scheme -> T.Type
 convertScheme = undefined
