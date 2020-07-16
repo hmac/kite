@@ -1,8 +1,9 @@
 { mkDerivation, base, containers, criterion, directory, extra
-, filepath, hedgehog, hlint, hpack, hspec, hspec-megaparsec
-, hw-hspec-hedgehog, megaparsec, mtl, optparse-generic
-, pretty-simple, prettyprinter, prettyprinter-ansi-terminal
-, QuickCheck, semigroupoids, stdenv, text, transformers
+, filepath, hedgehog, hedgehog-checkers, hlint, hpack, hspec
+, hspec-hedgehog, hspec-megaparsec, megaparsec, mtl
+, optparse-generic, pretty-simple, prettyprinter
+, prettyprinter-ansi-terminal, QuickCheck, semigroupoids, stdenv
+, text, transformers
 }:
 mkDerivation {
   pname = "lam";
@@ -11,29 +12,29 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    base containers directory extra megaparsec mtl optparse-generic
-    pretty-simple prettyprinter prettyprinter-ansi-terminal
-    semigroupoids text transformers
+    base containers directory extra hedgehog hedgehog-checkers
+    megaparsec mtl optparse-generic pretty-simple prettyprinter
+    prettyprinter-ansi-terminal semigroupoids text transformers
   ];
   libraryToolDepends = [ hpack ];
   executableHaskellDepends = [
-    base containers directory extra megaparsec mtl optparse-generic
-    pretty-simple prettyprinter prettyprinter-ansi-terminal
-    semigroupoids text transformers
-  ];
-  testHaskellDepends = [
-    base containers directory extra filepath hedgehog hlint hspec
-    hspec-megaparsec hw-hspec-hedgehog megaparsec mtl optparse-generic
-    pretty-simple prettyprinter prettyprinter-ansi-terminal QuickCheck
-    semigroupoids text transformers
-  ];
-  benchmarkHaskellDepends = [
-    base containers criterion directory extra filepath megaparsec mtl
-    optparse-generic pretty-simple prettyprinter
+    base containers directory extra hedgehog hedgehog-checkers
+    megaparsec mtl optparse-generic pretty-simple prettyprinter
     prettyprinter-ansi-terminal semigroupoids text transformers
   ];
-  enableLibraryProfiling = true;
-  enableExecutableProfiling = true;
+  testHaskellDepends = [
+    base containers directory extra filepath hedgehog hedgehog-checkers
+    hlint hspec hspec-hedgehog hspec-megaparsec megaparsec mtl
+    optparse-generic pretty-simple prettyprinter
+    prettyprinter-ansi-terminal QuickCheck semigroupoids text
+    transformers
+  ];
+  benchmarkHaskellDepends = [
+    base containers criterion directory extra filepath hedgehog
+    hedgehog-checkers megaparsec mtl optparse-generic pretty-simple
+    prettyprinter prettyprinter-ansi-terminal semigroupoids text
+    transformers
+  ];
   prePatch = "hpack";
   homepage = "https://github.com/hmac/lam#readme";
   description = "A Haskell-like language for scripting and web apps";

@@ -44,6 +44,7 @@ dependencies:
 - optparse-generic
 - semigroupoids
 - directory
+- hedgehog
 
 library:
   source-dirs: src
