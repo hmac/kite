@@ -149,90 +149,89 @@ buildTuplePat elems = case length elems of
   n -> error $ "cannot handle tuples of length " <> show n
 
 translateExpr :: Env -> T.Exp -> NameGen Exp
-translateExpr _   (T.IntLitT  i _        ) = pure $ Const (Int i) []
-translateExpr _   (T.BoolLitT b _        ) = pure $ Const (Bool b) []
-translateExpr _   (T.CharLitT c _        ) = pure $ Const (Char c) []
-translateExpr env (T.StringLitT s parts _) = translateStringLit env s parts
-translateExpr env (T.ListLitT elems _    ) = do
-  elems' <- mapM (translateExpr env) elems
-  buildList elems'
-translateExpr _   (T.UnitLitT _       ) = pure $ Const Unit []
-translateExpr env (T.TupleLitT elems _) = do
-  elems' <- mapM (translateExpr env) elems
-  pure (buildTuple elems')
+translateExpr env = \case
+  T.IntLitT  i _         -> pure $ Const (Int i) []
+  T.BoolLitT b _         -> pure $ Const (Bool b) []
+  T.CharLitT c _         -> pure $ Const (Char c) []
+  T.StringLitT s parts _ -> translateStringLit env s parts
+  T.ListLitT elems _     -> do
+    elems' <- mapM (translateExpr env) elems
+    buildList elems'
+  T.UnitLitT _        -> pure $ Const Unit []
+  T.TupleLitT elems _ -> do
+    elems' <- mapM (translateExpr env) elems
+    pure (buildTuple elems')
+  -- TODO: what's a better way to handle this?
+  -- possible have a Prelude module which puts these variables in scope, bound to
+  -- "$prim$Num$add" or something?
+  T.VarT (TopLevel m "+") _ | m == modPrim -> binaryPrim PrimAdd
+  T.VarT (TopLevel m "*") _ | m == modPrim -> binaryPrim PrimMult
+  T.VarT (TopLevel m "-") _ | m == modPrim -> binaryPrim PrimSub
+  T.VarT (TopLevel m "appendString") _ | m == modPrim ->
+    binaryPrim PrimStringAppend
+  T.VarT (TopLevel m "$showInt") _ | m == modPrim -> do
+    v <- fresh
+    pure $ Abs (VarPat v) (Const (Prim PrimShowInt) [Var v])
+  T.VarT (TopLevel m "show") _ | m == modPrim -> do
+    v <- fresh
+    pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
+  T.VarT (TopLevel m "$eqInt") _ | m == modPrim -> do
+    v1 <- fresh
+    v2 <- fresh
+    pure $ Abs (VarPat v1)
+               (Abs (VarPat v2) (Const (Prim PrimEqInt) [Var v1, Var v2]))
+  T.VarT n _ -> pure (Var n)
+  T.AppT a b -> do
+    a' <- translateExpr env a
+    b' <- translateExpr env b
+    pure $ App a' b'
 
--- TODO: what's a better way to handle this?
--- possible have a Prelude module which puts these variables in scope, bound to
--- "$prim$Num$add" or something?
-translateExpr _ (T.VarT (TopLevel m "+") _) | m == modPrim = binaryPrim PrimAdd
-translateExpr _ (T.VarT (TopLevel m "*") _) | m == modPrim = binaryPrim PrimMult
-translateExpr _ (T.VarT (TopLevel m "-") _) | m == modPrim = binaryPrim PrimSub
-translateExpr _ (T.VarT (TopLevel m "appendString") _) | m == modPrim =
-  binaryPrim PrimStringAppend
-translateExpr _ (T.VarT (TopLevel m "$showInt") _) | m == modPrim = do
-  v <- fresh
-  pure $ Abs (VarPat v) (Const (Prim PrimShowInt) [Var v])
-translateExpr _ (T.VarT (TopLevel m "show") _) | m == modPrim = do
-  v <- fresh
-  pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
-translateExpr _ (T.VarT (TopLevel m "$eqInt") _) | m == modPrim = do
-  v1 <- fresh
-  v2 <- fresh
-  pure $ Abs (VarPat v1)
-             (Abs (VarPat v2) (Const (Prim PrimEqInt) [Var v1, Var v2]))
-
-translateExpr _   (T.VarT n _) = pure (Var n)
-translateExpr env (T.AppT a b) = do
-  a' <- translateExpr env a
-  b' <- translateExpr env b
-  pure $ App a' b'
-
--- We translate a constructor into a series of nested lambda abstractions, one
--- for each argument to the constructor. When applied, the result is a fully
--- saturated constructor.
-translateExpr env (T.ConT n) = do
-  let con = lookupCon n env
-      a   = conArity con
-  newVars <- replicateM a fresh
-  pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
-translateExpr _ (T.HoleT n _) = pure $ Bottom ("Hole encountered: " <> show n)
-translateExpr env (T.AbsT vars e) = do
-  body <- translateExpr env e
-  pure $ buildAbs body (map (VarPat . fst) vars)
-translateExpr env (T.LetT alts expr _) = do
-  alts' <- mapM
-    (\(n, e) -> do
-      e' <- translateExpr env e
-      pure (VarPat n, e')
-    )
-    alts
-  expr' <- translateExpr env expr
-  pure $ LetRec alts' expr'
-translateExpr _   T.LetAT{}              = error "Cannot translate LetA yet"
--- case (foo bar) of
---   p1 -> e1
---   p2 -> e2
--- ==>
--- let $v = foo bar
---  in ((\p1 -> e1) $v) [] ((\p2 -> e2) $v) [] BOTTOM
--- ((\p1 -> e1) [] (\p2 -> e2)) (foo bar)
-translateExpr env (T.CaseT scrut alts _) = do
-  var    <- fresh
-  scrut' <- translateExpr env scrut
-  alts'  <- mapM
-    (\(T.AltT p e) -> do
-      p' <- translatePattern env p
-      e' <- translateExpr env e
-      pure $ App (Abs p' e') (Var var)
-    )
-    alts
-  let lams = foldr Fatbar (Bottom "pattern match failure") alts'
-  pure $ Let (VarPat var) scrut' lams
-translateExpr env (T.RecordT fields _type) = translateRecord env fields
-translateExpr env (T.ProjectT e l _type) = translateRecordProjection env e l
-translateExpr env (T.FCallT proc args _type) = do
-  args' <- mapM (translateExpr env) args
-  pure $ FCall proc args'
+  -- We translate a constructor into a series of nested lambda abstractions, one
+  -- for each argument to the constructor. When applied, the result is a fully
+  -- saturated constructor.
+  T.ConT n -> do
+    let con = lookupCon n env
+        a   = conArity con
+    newVars <- replicateM a fresh
+    pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
+  T.HoleT n    _ -> pure $ Bottom ("Hole encountered: " <> show n)
+  T.AbsT  vars e -> do
+    body <- translateExpr env e
+    pure $ buildAbs body (map (VarPat . fst) vars)
+  T.LetT alts expr _ -> do
+    alts' <- mapM
+      (\(n, e) -> do
+        e' <- translateExpr env e
+        pure (VarPat n, e')
+      )
+      alts
+    expr' <- translateExpr env expr
+    pure $ LetRec alts' expr'
+  T.LetAT{}            -> error "Cannot translate LetA yet"
+  -- case (foo bar) of
+  --   p1 -> e1
+  --   p2 -> e2
+  -- ==>
+  -- let $v = foo bar
+  --  in ((\p1 -> e1) $v) [] ((\p2 -> e2) $v) [] BOTTOM
+  -- ((\p1 -> e1) [] (\p2 -> e2)) (foo bar)
+  T.CaseT scrut alts _ -> do
+    var    <- fresh
+    scrut' <- translateExpr env scrut
+    alts'  <- mapM
+      (\(T.AltT p e) -> do
+        p' <- translatePattern env p
+        e' <- translateExpr env e
+        pure $ App (Abs p' e') (Var var)
+      )
+      alts
+    let lams = foldr Fatbar (Bottom "pattern match failure") alts'
+    pure $ Let (VarPat var) scrut' lams
+  T.RecordT fields _type     -> translateRecord env fields
+  T.ProjectT e    l    _type -> translateRecordProjection env e l
+  T.FCallT   proc args _type -> do
+    args' <- mapM (translateExpr env) args
+    pure $ FCall proc args'
 
 -- "hi #{name}!" ==> "hi " <> name <> "!"
 -- The typechecker ensures that name : String
