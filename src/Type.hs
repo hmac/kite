@@ -19,6 +19,7 @@ module Type
 where
 
 import           Util
+import           Data.String                    ( fromString )
 import           Data.Foldable                  ( foldlM )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
@@ -83,22 +84,22 @@ primitiveConstructors =
   [ Var (Free "Unit")  (TCon "Unit" [])
   , Var (Free "True")  (TCon "Bool" [])
   , Var (Free "False") (TCon "Bool" [])
-  , Var (Free "[]")    (Forall (U 0) (TCon "List" [UType (U 0)]))
+  , Var (Free "[]") (Forall (U 0 "a") (TCon "List" [UType (U 0 "a")]))
   , Var
     (Free "::")
     (Forall
-      (U 0)
-      (Fn (UType (U 0))
-          (Fn (TCon "List" [UType (U 0)]) (TCon "List" [UType (U 0)]))
+      (U 0 "a")
+      (Fn (UType (U 0 "a"))
+          (Fn (TCon "List" [UType (U 0 "a")]) (TCon "List" [UType (U 0 "a")]))
       )
     )
-  , Var (Free "Tuple2") (mkTupleCon (map U [0 .. 1]) "Tuple2")
-  , Var (Free "Tuple3") (mkTupleCon (map U [0 .. 2]) "Tuple3")
-  , Var (Free "Tuple4") (mkTupleCon (map U [0 .. 3]) "Tuple4")
-  , Var (Free "Tuple5") (mkTupleCon (map U [0 .. 4]) "Tuple5")
-  , Var (Free "Tuple6") (mkTupleCon (map U [0 .. 5]) "Tuple6")
-  , Var (Free "Tuple7") (mkTupleCon (map U [0 .. 6]) "Tuple7")
-  , Var (Free "Tuple8") (mkTupleCon (map U [0 .. 7]) "Tuple8")
+  , Var (Free "Tuple2") (mkTupleCon 2 "Tuple2")
+  , Var (Free "Tuple3") (mkTupleCon 3 "Tuple3")
+  , Var (Free "Tuple4") (mkTupleCon 4 "Tuple4")
+  , Var (Free "Tuple5") (mkTupleCon 5 "Tuple5")
+  , Var (Free "Tuple6") (mkTupleCon 6 "Tuple6")
+  , Var (Free "Tuple7") (mkTupleCon 7 "Tuple7")
+  , Var (Free "Tuple8") (mkTupleCon 8 "Tuple8")
   ]
 
 -- Primitive functions
@@ -109,9 +110,12 @@ primitiveFns =
 primCtx :: Ctx
 primCtx = primitiveConstructors <> primitiveFns
 
-mkTupleCon :: [U] -> Name -> Type
-mkTupleCon us tcon =
-  foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
+mkTupleCon :: Int -> Name -> Type
+mkTupleCon len tcon =
+  let us = map (uncurry U) $ take len $ zip
+        [0 ..]
+        (map (fromString . (: [])) ['a' ..])
+  in  foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
 
 -- | Types
 data Type =
@@ -141,11 +145,15 @@ genType = G.recursive
 
 -- | Variables
 -- Universal type variable
-newtype U = U Int
-  deriving (Eq, Show)
+-- Contains a name hint
+data U = U Int Name
+  deriving Show
+
+instance Eq U where
+  (U i _) == (U j _) = i == j
 
 genU :: Gen U
-genU = U <$> G.int (R.linear 0 100)
+genU = U <$> G.int (R.linear 0 100) <*> genName
 
 -- Existential type variable
 newtype E = E Int
@@ -860,8 +868,9 @@ prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
   let uval = Con (Free "Unit")
+      a    = U 0 "a"
       ctx =
-        [ Var (Free "id") (Forall (U 0) (Fn (UType (U 0)) (UType (U 0))))
+        [ Var (Free "id")     (Forall a (Fn (UType a) (UType a)))
           , Var (Free "idUnit") (Fn unit unit)
           ]
           <> primCtx
@@ -872,7 +881,8 @@ prop_infers_polymorphic_app = property $ do
 
 prop_infers_list_app :: Property
 prop_infers_list_app = property $ do
-  let ty   = Forall (U 0) (TCon "List" [UType (U 0)])
+  let a    = U 0 "a"
+      ty   = Forall a (TCon "List" [UType a])
       -- [] : forall a. List a
       ctx  = [Var (Free "[]") ty]
       expr = VarExp (Free "[]")
