@@ -1,4 +1,3 @@
-{-# LANGUAGE DerivingVia #-}
 module Syn
   ( module Syn
   , module Data.Name

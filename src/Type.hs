@@ -19,6 +19,7 @@ module Type
 where
 
 import           Util
+import           Data.Foldable                  ( foldlM )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
                                                 , ModuleName(..)
@@ -177,8 +178,10 @@ data Exp =
   | Con V
   -- Hole
   | Hole String
-  -- -- Case expression
+  -- Case expression
   | Case Exp [(Pattern, Exp)]
+  -- MCase expression
+  | MCase [([Pattern], Exp)]
   -- Let expression
   | Let1 V Exp Exp
   -- String literal
@@ -526,6 +529,20 @@ check ctx expr ty = case (expr, ty) of
     (a, ctx') <- infer ctx e
     subtype ctx' (subst ctx' a) (subst ctx' b)
 
+checkMCaseAlt :: [Type] -> Type -> Ctx -> ([Pattern], Exp) -> TypeM Ctx
+checkMCaseAlt patTys _ _ (pats, _) | length patTys /= length pats =
+  throwError TooManyPatterns
+checkMCaseAlt patTys rhsTy ctx (pats, rhs) = do
+  -- check each pat against the corresponding pat type, accumulating a new
+  -- context
+  ctx' <- foldlM (\ctx_ (pat, ty) -> checkPattern ctx_ pat ty)
+                 ctx
+                 (zip pats patTys)
+  -- check the rhs against the rhs type
+  check ctx' rhs rhsTy
+
+-- TODO: flip this around so it's Ctx -> Exp -> TypeM (Ctx, Typ)
+-- This fits with foldlM and mapAccumLM
 infer :: Ctx -> Exp -> TypeM (Type, Ctx)
 infer ctx = \case
   VarExp x -> trace2 "infer.var" ctx $ do
@@ -552,9 +569,26 @@ infer ctx = \case
   c@(  Case _ [])            -> throwError $ EmptyCase c
   Case scrut    (alt : alts) -> do
     (scrutTy, ctx' ) <- infer ctx scrut
-    (altTy  , ctx'') <- inferAlt scrutTy ctx' alt
-    ctx'''           <- foldM (checkAlt altTy scrutTy) ctx'' alts
+    (altTy  , ctx'') <- inferCaseAlt scrutTy ctx' alt
+    ctx'''           <- foldM (checkCaseAlt altTy scrutTy) ctx'' alts
     pure (altTy, ctx''')
+  c@(MCase [])                -> throwError $ EmptyCase c
+  MCase ((pats, expr) : alts) -> do
+    -- The type of an mcase will be a function type taking as many arguments as
+    -- there are patterns. Each alt should have the same number of patterns.
+    -- Taking the first alt, we infer a type for each pattern and a type for the
+    -- RHS expr. We then check the remaining alts against this. This yields a
+    -- function type which we return. It may have existential variables that
+    -- need to be resolved later on.
+
+    -- First, infer a type for each pattern in the first alt
+    (ctx'  , patTys) <- mapAccumLM inferPattern ctx pats
+    -- Next, infer a type for the RHS
+    (exprTy, ctx'' ) <- infer ctx' expr
+    -- Now check the remaining alts using this information
+    ctx'''           <- foldlM (checkMCaseAlt patTys exprTy) ctx'' alts
+    -- Now construct a result type and return it
+    pure (foldFn patTys exprTy, ctx''')
   Let1 _x _e _body -> error "not implemented"
   String _         -> pure (string, ctx)
   Char   _         -> pure (char, ctx)
@@ -583,13 +617,71 @@ infer ctx = \case
       _ -> throwError $ NotARecordType recordTy
   e@(FCall _name _args) -> throwError $ CannotInferFCall e
 
+-- TODO: check that we have the same number of scrutinee types as patterns
+inferMCaseAlt :: [Type] -> Ctx -> ([Pattern], Exp) -> TypeM (Type, Ctx)
+inferMCaseAlt scrutTys ctx (pats, expr) = do
+  ctx' <- foldlM (\c (pat, ty) -> checkPattern c pat ty) ctx (zip pats scrutTys)
+  infer ctx' expr
 
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
-inferAlt :: Type -> Ctx -> (Pattern, Exp) -> TypeM (Type, Ctx)
-inferAlt scrutTy ctx (pat, expr) = do
+inferCaseAlt :: Type -> Ctx -> (Pattern, Exp) -> TypeM (Type, Ctx)
+inferCaseAlt scrutTy ctx (pat, expr) = do
   ctx' <- checkPattern ctx pat scrutTy
   infer ctx' expr
+
+inferPattern :: Ctx -> Pattern -> TypeM (Ctx, Type)
+inferPattern ctx = \case
+  IntPat  _           -> pure (ctx, int)
+  CharPat _           -> pure (ctx, char)
+  BoolPat _           -> pure (ctx, bool)
+  UnitPat             -> pure (ctx, unit)
+  StringPat _         -> pure (ctx, string)
+  ConsPat con subpats -> do
+    -- Infer a type for each pattern
+    (ctx', subPatTys) <- mapAccumLM inferPattern ctx subpats
+    -- Lookup the type of the constructor
+    conTy             <- lookupV con ctx'
+    -- @inferApp' A B@ tells us the type of the result when applying a function
+    -- of type A to an argument of type B.
+    --
+    -- We can use it here to infer the type of the whole pattern, by applying
+    -- the constructor to each infer
+    (ctx'', resultTy) <- foldlM (\(c, fTy) patTy -> inferApp' c fTy patTy)
+                                (ctx', conTy)
+                                subPatTys
+    pure (ctx'', resultTy)
+  VarPat x -> do
+    alpha <- newE
+    ctx'  <- extendE alpha ctx >>= extendV x (EType alpha)
+    pure (ctx', EType alpha)
+  WildPat -> do
+    alpha <- newE
+    ctx'  <- extendE alpha ctx
+    pure (ctx', EType alpha)
+  TuplePat subpats ->
+    let con = case subpats of
+          []                       -> error "Type.inferPattern: empty tuple"
+          [_] -> error "Type.inferPattern: single-element tuple"
+          [_, _]                   -> Free "Tuple2"
+          [_, _, _]                -> Free "Tuple3"
+          [_, _, _, _]             -> Free "Tuple4"
+          [_, _, _, _, _]          -> Free "Tuple5"
+          [_, _, _, _, _, _]       -> Free "Tuple6"
+          [_, _, _, _, _, _, _]    -> Free "Tuple7"
+          [_, _, _, _, _, _, _, _] -> Free "Tuple8"
+          _ ->
+            error
+              $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
+              <> show subpats
+    in  inferPattern ctx (ConsPat con subpats)
+  ListPat []      -> inferPattern ctx (ConsPat (Free "[]") [])
+  ListPat subpats -> inferPattern
+    ctx
+    (foldr (\s acc -> ConsPat (Free "::") [s, acc])
+           (ConsPat (Free "[]") [])
+           subpats
+    )
 
 checkPattern :: Ctx -> Pattern -> Type -> TypeM Ctx
 checkPattern ctx pat ty = case pat of
@@ -663,9 +755,9 @@ foldFn []       t = t
 foldFn [a     ] t = Fn a t
 foldFn (a : as) t = Fn a (foldFn as t)
 
-checkAlt :: Type -> Type -> Ctx -> (Pattern, Exp) -> TypeM Ctx
-checkAlt expectedAltTy scrutTy ctx alt = do
-  (inferredAltTy, ctx') <- inferAlt scrutTy ctx alt
+checkCaseAlt :: Type -> Type -> Ctx -> (Pattern, Exp) -> TypeM Ctx
+checkCaseAlt expectedAltTy scrutTy ctx alt = do
+  (inferredAltTy, ctx') <- inferCaseAlt scrutTy ctx alt
   subtype ctx' expectedAltTy inferredAltTy
 
 inferApp :: Ctx -> Type -> Exp -> TypeM (Type, Ctx)
@@ -687,12 +779,34 @@ inferApp ctx ty e = case ty of
     pure (b, ctx')
   _ -> throwError $ InfAppFailure ty e
 
+-- Like inferApp but we pass the type of the argument, not the argument itself.
+-- We use this when inferring the types of patterns.
+inferApp' :: Ctx -> Type -> Type -> TypeM (Ctx, Type)
+inferApp' ctx fnTy argTy = case fnTy of
+  Forall u a -> do
+    alpha <- newE
+    ctx'  <- extendE alpha ctx
+    inferApp' ctx' (substEForU alpha u a) argTy
+  EType alpha -> do
+    a1   <- newE
+    a2   <- newE
+    ctx' <- extendE a2 ctx >>= extendE a1 >>= extendSolved
+      alpha
+      (Fn (EType a1) (EType a2))
+    ctx'' <- subtype ctx' argTy (EType a1)
+    pure (ctx'', EType a2)
+  Fn a b -> do
+    ctx' <- subtype ctx argTy a
+    pure (ctx', b)
+  _ -> throwError $ InfAppFailure' fnTy argTy
+
 -- Type errors
 data Error = TodoError String
            | OccursCheck E Type
            | OtherError Error
            | SubtypingFailure Type Type
            | InfAppFailure Type Exp
+           | InfAppFailure' Type Type
            | CannotInferHole Exp
            | CannotCheckHole Exp Type
            | UnknownVariable Ctx V
