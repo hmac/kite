@@ -43,8 +43,14 @@ import           Data.List.Extra                ( concatUnzip
 first :: Data.Bifunctor.Bifunctor p => (a -> b) -> p a c -> p b c
 first = Data.Bifunctor.first
 
+firstM :: Functor m => (a -> m a') -> (a, b) -> m (a', b)
+firstM f (a, b) = (, b) <$> f a
+
 second :: Data.Bifunctor.Bifunctor p => (c -> d) -> p a c -> p a d
 second = Data.Bifunctor.second
+
+secondM :: Functor m => (c -> m d) -> (a, c) -> m (a, d)
+secondM f (a, b) = (a, ) <$> f b
 
 bimap :: (a -> b) -> (c -> d) -> (a, c) -> (b, d)
 bimap = Data.Bifunctor.bimap

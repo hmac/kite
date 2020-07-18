@@ -258,6 +258,8 @@ pType' ctx = case ctx of
       "Char"   -> TyChar
       n        -> TyCon n
   hole = TyHole <$> (string "?" >> pHoleName)
+  -- TODO: maybe use List instead of []?
+  -- Simplifies the syntax of types
   list =
     (TyList <$ symbol "[]") <|> (TyApp TyList <$> brackets (pType' Neutral))
   tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)

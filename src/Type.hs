@@ -5,6 +5,7 @@ module Type
   , Type(..)
   , Exp(..)
   , V(..)
+  , U
   , Pattern
   , unfoldFn
   , foldFn
@@ -15,6 +16,14 @@ module Type
   , throwError
   , Error(..)
   , checkPattern
+  , newU
+  , string
+  , int
+  , char
+  , bool
+  , unit
+  , list
+  , mkTupleCon
   )
 where
 
@@ -429,6 +438,9 @@ newInt = do
 
 newE :: TypeM E
 newE = E <$> newInt
+
+newU :: Name -> TypeM U
+newU hint = U <$> newInt <*> pure hint
 
 -- | Lift a 'Maybe' value into the 'MaybeT' monad transformer.
 liftMaybe :: TypeM a -> Maybe a -> TypeM a
