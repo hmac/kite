@@ -2,6 +2,7 @@
 module Type
   ( tests
   , Ctx
+  , CtxElem(..)
   , Type(..)
   , Exp(..)
   , V(..)

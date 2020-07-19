@@ -25,7 +25,7 @@ import           Constraint.Expr                ( Scheme )
 --           data Maybe a = Just a | Nothing
 -- generates
 --           Just : Forall a. a -> Maybe a
---           Nothing : Forall a.
+--           Nothing : Forall a. Maybe a
 --
 --           data User = User { name : String, age : Int }
 -- generates
