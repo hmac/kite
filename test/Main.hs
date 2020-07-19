@@ -15,7 +15,7 @@ import qualified Test.Constraint.Module
 import qualified Integration.Typecheck
 
 import           Hedgehog
-import           Test.Hspec.Hedgehog
+import           Test.Hspec.Hedgehog            ( hedgehog )
 import qualified Type                           ( tests )
 
 main :: IO ()
@@ -30,4 +30,6 @@ main = do
     Test.Constraint.Module.test
     Integration.Typecheck.test
     Test.Syn.RoundTrip.test
-  void $ checkParallel Type.tests
+    describe "Type" $ it "passes all Hedgehog tests" $ do
+      success <- checkParallel Type.tests
+      success `shouldBe` True

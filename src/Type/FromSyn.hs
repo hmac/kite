@@ -4,9 +4,11 @@ module Type.FromSyn where
 
 import           Util
 
+import           Data.String                    ( fromString )
 import           Data.Name                      ( Name(TopLevel)
                                                 , RawName(Name)
                                                 , fromLocal
+                                                , toString
                                                 )
 import           Type                           ( Exp )
 import qualified Type                          as T
@@ -82,7 +84,17 @@ convertScheme (S.Forall vars ty) = do
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case
-  S.TyBool  -> pure T.bool
+  S.TyBool   -> pure T.bool
+  S.TyInt    -> pure T.int
+  S.TyString -> pure T.string
+  S.TyChar   -> pure T.char
+  S.TyUnit   -> pure T.unit
+  S.TyHole _ ->
+    T.throwError $ T.TodoError "Type.fromSyn: holes in types not implemented"
+  S.TyFun a b -> T.Fn <$> convertType uVarCtx a <*> convertType uVarCtx b
+  S.TyTuple as ->
+    let name = fromString $ "Lam.Primitive.Tuple" <> show (length as)
+    in  T.TCon name <$> mapM (convertType uVarCtx) as
   S.TyVar v -> case lookup v uVarCtx of
     Just u  -> pure $ T.UType u
     Nothing -> T.throwError $ T.UnknownVariable mempty (T.Free v)
@@ -99,3 +111,7 @@ convertType uVarCtx = \case
           <> show other
   S.TyList ->
     T.throwError $ T.TodoError "convertType: cannot convert bare List type"
+  S.TyRecord fields ->
+    T.TRecord <$> mapM (secondM (convertType uVarCtx) . first toString) fields
+  S.TyAlias _ _ ->
+    T.throwError $ T.TodoError "convertType: type aliases not implemented"

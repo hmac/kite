@@ -45,6 +45,9 @@ toRaw :: Name -> RawName
 toRaw (Local n     ) = n
 toRaw (TopLevel _ n) = n
 
+toString :: Name -> String
+toString = show . toRaw
+
 -- If the name contains no dots, interpret it as local
 -- If it contains dots, interpret it as a top level name qualified with a
 -- module.

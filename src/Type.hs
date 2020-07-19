@@ -70,45 +70,45 @@ import qualified Hedgehog
 
 -- Primitive types
 string :: Type
-string = TCon "String" []
+string = TCon "Lam.Primitive.String" []
 
 int :: Type
-int = TCon "Int" []
+int = TCon "Lam.Primitive.Int" []
 
 char :: Type
-char = TCon "Char" []
+char = TCon "Lam.Primitive.Char" []
 
 bool :: Type
-bool = TCon "Bool" []
+bool = TCon "Lam.Primitive.Bool" []
 
 unit :: Type
-unit = TCon "Unit" []
+unit = TCon "Lam.Primitive.Unit" []
 
 list :: Type -> Type
-list a = TCon "List" [a]
+list a = TCon "Lam.Primitive.List" [a]
 
 -- Primitive constructors
 primitiveConstructors :: Ctx
 primitiveConstructors =
-  [ Var (Free "Unit")  (TCon "Unit" [])
-  , Var (Free "True")  (TCon "Bool" [])
-  , Var (Free "False") (TCon "Bool" [])
-  , Var (Free "[]") (Forall (U 0 "a") (TCon "List" [UType (U 0 "a")]))
+  [ Var (Free "Lam.Primitive.Unit")  unit
+  , Var (Free "Lam.Primitive.True")  bool
+  , Var (Free "Lam.Primitive.False") bool
+  , Var (Free "Lam.Primitive.[]") (Forall (U 0 "a") (list (UType (U 0 "a"))))
   , Var
-    (Free "::")
+    (Free "Lam.Primitive.::")
     (Forall
       (U 0 "a")
       (Fn (UType (U 0 "a"))
-          (Fn (TCon "List" [UType (U 0 "a")]) (TCon "List" [UType (U 0 "a")]))
+          (Fn (list (UType (U 0 "a"))) (list (UType (U 0 "a"))))
       )
     )
-  , Var (Free "Tuple2") (mkTupleCon 2 "Tuple2")
-  , Var (Free "Tuple3") (mkTupleCon 3 "Tuple3")
-  , Var (Free "Tuple4") (mkTupleCon 4 "Tuple4")
-  , Var (Free "Tuple5") (mkTupleCon 5 "Tuple5")
-  , Var (Free "Tuple6") (mkTupleCon 6 "Tuple6")
-  , Var (Free "Tuple7") (mkTupleCon 7 "Tuple7")
-  , Var (Free "Tuple8") (mkTupleCon 8 "Tuple8")
+  , Var (Free "Lam.Primitive.Tuple2") (mkTupleCon 2 "Lam.Primitive.Tuple2")
+  , Var (Free "Lam.Primitive.Tuple3") (mkTupleCon 3 "Lam.Primitive.Tuple3")
+  , Var (Free "Lam.Primitive.Tuple4") (mkTupleCon 4 "Lam.Primitive.Tuple4")
+  , Var (Free "Lam.Primitive.Tuple5") (mkTupleCon 5 "Lam.Primitive.Tuple5")
+  , Var (Free "Lam.Primitive.Tuple6") (mkTupleCon 6 "Lam.Primitive.Tuple6")
+  , Var (Free "Lam.Primitive.Tuple7") (mkTupleCon 7 "Lam.Primitive.Tuple7")
+  , Var (Free "Lam.Primitive.Tuple8") (mkTupleCon 8 "Lam.Primitive.Tuple8")
   ]
 
 -- Primitive functions
@@ -527,11 +527,11 @@ instantiate dir ctx e ty = case ty of
 -- Typing
 check :: Ctx -> Exp -> Type -> TypeM Ctx
 check ctx expr ty = case (expr, ty) of
-  (Lam x e, Fn a b) -> trace2 "check.fn" ctx $ do
+  (Lam x e, Fn a b) -> do
     ctx'  <- extendV x a ctx
     ctx'' <- check ctx' e b
     pure $ dropAfter (Var x a) ctx''
-  (e, Forall u a) -> trace2 "check.forall" ctx $ do
+  (e, Forall u a) -> do
     ctx'  <- extendU u ctx
     ctx'' <- check ctx' e a
     pure $ dropAfter (UVar u) ctx''
@@ -545,7 +545,7 @@ check ctx expr ty = case (expr, ty) of
     -- assume the type we're checking against is the correct one.
     mapM_ (infer ctx) args
     pure ctx
-  (e, b) -> trace2 "check.default" ctx $ do
+  (e, b) -> do
     (a, ctx') <- infer ctx e
     subtype ctx' (subst ctx' a) (subst ctx' b)
 
@@ -565,25 +565,25 @@ checkMCaseAlt patTys rhsTy ctx (pats, rhs) = do
 -- This fits with foldlM and mapAccumLM
 infer :: Ctx -> Exp -> TypeM (Type, Ctx)
 infer ctx = \case
-  VarExp x -> trace2 "infer.var" ctx $ do
+  VarExp x -> do
     a <- lookupV x ctx
     pure (a, ctx)
-  Ann e a -> trace2 "infer.ann" ctx $ do
+  Ann e a -> do
     void $ wellFormedType ctx a
     ctx' <- check ctx e a
     pure (a, ctx')
-  App e1 e2 -> trace2 "infer.app" ctx $ do
+  App e1 e2 -> do
     (a, ctx' ) <- infer ctx e1
     (c, ctx'') <- inferApp ctx' (subst ctx' a) e2
     pure (c, ctx'')
-  Lam x e -> trace2 "infer.lam" ctx $ do
+  Lam x e -> do
     alpha <- newE
     beta  <- newE
     ctx'  <- extendE alpha ctx >>= extendE beta >>= extendV x (EType alpha)
     ctx'' <- check ctx' e (EType beta)
     pure (Fn (EType alpha) (EType beta), dropAfter (Var x (EType alpha)) ctx'')
-  Hole n -> trace2 "infer.hole" ctx $ throwError $ CannotInferHole (Hole n)
-  Con  x -> trace2 "infer.con" ctx $ do
+  Hole n -> throwError $ CannotInferHole (Hole n)
+  Con  x -> do
     a <- lookupV x ctx
     pure (a, ctx)
   c@(  Case _ [])            -> throwError $ EmptyCase c
@@ -683,13 +683,13 @@ inferPattern ctx = \case
     let con = case subpats of
           []                       -> error "Type.inferPattern: empty tuple"
           [_] -> error "Type.inferPattern: single-element tuple"
-          [_, _]                   -> Free "Tuple2"
-          [_, _, _]                -> Free "Tuple3"
-          [_, _, _, _]             -> Free "Tuple4"
-          [_, _, _, _, _]          -> Free "Tuple5"
-          [_, _, _, _, _, _]       -> Free "Tuple6"
-          [_, _, _, _, _, _, _]    -> Free "Tuple7"
-          [_, _, _, _, _, _, _, _] -> Free "Tuple8"
+          [_, _]                   -> Free "Lam.Primitive.Tuple2"
+          [_, _, _]                -> Free "Lam.Primitive.Tuple3"
+          [_, _, _, _]             -> Free "Lam.Primitive.Tuple4"
+          [_, _, _, _, _]          -> Free "Lam.Primitive.Tuple5"
+          [_, _, _, _, _, _]       -> Free "Lam.Primitive.Tuple6"
+          [_, _, _, _, _, _, _]    -> Free "Lam.Primitive.Tuple7"
+          [_, _, _, _, _, _, _, _] -> Free "Lam.Primitive.Tuple8"
           _ ->
             error
               $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
@@ -698,8 +698,8 @@ inferPattern ctx = \case
   ListPat []      -> inferPattern ctx (ConsPat (Free "[]") [])
   ListPat subpats -> inferPattern
     ctx
-    (foldr (\s acc -> ConsPat (Free "::") [s, acc])
-           (ConsPat (Free "[]") [])
+    (foldr (\s acc -> ConsPat (Free "Lam.Primitive.::") [s, acc])
+           (ConsPat (Free "Lam.Primitive.[]") [])
            subpats
     )
 
@@ -782,11 +782,11 @@ checkCaseAlt expectedAltTy scrutTy ctx alt = do
 
 inferApp :: Ctx -> Type -> Exp -> TypeM (Type, Ctx)
 inferApp ctx ty e = case ty of
-  Forall u a -> trace2 "inferapp.forall" ctx $ do
+  Forall u a -> do
     alpha <- newE
     ctx'  <- extendE alpha ctx
     inferApp ctx' (substEForU alpha u a) e
-  EType alpha -> trace2 "inferapp.e" ctx $ do
+  EType alpha -> do
     a1   <- newE
     a2   <- newE
     ctx' <- extendE a2 ctx >>= extendE a1 >>= extendSolved
@@ -794,7 +794,7 @@ inferApp ctx ty e = case ty of
       (Fn (EType a1) (EType a2))
     ctx'' <- check ctx' e (EType a1)
     pure (EType a2, ctx'')
-  Fn a b -> trace2 "inferapp.fn" ctx $ do
+  Fn a b -> do
     ctx' <- check ctx e a
     pure (b, ctx')
   _ -> throwError $ InfAppFailure ty e
@@ -848,7 +848,7 @@ prop_uval_infers_unit = property $ do
   ctx <- (primCtx <>) <$> forAll genCtx
   let expr = Con (Free "Unit")
       ty   = TCon "Unit" []
-  runTypeM (infer ctx expr) === Right (ty, ctx)
+  fmap fst (runTypeM (infer ctx expr)) === Right ty
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
@@ -863,7 +863,7 @@ prop_infers_simple_app = property $ do
   v <- forAll genV
   let uval = Con (Free "Unit")
   let expr = App (Ann (Lam v uval) (Fn unit unit)) uval
-  runTypeM (infer ctx expr) === Right (unit, ctx)
+  fmap fst (runTypeM (infer ctx expr)) === Right unit
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
@@ -873,7 +873,7 @@ prop_infers_app_with_context = property $ do
   -- The expression is id Unit
   let expr = App (VarExp (Free "id")) uval
   -- The inferred type should be Unit
-  runTypeM (infer ctx expr) === Right (unit, ctx)
+  fmap fst (runTypeM (infer ctx expr)) === Right unit
 
 prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
@@ -889,7 +889,7 @@ prop_infers_polymorphic_app = property $ do
   -- The expression is idUnit (id Unit)
   let expr = App (VarExp (Free "idUnit")) (App (VarExp (Free "id")) uval)
   -- The inferred type should be Unit
-  runTypeM (infer ctx expr) === Right (unit, ESolved (E 0) unit : ctx)
+  fmap fst (runTypeM (infer ctx expr)) === Right unit
 
 prop_infers_list_app :: Property
 prop_infers_list_app = property $ do
@@ -898,7 +898,7 @@ prop_infers_list_app = property $ do
       -- [] : forall a. List a
       ctx  = [Var (Free "[]") ty]
       expr = VarExp (Free "[]")
-  runTypeM (infer ctx expr) === Right (ty, ctx)
+  fmap fst (runTypeM (infer ctx expr)) === Right ty
 
 prop_infers_bool_case :: Property
 prop_infers_bool_case = property $ do
