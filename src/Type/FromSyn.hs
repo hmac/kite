@@ -99,16 +99,15 @@ convertType uVarCtx = \case
     Just u  -> pure $ T.UType u
     Nothing -> T.throwError $ T.UnknownVariable mempty (T.Free v)
   S.TyCon c   -> pure $ T.TCon c []
+  -- Flatten type applications into spine form, so the head of every TApp is
+  -- never a TApp. This is an invariant required by the typechecker.
   S.TyApp a b -> do
-    convertType uVarCtx a >>= \case
-      T.TCon c args -> do
-        b' <- convertType uVarCtx b
-        pure $ T.TCon c $ args ++ [b']
-      other ->
-        T.throwError
-          $  T.TodoError
-          $  "convertType: cannot handle applications of non constructors: "
-          <> show other
+    b' <- convertType uVarCtx b
+    a' <- convertType uVarCtx a
+    pure $ case a' of
+      T.TCon c args -> T.TCon c $ args ++ [b']
+      T.TApp f args -> T.TApp f (args <> [b'])
+      _             -> T.TApp a' [b']
   S.TyList ->
     T.throwError $ T.TodoError "convertType: cannot convert bare List type"
   S.TyRecord fields ->

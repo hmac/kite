@@ -137,10 +137,14 @@ data Type =
   -- Universal variable
   | UType U
   -- Type constructor (saturated)
+  -- TODO: not always saturated! see subtyping for TApps
   | TCon Name [Type]
   -- Record type
   -- TODO: record typing rules
   | TRecord [(String, Type)]
+  -- Type application
+  -- unchecked invariant: always in spine form (i.e., head is never a TApp)
+  | TApp Type [Type]
   deriving (Eq, Show)
 
 genType :: Gen Type
@@ -256,6 +260,7 @@ fv = \case
   UType _        -> []
   TCon _ as      -> concatMap fv as
   TRecord fields -> concatMap (fv . snd) fields
+  TApp f as      -> fv f <> concatMap fv as
 
 prop_fv_commutes :: Property
 prop_fv_commutes = property $ do
@@ -271,12 +276,20 @@ subst ctx = \case
   Forall u a     -> Forall u (subst ctx a)
   TCon   c as    -> TCon c (map (subst ctx) as)
   TRecord fields -> TRecord $ mapSnd (subst ctx) fields
-  EType   e      -> substE ctx
+  -- If the substitution yields a nested TCon or TApp, flatten it back to spine
+  -- form.
+  TApp f as ->
+    let as' = map (subst ctx) as
+    in  case subst ctx f of
+          TCon c args -> TCon c (args <> as')
+          TApp g cs   -> TApp g (cs <> as')
+          f'          -> TApp f' as'
+  EType e -> substE ctx
    where
     substE :: Ctx -> Type
     substE = \case
       []                           -> EType e
-      (ESolved e' t : _) | e == e' -> t
+      (ESolved e' t : _) | e == e' -> subst ctx t
       (EVar e' : _) | e == e'      -> EType e
       (_ : c)                      -> substE c
 
@@ -300,6 +313,7 @@ substEForU e u = go
              | otherwise -> UType u'
     TCon c as      -> TCon c (map go as)
     TRecord fields -> TRecord (mapSnd go fields)
+    TApp f as      -> TApp (go f) (map go as)
 
 prop_substEForU_commutes :: Property
 prop_substEForU_commutes = property $ do
@@ -410,7 +424,7 @@ dropAfter e = \case
 -- Check if a type is well-formed
 wellFormedType :: Ctx -> Type -> TypeM Type
 wellFormedType ctx = \case
-  Fn     a b -> wellFormedType ctx a >> wellFormedType ctx b
+  Fn     a b -> Fn <$> wellFormedType ctx a <*> wellFormedType ctx b
   Forall u t -> do
     ctx' <- extendU u ctx
     _    <- wellFormedType ctx' t
@@ -423,6 +437,7 @@ wellFormedType ctx = \case
   TCon c as -> TCon c <$> mapM (wellFormedType ctx) as
   TRecord fields ->
     TRecord <$> traverse (\(n, t) -> (n, ) <$> wellFormedType ctx t) fields
+  TApp f b -> TApp <$> wellFormedType ctx f <*> mapM (wellFormedType ctx) b
 
 -- Typechecking monad
 type TypeM = ExceptT Error (State Int)
@@ -464,7 +479,7 @@ subtype ctx typeA typeB = case (typeA, typeB) of
     alpha <- newE
     ctx'  <- extendMarker alpha ctx >>= extendE alpha
     ctx'' <- subtype ctx' (substEForU alpha u a) b
-    pure $ dropAfter (EVar alpha) ctx''
+    pure $ dropAfter (Marker alpha) ctx''
   (a, Forall u b) -> do
     ctx'  <- extendU u ctx
     ctx'' <- subtype ctx' a b
@@ -473,8 +488,16 @@ subtype ctx typeA typeB = case (typeA, typeB) of
                | otherwise     -> instantiateL ctx e a
   (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
                | otherwise     -> instantiateR ctx e a
-  (TCon v as, TCon v' bs) | v == v' && as == bs -> pure ctx
-  (a, b) -> throwError $ SubtypingFailure a b
+  (TCon v as, TCon v' bs) | v == v' ->
+    foldlM (\c (a, b) -> subtype c a b) ctx (zip as bs)
+  (TCon c as, TApp v bs) -> do
+    ctx' <- subtype ctx (TCon c []) v
+    foldlM (\ctx_ (a, b) -> subtype ctx_ a b) ctx' (zip as bs)
+  (TApp v as, TApp u bs) -> do
+    ctx' <- subtype ctx v u
+    foldlM (\c (a, b) -> subtype c a b) ctx' (zip as bs)
+
+  (a, b) -> throwError $ SubtypingFailure (subst ctx a) (subst ctx b)
 
 -- Instantiation
 -- Existential vars are written e, f
@@ -560,6 +583,14 @@ checkMCaseAlt patTys rhsTy ctx (pats, rhs) = do
                  (zip pats patTys)
   -- check the rhs against the rhs type
   check ctx' rhs rhsTy
+
+-- Like infer but applies the resulting substitution to the type and returns
+-- just the type.
+-- Useful for tests.
+infer' :: Ctx -> Exp -> TypeM Type
+infer' ctx e = do
+  (ty, ctx') <- infer ctx e
+  pure $ subst ctx' ty
 
 -- TODO: flip this around so it's Ctx -> Exp -> TypeM (Ctx, Typ)
 -- This fits with foldlM and mapAccumLM
@@ -846,14 +877,14 @@ todoError = throwError . TodoError
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
   ctx <- (primCtx <>) <$> forAll genCtx
-  let expr = Con (Free "Unit")
-      ty   = TCon "Unit" []
+  let expr = Con (Free "Lam.Primitive.Unit")
+      ty   = TCon "Lam.Primitive.Unit" []
   fmap fst (runTypeM (infer ctx expr)) === Right ty
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
   ctx <- (primCtx <>) <$> forAll genCtx
-  let expr = Con (Free "Unit")
+  let expr = Con (Free "Lam.Primitive.Unit")
       ty   = Fn unit unit
   runTypeM (check ctx expr ty) === Left (SubtypingFailure unit (Fn unit unit))
 
@@ -861,14 +892,14 @@ prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   let ctx = primCtx
   v <- forAll genV
-  let uval = Con (Free "Unit")
+  let uval = Con (Free "Lam.Primitive.Unit")
   let expr = App (Ann (Lam v uval) (Fn unit unit)) uval
   fmap fst (runTypeM (infer ctx expr)) === Right unit
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
-  let uval = Con (Free "Unit")
+  let uval = Con (Free "Lam.Primitive.Unit")
       ctx  = [Var (Free "id") (Fn unit unit)] <> primCtx
   -- The expression is id Unit
   let expr = App (VarExp (Free "id")) uval
@@ -879,7 +910,7 @@ prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
-  let uval = Con (Free "Unit")
+  let uval = Con (Free "Lam.Primitive.Unit")
       a    = U 0 "a"
       ctx =
         [ Var (Free "id")     (Forall a (Fn (UType a) (UType a)))
@@ -894,7 +925,7 @@ prop_infers_polymorphic_app = property $ do
 prop_infers_list_app :: Property
 prop_infers_list_app = property $ do
   let a    = U 0 "a"
-      ty   = Forall a (TCon "List" [UType a])
+      ty   = Forall a (list (UType a))
       -- [] : forall a. List a
       ctx  = [Var (Free "[]") ty]
       expr = VarExp (Free "[]")
@@ -903,14 +934,54 @@ prop_infers_list_app = property $ do
 prop_infers_bool_case :: Property
 prop_infers_bool_case = property $ do
   let ctx   = primCtx
+      -- case True of
+      --   True -> ()
+      --   False -> ()
       expr1 = Case
-        (Con (Free "True"))
-        [(BoolPat True, Con (Free "Unit")), (BoolPat False, Con (Free "Unit"))]
+        (Con (Free "Lam.Primitive.True"))
+        [ (BoolPat True , Con (Free "Lam.Primitive.Unit"))
+        , (BoolPat False, Con (Free "Lam.Primitive.Unit"))
+        ]
+      -- case True of
+      --   True -> True
+      --   False -> ()
       expr2 = Case
-        (Con (Free "True"))
-        [(BoolPat True, Con (Free "True")), (BoolPat False, Con (Free "Unit"))]
-  runTypeM (infer ctx expr1) === Right (unit, ctx)
+        (Con (Free "Lam.Primitive.True"))
+        [ (BoolPat True , Con (Free "Lam.Primitive.True"))
+        , (BoolPat False, Con (Free "Lam.Primitive.Unit"))
+        ]
+  fmap fst (runTypeM (infer ctx expr1)) === Right unit
   runTypeM (infer ctx expr2) === Left (SubtypingFailure bool unit)
+
+prop_checks_higher_kinded_application :: Property
+prop_checks_higher_kinded_application = property $ do
+  -- (\x -> x) : f a -> f a should check
+  let
+    f     = U 1 "f"
+    a     = U 2 "a"
+    expr1 = Lam (Bound 0) (VarExp (Bound 0))
+    type1 = Forall
+      f
+      (Forall a (Fn (TApp (UType f) [UType a]) (TApp (UType f) [UType a])))
+  fmap (const ()) (runTypeM (check primCtx expr1 type1)) === Right ()
+  -- ((\x -> x) : f a -> f a) [1] : [Int] should check
+  -- ((\x -> x) : f a -> f a) [1]         should infer [Int]
+  let expr2 = App
+        (Ann expr1 type1)
+        (App (App (VarExp (Free "Lam.Primitive.::")) (Int 1))
+             (VarExp (Free "Lam.Primitive.[]"))
+        )
+      type2 = list int
+  fmap (const ()) (runTypeM (check primCtx expr2 type2)) === Right ()
+  runTypeM (infer' primCtx expr2) === Right (list int)
+  -- ((\x -> x) : f a -> f a) True : [Int] should fail to check
+  -- ((\x -> x) : f a -> f a) True         should infer some unknown unification variables
+  let expr3 = App (Ann expr1 type1) (VarExp (Free "Lam.Primitive.True"))
+      type3 = list int
+  fmap (const ()) (runTypeM (check primCtx expr3 type3)) === Left
+    (SubtypingFailure (TCon "Lam.Primitive.Bool" [EType (E 1)]) (list int))
+  fmap fst (runTypeM (infer primCtx expr3))
+    === Right (TApp (EType (E 0)) [EType (E 1)])
 
 tests :: Hedgehog.Group
 tests = $$(Hedgehog.discover)
