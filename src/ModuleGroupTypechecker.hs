@@ -5,6 +5,11 @@ import           Constraint.Generate.M          ( run
                                                 , TypeEnv
                                                 )
 import           Constraint.Generate.Module     ( generateModule )
+import           Type.Module                    ( checkModule )
+import qualified Type                           ( primCtx
+                                                , Error
+                                                , runTypeM
+                                                )
 import qualified Constraint.Primitive
 import           ModuleGroup
 import           Util
@@ -31,6 +36,20 @@ typecheckModuleGroup (ModuleGroup m deps) = do
   case reverse typedModules of
     (typedModule : typedDeps) ->
       pure $ TypedModuleGroup typedModule (reverse typedDeps)
+    [] -> error "ModuleGroupTypechecker: empty list found"
+
+-- Same as above but using the new typechecker.
+-- We return an UntypedModuleGroup because the new typechecker doesn't yet add
+-- type annotations when it checks things.
+typecheckModuleGroup2
+  :: UntypedModuleGroup -> Either Type.Error UntypedModuleGroup
+typecheckModuleGroup2 (ModuleGroup m deps) = do
+  let ms = deps ++ [m]
+  (_env', typedModules) <- Type.runTypeM
+    $ mapAccumLM checkModule Type.primCtx ms
+  case reverse typedModules of
+    (typedModule : typedDeps) ->
+      pure $ ModuleGroup typedModule (reverse typedDeps)
     [] -> error "ModuleGroupTypechecker: empty list found"
 
 dumpEnv :: UntypedModuleGroup -> Either LocatedError TypeEnv

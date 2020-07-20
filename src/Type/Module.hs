@@ -5,7 +5,7 @@ module Type.Module where
 -- typechecked. In future we will need to return a copy of the module with full
 -- type annotations.
 
-import qualified Data.Map.Strict               as Map
+import qualified Data.Set                      as Set
 
 import qualified Syn                           as S
 import           Syn                            ( Decl_(..)
@@ -21,20 +21,64 @@ import           Type                           ( TypeM
                                                 , Ctx
                                                 , CtxElem(Var)
                                                 , V(..)
+                                                , Exp
+                                                , check
+                                                , wellFormedType
+                                                , throwError
+                                                , Error(..)
                                                 )
-import           Type.FromSyn                   ( convertScheme )
+import           Type.FromSyn                   ( convertScheme
+                                                , fromSyn
+                                                )
+import           Control.Monad                  ( void )
 
-type TypeEnv = Map.Map Name Type
-
-checkModule :: TypeEnv -> Can.Module -> TypeM (TypeEnv, ())
-checkModule _env modul = do
+-- TODO: return a type-annotated module
+-- TODO: check that data type definitions are well-formed
+checkModule :: Ctx -> Can.Module -> TypeM (Ctx, Can.Module)
+checkModule ctx modul = do
   -- Extract type signatures from all datatype definitions in the module
-  _dataTypeCtx <- mapM translateData (getDataDecls (moduleDecls modul))
-  -- TODO: generate E vars for each function so they can be typechecked in any
-  -- order
+  dataTypeCtx <- mconcat
+    <$> mapM translateData (getDataDecls (moduleDecls modul))
+
+  -- Get all the functions defined in the module
+  funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
+
+  -- Extend the context with type signatures for each function
+  -- This allows us to typecheck them in any order, and to typecheck any
+  -- recursive calls.
+  let funTypeCtx = map (\(name, ty, _exp) -> Var (Free name) ty) funs
+
+  let ctx'       = ctx <> dataTypeCtx <> funTypeCtx
+
   -- Typecheck each function definition
-  -- Done?
-  undefined
+  mapM_ (checkFun ctx') funs
+
+  -- Done
+  pure (ctx', modul)
+
+checkFun :: Ctx -> (Name, Type, Exp) -> TypeM ()
+checkFun ctx (_name, ty, body) = do
+  -- check the type is well-formed
+  void $ wellFormedType ctx ty
+  -- check the body of the function
+  void $ check ctx body ty
+
+funToBind :: Can.Fun Can.Exp -> TypeM (Name, Type, Exp)
+funToBind fun = do
+  rhs <- (fromSyn . S.defExpr . head . funDefs) fun
+  case funType fun of
+    Nothing ->
+      throwError $ TodoError $ "function with no type signature: " <> show
+        (funName fun)
+    Just ty -> do
+      sch <- quantify ty
+      pure (funName fun, sch, rhs)
+
+-- Explicitly quantify all type variables, then convert the whole thing to a
+-- T.Type.
+quantify :: Can.Type -> TypeM Type
+quantify t =
+  let vars = Set.toList (S.ftv t) in convertScheme (S.Forall vars t)
 
 -- Convert data type definitions into a series of <constructor, type> bindings.
 --

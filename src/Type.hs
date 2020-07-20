@@ -25,6 +25,8 @@ module Type
   , unit
   , list
   , mkTupleCon
+  , primCtx
+  , runTypeM
   )
 where
 

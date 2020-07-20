@@ -4,6 +4,7 @@ module Syn
   )
 where
 
+import qualified Data.Set                      as Set
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
                                                 )
@@ -159,6 +160,17 @@ tyapp = TyApp
 infixr 4 `fn`
 fn :: Type_ name -> Type_ name -> Type_ name
 fn = TyFun
+
+-- Get the free type variables of a type
+ftv :: Ord name => Type_ name -> Set.Set name
+ftv = \case
+  TyVar x         -> Set.singleton x
+  TyApp a b       -> ftv a <> ftv b
+  TyTuple as      -> mconcat (map ftv as)
+  TyFun a b       -> ftv a <> ftv b
+  TyRecord fields -> mconcat $ map (ftv . snd) fields
+  TyAlias _ a     -> ftv a
+  _               -> mempty
 
 -- Type schemes
 -- v: the type of type variables
