@@ -30,7 +30,8 @@ fromSyn = \case
     T.Case
       <$> fromSyn scrut
       <*> mapM (bimapM (pure . convertPattern) fromSyn) alts
-  S.MCase _  -> error "Type.fromSyn: MCase not implemented"
+  S.MCase alts ->
+    T.MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
   S.Abs xs a -> do
     a' <- fromSyn a
     pure $ foldr (T.Lam . T.Free) a' xs
@@ -108,8 +109,7 @@ convertType uVarCtx = \case
       T.TCon c args -> T.TCon c $ args ++ [b']
       T.TApp f args -> T.TApp f (args <> [b'])
       _             -> T.TApp a' [b']
-  S.TyList ->
-    T.throwError $ T.TodoError "convertType: cannot convert bare List type"
+  S.TyList -> pure $ T.TCon "Lam.Primitive.List" []
   S.TyRecord fields ->
     T.TRecord <$> mapM (secondM (convertType uVarCtx) . first toString) fields
   S.TyAlias _ _ ->

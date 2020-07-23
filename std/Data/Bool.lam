@@ -7,41 +7,41 @@ import Data.Eq (Eq(..))
 import Data.Ord (Ord(..), Ordering(..))
 
 and : Bool -> Bool -> Bool
-and False _ = False
-and True b = b
+and = False _ -> False
+      True  b -> b
 
 or : Bool -> Bool -> Bool
-or True _ = True
-or False b = b
+or = True  _ -> True
+     False b -> b
 
 xor : Bool -> Bool -> Bool
-xor True False = True
-xor False True = True
-xor _ _ = False
+xor = True False -> True
+      False True -> True
+      _     _    -> False
 
 xnor : Bool -> Bool -> Bool
-xnor x y = not (xor x y)
+xnor = x y -> not (xor x y)
 
 all : [Bool] -> Bool
-all [] = True
-all (True :: bs) = all bs
-all (False :: _) = False
+all = [] -> True
+      (True :: bs) -> all bs
+      (False :: _) -> False
 
 -- This is the All semigroup
 semigroupBool : Semigroup Bool
 semigroupBool = Semigroup { append = appendBool }
 
 appendBool : Bool -> Bool -> Bool
-appendBool False _ = False
-appendBool True b = b
+appendBool = and
 
 eqBool : Eq Bool
 eqBool = Eq { eq = xnor }
 
 compareBool : Bool -> Bool -> Ordering
-compareBool True False = GT
-compareBool False True = LT
-compareBool _ _ = EQ
+compareBool =
+  True False -> GT
+  False True -> LT
+  _     _    -> EQ
 
 ordBool : Ord Bool
 ordBool = Ord { eq = eqBool, compare = compareBool }

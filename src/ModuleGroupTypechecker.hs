@@ -6,8 +6,9 @@ import           Constraint.Generate.M          ( run
                                                 )
 import           Constraint.Generate.Module     ( generateModule )
 import           Type.Module                    ( checkModule )
-import qualified Type                           ( primCtx
-                                                , Error
+import qualified Type                           ( --primCtx
+                                               -- ,
+                                                  LocatedError
                                                 , runTypeM
                                                 )
 import qualified Constraint.Primitive
@@ -42,11 +43,10 @@ typecheckModuleGroup (ModuleGroup m deps) = do
 -- We return an UntypedModuleGroup because the new typechecker doesn't yet add
 -- type annotations when it checks things.
 typecheckModuleGroup2
-  :: UntypedModuleGroup -> Either Type.Error UntypedModuleGroup
+  :: UntypedModuleGroup -> Either Type.LocatedError UntypedModuleGroup
 typecheckModuleGroup2 (ModuleGroup m deps) = do
   let ms = deps ++ [m]
-  (_env', typedModules) <- Type.runTypeM
-    $ mapAccumLM checkModule Type.primCtx ms
+  (_env', typedModules) <- Type.runTypeM $ mapAccumLM checkModule mempty ms
   case reverse typedModules of
     (typedModule : typedDeps) ->
       pure $ ModuleGroup typedModule (reverse typedDeps)

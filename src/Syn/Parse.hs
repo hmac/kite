@@ -371,7 +371,7 @@ pInt = do
   pure . read $ fromMaybe "" sign <> digits
 
 pExpr :: Parser Syn
-pExpr = try pBinApp <|> try pApp <|> pExpr'
+pExpr = try pMultiCase <|> try pBinApp <|> try pApp <|> pExpr'
 
 pExpr' :: Parser Syn
 pExpr' =
@@ -391,7 +391,6 @@ pExpr' =
     <|> pList
     <|> pCons
     <|> pCase
-    <|> pMultiCase
 
 pUnitLit :: Parser Syn
 pUnitLit = do
@@ -602,30 +601,25 @@ pCase = do
 
 -- A multi-case is a lambda-case expression which can scrutinise multiple things
 -- at once. It looks like this:
---   mcase
---     [] -> 1
---     _  -> 2
+--     True [] -> 1
+--     _    _  -> 2
 --
--- or this (first branch on the same line as the 'mcase'):
+-- This is equivalent to the haskell expression:
 --
---   mcase [] -> 1
---         _  -> 2
---
--- These are both equivalent to this haskell expression:
---
---   \case
---     [] -> 1
---     _  -> 2
+--   \b l -> case b of
+--             True -> case l of
+--                       [] -> 1
+--                       _ -> 2
+--             _    -> 2
 --
 -- Note that constructor patterns must be parenthesised to distinguish them from
 -- multiple independent patterns. This is why we use pPattern rather than
 -- pCasePattern.
 pMultiCase :: Parser Syn
 pMultiCase = do
-  void (symbolN' "mcase")
-  pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
+  pos   <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
   first <- pAlt
-  rest  <- many $ do
+  rest  <- many $ try $ do
     void $ indentGuard spaceConsumerN GT pos
     pAlt
   pure $ MCase (first : rest)

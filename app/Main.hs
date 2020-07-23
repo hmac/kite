@@ -91,8 +91,8 @@ dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
 
 typecheck :: FilePath -> FilePath -> IO ()
 typecheck homeDir = withParsedFile homeDir $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printLocatedError err)
+  case ModuleGroupTypechecker.typecheckModuleGroup2 g of
+    Left  err -> print err
     Right _   -> printNicely "Success."
 
 format :: FilePath -> IO ()

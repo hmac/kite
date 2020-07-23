@@ -26,11 +26,13 @@ import           Type                           ( TypeM
                                                 , wellFormedType
                                                 , throwError
                                                 , Error(..)
+                                                , LocatedError(..)
                                                 )
 import           Type.FromSyn                   ( convertScheme
                                                 , fromSyn
                                                 )
 import           Control.Monad                  ( void )
+import           Control.Monad.Except           ( withExceptT )
 
 -- TODO: return a type-annotated module
 -- TODO: check that data type definitions are well-formed
@@ -57,11 +59,12 @@ checkModule ctx modul = do
   pure (ctx', modul)
 
 checkFun :: Ctx -> (Name, Type, Exp) -> TypeM ()
-checkFun ctx (_name, ty, body) = do
+checkFun ctx (name, ty, body) =
+  withExceptT (\(LocatedError _ e) -> LocatedError (Just name) e) $ do
   -- check the type is well-formed
-  void $ wellFormedType ctx ty
-  -- check the body of the function
-  void $ check ctx body ty
+    void $ wellFormedType ctx ty
+    -- check the body of the function
+    void $ check ctx body ty
 
 funToBind :: Can.Fun Can.Exp -> TypeM (Name, Type, Exp)
 funToBind fun = do

@@ -16,6 +16,7 @@ module Type
   , TypeM
   , throwError
   , Error(..)
+  , LocatedError(..)
   , checkPattern
   , newU
   , string
@@ -51,9 +52,9 @@ import           Control.Monad.Trans.State.Strict
                                                 , get
                                                 , put
                                                 )
+import qualified Control.Monad.Except
 import           Control.Monad.Except           ( ExceptT(..)
                                                 , runExceptT
-                                                , throwError
                                                 )
 import           Control.Monad.Trans.Class      ( lift )
 
@@ -354,15 +355,17 @@ markers = mapMaybe $ \case
 
 -- | Lookup a universal variable in the context
 lookupU :: U -> Ctx -> TypeM U
-lookupU u = liftMaybe1 (todoError "lookupU failed") . firstJust $ \case
-  (UVar u') | u' == u -> Just u
-  _                   -> Nothing
+lookupU u =
+  liftMaybe1 (todoError ("lookupU failed: " <> show u)) . firstJust $ \case
+    (UVar u') | u' == u -> Just u
+    _                   -> Nothing
 
 -- | Lookup an existential variable in the context
 lookupE :: E -> Ctx -> TypeM E
-lookupE e = liftMaybe1 (todoError "lookupE failed") . firstJust $ \case
-  (EVar e') | e' == e -> Just e
-  _                   -> Nothing
+lookupE e =
+  liftMaybe1 (todoError ("lookupE failed: " <> show e)) . firstJust $ \case
+    (EVar e') | e' == e -> Just e
+    _                   -> Nothing
 
 lookupSolved :: E -> Ctx -> TypeM (E, Type)
 lookupSolved e =
@@ -401,8 +404,9 @@ extendE e ctx | e `notElem` domE ctx = pure $ EVar e : ctx
 -- | Extend a context with a solved existential variable
 extendSolved :: E -> Type -> Ctx -> TypeM Ctx
 extendSolved e t ctx
-  | e `notElem` domE ctx = wellFormedType ctx t >> pure (ESolved e t : ctx)
-  | otherwise            = todoError "extendSolved failed"
+  | e `notElem` domE ctx = trace "extendSolved" $ wellFormedType ctx t >> pure
+    (ESolved e t : ctx)
+  | otherwise = todoError "extendSolved failed"
 
 -- | Extend a context with an existential marker
 extendMarker :: E -> Ctx -> TypeM Ctx
@@ -426,15 +430,16 @@ dropAfter e = \case
 
 -- Check if a type is well-formed
 wellFormedType :: Ctx -> Type -> TypeM Type
-wellFormedType ctx = \case
-  Fn     a b -> Fn <$> wellFormedType ctx a <*> wellFormedType ctx b
+wellFormedType ctx ty = case ty of
+  Fn a b ->
+    trace "wf.fn" $ Fn <$> wellFormedType ctx a <*> wellFormedType ctx b
   Forall u t -> do
     ctx' <- extendU u ctx
     _    <- wellFormedType ctx' t
     pure $ Forall u t
   UType u -> lookupU u ctx >> pure (UType u)
-  EType e -> do
-    void (lookupE e ctx)
+  EType e -> trace "wf.e" $ do
+    pTrace (e, ctx) $ void (lookupE e ctx)
     pure (EType e)
   -- TODO: check that c exists
   TCon c as -> TCon c <$> mapM (wellFormedType ctx) as
@@ -443,9 +448,9 @@ wellFormedType ctx = \case
   TApp f b -> TApp <$> wellFormedType ctx f <*> mapM (wellFormedType ctx) b
 
 -- Typechecking monad
-type TypeM = ExceptT Error (State Int)
+type TypeM = ExceptT LocatedError (State Int)
 
-runTypeM :: TypeM a -> Either Error a
+runTypeM :: TypeM a -> Either LocatedError a
 runTypeM m = evalState (runExceptT m) 0
 
 newInt :: TypeM Int
@@ -472,35 +477,36 @@ liftMaybe1 err m x = maybe err pure (m x)
 -- | Under this input context, the first type is a subtype of the second type,
 -- with the given output context
 subtype :: Ctx -> Type -> Type -> TypeM Ctx
-subtype ctx typeA typeB = case (typeA, typeB) of
-  (UType a, UType a') | a == a' -> lookupU a ctx $> ctx
-  (EType a, EType a') | a == a' -> lookupE a ctx $> ctx
-  (Fn a1 a2, Fn b1 b2)          -> do
-    ctx' <- subtype ctx b1 a1
-    subtype ctx' (subst ctx' a2) (subst ctx' b2)
-  (Forall u a, b) -> do
-    alpha <- newE
-    ctx'  <- extendMarker alpha ctx >>= extendE alpha
-    ctx'' <- subtype ctx' (substEForU alpha u a) b
-    pure $ dropAfter (Marker alpha) ctx''
-  (a, Forall u b) -> do
-    ctx'  <- extendU u ctx
-    ctx'' <- subtype ctx' a b
-    pure $ dropAfter (UVar u) ctx''
-  (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
-               | otherwise     -> instantiateL ctx e a
-  (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
-               | otherwise     -> instantiateR ctx e a
-  (TCon v as, TCon v' bs) | v == v' ->
-    foldlM (\c (a, b) -> subtype c a b) ctx (zip as bs)
-  (TCon c as, TApp v bs) -> do
-    ctx' <- subtype ctx (TCon c []) v
-    foldlM (\ctx_ (a, b) -> subtype ctx_ a b) ctx' (zip as bs)
-  (TApp v as, TApp u bs) -> do
-    ctx' <- subtype ctx v u
-    foldlM (\c (a, b) -> subtype c a b) ctx' (zip as bs)
+subtype ctx typeA typeB =
+  trace "subtype" $ pTrace (ctx, typeA, typeB) $ case (typeA, typeB) of
+    (UType a, UType a') | a == a' -> lookupU a ctx $> ctx
+    (EType a, EType a') | a == a' -> lookupE a ctx $> ctx
+    (Fn a1 a2, Fn b1 b2)          -> do
+      ctx' <- subtype ctx b1 a1
+      subtype ctx' (subst ctx' a2) (subst ctx' b2)
+    (Forall u a, b) -> do
+      alpha <- newE
+      ctx'  <- extendMarker alpha ctx >>= extendE alpha
+      ctx'' <- subtype ctx' (substEForU alpha u a) b
+      pure $ dropAfter (Marker alpha) ctx''
+    (a, Forall u b) -> do
+      ctx'  <- extendU u ctx
+      ctx'' <- subtype ctx' a b
+      pure $ dropAfter (UVar u) ctx''
+    (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
+                 | otherwise     -> instantiateL ctx e a
+    (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
+                 | otherwise     -> instantiateR ctx e a
+    (TCon v as, TCon v' bs) | v == v' ->
+      foldlM (\c (a, b) -> subtype c a b) ctx (zip as bs)
+    (TCon c as, TApp v bs) -> do
+      ctx' <- subtype ctx (TCon c []) v
+      foldlM (\ctx_ (a, b) -> subtype ctx_ a b) ctx' (zip as bs)
+    (TApp v as, TApp u bs) -> do
+      ctx' <- subtype ctx v u
+      foldlM (\c (a, b) -> subtype c a b) ctx' (zip as bs)
 
-  (a, b) -> throwError $ SubtypingFailure (subst ctx a) (subst ctx b)
+    (a, b) -> throwError $ SubtypingFailure (subst ctx a) (subst ctx b)
 
 -- Instantiation
 -- Existential vars are written e, f
@@ -515,7 +521,7 @@ instantiateR = instantiate (Right ())
 -- or right. This affects the rules for Fn and Forall.
 instantiate :: Either () () -> Ctx -> E -> Type -> TypeM Ctx
 instantiate dir ctx e ty = case ty of
-  EType f -> do
+  EType f -> trace "inst.e" $ do
     -- e must occur before f in the context
     -- to check this, we look for e after splitting the context at f
     let (l, r) = splitAt (EVar f) ctx
@@ -541,9 +547,9 @@ instantiate dir ctx e ty = case ty of
       ctx'  <- extendMarker beta ctx >>= extendE beta
       ctx'' <- instantiate dir ctx' e (substEForU beta u a)
       pure $ dropAfter (Marker beta) ctx''
-  a -> do
+  a -> trace "inst.other" $ do
     let (l, r) = splitAt (EVar e) ctx
-    void $ wellFormedType l a
+    void $ wellFormedType r a
     pure $ l <> [ESolved e a] <> r
  where
   flipDir :: Either () () -> Either () ()
@@ -599,10 +605,10 @@ infer' ctx e = do
 -- This fits with foldlM and mapAccumLM
 infer :: Ctx -> Exp -> TypeM (Type, Ctx)
 infer ctx = \case
-  VarExp x -> do
+  VarExp x -> trace "infer.var" $ do
     a <- lookupV x ctx
     pure (a, ctx)
-  Ann e a -> do
+  Ann e a -> trace "infer.ann" $ do
     void $ wellFormedType ctx a
     ctx' <- check ctx e a
     pure (a, ctx')
@@ -643,12 +649,12 @@ infer ctx = \case
     ctx'''           <- foldlM (checkMCaseAlt patTys exprTy) ctx'' alts
     -- Now construct a result type and return it
     pure (foldFn patTys exprTy, ctx''')
-  Let1 _x _e _body -> error "not implemented"
+  Let1 _x _e _body -> error "Type.infer: Let1 not implemented"
   String _         -> pure (string, ctx)
   Char   _         -> pure (char, ctx)
   Int    _         -> pure (int, ctx)
   Bool   _         -> pure (bool, ctx)
-  Record fields    -> do
+  Record fields    -> trace "infer.record" $ do
     -- To infer the type of a record, we must be able to infer types for all its
     -- fields
     (ctx', fTypes) <- mapAccumLM
@@ -659,14 +665,14 @@ infer ctx = \case
       ctx
       fields
     pure (TRecord fTypes, ctx')
-  Project record fieldName -> do
+  Project record fieldName -> trace "infer.project" $ do
     -- To infer the type of a record projection, we must know the type of the
     -- record.
     (recordTy, ctx') <- infer ctx record
     -- Check if the record contains this field
-    case recordTy of
+    case subst ctx' recordTy of
       TRecord fields -> case lookup fieldName fields of
-        Just fieldTy -> pure (fieldTy, ctx')
+        Just fieldTy -> pTrace fieldTy $ pure (fieldTy, ctx')
         Nothing      -> throwError $ RecordDoesNotHaveField recordTy fieldName
       _ -> throwError $ NotARecordType recordTy
   e@(FCall _name _args) -> throwError $ CannotInferFCall e
@@ -686,25 +692,28 @@ inferCaseAlt scrutTy ctx (pat, expr) = do
 
 inferPattern :: Ctx -> Pattern -> TypeM (Ctx, Type)
 inferPattern ctx = \case
-  IntPat  _           -> pure (ctx, int)
-  CharPat _           -> pure (ctx, char)
-  BoolPat _           -> pure (ctx, bool)
-  UnitPat             -> pure (ctx, unit)
-  StringPat _         -> pure (ctx, string)
-  ConsPat con subpats -> do
-    -- Infer a type for each pattern
-    (ctx', subPatTys) <- mapAccumLM inferPattern ctx subpats
-    -- Lookup the type of the constructor
-    conTy             <- lookupV con ctx'
-    -- @inferApp' A B@ tells us the type of the result when applying a function
-    -- of type A to an argument of type B.
-    --
-    -- We can use it here to infer the type of the whole pattern, by applying
-    -- the constructor to each infer
-    (ctx'', resultTy) <- foldlM (\(c, fTy) patTy -> inferApp' c fTy patTy)
-                                (ctx', conTy)
-                                subPatTys
-    pure (ctx'', resultTy)
+  IntPat  _   -> pure (ctx, int)
+  CharPat _   -> pure (ctx, char)
+  BoolPat _   -> pure (ctx, bool)
+  UnitPat     -> pure (ctx, unit)
+  StringPat _ -> pure (ctx, string)
+  ConsPat con subpats ->
+    trace "inferPattern.conspat" $ pTrace (ConsPat con subpats) $ do
+      -- Lookup the type of the constructor
+      conTy              <- lookupV con ctx
+
+      -- Infer a type for each subpattern
+      (ctx' , subPatTys) <- mapAccumLM inferPattern ctx subpats
+
+      -- @inferApp' A B@ tells us the type of the result when applying a function
+      -- of type A to an argument of type B.
+      --
+      -- We can use it here to infer the type of the whole pattern, by applying
+      -- the constructor to each infer
+      (ctx'', resultTy ) <- foldlM (\(c, fTy) patTy -> inferApp' c fTy patTy)
+                                   (ctx', conTy)
+                                   subPatTys
+      pure (ctx'', resultTy)
   VarPat x -> do
     alpha <- newE
     ctx'  <- extendE alpha ctx >>= extendV x (EType alpha)
@@ -738,7 +747,7 @@ inferPattern ctx = \case
     )
 
 checkPattern :: Ctx -> Pattern -> Type -> TypeM Ctx
-checkPattern ctx pat ty = case pat of
+checkPattern ctx pat ty = trace "checkPattern" $ case pat of
   WildPat     -> pure ctx
   VarPat  x   -> extendV x ty ctx
   IntPat  _   -> subtype ctx ty int
@@ -810,7 +819,7 @@ foldFn [a     ] t = Fn a t
 foldFn (a : as) t = Fn a (foldFn as t)
 
 checkCaseAlt :: Type -> Type -> Ctx -> (Pattern, Exp) -> TypeM Ctx
-checkCaseAlt expectedAltTy scrutTy ctx alt = do
+checkCaseAlt expectedAltTy scrutTy ctx alt = trace "checkCaseAlt" $ do
   (inferredAltTy, ctx') <- inferCaseAlt scrutTy ctx alt
   subtype ctx' expectedAltTy inferredAltTy
 
@@ -837,11 +846,11 @@ inferApp ctx ty e = case ty of
 -- We use this when inferring the types of patterns.
 inferApp' :: Ctx -> Type -> Type -> TypeM (Ctx, Type)
 inferApp' ctx fnTy argTy = case fnTy of
-  Forall u a -> do
+  Forall u a -> trace "inferApp'.forall" $ do
     alpha <- newE
     ctx'  <- extendE alpha ctx
     inferApp' ctx' (substEForU alpha u a) argTy
-  EType alpha -> do
+  EType alpha -> trace "inferApp'.e" $ do
     a1   <- newE
     a2   <- newE
     ctx' <- extendE a2 ctx >>= extendE a1 >>= extendSolved
@@ -849,10 +858,15 @@ inferApp' ctx fnTy argTy = case fnTy of
       (Fn (EType a1) (EType a2))
     ctx'' <- subtype ctx' argTy (EType a1)
     pure (ctx'', EType a2)
-  Fn a b -> do
-    ctx' <- subtype ctx argTy a
+  Fn a b -> trace "inferApp'.fn" $ do
+    ctx' <- pTrace (fnTy, argTy, ctx) $ subtype ctx argTy a
     pure (ctx', b)
   _ -> throwError $ InfAppFailure' fnTy argTy
+
+-- A type error, optionally with the name of the function definition that caused
+-- it.
+data LocatedError = LocatedError (Maybe Name) Error
+  deriving (Eq, Show)
 
 -- Type errors
 data Error = TodoError String
@@ -875,6 +889,9 @@ data Error = TodoError String
 todoError :: String -> TypeM a
 todoError = throwError . TodoError
 
+throwError :: Error -> TypeM a
+throwError err = Control.Monad.Except.throwError (LocatedError Nothing err)
+
 -- Tests
 
 prop_uval_infers_unit :: Property
@@ -889,7 +906,8 @@ prop_checks_bad_unit_annotation = property $ do
   ctx <- (primCtx <>) <$> forAll genCtx
   let expr = Con (Free "Lam.Primitive.Unit")
       ty   = Fn unit unit
-  runTypeM (check ctx expr ty) === Left (SubtypingFailure unit (Fn unit unit))
+  runTypeM (check ctx expr ty)
+    === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
 
 prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
@@ -954,7 +972,8 @@ prop_infers_bool_case = property $ do
         , (BoolPat False, Con (Free "Lam.Primitive.Unit"))
         ]
   fmap fst (runTypeM (infer ctx expr1)) === Right unit
-  runTypeM (infer ctx expr2) === Left (SubtypingFailure bool unit)
+  runTypeM (infer ctx expr2)
+    === Left (LocatedError Nothing (SubtypingFailure bool unit))
 
 prop_checks_higher_kinded_application :: Property
 prop_checks_higher_kinded_application = property $ do
@@ -982,7 +1001,10 @@ prop_checks_higher_kinded_application = property $ do
   let expr3 = App (Ann expr1 type1) (VarExp (Free "Lam.Primitive.True"))
       type3 = list int
   fmap (const ()) (runTypeM (check primCtx expr3 type3)) === Left
-    (SubtypingFailure (TCon "Lam.Primitive.Bool" [EType (E 1)]) (list int))
+    (LocatedError
+      Nothing
+      (SubtypingFailure (TCon "Lam.Primitive.Bool" [EType (E 1)]) (list int))
+    )
   fmap fst (runTypeM (infer primCtx expr3))
     === Right (TApp (EType (E 0)) [EType (E 1)])
 

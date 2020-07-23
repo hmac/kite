@@ -4,12 +4,8 @@ import Data.Eq (eq)
 import Data.Int (eqInt)
 
 fib : Int -> Int
-fib n = case eq eqInt n 0 of
-          True -> 0
-          False -> case eq eqInt n 1 of
-                     True -> 1
-                     False -> case eq eqInt n 2 of
-                                True -> 1
-                                False -> (fib (n - 1)) + (fib (n - 2))
+fib = 0 -> 0
+      1 -> 1
+      n -> (fib (n - 1)) + (fib (n - 2))
 main : Int
 main = fib 15
