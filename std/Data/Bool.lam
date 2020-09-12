@@ -23,7 +23,7 @@ xnor : Bool -> Bool -> Bool
 xnor = x y -> not (xor x y)
 
 all : [Bool] -> Bool
-all = [] -> True
+all = []           -> True
       (True :: bs) -> all bs
       (False :: _) -> False
 

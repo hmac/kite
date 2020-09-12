@@ -114,3 +114,7 @@ convertType uVarCtx = \case
     T.TRecord <$> mapM (secondM (convertType uVarCtx) . first toString) fields
   S.TyAlias _ _ ->
     T.throwError $ T.TodoError "convertType: type aliases not implemented"
+  S.TyForall v t -> do
+    u  <- T.newU v
+    t' <- convertType ((v, u) : uVarCtx) t
+    pure $ T.Forall u t'

@@ -164,7 +164,7 @@ data Type =
 
 instance Debug Type where
   debug (Fn     a b    ) = debug a <+> "->" <+> debug b
-  debug (Forall v t    ) = "∀" <> debug v <> "." <+> debug t
+  debug (Forall v t    ) = "∀" <> debug v <> "." <+> "(" <> debug t <> ")"
   debug (EType e       ) = debug e
   debug (UType u       ) = debug u
   debug (TCon c args   ) = debug c <+> sepBy " " (map debug args)
@@ -191,7 +191,7 @@ instance Eq U where
   (U i _) == (U j _) = i == j
 
 instance Debug U where
-  debug (U _ n) = debug n
+  debug (U n v) = debug v <> show n
 
 genU :: Gen U
 genU = U <$> G.int (R.linear 0 100) <*> genName
@@ -506,7 +506,7 @@ wellFormedType ctx ty = trace' ctx ["wellFormedType", debug ty] $ case ty of
     pure $ Forall u t
   UType u -> lookupU u ctx >> pure (UType u)
   EType e -> do
-    void (lookupE e ctx)
+    void (lookupE e ctx) `catchError` const (void (lookupSolved e ctx))
     pure (EType e)
   -- TODO: check that c exists
   TCon c as -> TCon c <$> mapM (wellFormedType ctx) as
@@ -522,7 +522,7 @@ data TypeEnv =
           } deriving (Eq, Show)
 
 defaultTypeEnv :: TypeEnv
-defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = False }
+defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = True }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State Int))
 
@@ -585,6 +585,17 @@ subtype ctx typeA typeB =
     (TApp v as, TApp u bs) -> do
       ctx' <- subtype ctx v u
       foldM (\c (a, b) -> subtype c a b) ctx' (zip as bs)
+    (TRecord as, TRecord bs) -> do
+      -- For any records A, B
+      -- A < B if every field fB in B has a corresponding field fA such that fA < fB
+      foldM
+        (\ctx_ (label, bTy) -> case lookup label bs of
+          Nothing  -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
+          Just aTy -> subtype ctx_ aTy bTy
+        )
+        ctx
+        bs
+
 
     (a, b) -> throwError $ SubtypingFailure (subst ctx a) (subst ctx b)
 

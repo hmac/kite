@@ -233,10 +233,11 @@ pType = pType' Neutral
 -- Note: currently broken
 pType' :: TypeCtx -> Parser Type
 pType' ctx = case ctx of
-  Neutral -> try arr <|> try app <|> atomic <|> parens (pType' Neutral)
-  Paren   -> atomic <|> parens (pType' Neutral)
-  AppL    -> try app <|> atomic <|> parens (pType' Neutral)
-  AppR    -> atomic <|> parens (pType' Neutral)
+  Neutral ->
+    try arr <|> try app <|> for_all <|> atomic <|> parens (pType' Neutral)
+  Paren -> atomic <|> parens (pType' Neutral)
+  AppL  -> try app <|> atomic <|> parens (pType' Neutral)
+  AppR  -> atomic <|> parens (pType' Neutral)
  where
   atomic = unit <|> con <|> var <|> hole <|> list <|> record <|> try tuple
   arr    = do
@@ -269,6 +270,12 @@ pType' ctx = case ctx of
     void (symbol ":")
     ty <- pType' Neutral
     pure (fName, ty)
+  for_all = do
+    void (symbol "forall")
+    vars <- some lowercaseName
+    void (symbol ".")
+    t <- pType' Neutral
+    pure $ foldr TyForall t vars
 
 -- When parsing the type args to a constructor, type application must be inside
 -- parentheses
@@ -692,6 +699,7 @@ keywords =
   , "where"
   , "module"
   , "import"
+  , "forall"
   , "$fcall"
   ]
 

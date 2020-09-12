@@ -119,7 +119,7 @@ translateData d =
     let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
     let scheme = S.Forall tyvars $ foldr S.TyFun resultType (conArgs datacon)
     ty <- convertScheme scheme
-    pure $ Var (Free dataTypeName) ty
+    pure $ Var (Free (conName datacon)) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
 getFunDecls = getDeclBy $ \case

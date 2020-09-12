@@ -67,3 +67,6 @@ tyToType = \case
   S.TyUnit          -> TUnit
   S.TyFun a b       -> tyToType a `fn` tyToType b
   S.TyRecord fields -> TRecord $ mapSnd tyToType fields
+  -- We ignore foralls, because this typechecker doesn't support them and
+  -- we will replace it soon anyway.
+  S.TyForall _v t   -> tyToType t

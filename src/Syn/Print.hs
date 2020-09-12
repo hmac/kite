@@ -164,6 +164,7 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyUnit         ) -> type_ "()"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
+  (_, TyForall v t) -> "forall" <+> printName v <> "." <+> printType t
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line

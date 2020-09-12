@@ -348,3 +348,21 @@ test = parallel $ do
         `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]
     it "parses applications of holes to types" $ do
       parse pType "" "?a A" `shouldParse` (TyHole "a" `tyapp` TyCon "A")
+    it "parses quantification" $ do
+      parse pType "" "forall a. a -> a"
+        `shouldParse` TyForall "a" (TyVar "a" `fn` TyVar "a")
+    it "parses multi quantification" $ do
+      parse pType "" "forall a b. a -> b"
+        `shouldParse` TyForall "a" (TyForall "b" (TyVar "a" `fn` TyVar "b"))
+    it "parses complex multi quantification" $ do
+      parse pType "" "forall a b. (a -> b) -> f a -> f b"
+        `shouldParse` (TyForall
+                        "a"
+                        (TyForall
+                          "b"
+                          (    (TyVar "a" `fn` TyVar "b")
+                          `fn` (TyVar "f" `tyapp` TyVar "a")
+                          `fn` (TyVar "f" `tyapp` TyVar "b")
+                          )
+                        )
+                      )

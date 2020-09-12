@@ -2,11 +2,11 @@ module Data.Functor
 
 import Data.Function (const)
 
-type Functor f = Functor { map : (a -> b) -> f a -> f b }
+type Functor f = Functor { map : forall a b. (a -> b) -> f a -> f b }
 
 map : Functor f -> (a -> b) -> f a -> f b
-map (Functor d) = d.map
+map = (Functor d) -> d.map
 
 -- Discard the result, replacing it with ()
 void : Functor f -> f a -> f ()
-void ftor x = map ftor (const ()) x
+void = ftor x -> map ftor (const ()) x
