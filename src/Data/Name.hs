@@ -55,3 +55,6 @@ instance IsString Name where
   fromString s = case splitOn '.' s of
     [n] -> Local (Name n)
     ns  -> TopLevel (ModuleName (init ns)) (Name (last ns))
+
+instance Debug Name where
+  debug = toString

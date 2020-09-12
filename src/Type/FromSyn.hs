@@ -81,7 +81,7 @@ convertScheme :: Can.Scheme -> T.TypeM T.Type
 convertScheme (S.Forall vars ty) = do
   uMap <- mapM (\v -> (v, ) <$> T.newU v) vars
   ty'  <- convertType uMap ty
-  pure $ foldr T.Forall ty' (map snd uMap)
+  pure $ foldr (T.Forall . snd) ty' uMap
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case

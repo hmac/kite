@@ -1,9 +1,44 @@
 module Syn
-  ( module Syn
+  ( Module
+  , Module_(..)
+  , dataDecls
+  , funDecls
+  , extractDecl
+  , Import(..)
+  , ImportItem
+  , ImportItem_(..)
+  , unName
+  , Decl
+  , Decl_(..)
+  , Fun
+  , Fun_(..)
+  , Constraint
+  , Constraint_(..)
+  , Data
+  , Data_(..)
+  , Alias
+  , Alias_(..)
+  , DataCon
+  , DataCon_(..)
+  , Def
+  , Def_(..)
+  , Pattern
+  , Pattern_(..)
+  , tyapp
+  , fn
+  , ftv
+  , Scheme
+  , Scheme_(..)
+  , binOps
+  , Syn
+  , Syn_(..)
+  , Type
+  , Type_(..)
   , module Data.Name
   )
 where
 
+import           Data.List                      ( intercalate )
 import qualified Data.Set                      as Set
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
@@ -113,6 +148,7 @@ data Def_ name a = Def { defArgs :: [Pattern_ name]
                        }
                        deriving (Eq, Show)
 
+-- TODO: record patterns
 type Pattern = Pattern_ RawName
 data Pattern_ a = VarPat a
              | WildPat
@@ -125,6 +161,24 @@ data Pattern_ a = VarPat a
              | ConsPat a [Pattern_ a]
              | StringPat String
              deriving (Eq, Show)
+
+instance Debug a => Debug (Pattern_ a) where
+  debug (VarPat v)       = debug v
+  debug WildPat          = "_"
+  debug (IntPat  i)      = show i
+  debug (CharPat c)      = "'" <> [c] <> "'"
+  debug (BoolPat b)      = show b
+  debug UnitPat          = "()"
+  debug (TuplePat args ) = "(" <> sepBy ", " (map debug args) <> ")"
+  debug (ListPat  args ) = "[" <> sepBy ", " (map debug args) <> "]"
+  debug (ConsPat c args) = "(" <> debug c <+> sepBy " " (map debug args) <> ")"
+  debug (StringPat s   ) = "\"" <> s <> "\""
+
+sepBy :: String -> [String] -> String
+sepBy = intercalate
+
+(<+>) :: String -> String -> String
+a <+> b = a <> " " <> b
 
 -- Int
 -- Maybe Int

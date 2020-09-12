@@ -40,6 +40,7 @@ instance ParseRecord Config
 
 data DumpPhase =
     AfterParse
+  | BeforeTypecheck
   | AfterTypecheck
   | LC
   | ELC
@@ -63,10 +64,11 @@ main = do
     Run       f  -> run homeDir f
     Typecheck f  -> typecheck homeDir f
     Dump phase f -> case phase of
-      AfterParse     -> parse homeDir f
-      AfterTypecheck -> dumpTypeEnv homeDir f
-      LC             -> dumpLC homeDir f
-      ELC            -> dumpELC homeDir f
+      AfterParse      -> parse homeDir f
+      BeforeTypecheck -> dumpTypeEnv homeDir f
+      AfterTypecheck  -> dumpTypeEnv homeDir f -- TODO: currently this is before typechecking
+      LC              -> dumpLC homeDir f
+      ELC             -> dumpELC homeDir f
 
 parse :: FilePath -> FilePath -> IO ()
 parse homeDir = withParsedFile homeDir pPrint
@@ -85,8 +87,8 @@ dumpELC homeDir = withParsedFile homeDir $ \g ->
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()
 dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printLocatedError err)
+  case ModuleGroupTypechecker.dumpEnv g of
+    Left  err -> pPrint err
     Right g'  -> pPrint g'
 
 typecheck :: FilePath -> FilePath -> IO ()

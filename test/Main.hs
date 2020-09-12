@@ -11,6 +11,7 @@ import qualified Test.Constraint.Pattern
 import qualified Test.Constraint.Bind
 import qualified Test.Constraint.FromSyn
 import qualified Test.Constraint.Module
+import qualified Test.Type
 
 import qualified Integration.Typecheck
 
@@ -28,6 +29,7 @@ main = do
     Test.Constraint.Bind.test
     Test.Constraint.FromSyn.test
     Test.Constraint.Module.test
+    Test.Type.test
     Integration.Typecheck.test
     Test.Syn.RoundTrip.test
     describe "Type" $ it "passes all Hedgehog tests" $ do

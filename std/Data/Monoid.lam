@@ -6,4 +6,4 @@ import Data.Semigroup (Semigroup, append)
 type Monoid a = Monoid { empty : a, semigroup : Semigroup a }
 
 concat : Monoid a -> [a] -> a
-concat (Monoid d) = foldr (append d.semigroup) d.empty
+concat = (Monoid d) -> foldr (append d.semigroup) d.empty

@@ -102,7 +102,7 @@ printFun Fun { funComments = comments, funName = name, funDefs = defs, funType =
   = vsep $ printComments comments ++ sig ++ map (printDef name) defs
  where
   sig = case ty of
-    Just t  -> [printName name <> align (space <> colon <+> printType t)]
+    Just t  -> [func (printName name) <> align (space <> colon <+> printType t)]
     Nothing -> []
   printComments [] = []
   printComments cs = map printComment cs
@@ -150,27 +150,31 @@ printType' ctx ty = case (ctx, ty) of
   (ArrR, t@TyApp{}      ) -> printType' Root t
 
   -- Basic cases
-  (_   , TyCon n        ) -> printName n
+  (_   , TyCon n        ) -> type_ $ printName n
   -- Type aliases are treated like constructors
-  (_   , TyAlias alias _) -> printName alias
+  (_   , TyAlias alias _) -> type_ $ printName alias
   (_   , TyHole n       ) -> hole ("?" <> printName n)
   (_   , TyVar n        ) -> printName n
-  (_   , TyList         ) -> "[]"
+  (_   , TyList         ) -> type_ "[]"
   (_   , TyTuple ts     ) -> tupled (map (printType' Root) ts)
-  (_   , TyInt          ) -> "Int"
-  (_   , TyString       ) -> "String"
-  (_   , TyChar         ) -> "Char"
-  (_   , TyBool         ) -> "Bool"
-  (_   , TyUnit         ) -> "()"
+  (_   , TyInt          ) -> type_ "Int"
+  (_   , TyString       ) -> type_ "String"
+  (_   , TyChar         ) -> type_ "Char"
+  (_   , TyBool         ) -> type_ "Bool"
+  (_   , TyUnit         ) -> type_ "()"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
+-- TODO: when we drop support for LHS patterns, update this
 printDef :: RawName -> Def Syn -> Document
 printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
                 | otherwise       = lhs <+> printExpr (defExpr d)
-  where lhs = printName name <+> hsep (map printPattern (defArgs d)) <+> equals
+ where
+  lhs = case map printPattern (defArgs d) of
+    []   -> func (printName name) <+> equals
+    pats -> func (printName name) <+> hsep pats <+> equals
 
 printPattern :: Pattern -> Document
 printPattern (VarPat n)      = printName n
@@ -186,18 +190,14 @@ printPattern (ListPat  pats) = list (map printPattern pats)
 printPattern (ConsPat "::" [x, y]) =
   parens $ printPattern x <+> "::" <+> printPattern y
 printPattern (ConsPat n pats) =
-  parens $ printName n <+> hsep (map printPattern pats)
+  parens $ data_ (printName n) <+> hsep (map printPattern pats)
 
 -- TODO: binary operators
 printExpr :: Syn -> Document
-printExpr (Var    n     ) = printName n
-printExpr (Con    n     ) = data_ (printName n)
-printExpr (Record fields) = data_ $ braces
-  (hsep
-    (punctuate comma
-               (map (\(f, e) -> printName f <+> "=" <+> printExpr e) fields)
-    )
-  )
+printExpr (Var n) = printName n
+printExpr (Con n) = data_ (printName n)
+printExpr (Record fields) =
+  data_ $ printRecordSyntax "=" $ map (bimap printName printExpr) fields
 printExpr (Project e f) = printExpr' e <> dot <> printName f
 printExpr (Hole n     ) = hole ("?" <> printName n)
 printExpr (Abs args e) =
@@ -213,9 +213,9 @@ printExpr (ListLit es) | any big es = printList es
 printExpr (IntLit i                ) = pretty i
 printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
 printExpr (CharLit c               ) = squotes $ pretty c
-printExpr (BoolLit True            ) = "True"
-printExpr (BoolLit False           ) = "False"
-printExpr UnitLit                    = "()"
+printExpr (BoolLit True            ) = data_ "True"
+printExpr (BoolLit False           ) = data_ "False"
+printExpr UnitLit                    = data_ "()"
 printExpr (FCall proc args) =
   "$fcall" <+> pretty proc <+> hsep (map printExpr args)
 
@@ -304,11 +304,10 @@ printCase e alts = keyword "case"
   <+> hang (-3) (vsep ((printExpr e <+> keyword "of") : map printAlt alts))
   where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
--- mcase
---  pat1 pat2 -> e1
---  pat3 pat4 -> e2
+-- pat1 pat2 -> e1
+-- pat3 pat4 -> e2
 printMCase :: [([Pattern], Syn)] -> Document
-printMCase alts = nest 2 $ vsep $ keyword "mcase" : map printAlt alts
+printMCase alts = hang 0 $ vsep $ map printAlt alts
  where
   printAlt (pats, expr) =
     hsep (map printPattern pats) <+> "->" <+> printExpr expr
@@ -366,8 +365,12 @@ size _         = 1
 
 printRecordSyntax :: Doc a -> [(Doc a, Doc a)] -> Doc a
 printRecordSyntax separator rec =
-  braces $ hsep $ punctuate comma (map (\(n, t) -> n <+> separator <+> t) rec)
+  braces' $ hsep $ punctuate comma (map (\(n, t) -> n <+> separator <+> t) rec)
 
 -- Like tupled but will always print everything on the same line
 htupled :: [Doc a] -> Doc a
 htupled elems = mconcat (zipWith (<>) (lparen : repeat comma) elems) <> rparen
+
+-- Like braces but will pad with a space on either side
+braces' :: Doc a -> Doc a
+braces' d = "{" <+> d <+> "}"

@@ -32,7 +32,19 @@ import           Type.FromSyn                   ( convertScheme
                                                 , fromSyn
                                                 )
 import           Control.Monad                  ( void )
-import           Control.Monad.Except           ( withExceptT )
+import qualified Control.Monad.Except          as Except
+                                                ( throwError
+                                                , catchError
+                                                )
+
+-- Translate a module into typechecking structures, and return them
+-- Used for debugging
+translateModule :: Can.Module -> TypeM (Ctx, [(Name, Type, Exp)])
+translateModule modul = do
+  dataTypeCtx <- mconcat
+    <$> mapM translateData (getDataDecls (moduleDecls modul))
+  funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
+  pure (dataTypeCtx, funs)
 
 -- TODO: return a type-annotated module
 -- TODO: check that data type definitions are well-formed
@@ -60,11 +72,13 @@ checkModule ctx modul = do
 
 checkFun :: Ctx -> (Name, Type, Exp) -> TypeM ()
 checkFun ctx (name, ty, body) =
-  withExceptT (\(LocatedError _ e) -> LocatedError (Just name) e) $ do
+  flip Except.catchError
+       (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
+    $ do
   -- check the type is well-formed
-    void $ wellFormedType ctx ty
-    -- check the body of the function
-    void $ check ctx body ty
+        void $ wellFormedType ctx ty
+        -- check the body of the function
+        void $ check ctx body ty
 
 funToBind :: Can.Fun Can.Exp -> TypeM (Name, Type, Exp)
 funToBind fun = do
@@ -85,10 +99,15 @@ quantify t =
 
 -- Convert data type definitions into a series of <constructor, type> bindings.
 --
---   data Maybe a = Just a | Nothing
+--   type Maybe a = Just a | Nothing
 -- becomes
 --   Var (Free "Just") (Forall a. a -> Maybe a)
 --   Var (Free "Nothing") (Forall a. Maybe a)
+--
+--   type Functor f = Functor { map : forall a b. (a -> b) -> f a -> f b }
+-- becomes
+--   Var (Free "Functor") (Forall f. { map : Forall a b. (a -> b) -> f a -> f b })
+--
 translateData :: Can.Data -> TypeM Ctx
 translateData d =
   let tyvars = map Local (dataTyVars d)
@@ -97,8 +116,7 @@ translateData d =
   go :: Name -> [Name] -> Can.DataCon -> TypeM CtxElem
   go dataTypeName tyvars datacon = do
     -- Construct a (Syn) Scheme for this constructor
-    let resultType =
-          foldl (S.TyApp) (S.TyCon dataTypeName) (map S.TyVar tyvars)
+    let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
     let scheme = S.Forall tyvars $ foldr S.TyFun resultType (conArgs datacon)
     ty <- convertScheme scheme
     pure $ Var (Free dataTypeName) ty

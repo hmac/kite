@@ -13,9 +13,7 @@ import qualified Data.Map.Strict               as Map
 import           Util
 import           Control.Monad.State.Strict
 import           Data.List.Extra                ( groupOn )
-import           Data.Foldable                  ( foldlM
-                                                , foldrM
-                                                )
+import           Data.Foldable                  ( foldrM )
 
 import           ELC
 import           ELC.Primitive
@@ -56,7 +54,7 @@ translateModule env T.Module { T.moduleDecls = decls } =
         (T.DataDecl _) -> 0
         (T.FunDecl  _) -> 3
       orderedDecls = sortOn ordering decls
-  in  foldlM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
+  in  foldM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
 
 translateDecl :: Env -> T.Decl -> NameGen [(Name, Exp)]
 translateDecl env (T.FunDecl T.Fun { T.funName = n, T.funDefs = defs }) = do

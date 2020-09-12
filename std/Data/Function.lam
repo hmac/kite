@@ -1,10 +1,10 @@
 module Data.Function
 
 id : a -> a
-id x = x
+id = x -> x
 
 const : a -> b -> a
-const x _ = x
+const = x _ -> x
 
 flip : (a -> b -> c) -> b -> a -> c
-flip f x y = f y x
+flip = f x y -> f y x

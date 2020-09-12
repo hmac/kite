@@ -19,6 +19,7 @@ module Util
   , Data.Either.rights
   , Control.Monad.forM
   , Control.Monad.foldM
+  , Control.Monad.Extra.mconcatMapM
   , Debug.Trace.trace
   , Debug.Trace.traceShow
   , Debug.Trace.traceShowId
@@ -27,6 +28,7 @@ where
 
 import qualified Debug.Trace
 import qualified Control.Monad
+import qualified Control.Monad.Extra
 import qualified Data.List.Extra
 import qualified Data.List
 import qualified Data.Either
@@ -149,3 +151,14 @@ mapAccumLM f s (x : xs) = do
 
 deleteList :: Ord k => [k] -> [(k, v)] -> [(k, v)]
 deleteList ks = Data.List.filter (not . (`elem` ks) . fst)
+
+-- A typeclass for nice debugging output
+-- We use this to compactly print expressions in typechecking traces, for example
+class Debug a where
+  debug :: a -> String
+
+instance Debug Char where
+  debug c = [c]
+
+instance Debug a => Debug [a] where
+  debug xs = concat (map debug xs)
