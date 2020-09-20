@@ -130,3 +130,46 @@ test = do
     --         _ <- check mempty funBody4 funType4
     --         pure ()
     --   runTypeM ctx4 r `shouldBe` Right ()
+  describe "check [Nothing] : forall a. [Maybe a]" $ do
+    let
+      maybeType arg = TCon "Maybe" [arg]
+      expr = App
+        (App (VarExp (Free "Lam.Primitive.::")) (VarExp (Free "Nothing")))
+        (VarExp (Free "Lam.Primitive.[]"))
+      ctx =
+        [Var (Free "Nothing") (Forall (U 0 "a") (maybeType (UType (U 0 "a"))))]
+      ty = Forall (U 1 "a") (list (maybeType (UType (U 1 "a"))))
+    it "typechecks successfully" $ do
+      let r = do
+            lift $ lift $ put 2
+            _ <- check ctx expr ty
+            pure ()
+      runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
+        `shouldBe` Right ()
+  describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
+    -- Note that we add the (claimed) type for foo to the context so that the
+    -- recursive call can be inferred.
+    -- We do this for functions normally anyway (see Type.Module.checkModule)
+    let maybeType arg = TCon "Maybe" [arg]
+        funType = Forall
+          (U 0 "a")
+          (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
+        cons    = Free "Lam.Primitive.::"
+        nil     = Free "Lam.Primitive.[]"
+        nothing = Free "Nothing"
+        fun     = MCase
+          [ ( [ConsPat cons [ConsPat nothing [], VarPat (Free "rest")]]
+            , App (VarExp (Free "foo")) (VarExp (Free "rest"))
+            )
+          ]
+        ctx =
+          [ Var nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
+          , Var (Free "foo") funType
+          ]
+    it "typechecks successfully" $ do
+      let r = do
+            lift $ lift $ put 2
+            _ <- check ctx fun funType
+            pure ()
+      runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
+        `shouldBe` Right ()

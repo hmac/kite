@@ -22,8 +22,8 @@ semigroupList : Semigroup [a]
 semigroupList = Semigroup { append = listAppend }
 
 listAppend : [a] -> [a] -> [a]
-listAppend [] ys = ys
-listAppend (x :: xs) ys = x :: (listAppend xs ys)
+listAppend = [] ys -> ys
+             (x :: xs) ys -> x :: (listAppend xs ys)
 
 monoidList : Monoid [a]
 monoidList = Monoid { empty = [], semigroup = semigroupList }
@@ -32,91 +32,86 @@ functorList : Functor []
 functorList = Functor { map = mapList }
 
 mapList : (a -> b) -> [a] -> [b]
-mapList _ [] = []
-mapList f (x :: xs) = (f x) :: (mapList f xs)
+mapList = _ [] -> []
+          f (x :: xs) -> (f x) :: (mapList f xs)
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.
 head : [a] -> Maybe a
-head [] = Nothing
-head (x :: _) = Just x
+head = [] -> Nothing
+       (x :: _) -> Just x
 
 -- Extract the elements after the head of a list.
 -- Returns Nothing if the list is empty.
 tail : [a] -> Maybe [a]
-tail [] = Nothing
-tail (x :: xs) = Just xs
+tail = [] -> Nothing
+       (x :: xs) -> Just xs
 
 -- Extract the last element of a list.
 -- Returns Nothing if the list is empty.
 last : [a] -> Maybe a
-last [] = Nothing
-last [x] = Just x
-last (x :: xs) = last xs
-
-initHelper : [a] -> [a]
-initHelper [x] = []
-initHelper (x :: xs) = x :: (initHelper xs)
+last = [] -> Nothing
+       [x] -> Just x
+       (x :: xs) -> last xs
 
 -- Return all the elements of a list except the last one.
 -- Returns Nothing if the list is empty.
 -- TODO: to write this efficiently and nicely, we really need to support
 -- pattern matching definitions in let bindings
 init : [a] -> Maybe [a]
-init [] = Nothing
-init xs = Just (initHelper xs)
+init = [] -> Nothing
+       xs -> Just (initHelper xs)
+
+initHelper : [a] -> [a]
+initHelper = [x] -> []
+             (x :: xs) -> x :: (initHelper xs)
 
 -- Decompose a list into its head and tail.
 -- Returns Nothing if the list is empty.
 uncons : [a] -> Maybe (a, [a])
-uncons [] = Nothing
-uncons (x :: xs) = Just (x, xs)
+uncons = [] -> Nothing
+         (x :: xs) -> Just (x, xs)
 
 -- Returns True is the list is empty
 null : [a] -> Bool
-null [] = True
-null _ = False
+null = [] -> True
+       _ -> False
 
 -- Returns the length of the list
 length : [a] -> Int
-length [] = 0
-length (x :: xs) = 1 + (length xs)
-
--- TODO: replace with Functor.map when we get that working (see above)
-map : (a -> b) -> [a] -> [b]
-map _ [] = []
-map f (x :: xs) = (f x) :: (map f xs)
+length = [] -> 0
+         (x :: xs) -> 1 + (length xs)
 
 -- True if all the elements satisfy the predicate
 all : (a -> Bool) -> [a] -> Bool
-all p [] = True
-all p (x :: xs) = and (p x) (all p xs)
-
--- A helper function for reverse.
--- TOOD: inline when we support pattern matching lets
-reverseHelper : [a] -> [a] -> [a]
-reverseHelper [] acc = acc
-reverseHelper (x :: xs) acc = reverseHelper xs (x :: acc)
+all = p [] -> True
+      p (x :: xs) -> and (p x) (all p xs)
 
 -- Return the elements of the list in reverse order.
 reverse : [a] -> [a]
-reverse xs = reverseHelper xs []
+reverse = xs -> reverseHelper [] xs
 
-intersperseHelper : a -> [a] -> [a]
-intersperseHelper _ [] = []
-intersperseHelper e (x :: xs) = e :: (x :: (intersperseHelper e xs))
+-- A helper function for reverse.
+-- TODO: inline when we support pattern matching lets
+reverseHelper : [a] -> [a] -> [a]
+reverseHelper = [] acc -> acc
+                (x :: xs) acc -> reverseHelper xs (x :: acc)
 
 -- Intersperse an item between each element of a list
 intersperse : a -> [a] -> [a]
-intersperse _ [] = []
-intersperse e (x :: xs) = x :: (intersperseHelper e xs)
+intersperse = _ [] -> []
+              e (x :: xs) -> x :: (intersperseHelper e xs)
+
+intersperseHelper : a -> [a] -> [a]
+intersperseHelper = _ [] -> []
+                    e (x :: xs) -> e :: (x :: (intersperseHelper e xs))
 
 subsequences : [a] -> [[a]]
-subsequences xs = [] :: (nonEmptySubsequences xs)
-
-nonEmptySubsequencesHelper : a -> [a] -> [[a]] -> [[a]]
-nonEmptySubsequencesHelper x ys r = ys :: ((x :: ys) :: r)
+subsequences = xs -> [] :: (nonEmptySubsequences xs)
 
 nonEmptySubsequences : [a] -> [[a]]
-nonEmptySubsequences [] = []
-nonEmptySubsequences (x :: xs) = [x] :: (foldr (nonEmptySubsequencesHelper x) [] (nonEmptySubsequences xs))
+nonEmptySubsequences = [] -> []
+                       (x :: xs) -> [x] :: (foldr (nonEmptySubsequencesHelper x) [] (nonEmptySubsequences xs))
+
+nonEmptySubsequencesHelper : a -> [a] -> [[a]] -> [[a]]
+nonEmptySubsequencesHelper = x ys r -> ys :: ((x :: ys) :: r)

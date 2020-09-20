@@ -7,43 +7,43 @@ import Data.Applicative (Applicative)
 type Maybe a = Just a | Nothing
 
 mapMaybe : (a -> b) -> Maybe a -> Maybe b
-mapMaybe _ Nothing = Nothing
-mapMaybe f (Just x) = Just (f x)
+mapMaybe = _ Nothing -> Nothing
+           f (Just x) -> Just (f x)
 
 functorMaybe : Functor Maybe
 functorMaybe = Functor { map = mapMaybe }
 
 apMaybe : Maybe (a -> b) -> Maybe a -> Maybe b
-apMaybe Nothing _ = Nothing
-apMaybe (Just f) m = mapMaybe f m
+apMaybe = Nothing _ -> Nothing
+          (Just f) m -> mapMaybe f m
 
 applicativeMaybe : Applicative Maybe
 applicativeMaybe = Applicative { functor = functorMaybe, pure = Just, ap = apMaybe }
 
 maybe : b -> (a -> b) -> Maybe a -> b
-maybe n _ Nothing = n
-maybe _ f (Just x) = f x
+maybe = n _ Nothing  -> n
+        _ f (Just x) -> f x
 
 isJust : Maybe a -> Bool
-isJust Nothing = False
-isJust _ = True
+isJust = Nothing -> False
+         _       -> True
 
 isNothing : Maybe a -> Bool
-isNothing Nothing = True
-isNothing _ = False
+isNothing = Nothing -> True
+            _       -> False
 
 fromMaybe : a -> Maybe a -> a
-fromMaybe d Nothing = d
-fromMaybe d (Just x) = x
+fromMaybe = d Nothing  -> d
+            d (Just x) -> x
 
 catMaybes : [Maybe a] -> [a]
-catMaybes [] = []
-catMaybes ((Just x) :: rest) = x :: (catMaybes rest)
-catMaybes (Nothing :: rest) = catMaybes rest
+catMaybes = []                 -> []
+            ((Just x) :: rest) -> x :: (catMaybes rest)
+            (Nothing :: rest)  -> catMaybes rest
 
--- Haskell calls this mapMaybe, but that's the name of our 'fmap' instance
+---- Haskell calls this mapMaybe, but that's the name of our 'fmap' instance
 filterMaybe : (a -> Maybe b) -> [a] -> [b]
-filterMaybe _ [] = []
-filterMaybe f (x :: xs) = case f x of
-                            Just r -> r :: (filterMaybe f xs)
-                            Nothing -> filterMaybe f xs
+filterMaybe = _ []        -> []
+filterMaybe = f (x :: xs) -> case f x of
+                               Just r  -> r :: (filterMaybe f xs)
+                               Nothing -> filterMaybe f xs

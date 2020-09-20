@@ -129,7 +129,11 @@ primitiveConstructors =
 -- Primitive functions
 primitiveFns :: Ctx
 primitiveFns =
-  [Var (Free "Lam.Primitive.appendString") (Fn string (Fn string string))]
+  [ Var (Free "Lam.Primitive.appendString") (Fn string (Fn string string))
+  , Var (Free "Lam.Primitive.+")            (Fn int (Fn int int))
+  , Var (Free "Lam.Primitive.-")            (Fn int (Fn int int))
+  , Var (Free "Lam.Primitive.*")            (Fn int (Fn int int))
+  ]
 
 primCtx :: Ctx
 primCtx = primitiveConstructors <> primitiveFns
@@ -162,15 +166,32 @@ data Type =
   | TApp Type [Type]
   deriving (Eq, Show)
 
+data DebugPrintCtx = Neutral | AppL | AppR | ArrL | ArrR
 instance Debug Type where
-  debug (Fn     a b    ) = debug a <+> "->" <+> debug b
-  debug (Forall v t    ) = "∀" <> debug v <> "." <+> "(" <> debug t <> ")"
-  debug (EType e       ) = debug e
-  debug (UType u       ) = debug u
-  debug (TCon c args   ) = debug c <+> sepBy " " (map debug args)
-  debug (TRecord fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
-    where go (name, ty) = name <+> ":" <+> debug ty
-  debug (TApp ty args) = debug ty <+> sepBy " " (map debug args)
+  debug = debug' AppR
+   where
+    debug' _ (EType e) = debug e
+    debug' _ (UType u) = debug u
+    debug' c (Fn a b ) = case c of
+      Neutral -> debug' ArrL a <+> "->" <+> debug' ArrR b
+      ArrR    -> debug' Neutral (Fn a b)
+      _       -> "(" <> debug' Neutral (Fn a b) <> ")"
+    debug' c (Forall v t) = case c of
+      Neutral -> "∀" <> debug v <> "." <+> "(" <> debug' Neutral t <> ")"
+      _       -> "(" <> debug' Neutral (Forall v t) <> ")"
+    debug' _ (TCon d []  ) = debug d
+    debug' c (TCon d args) = case c of
+      Neutral -> debug d <+> sepBy " " (map debug args)
+      AppL    -> "(" <> debug' Neutral (TCon d args) <> ")"
+      AppR    -> "(" <> debug' Neutral (TCon d args) <> ")"
+      _       -> debug' Neutral (TCon d args)
+    debug' _ (TRecord fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
+      where go (name, ty) = name <+> ":" <+> debug' Neutral ty
+    debug' c (TApp ty args) = case c of
+      Neutral -> debug' AppL ty <+> sepBy " " (map (debug' AppR) args)
+      AppR    -> "(" <> debug' Neutral (TApp ty args) <> ")"
+      _       -> debug' Neutral (TApp ty args)
+
 
 genType :: Gen Type
 genType = G.recursive
@@ -522,7 +543,7 @@ data TypeEnv =
           } deriving (Eq, Show)
 
 defaultTypeEnv :: TypeEnv
-defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = True }
+defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = False }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State Int))
 
@@ -564,15 +585,15 @@ subtype ctx typeA typeB =
     (Fn a1 a2, Fn b1 b2)          -> do
       ctx' <- subtype ctx b1 a1
       subtype ctx' (subst ctx' a2) (subst ctx' b2)
+    (a, Forall u b) -> do
+      ctx'  <- extendU u ctx
+      ctx'' <- subtype ctx' a b
+      pure $ dropAfter (UVar u) ctx''
     (Forall u a, b) -> do
       alpha <- newE
       ctx'  <- extendMarker alpha ctx >>= extendE alpha
       ctx'' <- subtype ctx' (substEForU alpha u a) b
       pure $ dropAfter (Marker alpha) ctx''
-    (a, Forall u b) -> do
-      ctx'  <- extendU u ctx
-      ctx'' <- subtype ctx' a b
-      pure $ dropAfter (UVar u) ctx''
     (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateL ctx e a
     (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
@@ -581,6 +602,9 @@ subtype ctx typeA typeB =
       foldM (\c (a, b) -> subtype c a b) ctx (zip as bs)
     (TCon c as, TApp v bs) -> do
       ctx' <- subtype ctx (TCon c []) v
+      foldM (\ctx_ (a, b) -> subtype ctx_ a b) ctx' (zip as bs)
+    (TApp v as, TCon c bs) -> do
+      ctx' <- subtype ctx v (TCon c [])
       foldM (\ctx_ (a, b) -> subtype ctx_ a b) ctx' (zip as bs)
     (TApp v as, TApp u bs) -> do
       ctx' <- subtype ctx v u
@@ -656,6 +680,17 @@ instantiate dir ctx e ty =
         ctx'  <- extendMarker beta ctx >>= extendE beta
         ctx'' <- instantiate dir ctx' e (substEForU beta u a)
         pure $ dropAfter (Marker beta) ctx''
+    TCon c [EType b] -> do
+      -- hmac: custom rule for type applications
+      -- G [e3, e1 = A e3][e2] |- e2 :=< e3   -| G'
+      -- ------------------------------------------
+      -- G[e1][e2]             |- A e2 <=: e1 -| G'
+      --
+      -- TODO: how do we handle multi-arg applications?
+      let (l, r) = splitAt (EVar e) ctx
+      e3 <- newE
+      let ctx' = l <> [ESolved e (TCon c [EType e3]), EVar e3] <> r
+      instantiate (flipDir dir) ctx' b (EType e3)
     a -> do
       let (l, r) = splitAt (EVar e) ctx
       void $ wellFormedType r a
@@ -668,7 +703,7 @@ instantiate dir ctx e ty =
 -- Typing
 check :: Ctx -> Exp -> Type -> TypeM Ctx
 check ctx expr ty =
-  trace' ctx ["check", debug expr, debug ty] $ case (expr, ty) of
+  trace' ctx ["check", debug expr, ":", debug ty] $ case (expr, ty) of
     (Lam x e, Fn a b) -> do
       ctx'  <- extendV x a ctx
       ctx'' <- check ctx' e b
@@ -767,7 +802,7 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
     -- function type which we return. It may have existential variables that
     -- need to be resolved later on.
 
-    -- First, infer a type for each pattern in the first alt
+    -- First, we infer a type for each pattern in the first alt
     (ctx'  , patTys) <- mapAccumLM inferPattern ctx pats
     -- Next, infer a type for the RHS
     (exprTy, ctx'' ) <- infer ctx' expr
@@ -886,27 +921,39 @@ checkPattern ctx pat ty =
     ConsPat con subpats -> do
       constructorType <- lookupV con ctx
       case second unfoldFn (unfoldForall constructorType) of
-        (us, (argTys, TCon{})) -> do
+        (us, (argTys, tcon@TCon{})) -> do
           -- Create new existentials for each universal in the forall
           eSub <- mapM (\u -> (, u) <$> newE) us
 
           -- Add new existentials to the context
           ctx' <- foldM (flip extendE) ctx (map fst eSub)
 
-          -- Substitute them into the argtys
+          -- Substitute them into the argtys and the tcon
           let
             argTys' =
               map (\t -> foldl (\t' (e, u) -> substEForU e u t') t eSub) argTys
+            tcon' = foldl (\t' (e, u) -> substEForU e u t') tcon eSub
 
-          -- Check each subpattern against the corresponding argty, and return the
-          -- resulting context
-          foldM (\c (p, t) -> checkPattern c p t) ctx' (zip subpats argTys')
+          -- Check each subpattern against the corresponding argty
+          ctx'' <- foldM (\c (p, t) -> checkPattern c p t)
+                         ctx'
+                         (zip subpats argTys')
+
+          -- Somehow check this against the ty we have been given..?
+          ctx''' <- subtype ctx'' (subst ctx'' tcon') (subst ctx'' ty)
+
+          -- If all is good, drop the existentials off the context
+          -- (disabled for now because I'm not sure if we want to do this)
+          -- pure $ case eSub of
+          --   []           -> ctx'''
+          --   ((e, _) : _) -> dropAfter (EVar e) ctx'''
+          pure ctx'''
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
     ListPat [] -> checkPattern ctx (ConsPat (Free "Lam.Primitive.[]") []) ty
     ListPat subpats -> checkPattern
       ctx
-      (foldr (\s acc -> ConsPat (Free "::") [s, acc])
-             (ConsPat (Free "[]") [])
+      (foldr (\s acc -> ConsPat (Free "Lam.Primitive.::") [s, acc])
+             (ConsPat (Free "Lam.Primitive.[]") [])
              subpats
       )
       ty
@@ -1187,7 +1234,7 @@ trace' :: Ctx -> [String] -> TypeM a -> TypeM a
 trace' ctx args m = do
   i         <- asks envDepth
   debugging <- asks envDebug
-  let indent = replicate i ' '
+  let indent = replicate i '|'
       msg    = indent <+> debugCtx ctx <+> sepBy " " args
   if debugging then trace msg (local incDepth m) else local incDepth m
 
