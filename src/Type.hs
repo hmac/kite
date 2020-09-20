@@ -32,6 +32,7 @@ module Type
   , runTypeM
   , defaultTypeEnv
   , TypeEnv(..)
+  , subst
   )
 where
 
@@ -849,9 +850,10 @@ inferMCaseAlt scrutTys ctx (pats, expr) = do
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
 inferCaseAlt :: Type -> Ctx -> (Pattern, Exp) -> TypeM (Type, Ctx)
-inferCaseAlt scrutTy ctx (pat, expr) = do
-  ctx' <- checkPattern ctx pat scrutTy
-  infer ctx' expr
+inferCaseAlt scrutTy ctx (pat, expr) =
+  trace' ctx ["inferCaseAlt", debug pat, debug expr] $ do
+    ctx' <- checkPattern ctx pat scrutTy
+    infer ctx' expr
 
 inferPattern :: Ctx -> Pattern -> TypeM (Ctx, Type)
 inferPattern ctx pattern =
@@ -997,9 +999,10 @@ foldFn [a     ] t = Fn a t
 foldFn (a : as) t = Fn a (foldFn as t)
 
 checkCaseAlt :: Type -> Type -> Ctx -> (Pattern, Exp) -> TypeM Ctx
-checkCaseAlt expectedAltTy scrutTy ctx alt = trace "checkCaseAlt" $ do
-  (inferredAltTy, ctx') <- inferCaseAlt scrutTy ctx alt
-  subtype ctx' expectedAltTy inferredAltTy
+checkCaseAlt expectedAltTy scrutTy ctx (pat, expr) =
+  trace' ctx ["checkCaseAlt", debug scrutTy, debug pat, debug expr] $ do
+    (inferredAltTy, ctx') <- inferCaseAlt scrutTy ctx (pat, expr)
+    subtype ctx' (subst ctx' expectedAltTy) (subst ctx' inferredAltTy)
 
 inferApp :: Ctx -> Type -> Exp -> TypeM (Type, Ctx)
 inferApp ctx ty e = trace' ctx ["inferApp", debug ty, debug e] $ case ty of
