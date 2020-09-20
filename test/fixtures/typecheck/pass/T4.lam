@@ -3,7 +3,7 @@ module T4
 type Default a = Default { def : a }
 
 def : Default a -> a
-def (Default d) = d.def
+def = (Default d) -> d.def
 
 type D = A | B | C
 
@@ -14,4 +14,4 @@ defD : D
 defD = def defaultD
 
 getDefD : Default D -> D
-getDefD (Default d) = d.def
+getDefD = (Default d) -> d.def

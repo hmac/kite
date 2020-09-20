@@ -8,8 +8,8 @@ semigroupFoo : Semigroup Foo
 semigroupFoo = Semigroup { append = appendFoo }
 
 appendFoo : Foo -> Foo -> Foo
-appendFoo Empty f = f
-appendFoo MkFoo _ = MkFoo
+appendFoo = Empty f -> f
+            MkFoo _ -> MkFoo
 
 foo1 : Foo
 foo1 = MkFoo

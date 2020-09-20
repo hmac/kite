@@ -3,9 +3,9 @@ module T1
 type Maybe a = Just a | Nothing
 
 fromMaybe : Maybe a -> a -> a
-fromMaybe (Just x) _ = x
-fromMaybe _ y = y
+fromMaybe = (Just x) _ -> x
+            _        y -> y
 
 leftJoin : Maybe a -> Maybe a -> Maybe a
-leftJoin (Just x) _ = Just x
-leftJoin Nothing y = y
+leftJoin = (Just x) _ -> Just x
+           Nothing  y -> y

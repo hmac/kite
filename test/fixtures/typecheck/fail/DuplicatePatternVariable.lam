@@ -1,4 +1,4 @@
 module DuplicatePatternVariable
 
 foo : Int -> Int -> Int
-foo x x = x
+foo = x x -> x

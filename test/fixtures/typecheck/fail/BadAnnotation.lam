@@ -1,6 +1,6 @@
 module BadAnnotation
 
-type Bool = True | False
+type BBool = BTrue | BFalse
 
-foo : Bool
+foo : BBool
 foo = []
