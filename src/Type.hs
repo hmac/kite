@@ -133,6 +133,8 @@ primitiveFns =
   , Var (Free "Lam.Primitive.+")            (Fn int (Fn int int))
   , Var (Free "Lam.Primitive.-")            (Fn int (Fn int int))
   , Var (Free "Lam.Primitive.*")            (Fn int (Fn int int))
+  , Var (Free "Lam.Primitive.$showInt")     (Fn int string)
+  , Var (Free "Lam.Primitive.$eqInt")       (Fn int (Fn int bool))
   ]
 
 primCtx :: Ctx
@@ -861,20 +863,28 @@ inferPattern ctx pattern =
     StringPat _         -> pure (ctx, string)
     ConsPat con subpats -> do
         -- Lookup the type of the constructor
-      conTy              <- lookupV con ctx
+      conTy <- lookupV con ctx
+      case second unfoldFn (unfoldForall conTy) of
+        (us, (argTys, tcon@TCon{})) -> do
+          -- Create new existentials for each universal in the forall
+          -- Add them to the context
+          eSub <- mapM (\u -> (, u) <$> newE) us
+          ctx' <- foldM (flip extendE) ctx (map fst eSub)
 
-      -- Infer a type for each subpattern
-      (ctx' , subPatTys) <- mapAccumLM inferPattern ctx subpats
+          -- Substitute them into the argtys and the tcon
+          let
+            argTys' =
+              map (\t -> foldl (\t' (e, u) -> substEForU e u t') t eSub) argTys
+            tcon' = foldl (\t' (e, u) -> substEForU e u t') tcon eSub
 
-      -- @inferApp' A B@ tells us the type of the result when applying a function
-      -- of type A to an argument of type B.
-      --
-      -- We can use it here to infer the type of the whole pattern, by applying
-      -- the constructor to each infer
-      (ctx'', resultTy ) <- foldM (\(c, fTy) patTy -> inferApp' c fTy patTy)
-                                  (ctx', conTy)
-                                  subPatTys
-      pure (ctx'', resultTy)
+          -- Check each subpattern against the corresponding argty
+          ctx'' <- foldM (\c (p, t) -> checkPattern c p t)
+                         ctx'
+                         (zip subpats argTys')
+
+          -- Return the constructor type
+          pure (ctx'', tcon')
+        (_, (_, t)) -> throwError $ ExpectedConstructorType t
     VarPat x -> do
       alpha <- newE
       ctx'  <- extendE alpha ctx >>= extendV x (EType alpha)
@@ -939,14 +949,9 @@ checkPattern ctx pat ty =
                          ctx'
                          (zip subpats argTys')
 
-          -- Somehow check this against the ty we have been given..?
+          -- Check this against the type we have been given
           ctx''' <- subtype ctx'' (subst ctx'' tcon') (subst ctx'' ty)
 
-          -- If all is good, drop the existentials off the context
-          -- (disabled for now because I'm not sure if we want to do this)
-          -- pure $ case eSub of
-          --   []           -> ctx'''
-          --   ((e, _) : _) -> dropAfter (EVar e) ctx'''
           pure ctx'''
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
     ListPat [] -> checkPattern ctx (ConsPat (Free "Lam.Primitive.[]") []) ty

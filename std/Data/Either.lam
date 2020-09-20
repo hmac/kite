@@ -5,30 +5,30 @@ import Data.Functor (Functor(..))
 import Data.Applicative (Applicative)
 import Data.Eq (Eq, eq)
 
-fromLeft : Either a b -> Maybe a
-fromLeft (Left x) = Just x
-fromLeft (Right _) = Nothing
-
 type Either a b = Left a | Right b
 
+fromLeft : Either a b -> Maybe a
+fromLeft = (Left x) -> Just x
+           (Right _) -> Nothing
+
 mapEither : (a -> b) -> Either c a -> Either c b
-mapEither _ (Left l) = Left l
-mapEither f (Right r) = Right (f r)
+mapEither = _ (Left l) -> Left l
+            f (Right r) -> Right (f r)
 
 functorEither : Functor (Either a)
 functorEither = Functor { map = mapEither }
 
 apEither : Either a (b -> c) -> Either a b -> Either a c
-apEither (Left e) _ = Left e
-apEither (Right f) r = mapEither f r
+apEither = (Left e) _ -> Left e
+           (Right f) r -> mapEither f r
 
 applicativeEither : Applicative (Either c)
 applicativeEither = Applicative { functor = functorEither, pure = Right, ap = apEither }
 
 either : (a -> c) -> (b -> c) -> Either a b -> c
-either f _ (Left x) = f x
-either _ g (Right y) = g y
+either = f _ (Left x) -> f x
+         _ g (Right y) -> g y
 
 eqEither : Eq a -> Eq b -> Either a b -> Either a b -> Bool
-eqEither eqa eqb (Left x) (Left y) = eq eqa x y
-eqEither eqa eqb (Right x) (Right y) = eq eqb x y
+eqEither = eqa eqb (Left x) (Left y) -> eq eqa x y
+           eqa eqb (Right x) (Right y) -> eq eqb x y

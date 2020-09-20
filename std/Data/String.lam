@@ -8,7 +8,7 @@ import Data.Functor (map)
 import Data.List (functorList)
 
 chars : String -> [Char]
-chars s = $fcall chars s
+chars = s -> $fcall chars s
 
 fromChars : [Char] -> String
-fromChars cs = concat monoidString (map functorList (show showChar) cs)
+fromChars = cs -> concat monoidString (map functorList (show showChar) cs)

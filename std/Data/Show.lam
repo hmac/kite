@@ -9,7 +9,7 @@ import Lam.Primitive ($showInt)
 type Show a = Show { show : a -> String }
 
 show : Show a -> a -> String
-show (Show d) x = d.show x
+show = (Show d) x -> d.show x
 
 showInt : Show Int
 showInt = Show { show = $showInt }
@@ -18,9 +18,9 @@ showString : Show String
 showString = Show { show = \x -> x }
 
 showList : Show a -> Show [a]
-showList (Show d) = Show { show = \xs -> "[#{showListHelper d.show xs}]" }
+showList = (Show d) -> Show { show = \xs -> "[#{showListHelper d.show xs}]" }
 
 showListHelper : (b -> String) -> [b] -> String
-showListHelper _ [] = ""
-showListHelper f [x] = "#{f x}"
-showListHelper f (x :: xs) = "#{f x}, #{showListHelper f xs}"
+showListHelper = _ [] -> ""
+                 f [x] -> "#{f x}"
+                 f (x :: xs) -> "#{f x}, #{showListHelper f xs}"

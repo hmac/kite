@@ -29,10 +29,10 @@ isfoo = case foo of
           Foo f -> f.unFoo
 
 inc : Int -> Int
-inc i = i + 1
+inc = i -> i + 1
 
 dec : Int -> Int
-dec i = i - 1
+dec = i -> i - 1
 
 square : Int -> Int
 square = i -> i * i

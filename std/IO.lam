@@ -8,16 +8,16 @@ import Data.Monad (Monad(..))
 -- Combinators
 
 bindIO : IO a -> (a -> IO b) -> IO b
-bindIO x y = $fcall bindIO x y
+bindIO = x y -> $fcall bindIO x y
 
 pureIO : a -> IO a
-pureIO x = $fcall pureIO x
+pureIO = x -> $fcall pureIO x
 
 mapIO : (a -> b) -> IO a -> IO b
-mapIO f m = bindIO m (\x -> pureIO (f x))
+mapIO = f m -> bindIO m (\x -> pureIO (f x))
 
 apIO : IO (a -> b) -> IO a -> IO b
-apIO mf mx = bindIO mf (\f -> bindIO mx (\x -> pureIO (f x)))
+apIO = mf mx -> bindIO mf (\f -> bindIO mx (\x -> pureIO (f x)))
 
 -- Typeclass instances
 
@@ -36,7 +36,7 @@ getLine : IO String
 getLine = $fcall getLine
 
 putLine : String -> IO ()
-putLine s = $fcall putStrLn s
+putLine = s -> $fcall putStrLn s
 
 putStr : String -> IO ()
-putStr s = $fcall putStr s
+putStr = s -> $fcall putStr s
