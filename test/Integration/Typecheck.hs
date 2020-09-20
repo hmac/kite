@@ -30,7 +30,7 @@ expectTypecheckPass path = do
   res <- parseFile path
   case res of
     Left  err -> expectationFailure err
-    Right g   -> case typecheckModuleGroup2 g of
+    Right g   -> case typecheckModuleGroup g of
       Left  err -> expectationFailure (show err)
       Right _   -> pure ()
 
@@ -39,7 +39,7 @@ expectTypecheckFail path = do
   res <- parseFile path
   case res of
     Left  err -> expectationFailure err
-    Right g   -> case typecheckModuleGroup2 g of
+    Right g   -> case typecheckModuleGroup g of
       Left  _ -> pure ()
       Right _ -> expectationFailure "expected type error but succeeded"
 

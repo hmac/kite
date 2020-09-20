@@ -225,6 +225,16 @@ translateExpr env = \case
       alts
     let lams = foldr Fatbar (Bottom "pattern match failure") alts'
     pure $ Let (VarPat var) scrut' lams
+  T.MCaseT alts _ -> do
+    equations <- forM alts $ \(pats, expr) -> do
+      pats' <- mapM (translatePattern env) pats
+      expr' <- translateExpr env expr
+      pure (pats', expr')
+    let numVars = length (fst (head alts))
+    varNames <- replicateM numVars fresh
+    let vars = map VarPat varNames
+    caseExpr <- match varNames equations (Bottom "pattern match failed")
+    pure $ buildAbs caseExpr vars
   T.RecordT fields _type     -> translateRecord env fields
   T.ProjectT e    l    _type -> translateRecordProjection env e l
   T.FCallT   proc args _type -> do

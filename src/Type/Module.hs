@@ -36,6 +36,8 @@ import qualified Control.Monad.Except          as Except
                                                 ( throwError
                                                 , catchError
                                                 )
+import qualified Syn.Typed                     as T
+import qualified Type.ToTyped                   ( convertModule )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
@@ -48,7 +50,7 @@ translateModule modul = do
 
 -- TODO: return a type-annotated module
 -- TODO: check that data type definitions are well-formed
-checkModule :: Ctx -> Can.Module -> TypeM (Ctx, Can.Module)
+checkModule :: Ctx -> Can.Module -> TypeM (Ctx, T.Module)
 checkModule ctx modul = do
   -- Extract type signatures from all datatype definitions in the module
   dataTypeCtx <- mconcat
@@ -67,8 +69,13 @@ checkModule ctx modul = do
   -- Typecheck each function definition
   mapM_ (checkFun ctx') funs
 
+  -- Construct a typed module by converting every data & fun decl into the typed
+  -- form, with empty type annotations. In the future this should be done during
+  -- typechecking itself.
+  let typedModule = Type.ToTyped.convertModule modul
+
   -- Done
-  pure (ctx', modul)
+  pure (ctx', typedModule)
 
 checkFun :: Ctx -> (Name, Type, Exp) -> TypeM ()
 checkFun ctx (name, ty, body) =

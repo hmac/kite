@@ -25,7 +25,7 @@ import           Options.Generic
 
 import           Syn.Parse                      ( parseLamFile )
 
-import           Constraint.Print
+import           Type.Print
 
 data Config =
       Repl
@@ -93,7 +93,7 @@ dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
 
 typecheck :: FilePath -> FilePath -> IO ()
 typecheck homeDir = withParsedFile homeDir $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup2 g of
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> print err
     Right _   -> printNicely "Success."
 
