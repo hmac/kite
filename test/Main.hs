@@ -6,7 +6,6 @@ import           Test.Hspec
 import qualified Test.Syn.Parse
 import qualified Test.Syn.Print
 import qualified Test.Syn.RoundTrip
-import qualified Test.Constraint.FromSyn
 import qualified Test.Type
 import qualified Test.Type.Module
 
@@ -21,7 +20,6 @@ main = do
   hspec $ do
     Test.Syn.Parse.test
     Test.Syn.Print.test
-    Test.Constraint.FromSyn.test
     Test.Type.test
     Test.Type.Module.test
     Integration.Typecheck.test
