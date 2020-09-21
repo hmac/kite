@@ -18,9 +18,9 @@ import qualified Type                           ( tests )
 main :: IO ()
 main = do
   hspec $ do
-    -- Test.Syn.Parse.test
-    -- Test.Syn.Print.test
-    -- Test.Constraint.FromSyn.test
+    Test.Syn.Parse.test
+    Test.Syn.Print.test
+    Test.Constraint.FromSyn.test
     Test.Type.test
     Integration.Typecheck.test
     -- Test.Syn.RoundTrip.test

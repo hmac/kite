@@ -1,5 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE Rank2Types #-}
 module Type
   ( tests
   , Ctx
@@ -79,6 +77,9 @@ import           Hedgehog                       ( Property
                                                 , forAll
                                                 )
 import qualified Hedgehog
+
+import Type.Reflection (Typeable)
+import Data.Data (Data)
 
 -- Bidirectional typechecker
 -- Following:
@@ -167,7 +168,7 @@ data Type =
   -- Type application
   -- unchecked invariant: always in spine form (i.e., head is never a TApp)
   | TApp Type [Type]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable, Data)
 
 data DebugPrintCtx = Neutral | AppL | AppR | ArrL | ArrR
 instance Debug Type where
@@ -209,7 +210,7 @@ genType = G.recursive
 -- Universal type variable
 -- Contains a name hint
 data U = U Int Name
-  deriving Show
+  deriving (Show, Typeable, Data)
 
 instance Eq U where
   (U i _) == (U j _) = i == j
@@ -222,7 +223,7 @@ genU = U <$> G.int (R.linear 0 100) <*> genName
 
 -- Existential type variable
 newtype E = E Int
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable, Data)
 
 instance Debug E where
   debug (E e) = "e" <> show e
@@ -235,7 +236,7 @@ genE = E <$> G.int (R.linear 0 100)
 -- Contains a name hint for conversion back to source.
 data V = Free Name
        | Bound Int -- Not currently used, but should be for lambda bindings
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable, Data)
 
 instance Debug V where
   debug (Free  n) = debug n
@@ -278,7 +279,7 @@ data Exp =
   | Project Exp String
   -- FFI Call
   | FCall String [Exp]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable, Data)
 
 instance Debug Exp where
   debug (VarExp v) = debug v

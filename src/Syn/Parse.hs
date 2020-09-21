@@ -429,7 +429,7 @@ pApp = do
   pure $ foldl1 App (first : rest)
 
 -- foo.bar
--- For easy of implementation we currently only support using projection on
+-- For ease of implementation we currently only support using projection on
 -- variables. In the future we may want to support arbitrary expressions, e.g.
 --   (let a = 1 in Foo { x = a }).x
 pRecordProject :: Parser Syn

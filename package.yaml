@@ -29,6 +29,9 @@ default-extensions:
 - OverloadedStrings
 - LambdaCase
 - TupleSections
+- DeriveDataTypeable
+- Rank2Types
+- TemplateHaskell
 
 dependencies:
 - base >= 4.7 && < 5
@@ -91,6 +94,7 @@ tests:
     - hedgehog
     - hspec-hedgehog
     - filepath
+    - template-haskell
   lam-hlint:
     main: hlint.hs
     other-modules: []

@@ -1,5 +1,8 @@
 module Data.Name where
 
+import           Type.Reflection                ( Typeable )
+import           Data.Data                      ( Data )
+
 import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )
 import           Util
@@ -7,7 +10,7 @@ import           Util
 -- Shared types of name
 
 newtype RawName = Name String
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Typeable, Data)
 
 instance Show RawName where
   show (Name s) = s
@@ -16,7 +19,7 @@ instance IsString RawName where
   fromString = Name
 
 newtype ModuleName = ModuleName [String]
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Typeable, Data)
 
 instance Show ModuleName where
   show = showModuleName
@@ -31,7 +34,7 @@ instance IsString ModuleName where
 data Name
   = Local RawName
   | TopLevel ModuleName RawName
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Typeable, Data)
 
 instance Show Name where
   show (Local (Name name)              ) = "Local " ++ name

@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 module Test.Type where
 
 import           Test.Hspec
@@ -8,6 +9,15 @@ import           Control.Monad.Trans.State.Strict
                                                 ( put )
 import           Control.Monad.Trans.Class      ( lift )
 import           Util
+
+import           Test.QQ
+import           Canonicalise                   ( canonicaliseExp
+                                                , canonicaliseType
+                                                )
+import           Type.FromSyn                   ( fromSyn
+                                                , convertType
+                                                )
+import qualified Syn
 
 test :: Spec
 test = do
@@ -55,30 +65,19 @@ test = do
       runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
         `shouldBe` Right ()
   describe "Simple inference" $ do
-    let true   = Con (Free "Lam.Primitive.True")
-        false  = Con (Free "Lam.Primitive.False")
-        zero   = VarExp (Free "Zero")
-        suc    = VarExp (Free "Suc")
-        mkpair = VarExp (Free "MkPair")
-        mkwrap = VarExp (Free "MkWrap")
-
-        nat    = TCon "Nat" []
+    let nat    = TCon "Nat" []
+        int    = TCon "Lam.Primitive.Int" []
+        string = TCon "Lam.Primitive.String" []
         wrap a = TCon "Wrap" [a]
         pair a b = TCon "Pair" [a, b]
 
-        int    = TCon "Lam.Primitive.Int" []
-        string = TCon "Lam.Primitive.String" []
-
-        nil    = VarExp (Free "Lam.Primitive.[]")
-        cons x xs = App (App (VarExp (Free "Lam.Primitive.::")) x) xs
-
         ctx =
-          [ Var (Free "Zero") nat
-          , Var (Free "Suc")  (Fn nat nat)
-          , Var (Free "MkWrap")
+          [ Var (Free "QQ.Zero") nat
+          , Var (Free "QQ.Suc")  (Fn nat nat)
+          , Var (Free "QQ.MkWrap")
                 (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
           , Var
-            (Free "MkPair")
+            (Free "QQ.MkPair")
             (let a = U 1 "a"
                  b = U 2 "b"
              in  Forall a $ Forall b $ Fn
@@ -87,172 +86,101 @@ test = do
             )
           ]
 
-    it "True" $ infers ctx true bool
-    it "simple function application"
-      $ infers ctx (App (Lam (Free "x") (VarExp (Free "x"))) true) bool
+    it "True" $ infers ctx [syn|True|] bool
+    it "simple function application" $ infers ctx [syn|(\x -> x) True|] bool
     it "multi-arg function application"
-      $ let f    = (Lam (Free "x") (Lam (Free "y") (VarExp (Free "x"))))
-            expr = App (App f true) (App suc zero)
-        in  infers ctx expr bool
+      $ infers ctx [syn|(\x y -> x) True (Suc Zero)|] bool
     it "compound lets"
-      -- let x = True
-      --     id = \y -> y
-      --  in id x
-      $ let expr = Let1
-              (Free "x")
-              true
-              (Let1 (Free "id")
-                    (Lam (Free "y") (VarExp (Free "y")))
-                    (App (VarExp (Free "id")) (VarExp (Free "x")))
-              )
-        in  pendingWith "let typechecking not implemented yet"
+      -- $ let expr = [syn|let x = True
+      --                       id = \y -> y
+      --                    in id x|]
+      --    in infers ctx expr bool
+                       $ pendingWith "let typechecking not implemented yet"
     it "simple case expressions"
-      -- case True of
-      --   True -> False
-      --   False -> True
-      $ let expr = Case
-              true
-              [ (ConsPat (Free "Lam.Primitive.True") [] , false)
-              , (ConsPat (Free "Lam.Primitive.False") [], true)
-              ]
+      $ let expr = [syn|case True of
+                              True -> False
+                              False -> True|]
         in  infers ctx expr bool
     it "combined case and let expressions"
-      -- case True of
-      --   True -> let id = \y -> y
-      --            in id True
-      --   False -> True
-      $ let expr = Case
-              true
-              [ ( ConsPat (Free "Lam.Primitive.True") []
-                , Let1 (Free "id")
-                       (Lam (Free "y") (VarExp (Free "y")))
-                       (App (VarExp (Free "id")) true)
-                )
-              , (ConsPat (Free "Lam.Primitive.False") [], true)
-              ]
+      $ let expr = [syn|case True of
+                         True -> let id = \y -> y
+                                  in id True
+                         False -> True|]
         in  pendingWith "let typechecking not implemented yet"
     it "expressions with annotated lets"
-      -- let id : a -> a
-      --     id = \x -> x
-      --  in id True
-
-      $ pendingWith "let annotations not implemented yet"
+      $ let expr = undefined
+                    -- [syn|let id : a -> a
+                    --        id = \x -> x
+                    --     in id True|]
+        in  pendingWith "let annotations not implemented yet"
     it "simultaneous let definitions"
-      -- let x = y
-      --     y = True
-      --  in x
-
-      $ pendingWith "simultaneous lets not implemented yet"
+      $ let expr = [syn|let x = y
+                           y = True
+                        in x|]
+        in  pendingWith "simultaneous lets not implemented yet"
     it "case expressions with variable patterns"
-      -- case True of
-      --   x -> Zero
-      $ let expr = Case true [(VarPat (Free "x"), zero)] in infers ctx expr nat
+      $ let expr = [syn|case True of
+                         x -> Zero|]
+        in  infers ctx expr nat
     it "case expressions that use bound variables"
-      -- case True of
-      --   False -> False
-      --   x -> x
-      $ let expr = Case
-              true
-              [ (ConsPat (Free "Lam.Primitive.False") [], false)
-              , (VarPat (Free "x")                      , VarExp (Free "x"))
-              ]
+      $ let expr = [syn|case True of
+                         False -> False
+                         x -> x|]
         in  infers ctx expr bool
     it "case expressions with wildcard patterns"
-      -- case True of
-      --   _ -> False
-      $ let expr = Case true [(WildPat, false)] in infers ctx expr bool
+      $ let expr = [syn|case True of
+                        _ -> False|]
+        in  infers ctx expr bool
     it "case expressions with a mixture of patterns"
-      -- case True of
-      --   True -> False
-      --   x -> True
-      $ let expr = Case
-              true
-              [ (ConsPat (Free "Lam.Primitive.True") [], false)
-              , (VarPat (Free "x")                     , true)
-              ]
+      $ let expr = [syn|case True of
+                         True -> False
+                         x -> True|]
         in  infers ctx expr bool
     it "creating an instance of a parameterised type"
-      -- type Pair a b = MkPair a b
-      -- MkPair False Zero
-      $ let expr = App (App mkpair false) zero
-        in  infers ctx expr (pair bool nat)
+      $ let expr = [syn|MkPair False Zero|] in infers ctx expr (pair bool nat)
     it "deconstructing a parameterised type with a case expression (Wrap)"
-      -- type Wrap a = MkWrap a
-      -- case (MkWrap True) of
-      --   MkWrap y -> y
-      $ let x = App mkwrap true
-            expr =
-              (Case
-                x
-                [ ( ConsPat (Free "MkWrap") [VarPat (Free "y")]
-                  , VarExp (Free "y")
-                  )
-                ]
-              )
+      $ let expr = [syn|case (MkWrap True) of
+                         MkWrap y -> y|]
         in  infers ctx expr bool
     it "deconstructing a parameterised type with a case expression (Pair)"
-      -- type Wrap a = MkWrap a
-      -- type Pair a b = MkPair a b
-      -- case (MkPair False Zero) of
-      --   MkPair y z -> MkWrap y
-      --   w -> MkWrap False
-      $ let x    = App (App mkpair false) zero
-            expr = Case
-              x
-              [ ( ConsPat (Free "MkPair") [VarPat (Free "y"), VarPat (Free "z")]
-                , App mkwrap (VarExp (Free "y"))
-                )
-              , (VarPat (Free "w"), App mkwrap false)
-              ]
+      $ let expr = [syn|case (MkPair False Zero) of
+                         MkPair y z -> MkWrap y
+                         w -> MkWrap False|]
         in  infers ctx expr (wrap bool)
     it "an expression hole (1)"
       -- let x = ?foo
       --  in True
-      $ let expr = Let1 (Free "x") (Hole "foo") true
-        in  pendingWith "let typechecking not implemented yet"
+      $ pendingWith "let typechecking not implemented yet"
     it "an expression hole (2)"
       -- let not b = case b of
       --               True -> False
       --               False -> True
       --  in not ?foo
-      $ let expr = Let1
-              (Free "not")
-              (Lam
-                (Free "b")
-                (Case
-                  (VarExp (Free "b"))
-                  [ (ConsPat (Free "Lam.Primitive.True") [] , false)
-                  , (ConsPat (Free "Lam.Primitive.False") [], true)
-                  ]
-                )
-              )
-              (App (VarExp (Free "not")) (Hole "foo"))
-        in  pendingWith "let typechecking not implemented yet"
+      $ pendingWith "let typechecking not implemented yet"
     it "a tuple"
       -- (True, False, Zero)
-      $ let
-          expr =
-            App (App (App (Con (Free "Lam.Primitive.Tuple3")) true) false) zero
+      $ let expr = [syn|(True, False, Zero)|]
         in  infers ctx expr (TCon "Lam.Primitive.Tuple3" [bool, bool, nat])
     it "a list"
       -- [True, False]
-      $ let expr = cons true (cons false nil) in infers ctx expr (list bool)
-    it "an integer literal" $ let expr = Int 6 in infers ctx expr int
-    it "a string literal" $ let expr = String "Hello" in infers ctx expr string
+      $ let expr = [syn|[True, False]|] in infers ctx expr (list bool)
+    it "an integer literal" $ let expr = [syn|6|] in infers ctx expr int
+    it "a string literal" $ let expr = [syn|"Hello"|] in infers ctx expr string
     it "a record"
-      $ let expr = Record [("five", Int 5), ("msg", String "Hello")]
+      $ let expr = [syn|{ five = 5, msg = "Hello" }|]
         in  infers ctx expr (TRecord [("five", int), ("msg", string)])
     it "a record projection"
-      $ let record = Record [("five", Int 5), ("msg", String "Hello")]
-            expr   = Project record "five"
-        in  infers ctx expr int
+      -- $ let expr = [syn|let r = { five = 5, msg = "Hello" }
+      --                   in r.five|]
+      --   in infers ctx expr int
+      $ pendingWith "let typechecking not implemented yet"
     -- fcalls have hardcoded types:
     -- putStrLn : String -> IO Unit
     it "a foreign call"
-      $ let expr = FCall "putStrLn" [String "Hello"]
-            ty =
+      $ let expr = [syn|$fcall putStrLn "Hello"|]
+            type_ =
               TApp (TCon "Lam.Primitive.IO" []) [TCon "Lam.Primitive.Unit" []]
-        in  infers ctx expr ty
+        in  infers ctx expr type_
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -260,20 +188,16 @@ test = do
         -- f = x (D d) -> x
       $ let
           a0 = U 0 "a"
-          a1 = U 1 "a"
           ctx' =
             [ Var
-                (Free "D")
-                (Forall a0
-                        (Fn (TRecord [("field", bool)]) (TCon "D" [UType a0]))
+                (Free "QQ.D")
+                (Forall
+                  a0
+                  (Fn (TRecord [("field", bool)]) (TCon "QQ.D" [UType a0]))
                 )
             ]
-          e = MCase
-            [ ( [VarPat (Free "x"), ConsPat (Free "D") [VarPat (Free "d")]]
-              , VarExp (Free "x")
-              )
-            ]
-          t = Forall a1 (Fn (UType a1) (Fn (TCon "D" [UType a1]) (UType a1)))
+          e = [syn|x (D d) -> x|]
+          t = [ty|forall a. a -> D a -> a|]
         in
           checks ctx' e t
     it "polymorphic record extraction"
@@ -283,24 +207,16 @@ test = do
       -- f = x (D d) -> x
       $ let ctx' =
               [ Var
-                  (Free "D")
+                  (Free "QQ.D")
                   (Forall
                     (U 0 "a")
                     (Fn (TRecord [("field", UType (U 0 "a"))])
-                        (TCon "D" [UType (U 0 "a")])
+                        (TCon "QQ.D" [UType (U 0 "a")])
                     )
                   )
               ]
-            e = MCase
-              [ ( [VarPat (Free "x"), ConsPat (Free "D") [VarPat (Free "d")]]
-                , VarExp (Free "x")
-                )
-              ]
-            t = Forall
-              (U 1 "a")
-              (Fn (UType (U 1 "a"))
-                  (Fn (TCon "D" [UType (U 1 "a")]) (UType (U 1 "a")))
-              )
+            e = [syn|x (D d) -> x|]
+            t = [ty|forall a. a -> D a -> a|]
         in  checks ctx' e t
     it "polymorphic function-typed record extraction"
         -- This ???
@@ -313,22 +229,23 @@ test = do
           a1 = U 1 "a"
           ctx' =
             [ Var
-                (Free "D")
-                (Forall a0 (Fn (Fn (UType a0) (UType a0)) (TCon "D" [UType a0]))
+                (Free "QQ.D")
+                (Forall
+                  a0
+                  (Fn (Fn (UType a0) (UType a0)) (TCon "QQ.D" [UType a0]))
                 )
             ]
-          t = Forall (U 1 "a")
-                     (Fn (TCon "D" [UType a1]) (Fn (UType a1) (UType a1)))
-          e = MCase
-            [([ConsPat (Free "D") [VarPat (Free "x")]], VarExp (Free "x"))]
+          t = [ty|forall a. D a -> (a -> a)|]
+          e = [syn|(D f) -> f|]
         in
           checks ctx' e t
 
-infers :: Ctx -> Exp -> Type -> Expectation
-infers ctx e t = do
+infers :: Ctx -> Syn.Syn -> Type -> Expectation
+infers ctx expr t = do
+  let moduleName    = "QQ"
+      canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
-        -- hack: ensure we generate unique vars
-        lift $ lift $ put 100
+        e          <- fromSyn canonicalExpr
         (ty, ctx') <- infer ctx e
         pure (subst ctx' ty)
   let env = defaultTypeEnv { envCtx = primCtx <> ctx }
@@ -336,11 +253,32 @@ infers ctx e t = do
     Left  err      -> expectationFailure $ show (printLocatedError err)
     Right resultTy -> resultTy `shouldBe` t
 
-checks :: Ctx -> Exp -> Type -> Expectation
-checks ctx e t = do
+-- Like infers but takes a quasiquoted type expression.
+-- Currently unused because most of the time the type is Bool, which is easy to
+-- write in AST form.
+infers' :: Ctx -> Syn.Syn -> Syn.Type -> Expectation
+infers' ctx expr ty = do
+  let moduleName    = "QQ"
+      canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
+      canonicalType = canonicaliseType (moduleName, mempty) ty
   let r = do
-        -- hack: ensure we generate unique vars
-        lift $ lift $ put 100
+        e          <- fromSyn canonicalExpr
+        t          <- convertType mempty canonicalType
+        (t', ctx') <- infer ctx e
+        pure (t, subst ctx' t')
+  let env = defaultTypeEnv { envCtx = primCtx <> ctx }
+  case runTypeM env r of
+    Left err -> expectationFailure $ show (printLocatedError err)
+    Right (expectedType, actualType) -> actualType `shouldBe` expectedType
+
+checks :: Ctx -> Syn.Syn -> Syn.Type -> Expectation
+checks ctx expr ty = do
+  let moduleName    = "QQ"
+      canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
+      canonicalType = canonicaliseType (moduleName, mempty) ty
+  let r = do
+        e <- fromSyn canonicalExpr
+        t <- convertType mempty canonicalType
         _ <- check ctx e t
         pure ()
   let env = defaultTypeEnv { envCtx = primCtx <> ctx }

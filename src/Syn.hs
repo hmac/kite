@@ -45,6 +45,9 @@ import           Data.Name                      ( ModuleName(..)
                                                 )
 import           Util
 
+import           Type.Reflection                ( Typeable )
+import qualified Data.Data                     as Data
+
 -- module Foo
 type Module = Module_ RawName Syn Type
 data Module_ name a ty = Module { moduleName :: ModuleName
@@ -160,7 +163,7 @@ data Pattern_ a = VarPat a
              | ListPat [Pattern_ a]
              | ConsPat a [Pattern_ a]
              | StringPat String
-             deriving (Eq, Show)
+             deriving (Eq, Show, Typeable, Data.Data)
 
 instance Debug a => Debug (Pattern_ a) where
   debug (VarPat v)       = debug v
@@ -206,7 +209,7 @@ data Type_ a =
         | TyRecord [(a, Type_ a)]
         | TyAlias a (Type_ a)
         | TyForall a (Type_ a)
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord, Typeable, Data.Data)
 
 infixl 5 `tyapp`
 tyapp :: Type_ name -> Type_ name -> Type_ name
@@ -233,7 +236,7 @@ ftv = \case
 -- t: the type of types
 type Scheme = Scheme_ RawName Type
 data Scheme_ v t = Forall [v] t
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord, Typeable, Data.Data)
 
 -- Syn: the surface syntax
 -- Syn represents the code that users write. It goes through several
@@ -278,7 +281,7 @@ data Syn_ n v t = Var n
          -- FFI calls
          -- FCall stands for "foreign call"
          | FCall String [Syn_ n v t]
-         deriving (Eq, Show)
+         deriving (Eq, Show, Typeable, Data.Data)
 
 -- Supported binary operators
 binOps :: [RawName]

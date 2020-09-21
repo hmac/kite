@@ -17,6 +17,10 @@ import           Syn.Parse                      ( pModule
 
 import           Syn
 
+-- Parse the string as an expression
+-- TODO: roll out to this whole module
+parseExpr str = parse (pExpr <* eof) "" str
+
 test :: Spec
 test = parallel $ do
   describe "parsing declarations" $ do
@@ -250,8 +254,11 @@ test = parallel $ do
       parse pExpr "" "{ a = a, b = b }"
         `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
     it "parses record projection" $ do
-      parse pExpr "" "a.b" `shouldParse` Project (Var "a") "b"
+      parseExpr "a.b" `shouldParse` Project (Var "a") "b"
       parse pExpr "" "f a.b" `shouldParse` App (Var "f") (Project (Var "a") "b")
+      -- Not currently supported
+      -- parseExpr "{ a = a }.b"
+      --   `shouldParse` (Project (Record [("a", Var "a")]) "b")
   describe "parsing string literals" $ do
     it "parses a simple string" $ do
       parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello" []
