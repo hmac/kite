@@ -56,7 +56,7 @@ data Module_ name a ty = Module { moduleName :: ModuleName
                                 , moduleDecls :: [Decl_ name a ty]
                                 , moduleMetadata :: [(String, String)]
                                 }
-                                deriving (Eq, Show)
+                                deriving (Eq, Show, Typeable, Data.Data)
 
 dataDecls :: Module_ n a ty -> [Data_ n]
 dataDecls = extractDecl $ \case
@@ -78,13 +78,13 @@ data Import = Import { importQualified :: Bool
                      , importAlias :: Maybe RawName
                      , importItems :: [ImportItem_ RawName]
                      }
-                     deriving (Eq, Show)
+                     deriving (Eq, Show, Typeable, Data.Data)
 
 type ImportItem = ImportItem_ RawName
 data ImportItem_ name = ImportSingle { importItemName :: name }
                       | ImportAll { importItemName :: name }
                       | ImportSome { importItemName :: name, importItemConstructors :: [name] }
-                      deriving (Eq, Show)
+                      deriving (Eq, Show, Typeable, Data.Data)
 
 unName :: RawName -> String
 unName (Name n) = n
@@ -96,7 +96,7 @@ data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
                        | DataDecl (Data_ name)
                        | AliasDecl (Alias_ name)
                        | Comment String
-                       deriving (Eq, Show)
+                       deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: I think it'll simplify things down the line if we have a single
 -- funScheme field that contains both the constraint and the type, instead of
@@ -109,7 +109,7 @@ data Fun_ name exp ty = Fun { funComments :: [String]
                             , funType :: Maybe ty
                             , funDefs :: [Def_ name exp]
                             }
-                            deriving (Eq, Show)
+                            deriving (Eq, Show, Typeable, Data.Data)
 
 -- Constraints
 -- Should be removed as we no longer have typeclasses
@@ -124,7 +124,7 @@ data Data_ name = Data { dataName :: name
                        , dataTyVars :: [RawName]
                        , dataCons :: [DataCon_ name]
                        }
-                       deriving (Eq, Show)
+                       deriving (Eq, Show, Typeable, Data.Data)
 
 -- A type alias in its raw form. The variables in aliasTyVars are free in the
 -- type. This is later converted into a Scheme, so they get quantified over
@@ -134,7 +134,7 @@ data Alias_ name = Alias { aliasName :: name
                          , aliasTyVars :: [RawName]
                          , aliasType :: Type_ name
                          }
-                         deriving (Eq, Show)
+                         deriving (Eq, Show, Typeable, Data.Data)
 
 type DataCon = DataCon_ RawName
 -- Left a
@@ -142,14 +142,14 @@ type DataCon = DataCon_ RawName
 data DataCon_ name = DataCon { conName :: name
                              , conArgs :: [Type_ name]
                              }
-                             deriving (Eq, Show)
+                             deriving (Eq, Show, Typeable, Data.Data)
 
 -- Consider adding defName here - I think it might simplify things elsewhere
 type Def = Def_ RawName
 data Def_ name a = Def { defArgs :: [Pattern_ name]
                        , defExpr :: a
                        }
-                       deriving (Eq, Show)
+                       deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
 type Pattern = Pattern_ RawName

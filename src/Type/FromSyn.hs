@@ -100,7 +100,7 @@ convertType uVarCtx = \case
     in  T.TCon name <$> mapM (convertType uVarCtx) as
   S.TyVar v -> case lookup v uVarCtx of
     Just u  -> pure $ T.UType u
-    Nothing -> T.throwError $ T.UnknownVariable mempty (T.Free v)
+    Nothing -> T.throwError $ T.UnknownVariable (T.Free v)
   S.TyCon c   -> pure $ T.TCon c []
   -- Flatten type applications into spine form, so the head of every TApp is
   -- never a TApp. This is an invariant required by the typechecker.

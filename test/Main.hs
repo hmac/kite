@@ -8,6 +8,7 @@ import qualified Test.Syn.Print
 import qualified Test.Syn.RoundTrip
 import qualified Test.Constraint.FromSyn
 import qualified Test.Type
+import qualified Test.Type.Module
 
 import qualified Integration.Typecheck
 
@@ -22,8 +23,9 @@ main = do
     Test.Syn.Print.test
     Test.Constraint.FromSyn.test
     Test.Type.test
+    Test.Type.Module.test
     Integration.Typecheck.test
-    -- Test.Syn.RoundTrip.test
-    -- describe "Type" $ it "passes all Hedgehog tests" $ do
-    --   success <- checkParallel Type.tests
-    --   success `shouldBe` True
+    Test.Syn.RoundTrip.test
+    describe "Type" $ it "passes all Hedgehog tests" $ do
+      success <- checkParallel Type.tests
+      success `shouldBe` True

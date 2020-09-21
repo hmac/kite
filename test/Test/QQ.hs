@@ -8,6 +8,9 @@ import           Text.Megaparsec                ( parse
                                                 )
 import           Syn.Parse                      ( pExpr
                                                 , pType
+                                                , pFun
+                                                , pModule
+                                                , spaceConsumerN
                                                 )
 import           Canonicalise                   ( canonicaliseExp )
 import           Type.FromSyn                   ( fromSyn )
@@ -44,5 +47,33 @@ ty = QuasiQuoter { quoteExp  = f
  where
   f :: String -> Q Exp
   f s = case parse (pType <* eof) "" s of
+    Left  err -> error (errorBundlePretty err)
+    Right ty  -> dataToExpQ (const Nothing) ty
+
+-- A QuasiQuoter for functions
+-- [fn|inc : Int -> Int
+--     inc = x -> x + 1]] ==> Fun { funName = "inc", ... }
+fn :: QuasiQuoter
+fn = QuasiQuoter { quoteExp  = f
+                 , quotePat  = undefined
+                 , quoteType = undefined
+                 , quoteDec  = undefined
+                 }
+ where
+  f :: String -> Q Exp
+  f s = case parse (spaceConsumerN *> pFun <* eof) "" s of
+    Left  err -> error (errorBundlePretty err)
+    Right ty  -> dataToExpQ (const Nothing) ty
+
+-- A QuasiQuoter for module
+mod :: QuasiQuoter
+mod = QuasiQuoter { quoteExp  = f
+                  , quotePat  = undefined
+                  , quoteType = undefined
+                  , quoteDec  = undefined
+                  }
+ where
+  f :: String -> Q Exp
+  f s = case parse (spaceConsumerN *> pModule <* eof) "" s of
     Left  err -> error (errorBundlePretty err)
     Right ty  -> dataToExpQ (const Nothing) ty

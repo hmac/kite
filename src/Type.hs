@@ -104,6 +104,9 @@ unit = TCon "Lam.Primitive.Unit" []
 list :: Type -> Type
 list a = TCon "Lam.Primitive.List" [a]
 
+io :: Type
+io = TCon "Lam.Primitive.IO" []
+
 -- Primitive constructors
 primitiveConstructors :: Ctx
 primitiveConstructors =
@@ -148,6 +151,26 @@ mkTupleCon len tcon =
         [0 ..]
         (map (fromString . (: [])) ['a' ..])
   in  foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
+
+-- In the future we will support syntax to declare the types of foreign calls,
+-- like this:
+--     foreign putStrLn : String -> IO ()
+--     foreign getLine : IO String
+--     foreign bindIO : IO a -> (a -> IO b) -> IO b
+-- Until then, we hard-code the types here.
+-- If you add a new fcall here, you also need to add its implementation in
+-- LC.Execute.
+fcallInfo :: [(String, Type)]
+fcallInfo =
+  -- name        type
+  [ ("putStrLn", Fn string (TApp io [unit]))
+  , ("putStr"  , Fn string (TApp io [unit]))
+  , ("getLine" , TApp io [string])
+  , ("pureIO", Forall (U 0 "a") (Fn (UType (U 0 "a")) (TApp io [UType (U 0 "a")])))
+  , ("bindIO", Forall (U 0 "a") $ Forall (U 1 "b") $ Fn (TApp io [UType (U 0 "a")]) $ Fn (Fn (UType (U 0 "a")) (TApp io [UType (U 1 "b")])) (TApp io [UType (U 1 "b")]))
+  , ("chars", Fn string (list char))
+  , ("showChar", Fn char string)
+  ]
 
 -- | Types
 data Type =
@@ -468,7 +491,7 @@ lookupSolved e =
 lookupV :: V -> Ctx -> TypeM Type
 lookupV v ctx = do
   TypeEnv { envCtx = globalCtx } <- ask
-  liftMaybe (throwError (UnknownVariable ctx v))
+  liftMaybe (throwError (UnknownVariable v))
     $ flip firstJust (ctx <> globalCtx)
     $ \case
         (Var v' t) | v' == v -> Just t
@@ -721,11 +744,12 @@ check ctx expr ty =
       (a, ctx') <- infer ctx e
       ctx''     <- extendV x a ctx'
       check ctx'' body c
-    (FCall _name args, _) -> do
-      -- For now, just typecheck the arguments by inferring their types, and then
-      -- assume the type we're checking against is the correct one.
-      mapM_ (infer ctx) args
-      pure ctx
+    (FCall name args, _) -> do
+      case lookup name fcallInfo of
+        Just fCallTy -> do
+          (resultTy, ctx') <- foldM (\(fTy, c) arg -> inferApp c fTy arg) (fCallTy, ctx) args
+          subtype ctx' (subst ctx' resultTy) ty
+        Nothing -> throwError $ UnknownFCall name
     (MCase []                  , _     ) -> throwError (EmptyCase expr)
     (MCase alts@((pats, _) : _), Fn a b) -> do
       -- Split off as many args as there are patterns in the first alt
@@ -970,13 +994,13 @@ checkPattern ctx pat ty =
         con = case subpats of
           []                       -> error "Type.checkPattern: empty tuple"
           [_] -> error "Type.checkPattern: single-element tuple"
-          [_, _]                   -> Free "Tuple2"
-          [_, _, _]                -> Free "Tuple3"
-          [_, _, _, _]             -> Free "Tuple4"
-          [_, _, _, _, _]          -> Free "Tuple5"
-          [_, _, _, _, _, _]       -> Free "Tuple6"
-          [_, _, _, _, _, _, _]    -> Free "Tuple7"
-          [_, _, _, _, _, _, _, _] -> Free "Tuple8"
+          [_, _]                   -> Free "Lam.Primitive.Tuple2"
+          [_, _, _]                -> Free "Lam.Primitive.Tuple3"
+          [_, _, _, _]             -> Free "Lam.Primitive.Tuple4"
+          [_, _, _, _, _]          -> Free "Lam.Primitive.Tuple5"
+          [_, _, _, _, _, _]       -> Free "Lam.Primitive.Tuple6"
+          [_, _, _, _, _, _, _]    -> Free "Lam.Primitive.Tuple7"
+          [_, _, _, _, _, _, _, _] -> Free "Lam.Primitive.Tuple8"
           _ ->
             error
               $  "Type.checkPattern: cannot (yet) handle tuples of length > 8: "
@@ -1005,6 +1029,7 @@ checkCaseAlt expectedAltTy scrutTy ctx (pat, expr) =
     (inferredAltTy, ctx') <- inferCaseAlt scrutTy ctx (pat, expr)
     subtype ctx' (subst ctx' expectedAltTy) (subst ctx' inferredAltTy)
 
+-- Infer the type of the result when applying a function of type @ty@ to @e@
 inferApp :: Ctx -> Type -> Exp -> TypeM (Type, Ctx)
 inferApp ctx ty e = trace' ctx ["inferApp", debug ty, debug e] $ case ty of
   Forall u a -> do
@@ -1060,7 +1085,8 @@ data Error = TodoError String
            | InfAppFailure' Type Type
            | CannotInferHole Exp
            | CannotCheckHole Exp Type
-           | UnknownVariable Ctx V
+           | UnknownVariable V
+           | UnknownFCall String
            | EmptyCase Exp
            | ExpectedConstructorType Type
            | RecordDoesNotHaveField Type String

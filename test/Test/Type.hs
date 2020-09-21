@@ -3,6 +3,7 @@ module Test.Type where
 
 import           Test.Hspec
 import           Type
+import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
 import           Data.Name
 import           Control.Monad.Trans.State.Strict
@@ -13,6 +14,7 @@ import           Util
 import           Test.QQ
 import           Canonicalise                   ( canonicaliseExp
                                                 , canonicaliseType
+                                                , canonicaliseModule
                                                 )
 import           Type.FromSyn                   ( fromSyn
                                                 , convertType
@@ -174,13 +176,8 @@ test = do
       --                   in r.five|]
       --   in infers ctx expr int
       $ pendingWith "let typechecking not implemented yet"
-    -- fcalls have hardcoded types:
-    -- putStrLn : String -> IO Unit
-    it "a foreign call"
-      $ let expr = [syn|$fcall putStrLn "Hello"|]
-            type_ =
-              TApp (TCon "Lam.Primitive.IO" []) [TCon "Lam.Primitive.Unit" []]
-        in  infers ctx expr type_
+    -- fcalls have hardcoded types. putStrLn : String -> IO Unit
+    it "a foreign call" $ checks ctx [syn|$fcall putStrLn "Hello"|] [ty|IO ()|]
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -273,15 +270,23 @@ infers' ctx expr ty = do
 
 checks :: Ctx -> Syn.Syn -> Syn.Type -> Expectation
 checks ctx expr ty = do
-  let moduleName    = "QQ"
-      canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
-      canonicalType = canonicaliseType (moduleName, mempty) ty
-  let r = do
-        e <- fromSyn canonicalExpr
-        t <- convertType mempty canonicalType
-        _ <- check ctx e t
-        pure ()
-  let env = defaultTypeEnv { envCtx = primCtx <> ctx }
+  let
+    modul = canonicaliseModule Syn.Module
+      { Syn.moduleName     = "QQ"
+      , Syn.moduleImports  = mempty
+      , Syn.moduleExports  = mempty
+      , Syn.moduleDecls    =
+        [ Syn.FunDecl Syn.Fun
+            { Syn.funName     = "f"
+            , Syn.funType     = Just ty
+            , Syn.funDefs = [Syn.Def { Syn.defArgs = [], Syn.defExpr = expr }]
+            , Syn.funComments = mempty
+            }
+        ]
+      , Syn.moduleMetadata = mempty
+      }
+    r   = checkModule ctx modul >> pure ()
+    env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()
