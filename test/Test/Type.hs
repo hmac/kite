@@ -276,7 +276,7 @@ checks ctx expr ty = do
         , Syn.moduleExports  = mempty
         , Syn.moduleDecls    = [ Syn.FunDecl Syn.Fun { Syn.funName     = "f"
                                                      , Syn.funType     = Just ty
-                                                     , Syn.funDefs     = [expr]
+                                                     , Syn.funExpr     = expr
                                                      , Syn.funComments = mempty
                                                      }
                                ]

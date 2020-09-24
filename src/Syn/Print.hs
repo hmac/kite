@@ -98,8 +98,8 @@ printDecl (DataDecl  d) = printData d
 printDecl (AliasDecl a) = printAlias a
 
 printFun :: Fun Syn -> Document
-printFun Fun { funComments = comments, funName = name, funDefs = defs, funType = ty }
-  = vsep $ printComments comments ++ sig ++ map (printDef name) defs
+printFun Fun { funComments = comments, funName = name, funExpr = defs, funType = ty }
+  = vsep $ printComments comments ++ sig ++ [printDef name defs]
  where
   sig = case ty of
     Just t  -> [func (printName name) <> align (space <> colon <+> printType t)]

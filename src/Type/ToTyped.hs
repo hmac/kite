@@ -34,7 +34,7 @@ convertModule modul = T.Module
 convertFun :: Can.Fun Can.Exp -> T.Fun
 convertFun fun = T.Fun { T.funName = funName fun
                        , T.funType = convertMaybeType (funType fun)
-                       , T.funDefs = map convertDef (funDefs fun)
+                       , T.funDefs = [convertDef (funExpr fun)]
                        }
 
 convertData :: Can.Data -> T.Data

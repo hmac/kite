@@ -29,7 +29,7 @@ test = parallel $ do
         { funComments = []
         , funName     = "id"
         , funType     = Just (TyVar "a" `fn` TyVar "a")
-        , funDefs     = [MCase [([VarPat "x"], Var "x")]]
+        , funExpr     = MCase [([VarPat "x"], Var "x")]
         }
     it "requires a line fold to be indented" $ do
       parse pDecl "" `shouldFailOn` "id : a -> a\nid x =\nx"
@@ -38,12 +38,10 @@ test = parallel $ do
       parse pDecl "" "const : a -> b -> a\nconst = x y -> x"
         `shouldParse` FunDecl Fun
                         { funComments = []
-                        , funName     = "const"
+                        , funName = "const"
                         , funType = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar
                                       "a"
-                        , funDefs     = [ MCase
-                                            [([VarPat "x", VarPat "y"], Var "x")]
-                                        ]
+                        , funExpr = MCase [([VarPat "x", VarPat "y"], Var "x")]
                         }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap = f m -> undefined"
@@ -54,8 +52,8 @@ test = parallel $ do
                                         $    (TyVar "a" `fn` TyVar "b")
                                         `fn` TyApp (TyVar "f") (TyVar "a")
                                         `fn` TyApp (TyVar "f") (TyVar "b")
-                        , funDefs     =
-                          [MCase [([VarPat "f", VarPat "m"], Var "undefined")]]
+                        , funExpr     = MCase
+                          [([VarPat "f", VarPat "m"], Var "undefined")]
                         }
     it "parses a multiline function definition" $ do
       parse
@@ -67,16 +65,14 @@ test = parallel $ do
                         , funName     = "head"
                         , funType = Just $ TyApp TyList (TyVar "a") `fn` TyVar
                                       "a"
-                        , funDefs     =
-                          [ MCase
-                              [ ( [ListPat []]
-                                , App (Var "error")
-                                      (StringLit "head: empty list" [])
-                                )
-                              , ( [ConsPat "Cons" [VarPat "x", VarPat "xs"]]
-                                , Var "x"
-                                )
-                              ]
+                        , funExpr     = MCase
+                          [ ( [ListPat []]
+                            , App (Var "error")
+                                  (StringLit "head: empty list" [])
+                            )
+                          , ( [ConsPat "Cons" [VarPat "x", VarPat "xs"]]
+                            , Var "x"
+                            )
                           ]
                         }
     it "parses a function with a multi param argument type" $ do
@@ -92,15 +88,14 @@ test = parallel $ do
                           $    TyApp (TyApp (TyCon "Either") (TyVar "a"))
                                      (TyVar "b")
                           `fn` TyApp (TyCon "Maybe") (TyVar "a")
-                        , funDefs     = [ MCase
-                                            [ ( [ConsPat "Left" [VarPat "x"]]
-                                              , App (Con "Just") (Var "x")
-                                              )
-                                            , ( [ConsPat "Right" [WildPat]]
-                                              , Con "Nothing"
-                                              )
-                                            ]
-                                        ]
+                        , funExpr     = MCase
+                                          [ ( [ConsPat "Left" [VarPat "x"]]
+                                            , App (Con "Just") (Var "x")
+                                            )
+                                          , ( [ConsPat "Right" [WildPat]]
+                                            , Con "Nothing"
+                                            )
+                                          ]
                         }
 
     it "parses a simple type definition" $ do
@@ -166,7 +161,7 @@ test = parallel $ do
                         , moduleDecls    = [ FunDecl Fun { funName = "one"
                                                          , funComments = []
                                                          , funType = Just TyInt
-                                                         , funDefs = [IntLit 1]
+                                                         , funExpr = IntLit 1
                                                          }
                                            ]
                         , moduleMetadata = [("key", "val")]

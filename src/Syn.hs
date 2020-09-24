@@ -105,7 +105,7 @@ type Fun exp = Fun_ RawName exp (Type_ RawName)
 data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
                             , funType :: Maybe ty
-                            , funDefs :: [exp]
+                            , funExpr :: exp
                             }
                             deriving (Eq, Show, Typeable, Data.Data)
 

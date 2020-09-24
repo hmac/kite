@@ -85,7 +85,7 @@ canonicaliseDecl env = \case
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f = f
   { funName = TopLevel mod (funName f)
-  , funDefs = fmap (canonicaliseExp (mod, imps) mempty) (funDefs f)
+  , funExpr = canonicaliseExp (mod, imps) mempty (funExpr f)
   , funType = canonicaliseType (mod, imps) <$> funType f
   }
 
