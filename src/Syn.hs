@@ -20,8 +20,6 @@ module Syn
   , Alias_(..)
   , DataCon
   , DataCon_(..)
-  , Def
-  , Def_(..)
   , Pattern
   , Pattern_(..)
   , tyapp
@@ -107,7 +105,7 @@ type Fun exp = Fun_ RawName exp (Type_ RawName)
 data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
                             , funType :: Maybe ty
-                            , funDefs :: [Def_ name exp]
+                            , funDefs :: [exp]
                             }
                             deriving (Eq, Show, Typeable, Data.Data)
 
@@ -143,11 +141,6 @@ data DataCon_ name = DataCon { conName :: name
                              , conArgs :: [Type_ name]
                              }
                              deriving (Eq, Show, Typeable, Data.Data)
-
--- Consider adding defName here - I think it might simplify things elsewhere
-type Def = Def_ RawName
-data Def_ name a = Def { defExpr :: a }
-                       deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
 type Pattern = Pattern_ RawName

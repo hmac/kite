@@ -191,7 +191,7 @@ pFun = do
   pure Fun { funComments = comments
            , funName     = name
            , funType     = Just sig
-           , funDefs     = [Def { defExpr = expr }]
+           , funDefs     = [expr]
            }
 
 -- The context for parsing a type

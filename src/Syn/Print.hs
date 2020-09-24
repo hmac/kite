@@ -169,9 +169,9 @@ printType' ctx ty = case (ctx, ty) of
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
 -- TODO: when we drop support for LHS patterns, update this
-printDef :: RawName -> Def Syn -> Document
-printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
-                | otherwise       = lhs <+> printExpr (defExpr d)
+printDef :: RawName -> Syn -> Document
+printDef name expr | big expr  = nest 2 $ vsep [lhs, printExpr expr]
+                   | otherwise = lhs <+> printExpr expr
   where lhs = func (printName name) <+> equals
 
 printPattern :: Pattern -> Document

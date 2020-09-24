@@ -108,7 +108,7 @@ inferFun ctx (name, body) =
 
 funToBind :: Can.Fun Can.Exp -> TypeM (Name, Maybe Type, Exp)
 funToBind fun = do
-  rhs <- (fromSyn . S.defExpr . head . funDefs) fun
+  rhs <- (fromSyn . head . funDefs) fun
   sch <- case funType fun of
     Just t  -> Just <$> quantify t
     Nothing -> pure Nothing

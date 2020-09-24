@@ -270,22 +270,20 @@ infers' ctx expr ty = do
 
 checks :: Ctx -> Syn.Syn -> Syn.Type -> Expectation
 checks ctx expr ty = do
-  let
-    modul = canonicaliseModule Syn.Module
-      { Syn.moduleName     = "QQ"
-      , Syn.moduleImports  = mempty
-      , Syn.moduleExports  = mempty
-      , Syn.moduleDecls    = [ Syn.FunDecl Syn.Fun
-                                 { Syn.funName     = "f"
-                                 , Syn.funType     = Just ty
-                                 , Syn.funDefs = [Syn.Def { Syn.defExpr = expr }]
-                                 , Syn.funComments = mempty
-                                 }
-                             ]
-      , Syn.moduleMetadata = mempty
-      }
-    r   = checkModule ctx modul >> pure ()
-    env = defaultTypeEnv { envCtx = primCtx <> ctx }
+  let modul = canonicaliseModule Syn.Module
+        { Syn.moduleName     = "QQ"
+        , Syn.moduleImports  = mempty
+        , Syn.moduleExports  = mempty
+        , Syn.moduleDecls    = [ Syn.FunDecl Syn.Fun { Syn.funName     = "f"
+                                                     , Syn.funType     = Just ty
+                                                     , Syn.funDefs     = [expr]
+                                                     , Syn.funComments = mempty
+                                                     }
+                               ]
+        , Syn.moduleMetadata = mempty
+        }
+      r   = checkModule ctx modul >> pure ()
+      env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()

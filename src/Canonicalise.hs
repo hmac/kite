@@ -85,7 +85,7 @@ canonicaliseDecl env = \case
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun (mod, imps) f = f
   { funName = TopLevel mod (funName f)
-  , funDefs = fmap (canonicaliseDef (mod, imps)) (funDefs f)
+  , funDefs = fmap (canonicaliseExp (mod, imps) mempty) (funDefs f)
   , funType = canonicaliseType (mod, imps) <$> funType f
   }
 
@@ -129,9 +129,6 @@ canonicaliseDataCon (mod, imps) DataCon { conName = name, conArgs = args } =
   DataCon { conName = TopLevel mod name
           , conArgs = fmap (canonicaliseType (mod, imps)) args
           }
-
-canonicaliseDef :: Env -> Syn.Def Syn.Syn -> Can.Def Can.Exp
-canonicaliseDef env d = d { defExpr = canonicaliseExp env mempty (defExpr d) }
 
 canonicaliseExp :: Env -> [RawName] -> Syn.Syn -> Can.Exp
 canonicaliseExp env = go
