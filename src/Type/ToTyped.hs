@@ -82,9 +82,8 @@ convertScheme :: Can.Scheme -> T.Scheme
 convertScheme (Forall vars ty) = T.Forall (map C.R vars) (convertType ty)
 
 convertDef :: Can.Def Can.Exp -> T.Def
-convertDef def = T.Def { T.defArgs = map convertPattern (defArgs def)
-                       , T.defExpr = convertExpr (defExpr def)
-                       }
+convertDef def =
+  T.Def { T.defArgs = [], T.defExpr = convertExpr (defExpr def) }
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = coerce

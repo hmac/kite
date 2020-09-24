@@ -131,11 +131,7 @@ canonicaliseDataCon (mod, imps) DataCon { conName = name, conArgs = args } =
           }
 
 canonicaliseDef :: Env -> Syn.Def Syn.Syn -> Can.Def Can.Exp
-canonicaliseDef env d =
-  let res    = map (canonicalisePattern env) (defArgs d)
-      locals = concatMap fst res
-      args   = map snd res
-  in  d { defExpr = canonicaliseExp env locals (defExpr d), defArgs = args }
+canonicaliseDef env d = d { defExpr = canonicaliseExp env mempty (defExpr d) }
 
 canonicaliseExp :: Env -> [RawName] -> Syn.Syn -> Can.Exp
 canonicaliseExp env = go

@@ -25,28 +25,31 @@ test :: Spec
 test = parallel $ do
   describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
-      parse pDecl "" "id : a -> a\nid x = x" `shouldParse` FunDecl Fun
+      parse pDecl "" "id : a -> a\nid = x -> x" `shouldParse` FunDecl Fun
         { funComments = []
         , funName     = "id"
         , funType     = Just (TyVar "a" `fn` TyVar "a")
-        , funDefs     = [Def { defArgs = [VarPat "x"], defExpr = Var "x" }]
+        , funDefs     = [Def { defExpr = MCase [([VarPat "x"], Var "x")] }]
         }
     it "requires a line fold to be indented" $ do
       parse pDecl "" `shouldFailOn` "id : a -> a\nid x =\nx"
 
     it "parses a definition with multiple type arrows" $ do
-      parse pDecl "" "const : a -> b -> a\nconst x y = x" `shouldParse` FunDecl
-        Fun
-          { funComments = []
-          , funName     = "const"
-          , funType     = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar "a"
-          , funDefs     = [ Def { defArgs = [VarPat "x", VarPat "y"]
-                                , defExpr = Var "x"
-                                }
+      parse pDecl "" "const : a -> b -> a\nconst = x y -> x"
+        `shouldParse` FunDecl Fun
+                        { funComments = []
+                        , funName     = "const"
+                        , funType = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar
+                                      "a"
+                        , funDefs     =
+                          [ Def
+                              { defExpr = MCase
+                                [([VarPat "x", VarPat "y"], Var "x")]
+                              }
                           ]
-          }
+                        }
     it "parses a higher kinded type definition" $ do
-      parse pDecl "" "map : (a -> b) -> f a -> f b\nmap f m = undefined"
+      parse pDecl "" "map : (a -> b) -> f a -> f b\nmap = f m -> undefined"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "map"
@@ -54,16 +57,18 @@ test = parallel $ do
                                         $    (TyVar "a" `fn` TyVar "b")
                                         `fn` TyApp (TyVar "f") (TyVar "a")
                                         `fn` TyApp (TyVar "f") (TyVar "b")
-                        , funDefs = [ Def { defArgs = [VarPat "f", VarPat "m"]
-                                          , defExpr = Var "undefined"
-                                          }
-                                    ]
+                        , funDefs     =
+                          [ Def
+                              { defExpr = MCase
+                                [([VarPat "f", VarPat "m"], Var "undefined")]
+                              }
+                          ]
                         }
     it "parses a multiline function definition" $ do
       parse
           pDecl
           ""
-          "head : [a] -> a\nhead [] = error \"head: empty list\"\nhead (Cons x xs) = x"
+          "head : [a] -> a\nhead = [] -> error \"head: empty list\"\n       (Cons x xs) -> x"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "head"
@@ -71,23 +76,23 @@ test = parallel $ do
                                       "a"
                         , funDefs     =
                           [ Def
-                            { defArgs = [ListPat []]
-                            , defExpr = App (Var "error")
-                                            (StringLit "head: empty list" [])
-                            }
-                          , Def
-                            { defArgs = [ ConsPat "Cons"
-                                                  [VarPat "x", VarPat "xs"]
-                                        ]
-                            , defExpr = Var "x"
-                            }
+                              { defExpr = MCase
+                                [ ( [ListPat []]
+                                  , App (Var "error")
+                                        (StringLit "head: empty list" [])
+                                  )
+                                , ( [ConsPat "Cons" [VarPat "x", VarPat "xs"]]
+                                  , Var "x"
+                                  )
+                                ]
+                              }
                           ]
                         }
     it "parses a function with a multi param argument type" $ do
       parse
           pDecl
           ""
-          "fromLeft : Either a b -> Maybe a\nfromLeft (Left x) = Just x\nfromLeft (Right _) = Nothing"
+          "fromLeft : Either a b -> Maybe a\nfromLeft = (Left x) -> Just x\n           (Right _) -> Nothing"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "fromLeft"
@@ -97,12 +102,16 @@ test = parallel $ do
                                      (TyVar "b")
                           `fn` TyApp (TyCon "Maybe") (TyVar "a")
                         , funDefs     =
-                          [ Def { defArgs = [ConsPat "Left" [VarPat "x"]]
-                                , defExpr = App (Con "Just") (Var "x")
-                                }
-                          , Def { defArgs = [ConsPat "Right" [WildPat]]
-                                , defExpr = Con "Nothing"
-                                }
+                          [ Def
+                              { defExpr = MCase
+                                            [ ( [ConsPat "Left" [VarPat "x"]]
+                                              , App (Con "Just") (Var "x")
+                                              )
+                                            , ( [ConsPat "Right" [WildPat]]
+                                              , Con "Nothing"
+                                              )
+                                            ]
+                              }
                           ]
                         }
 
@@ -167,15 +176,11 @@ test = parallel $ do
                         , moduleImports  = []
                         , moduleExports  = []
                         , moduleDecls    =
-                          [ FunDecl Fun
-                              { funName     = "one"
-                              , funComments = []
-                              , funType     = Just TyInt
-                              , funDefs     = [ Def { defArgs = []
-                                                    , defExpr = IntLit 1
-                                                    }
-                                              ]
-                              }
+                          [ FunDecl Fun { funName     = "one"
+                                        , funComments = []
+                                        , funType     = Just TyInt
+                                        , funDefs = [Def { defExpr = IntLit 1 }]
+                                        }
                           ]
                         , moduleMetadata = [("key", "val")]
                         }

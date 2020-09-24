@@ -146,7 +146,7 @@ genFun =
   Fun []
     <$> genLowerName
     <*> (Just <$> genType)
-    <*> Gen.list (Range.linear 1 5) genDef
+    <*> Gen.list (Range.linear 1 1) genDef
 
 genType :: H.Gen Type
 genType = Gen.recursive
@@ -176,7 +176,7 @@ genTyRecord t1 t2 = do
   pure $ TyRecord [(f1, t1), (f2, t2)]
 
 genDef :: H.Gen (Def Syn)
-genDef = Def <$> Gen.list (Range.linear 1 5) genPattern <*> genExpr
+genDef = Def <$> genExpr
 
 genExpr :: H.Gen Syn
 genExpr = Gen.shrink shrinkExpr $ Gen.recursive

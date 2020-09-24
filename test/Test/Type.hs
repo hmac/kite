@@ -275,14 +275,13 @@ checks ctx expr ty = do
       { Syn.moduleName     = "QQ"
       , Syn.moduleImports  = mempty
       , Syn.moduleExports  = mempty
-      , Syn.moduleDecls    =
-        [ Syn.FunDecl Syn.Fun
-            { Syn.funName     = "f"
-            , Syn.funType     = Just ty
-            , Syn.funDefs = [Syn.Def { Syn.defArgs = [], Syn.defExpr = expr }]
-            , Syn.funComments = mempty
-            }
-        ]
+      , Syn.moduleDecls    = [ Syn.FunDecl Syn.Fun
+                                 { Syn.funName     = "f"
+                                 , Syn.funType     = Just ty
+                                 , Syn.funDefs = [Syn.Def { Syn.defExpr = expr }]
+                                 , Syn.funComments = mempty
+                                 }
+                             ]
       , Syn.moduleMetadata = mempty
       }
     r   = checkModule ctx modul >> pure ()

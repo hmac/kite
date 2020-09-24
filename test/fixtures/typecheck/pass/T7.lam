@@ -2,4 +2,4 @@ module T7
 
 length : [a] -> Int
 length = [] -> 0
-length = (x :: xs) -> 1 + (length xs)
+         (x :: xs) -> 1 + (length xs)

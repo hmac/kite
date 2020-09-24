@@ -184,39 +184,15 @@ pFun = do
   name     <- lowercaseName <?> "declaration type name"
   sig      <- symbol ":" >> pType
   _        <- indentGuard spaceConsumerN EQ pos1
-  defs     <- some (pDef name <* spaceConsumerN)
+  _        <- lexeme lowercaseName >>= \n -> guard (name == n)
+  _        <- void $ string "="
+  _        <- indentGuard spaceConsumerN GT (mkPos 2)
+  expr     <- pExpr
   pure Fun { funComments = comments
            , funName     = name
            , funType     = Just sig
-           , funDefs     = defs
+           , funDefs     = [Def { defExpr = expr }]
            }
-
--- Parses the portion of a definition after the name
--- Definitions must not be indented
-pDef :: RawName -> Parser (Def Syn)
-pDef name = do
-  _ <- try $ do
-    n <- lexeme lowercaseName
-    guard (name == n)
-    pure ()
-  bindings <- try $ do
-    bindings <- many pPattern <?> "pattern"
-    void (string "=")
-    pure bindings
-  -- If the next thing we parse is some newlines, then the token following it
-  -- must be indented by at least two columns (from the start of the line)
-  -- e.g. this is ok
-  --
-  -- foo x y =
-  --   bar
-  --
-  -- but this is not
-  --
-  -- foo x y =
-  -- bar
-  _    <- indentGuard spaceConsumerN GT (mkPos 2)
-  expr <- pExpr
-  pure Def { defArgs = bindings, defExpr = expr }
 
 -- The context for parsing a type
 -- Paren means that compound types have to be in parens

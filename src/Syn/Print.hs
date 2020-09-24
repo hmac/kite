@@ -172,10 +172,7 @@ printType' ctx ty = case (ctx, ty) of
 printDef :: RawName -> Def Syn -> Document
 printDef name d | big (defExpr d) = nest 2 $ vsep [lhs, printExpr (defExpr d)]
                 | otherwise       = lhs <+> printExpr (defExpr d)
- where
-  lhs = case map printPattern (defArgs d) of
-    []   -> func (printName name) <+> equals
-    pats -> func (printName name) <+> hsep pats <+> equals
+  where lhs = func (printName name) <+> equals
 
 printPattern :: Pattern -> Document
 printPattern (VarPat n)      = printName n

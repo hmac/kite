@@ -44,6 +44,6 @@ catMaybes = []                 -> []
 ---- Haskell calls this mapMaybe, but that's the name of our 'fmap' instance
 filterMaybe : (a -> Maybe b) -> [a] -> [b]
 filterMaybe = _ []        -> []
-filterMaybe = f (x :: xs) -> case f x of
+              f (x :: xs) -> case f x of
                                Just r  -> r :: (filterMaybe f xs)
                                Nothing -> filterMaybe f xs
