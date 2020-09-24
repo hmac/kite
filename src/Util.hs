@@ -4,6 +4,7 @@ module Util
   , Data.Maybe.mapMaybe
   , Data.Maybe.fromMaybe
   , Data.Maybe.catMaybes
+  , Data.Maybe.isJust
   , Data.List.nub
   , Data.List.sort
   , Data.List.sortOn
@@ -119,6 +120,15 @@ splitOn x xs = go xs []
  where
   go []       acc = [reverse acc]
   go (y : ys) acc = if x == y then reverse acc : go ys [] else go ys (y : acc)
+
+-- | Uses a function to determine which of two output lists an input element should join
+-- Taken from GHC.Util
+partitionWith :: (a -> Either b c) -> [a] -> ([b], [c])
+partitionWith _ [] = ([],[])
+partitionWith f (x:xs) = case f x of
+                         Left  b -> (b:bs, cs)
+                         Right c -> (bs, c:cs)
+    where (bs,cs) = partitionWith f xs
 
 -- Pretty printing
 pShow :: Show a => a -> String

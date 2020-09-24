@@ -6,6 +6,7 @@ module Type.Module where
 -- type annotations.
 
 import qualified Data.Set                      as Set
+import           Util
 
 import qualified Syn                           as S
 import           Syn                            ( Decl_(..)
@@ -23,9 +24,8 @@ import           Type                           ( TypeM
                                                 , V(..)
                                                 , Exp
                                                 , check
+                                                , infer
                                                 , wellFormedType
-                                                , throwError
-                                                , Error(..)
                                                 , LocatedError(..)
                                                 )
 import           Type.FromSyn                   ( convertScheme
@@ -41,7 +41,7 @@ import qualified Type.ToTyped                   ( convertModule )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
-translateModule :: Can.Module -> TypeM (Ctx, [(Name, Type, Exp)])
+translateModule :: Can.Module -> TypeM (Ctx, [(Name, Maybe Type, Exp)])
 translateModule modul = do
   dataTypeCtx <- mconcat
     <$> mapM translateData (getDataDecls (moduleDecls modul))
@@ -59,15 +59,26 @@ checkModule ctx modul = do
   -- Get all the functions defined in the module
   funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
 
+  -- Split the functions into those with type signatures and those without
+  let (funsWithSig, funsWithoutSig) = flip partitionWith funs $ \case
+        (name, Just ty, expr) -> Left (name, ty, expr)
+        (name, Nothing, expr) -> Right (name, expr)
+
+
   -- Extend the context with type signatures for each function
   -- This allows us to typecheck them in any order, and to typecheck any
   -- recursive calls.
-  let funTypeCtx = map (\(name, ty, _exp) -> Var (Free name) ty) funs
+  -- If the function has no type signature (should only happen when we're
+  -- invoking this function via the REPL), skip it.
+  let funTypeCtx = map (\(name, ty, _exp) -> Var (Free name) ty) funsWithSig
 
   let ctx'       = ctx <> dataTypeCtx <> funTypeCtx
 
   -- Typecheck each function definition
-  mapM_ (checkFun ctx') funs
+  -- For functions with type signatures, just check them against their signature
+  -- For functions without type signatures, infer their type
+  mapM_ (checkFun ctx') funsWithSig
+  mapM_ (inferFun ctx') funsWithoutSig
 
   -- Construct a typed module by converting every data & fun decl into the typed
   -- form, with empty type annotations. In the future this should be done during
@@ -87,16 +98,21 @@ checkFun ctx (name, ty, body) =
         -- check the body of the function
         void $ check ctx body ty
 
-funToBind :: Can.Fun Can.Exp -> TypeM (Name, Type, Exp)
+inferFun :: Ctx -> (Name, Exp) -> TypeM ()
+inferFun ctx (name, body) =
+  flip Except.catchError
+       (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
+    $ do
+        -- infer the body of the function
+        void $ infer ctx body
+
+funToBind :: Can.Fun Can.Exp -> TypeM (Name, Maybe Type, Exp)
 funToBind fun = do
   rhs <- (fromSyn . S.defExpr . head . funDefs) fun
-  case funType fun of
-    Nothing ->
-      throwError $ TodoError $ "function with no type signature: " <> show
-        (funName fun)
-    Just ty -> do
-      sch <- quantify ty
-      pure (funName fun, sch, rhs)
+  sch <- case funType fun of
+    Just t  -> Just <$> quantify t
+    Nothing -> pure Nothing
+  pure (funName fun, sch, rhs)
 
 -- Explicitly quantify all type variables, then convert the whole thing to a
 -- T.Type.

@@ -38,6 +38,6 @@ typecheckModuleGroup (ModuleGroup m deps) = do
 
 dumpEnv
   :: UntypedModuleGroup
-  -> Either Type.LocatedError (Type.Ctx, [(Name, Type.Type, Type.Exp)])
+  -> Either Type.LocatedError (Type.Ctx, [(Name, Maybe Type.Type, Type.Exp)])
 dumpEnv (ModuleGroup m deps) =
   Type.runTypeM Type.defaultTypeEnv $ mconcatMapM translateModule (deps <> [m])
