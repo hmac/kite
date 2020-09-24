@@ -77,6 +77,20 @@ executables:
     ghc-options: -O2 -threaded -fprof-auto "-with-rtsopts=-N -p -s -h -i0.1"
     dependencies:
     - lam
+  lam-bench:
+    source-dirs: benchmarks
+    main: Main.hs
+    ghc-options:
+    - -Wall
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - lam
+    - criterion
+    - filepath
+    - extra
 
 tests:
   lam-test:
@@ -104,19 +118,3 @@ tests:
     dependencies:
     - lam
     - hlint
-
-benchmarks:
-  lam-bench:
-    source-dirs: benchmarks
-    main: Main.hs
-    ghc-options:
-    - -Wall
-    - -O2
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - lam
-    - criterion
-    - filepath
-    - extra

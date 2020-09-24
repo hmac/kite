@@ -1,20 +1,13 @@
 module Main where
 
-import           Data.List.Extra                ( stripSuffix )
-import           Data.Maybe                     ( mapMaybe )
-import           Data.String                    ( IsString(fromString) )
 
 import           Criterion.Main
-import           System.FilePath.Posix          ( takeFileName )
-import           System.Directory.Extra         ( listFilesRecursive )
 
 import           Syn.Parse                      ( parseLamFile )
 import           Syn
 import           Canonicalise                   ( canonicaliseModule )
 
-import           ModuleGroup                    ( ModuleGroup(..)
-                                                , TypedModuleGroup(..)
-                                                )
+import           ModuleGroup                    ( TypedModuleGroup(..) )
 import           ModuleLoader                   ( loadFromPathAndRootDirectory )
 import           ModuleGroupTypechecker         ( typecheckModuleGroup )
 import           ModuleGroupCompiler            ( compileToLC
@@ -23,11 +16,11 @@ import           ModuleGroupCompiler            ( compileToLC
 import           LC.Eval                        ( evalMain )
 import qualified LC
 
-import           Constraint.Generate.M          ( run )
-import           Constraint.Generate.Module     ( generateModule )
-import qualified Constraint.Primitive
+import           Type.Module                    ( checkModule )
+import           Type                           ( runTypeM
+                                                , defaultTypeEnv
+                                                )
 
-import           Util
 
 -- We benchmark parsing and typechecking performance by parsing and typechecking
 -- the Data.List module from the standard library. Note that the typechecking
@@ -49,6 +42,7 @@ main = defaultMain
     [bench "Data.ListTest" $ nfIO $ runFromPathAndRoot "std/ListTest.lam" "std"]
   ]
 
+runFromPathAndRoot :: FilePath -> FilePath -> IO Bool
 runFromPathAndRoot path root = do
   group <- loadFromPathAndRootDirectory path root
   case group of
@@ -67,16 +61,15 @@ typecheckFromPathAndRoot path root = do
   case group of
     Left  err -> error $ path <> ":\n" <> err
     Right g   -> case typecheckModuleGroup g of
-      Left  err                       -> error $ path <> ":\n" <> show err
-      Right (TypedModuleGroup m deps) -> pure True
+      Left  err                    -> error $ path <> ":\n" <> show err
+      Right (TypedModuleGroup _ _) -> pure True
 
 typecheckModule :: Module -> IO Bool
 typecheckModule m =
-  let (res, _) =
-          run $ generateModule Constraint.Primitive.env (canonicaliseModule m)
+  let res = runTypeM defaultTypeEnv $ checkModule mempty (canonicaliseModule m)
   in  case res of
-        Left err -> error $ show (moduleName m) <> ":\n" <> show err
-        Right (_env, typedModule) -> pure True
+        Left  err -> error $ show (moduleName m) <> ":\n" <> show err
+        Right _   -> pure True
 
 parseFromPath :: String -> ModuleName -> IO Bool
 parseFromPath path modName = do
@@ -103,17 +96,16 @@ exampleModule = Module
           `tyapp` TyVar "a"
           `fn`    TyList
           `tyapp` TyVar "a"
-        , funDefs     =
-          [ Def { defArgs = [WildPat, ListPat []], defExpr = ListLit [] }
-          , Def
-            { defArgs = [VarPat "e", ConsPat "::" [VarPat "x", VarPat "xs"]]
-            , defExpr = App
-                          (App (Con "::") (Var "x"))
-                          (App (App (Var "intersperseHelper") (Var "e"))
-                               (Var "xs")
-                          )
-            }
-          ]
+        , funExpr     = MCase
+                          [ ([WildPat, ListPat []], ListLit [])
+                          , ( [VarPat "e", ConsPat "::" [VarPat "x", VarPat "xs"]]
+                            , App
+                              (App (Con "::") (Var "x"))
+                              (App (App (Var "intersperseHelper") (Var "e"))
+                                   (Var "xs")
+                              )
+                            )
+                          ]
         }
       )
     , FunDecl
@@ -127,23 +119,19 @@ exampleModule = Module
           `tyapp` TyVar "a"
           `fn`    TyList
           `tyapp` TyVar "a"
-        , funDefs     = [ Def { defArgs = [WildPat, ListPat []]
-                              , defExpr = ListLit []
-                              }
-                        , Def
-                          { defArgs = [ VarPat "e"
-                                      , ConsPat "::" [VarPat "x", VarPat "xs"]
-                                      ]
-                          , defExpr = App
-                            (App (Con "::") (Var "e"))
-                            (App
-                              (App (Con "::") (Var "x"))
-                              (App (App (Var "intersperseHelper") (Var "e"))
-                                   (Var "xs")
+        , funExpr     = MCase
+                          [ ([WildPat, ListPat []], ListLit [])
+                          , ( [VarPat "e", ConsPat "::" [VarPat "x", VarPat "xs"]]
+                            , App
+                              (App (Con "::") (Var "e"))
+                              (App
+                                (App (Con "::") (Var "x"))
+                                (App (App (Var "intersperseHelper") (Var "e"))
+                                     (Var "xs")
+                                )
                               )
                             )
-                          }
-                        ]
+                          ]
         }
       )
     ]
