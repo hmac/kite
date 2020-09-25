@@ -18,10 +18,9 @@ import qualified Syn                           as S
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
-  S.LetA x ty e body ->
-    T.Ann
-      <$> (T.Let1 (T.Free x) <$> fromSyn e <*> fromSyn body)
-      <*> convertScheme ty
+  S.LetA x ty e body -> do
+    e' <- T.Ann <$> fromSyn e <*> convertScheme ty
+    T.Let [(T.Free x, e')] <$> fromSyn body
   S.Var n   -> pure $ T.VarExp (T.Free n)
   S.Con n   -> pure $ T.Con (T.Free n)
   S.Ann e t -> T.Ann <$> fromSyn e <*> convertType mempty t
@@ -38,8 +37,8 @@ fromSyn = \case
     pure $ foldr (T.Lam . T.Free) a' xs
   S.Let binds body -> do
     body'  <- fromSyn body
-    binds' <- mapM (secondM fromSyn) binds
-    pure $ foldl (\b (x, e) -> T.Let1 (T.Free x) e b) body' binds'
+    binds' <- mapM (bimapM (pure . T.Free) fromSyn) binds
+    pure $ T.Let binds' body'
   S.UnitLit -> pure $ T.Con (T.Free "Lam.Primitive.Unit")
   S.TupleLit es ->
     let con =

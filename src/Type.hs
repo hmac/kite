@@ -286,8 +286,8 @@ data Exp =
   | Case Exp [(Pattern, Exp)]
   -- MCase expression
   | MCase [([Pattern], Exp)]
-  -- Let expression
-  | Let1 V Exp Exp
+  -- Multi let expression
+  | Let [(V, Exp)] Exp
   -- String literal
   | String String
   -- Char literal
@@ -316,8 +316,8 @@ instance Debug Exp where
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
   debug (MCase alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
-  debug (Let1 x a e) =
-    "let" <+> debug x <+> "=" <+> debug a <+> "in" <+> debug e
+  debug (Let binds e) =
+    "let" <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc) ("in" <+> debug e) binds
   debug (String s     ) = "\"" <> s <> "\""
   debug (Char   c     ) = "'" <> [c] <> "'"
   debug (Int    i     ) = show i
@@ -740,11 +740,19 @@ check ctx expr ty =
       ctx'' <- check ctx' e a
       pure $ dropAfter (UVar u) ctx''
     (Hole n       , a) -> throwError $ CannotCheckHole (Hole n) a
-    (Let1 x e body, c) -> do
-      (a, ctx') <- infer ctx e
-      ctx''     <- extendV x a ctx'
-      ctx''' <- check ctx'' body c
-      pure $ dropAfter (Var x a) ctx'''
+    (Let binds body, _) -> do
+      -- generate a dummy existential that we'll use to cut the context
+      alpha <- newE
+      ctx'  <- extendMarker alpha ctx
+
+      -- infer the type of each binding, adding to the context as we go
+      ctx'' <- foldM (\c (x, e) -> infer c e >>= \(a, c1) -> extendV x a c1) ctx' (reverse binds)
+
+      -- check the type of the body
+      ctx''' <- check ctx'' body ty
+
+      -- drop all these variables off the context
+      pure $ dropAfter (Marker alpha) ctx'''
     (FCall name args, _) -> do
       case lookup name fcallInfo of
         Just fCallTy -> do
@@ -839,11 +847,18 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
     ctx'''           <- foldM (checkMCaseAlt patTys exprTy) ctx'' alts
     -- Now construct a result type and return it
     pure (foldFn patTys exprTy, ctx''')
-  Let1 x e body -> do
-    (a, ctx') <- infer ctx e
-    ctx''     <- extendV x a ctx'
+  Let binds body -> do
+    -- generate a dummy existential that we'll use to cut the context
+    alpha <- newE
+    ctx'  <- extendMarker alpha ctx
+
+    -- infer the type of each binding, adding to the context as we go
+    ctx'' <- foldM (\c (x, e) -> infer c e >>= \(a, c1) -> extendV x a c1) ctx' (reverse binds)
+    -- infer the type of the body
     (ty, ctx''') <- infer ctx'' body
-    pure $ (subst ctx''' ty, dropAfter (Var x a) ctx''')
+
+    -- drop all these variables off the context
+    pure (subst ctx''' ty, dropAfter (Marker alpha) ctx''')
   String _         -> pure (string, ctx)
   Char   _         -> pure (char, ctx)
   Int    _         -> pure (int, ctx)
