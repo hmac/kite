@@ -5,8 +5,7 @@ module Type.FromSyn where
 import           Util
 
 import           Data.String                    ( fromString )
-import           Data.Name                      ( Name(TopLevel)
-                                                , RawName(Name)
+import           Data.Name                      ( Name
                                                 , fromLocal
                                                 , toString
                                                 )
@@ -39,15 +38,9 @@ fromSyn = \case
     body'  <- fromSyn body
     binds' <- mapM (bimapM (pure . T.Free) fromSyn) binds
     pure $ T.Let binds' body'
-  S.UnitLit -> pure T.Unit
-  S.TupleLit es ->
-    let con =
-            T.Con
-              (T.Free
-                (TopLevel "Lam.Primitive" (Name ("Tuple" <> show (length es))))
-              )
-    in  foldl T.App con <$> mapM fromSyn es
-  S.ListLit es          -> T.List <$> mapM fromSyn es
+  S.UnitLit             -> pure T.Unit
+  S.TupleLit es         -> T.Tuple <$> mapM fromSyn es
+  S.ListLit  es         -> T.List <$> mapM fromSyn es
   S.StringLit prefix [] -> pure $ T.String prefix
   S.StringLit prefix comps ->
     let append = T.VarExp (T.Free "Lam.Primitive.appendString")

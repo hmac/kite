@@ -307,6 +307,8 @@ data Exp =
   | Unit
   -- List literal
   | List [Exp]
+  -- Tuple literal
+  | Tuple [Exp]
   -- Record
   | Record [(String, Exp)]
   -- Record projection
@@ -338,6 +340,7 @@ instance Debug Exp where
   debug (Bool   b     ) = show b
   debug (Unit         ) = "()"
   debug (List   elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
+  debug (Tuple  elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
   debug (Record fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
     where go (name, expr) = debug name <+> "=" <+> debug expr
   debug (Project r f   ) = debug r <> "." <> f
@@ -892,6 +895,12 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
           (\s acc -> App (App (Con (Free "Lam.Primitive.::")) s) acc)
           (Con (Free "Lam.Primitive.[]"))
           elems
+    infer ctx expr
+  Tuple elems -> do
+    -- Construct an application of TupleN and infer the type of that
+    let n    = length elems
+        con  = Con (Free (fromString ("Lam.Primitive.Tuple" <> show n)))
+        expr = foldl App con elems
     infer ctx expr
   Record fields -> do
     -- To infer the type of a record, we must be able to infer types for all its
