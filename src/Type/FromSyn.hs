@@ -22,8 +22,9 @@ fromSyn = \case
     T.Ann
       <$> (T.Let1 (T.Free x) <$> fromSyn e <*> fromSyn body)
       <*> convertScheme ty
-  S.Var  n  -> pure $ T.VarExp (T.Free n)
-  S.Con  n  -> pure $ T.Con (T.Free n)
+  S.Var n   -> pure $ T.VarExp (T.Free n)
+  S.Con n   -> pure $ T.Con (T.Free n)
+  S.Ann e t -> T.Ann <$> fromSyn e <*> convertType mempty t
   S.Hole n  -> pure $ T.Hole (show n)
   S.App a b -> T.App <$> fromSyn a <*> fromSyn b
   S.Case scrut alts ->

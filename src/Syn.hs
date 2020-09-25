@@ -239,6 +239,7 @@ data Scheme_ v t = Forall [v] t
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
 type Syn = Syn_ RawName RawName Type
 data Syn_ n v t = Var n
+         | Ann (Syn_ n v t) t
          | Con n
          | Hole n
          | Abs [n] (Syn_ n v t)

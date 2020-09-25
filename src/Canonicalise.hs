@@ -136,6 +136,7 @@ canonicaliseExp env = go
   go locals = \case
     Var n | n `elem` locals -> Var (Local n)
           | otherwise       -> Var $ canonicaliseName env n
+    Ann e t -> Ann (canonicaliseExp env locals e) (canonicaliseType env t)
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
     Abs ns    e       -> Abs (fmap Local ns) $ go (ns <> locals) e

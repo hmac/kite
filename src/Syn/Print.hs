@@ -187,8 +187,9 @@ printPattern (ConsPat n pats) =
 
 -- TODO: binary operators
 printExpr :: Syn -> Document
-printExpr (Var n) = printName n
-printExpr (Con n) = data_ (printName n)
+printExpr (Var n  ) = printName n
+printExpr (Ann e t) = printExpr e <+> colon <+> printType t
+printExpr (Con n  ) = data_ (printName n)
 printExpr (Record fields) =
   data_ $ printRecordSyntax "=" $ map (bimap printName printExpr) fields
 printExpr (Project e f) = printExpr' e <> dot <> printName f
