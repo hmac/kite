@@ -19,7 +19,6 @@ type DataCon = DataCon_ Name
 type Data = Data_ Name
 type Alias = Alias_ Name
 type Fun a = Fun_ Name a (Type_ Name)
-type Constraint = Constraint_ Name
 type Decl a = Decl_ Name a (Type_ Name)
 type ImportItem = ImportItem_ RawName
 type Module = Module_ Name Exp (Type_ Name)

@@ -43,7 +43,7 @@ data Decl = FunDecl Fun
 
 data Fun = Fun { funName :: Name
                , funType :: Scheme
-               , funDefs :: [Def]
+               , funExpr :: Exp
                } deriving (Eq, Show)
 
 data Data = Data { dataName :: Name
@@ -54,6 +54,3 @@ data Data = Data { dataName :: Name
 data DataCon = DataCon { conName :: Name, conArgs :: [Type], conType :: Scheme }
              | RecordCon { conName :: Name, conFields :: [(Name, Type)], conType :: Scheme }
                deriving (Eq, Show)
-
-data Def = Def { defArgs :: [Pattern] , defExpr :: Exp }
-           deriving (Eq, Show)

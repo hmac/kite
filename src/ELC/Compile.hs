@@ -57,13 +57,9 @@ translateModule env T.Module { T.moduleDecls = decls } =
   in  foldM (\e decl -> merge e <$> translateDecl e decl) env orderedDecls
 
 translateDecl :: Env -> T.Decl -> NameGen [(Name, Exp)]
-translateDecl env (T.FunDecl T.Fun { T.funName = n, T.funDefs = defs }) = do
-  let numVars = length (T.defArgs (head defs))
-  varNames <- replicateM numVars fresh
-  let vars = map VarPat varNames
-  equations <- mapM (translateDef env) defs
-  caseExpr  <- match varNames equations (Bottom "pattern match failed")
-  pure [(n, buildAbs caseExpr vars)]
+translateDecl env (T.FunDecl T.Fun { T.funName = n, T.funExpr = expr }) = do
+  expr' <- translateExpr env expr
+  pure [(n, expr')]
 
 translateDecl _env (T.DataDecl d) = do
   let cons = T.dataCons d
@@ -72,14 +68,6 @@ translateDecl _env (T.DataDecl d) = do
       let cs = zipWith (translateSumCon cs) [0 ..] cons
       in  pure $ map (\c -> (conName c, Cons c [])) cs
     else concat <$> mapM translateProdCon cons
-
--- Translate a function definition into a form understood by the pattern match
--- compiler.
-translateDef :: Env -> T.Def -> NameGen Equation
-translateDef env def = do
-  args <- mapM (translatePattern env) (T.defArgs def)
-  expr <- translateExpr env (T.defExpr def)
-  pure (args, expr)
 
 -- Note: we do a weird trick here where each constructor has a reference to a
 -- list of all the constructors for its type, which includes itself.

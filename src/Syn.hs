@@ -12,8 +12,6 @@ module Syn
   , Decl_(..)
   , Fun
   , Fun_(..)
-  , Constraint
-  , Constraint_(..)
   , Data
   , Data_(..)
   , Alias
@@ -108,14 +106,6 @@ data Fun_ name exp ty = Fun { funComments :: [String]
                             , funExpr :: exp
                             }
                             deriving (Eq, Show, Typeable, Data.Data)
-
--- Constraints
--- Should be removed as we no longer have typeclasses
-type Constraint = Constraint_ RawName
-data Constraint_ name =
-    CTuple (Constraint_ name) (Constraint_ name)
-  | CNil
-  deriving (Show, Eq)
 
 type Data = Data_ RawName
 data Data_ name = Data { dataName :: name

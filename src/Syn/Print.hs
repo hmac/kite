@@ -107,11 +107,6 @@ printFun Fun { funComments = comments, funName = name, funExpr = defs, funType =
   printComments [] = []
   printComments cs = map printComment cs
 
--- TODO: properly print 3+ element constraint tuples
-printConstraint :: Constraint -> Document
-printConstraint (CTuple a b) = tupled [printConstraint a, printConstraint b]
-printConstraint CNil         = "ϵ"
-
 printScheme :: Scheme -> Document
 printScheme (Forall _ t) = printType t
 

@@ -34,7 +34,7 @@ convertModule modul = T.Module
 convertFun :: Can.Fun Can.Exp -> T.Fun
 convertFun fun = T.Fun { T.funName = funName fun
                        , T.funType = convertMaybeType (funType fun)
-                       , T.funDefs = [convertDef (funExpr fun)]
+                       , T.funExpr = convertExpr (funExpr fun)
                        }
 
 convertData :: Can.Data -> T.Data
@@ -80,9 +80,6 @@ convertType = \case
 
 convertScheme :: Can.Scheme -> T.Scheme
 convertScheme (Forall vars ty) = T.Forall (map C.R vars) (convertType ty)
-
-convertDef :: Can.Exp -> T.Def
-convertDef expr = T.Def { T.defArgs = [], T.defExpr = convertExpr expr }
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = coerce
