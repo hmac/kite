@@ -162,7 +162,6 @@ test = do
       $ let expr = [syn|(True, False, Zero)|]
         in  infers ctx expr (TCon "Lam.Primitive.Tuple3" [bool, bool, nat])
     it "a list"
-      -- [True, False]
       $ let expr = [syn|[True, False]|] in infers ctx expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in infers ctx expr int
     it "a string literal" $ let expr = [syn|"Hello"|] in infers ctx expr string

@@ -39,7 +39,7 @@ fromSyn = \case
     body'  <- fromSyn body
     binds' <- mapM (bimapM (pure . T.Free) fromSyn) binds
     pure $ T.Let binds' body'
-  S.UnitLit -> pure $ T.Con (T.Free "Lam.Primitive.Unit")
+  S.UnitLit -> pure T.Unit
   S.TupleLit es ->
     let con =
             T.Con
@@ -47,10 +47,7 @@ fromSyn = \case
                 (TopLevel "Lam.Primitive" (Name ("Tuple" <> show (length es))))
               )
     in  foldl T.App con <$> mapM fromSyn es
-  S.ListLit es ->
-    foldr (\s acc -> T.App (T.App (T.Con (T.Free "Lam.Primitive.::")) s) acc)
-          (T.Con (T.Free "Lam.Primitive.[]"))
-      <$> mapM fromSyn es
+  S.ListLit es          -> T.List <$> mapM fromSyn es
   S.StringLit prefix [] -> pure $ T.String prefix
   S.StringLit prefix comps ->
     let append = T.VarExp (T.Free "Lam.Primitive.appendString")

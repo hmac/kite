@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Type
   ( tests
   , Ctx
@@ -78,8 +79,8 @@ import           Hedgehog                       ( Property
                                                 )
 import qualified Hedgehog
 
-import Type.Reflection (Typeable)
-import Data.Data (Data)
+import           Type.Reflection                ( Typeable )
+import           Data.Data                      ( Data )
 
 -- Bidirectional typechecker
 -- Following:
@@ -166,9 +167,15 @@ fcallInfo =
   [ ("putStrLn", Fn string (TApp io [unit]))
   , ("putStr"  , Fn string (TApp io [unit]))
   , ("getLine" , TApp io [string])
-  , ("pureIO", Forall (U 0 "a") (Fn (UType (U 0 "a")) (TApp io [UType (U 0 "a")])))
-  , ("bindIO", Forall (U 0 "a") $ Forall (U 1 "b") $ Fn (TApp io [UType (U 0 "a")]) $ Fn (Fn (UType (U 0 "a")) (TApp io [UType (U 1 "b")])) (TApp io [UType (U 1 "b")]))
-  , ("chars", Fn string (list char))
+  , ( "pureIO"
+    , Forall (U 0 "a") (Fn (UType (U 0 "a")) (TApp io [UType (U 0 "a")]))
+    )
+  , ( "bindIO"
+    , Forall (U 0 "a") $ Forall (U 1 "b") $ Fn (TApp io [UType (U 0 "a")]) $ Fn
+      (Fn (UType (U 0 "a")) (TApp io [UType (U 1 "b")]))
+      (TApp io [UType (U 1 "b")])
+    )
+  , ("chars"   , Fn string (list char))
   , ("showChar", Fn char string)
   ]
 
@@ -296,6 +303,10 @@ data Exp =
   | Int Int
   -- Bool literal
   | Bool Bool
+  -- Unit literal
+  | Unit
+  -- List literal
+  | List [Exp]
   -- Record
   | Record [(String, Exp)]
   -- Record projection
@@ -317,11 +328,16 @@ instance Debug Exp where
   debug (MCase alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
   debug (Let binds e) =
-    "let" <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc) ("in" <+> debug e) binds
+    "let"
+      <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc)
+                ("in" <+> debug e)
+                binds
   debug (String s     ) = "\"" <> s <> "\""
   debug (Char   c     ) = "'" <> [c] <> "'"
   debug (Int    i     ) = show i
   debug (Bool   b     ) = show b
+  debug (Unit         ) = "()"
+  debug (List   elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
   debug (Record fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
     where go (name, expr) = debug name <+> "=" <+> debug expr
   debug (Project r f   ) = debug r <> "." <> f
@@ -739,14 +755,16 @@ check ctx expr ty =
       ctx'  <- extendU u ctx
       ctx'' <- check ctx' e a
       pure $ dropAfter (UVar u) ctx''
-    (Hole n       , a) -> throwError $ CannotCheckHole (Hole n) a
+    (Hole n        , a) -> throwError $ CannotCheckHole (Hole n) a
     (Let binds body, _) -> do
       -- generate a dummy existential that we'll use to cut the context
       alpha <- newE
       ctx'  <- extendMarker alpha ctx
 
       -- infer the type of each binding, adding to the context as we go
-      ctx'' <- foldM (\c (x, e) -> infer c e >>= \(a, c1) -> extendV x a c1) ctx' (reverse binds)
+      ctx'' <- foldM (\c (x, e) -> infer c e >>= \(a, c1) -> extendV x a c1)
+                     ctx'
+                     (reverse binds)
 
       -- check the type of the body
       ctx''' <- check ctx'' body ty
@@ -756,7 +774,9 @@ check ctx expr ty =
     (FCall name args, _) -> do
       case lookup name fcallInfo of
         Just fCallTy -> do
-          (resultTy, ctx') <- foldM (\(fTy, c) arg -> inferApp c fTy arg) (fCallTy, ctx) args
+          (resultTy, ctx') <- foldM (\(fTy, c) arg -> inferApp c fTy arg)
+                                    (fCallTy, ctx)
+                                    args
           subtype ctx' (subst ctx' resultTy) ty
         Nothing -> throwError $ UnknownFCall name
     (MCase []                  , _     ) -> throwError (EmptyCase expr)
@@ -853,17 +873,27 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
     ctx'  <- extendMarker alpha ctx
 
     -- infer the type of each binding, adding to the context as we go
-    ctx'' <- foldM (\c (x, e) -> infer c e >>= \(a, c1) -> extendV x a c1) ctx' (reverse binds)
+    ctx'' <- foldM (\c (x, e) -> infer c e >>= \(a, c1) -> extendV x a c1)
+                   ctx'
+                   (reverse binds)
     -- infer the type of the body
     (ty, ctx''') <- infer ctx'' body
 
     -- drop all these variables off the context
     pure (subst ctx''' ty, dropAfter (Marker alpha) ctx''')
-  String _         -> pure (string, ctx)
-  Char   _         -> pure (char, ctx)
-  Int    _         -> pure (int, ctx)
-  Bool   _         -> pure (bool, ctx)
-  Record fields    -> do
+  String _   -> pure (string, ctx)
+  Char   _   -> pure (char, ctx)
+  Int    _   -> pure (int, ctx)
+  Bool   _   -> pure (bool, ctx)
+  Unit       -> pure (unit, ctx)
+  List elems -> do
+    -- Construct a nested application of (::) and [] and infer the type of that
+    let expr = foldr
+          (\s acc -> App (App (Con (Free "Lam.Primitive.::")) s) acc)
+          (Con (Free "Lam.Primitive.[]"))
+          elems
+    infer ctx expr
+  Record fields -> do
     -- To infer the type of a record, we must be able to infer types for all its
     -- fields
     (ctx', fTypes) <- mapAccumLM
