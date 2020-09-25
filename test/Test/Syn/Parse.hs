@@ -67,8 +67,7 @@ test = parallel $ do
                                       "a"
                         , funExpr     = MCase
                           [ ( [ListPat []]
-                            , App (Var "error")
-                                  (StringLit "head: empty list" [])
+                            , App (Var "error") (StringLit "head: empty list")
                             )
                           , ( [ConsPat "Cons" [VarPat "x", VarPat "xs"]]
                             , Var "x"
@@ -235,8 +234,7 @@ test = parallel $ do
       parse pExpr "" "1 + 1"
         `shouldParse` App (App (Var "+") (IntLit 1)) (IntLit 1)
     it "parses a tuple" $ do
-      parse pExpr "" "(\"\", 0)"
-        `shouldParse` TupleLit [StringLit "" [], IntLit 0]
+      parse pExpr "" "(\"\", 0)" `shouldParse` TupleLit [StringLit "", IntLit 0]
     it "parses a record" $ do
       parse pExpr "" "{ a = a, b = b }"
         `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
@@ -248,31 +246,30 @@ test = parallel $ do
       --   `shouldParse` (Project (Record [("a", Var "a")]) "b")
   describe "parsing string literals" $ do
     it "parses a simple string" $ do
-      parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello" []
+      parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello"
     it "parses a string with escaped double quotes" $ do
       parse pExpr "" "\"hello quote: \\\"\""
-        `shouldParse` StringLit "hello quote: \"" []
+        `shouldParse` StringLit "hello quote: \""
     it "parses a string with an escaped backslash" $ do
       parse pExpr "" "\"hello backslash: \\\\\""
-        `shouldParse` StringLit "hello backslash: \\" []
+        `shouldParse` StringLit "hello backslash: \\"
     it "parses a string with an escaped newline" $ do
       parse pExpr "" "\"hello newline: \\n\""
-        `shouldParse` StringLit "hello newline: \n" []
+        `shouldParse` StringLit "hello newline: \n"
     it "parses a string with an interpolation" $ do
       parse pExpr "" "\"hello #{name}\""
-        `shouldParse` StringLit "hello " [(Var "name", "")]
+        `shouldParse` StringInterp "hello " [(Var "name", "")]
     it "parses a string with more complex interpolation" $ do
-      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringLit
+      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringInterp
         "hello "
-        [(App (App (Var "+") (Var "name")) (StringLit "!" []), "")]
+        [(App (App (Var "+") (Var "name")) (StringLit "!"), "")]
     it "parses a string with a lone hash" $ do
-      parse pExpr "" "\"hello hash: #\""
-        `shouldParse` StringLit "hello hash: #" []
+      parse pExpr "" "\"hello hash: #\"" `shouldParse` StringLit "hello hash: #"
     it "parses a string with an escaped hash bracket" $ do
       parse pExpr "" "\"hello hash bracket: #\\{\""
-        `shouldParse` StringLit "hello hash bracket: #{" []
+        `shouldParse` StringLit "hello hash bracket: #{"
     it "parses a string with several escaped backslashes" $ do
-      parse pExpr "" "\"\\\\\\\\\"" `shouldParse` StringLit "\\\\" []
+      parse pExpr "" "\"\\\\\\\\\"" `shouldParse` StringLit "\\\\"
   describe "parsing types" $ do
     it "basic applications" $ do
       parse pType "" "f a" `shouldParse` (TyVar "f" `tyapp` TyVar "a")

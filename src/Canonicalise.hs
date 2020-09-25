@@ -146,19 +146,20 @@ canonicaliseExp env = go
                               (canonicaliseScheme env sch)
                               (go locals e)
                               (go (n : locals) body)
-    Case e alts         -> canonicaliseCase (e, alts)
-    MCase    alts       -> canonicaliseMCase alts
-    TupleLit es         -> TupleLit $ fmap (go locals) es
-    ListLit  es         -> ListLit $ fmap (go locals) es
-    StringLit pre parts -> StringLit pre $ mapFst (go locals) parts
-    CharLit c           -> CharLit c
-    Hole    n           -> Hole (canonicaliseName env n)
-    IntLit  i           -> IntLit i
-    BoolLit b           -> BoolLit b
-    UnitLit             -> UnitLit
-    Record fields       -> Record $ bimapL Local (go locals) fields
-    Project r    l      -> Project (go locals r) (Local l)
-    FCall   proc args   -> FCall proc (map (go locals) args)
+    Case e alts            -> canonicaliseCase (e, alts)
+    MCase    alts          -> canonicaliseMCase alts
+    TupleLit es            -> TupleLit $ fmap (go locals) es
+    ListLit  es            -> ListLit $ fmap (go locals) es
+    StringInterp pre parts -> StringInterp pre $ mapFst (go locals) parts
+    StringLit s            -> StringLit s
+    CharLit   c            -> CharLit c
+    Hole      n            -> Hole (canonicaliseName env n)
+    IntLit    i            -> IntLit i
+    BoolLit   b            -> BoolLit b
+    UnitLit                -> UnitLit
+    Record fields          -> Record $ bimapL Local (go locals) fields
+    Project r    l         -> Project (go locals r) (Local l)
+    FCall   proc args      -> FCall proc (map (go locals) args)
    where
     canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
     canonicaliseLet (binds, e) =

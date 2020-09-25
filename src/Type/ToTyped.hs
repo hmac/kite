@@ -99,16 +99,17 @@ convertExpr = \case
   MCase alts      -> T.MCaseT
     (map (\(pats, expr) -> (map convertPattern pats, convertExpr expr)) alts)
     unknown
-  UnitLit           -> T.UnitLitT unknown
-  TupleLit es       -> T.TupleLitT (map convertExpr es) unknown
-  ListLit  es       -> T.ListLitT (map convertExpr es) unknown
-  StringLit s comps -> T.StringLitT s (mapFst convertExpr comps) unknown
-  CharLit c         -> T.CharLitT c unknown
-  IntLit  i         -> T.IntLitT i unknown
-  BoolLit b         -> T.BoolLitT b unknown
-  Record  fields    -> T.RecordT (mapSnd convertExpr fields) unknown
-  Project r f       -> T.ProjectT (convertExpr r) f unknown
-  FCall   f args    -> T.FCallT f (map convertExpr args) unknown
+  UnitLit              -> T.UnitLitT unknown
+  TupleLit es          -> T.TupleLitT (map convertExpr es) unknown
+  ListLit  es          -> T.ListLitT (map convertExpr es) unknown
+  StringInterp s comps -> T.StringInterpT s (mapFst convertExpr comps) unknown
+  StringLit s          -> T.StringLitT s unknown
+  CharLit   c          -> T.CharLitT c unknown
+  IntLit    i          -> T.IntLitT i unknown
+  BoolLit   b          -> T.BoolLitT b unknown
+  Record    fields     -> T.RecordT (mapSnd convertExpr fields) unknown
+  Project r f          -> T.ProjectT (convertExpr r) f unknown
+  FCall   f args       -> T.FCallT f (map convertExpr args) unknown
 
 convertAlt :: (Can.Pattern, Can.Exp) -> T.AltT
 convertAlt (p, e) = T.AltT (convertPattern p) (convertExpr e)

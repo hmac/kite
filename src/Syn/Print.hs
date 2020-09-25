@@ -204,12 +204,14 @@ printExpr (MCase    alts         ) = printMCase alts
 printExpr (TupleLit es           ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
-printExpr (IntLit i                ) = pretty i
-printExpr (StringLit prefix interps) = printInterpolatedString prefix interps
-printExpr (CharLit c               ) = squotes $ pretty c
-printExpr (BoolLit True            ) = data_ "True"
-printExpr (BoolLit False           ) = data_ "False"
-printExpr UnitLit                    = data_ "()"
+printExpr (IntLit i) = pretty i
+printExpr (StringInterp prefix interps) =
+  printInterpolatedString prefix interps
+printExpr (StringLit s    ) = printInterpolatedString s []
+printExpr (CharLit   c    ) = squotes $ pretty c
+printExpr (BoolLit   True ) = data_ "True"
+printExpr (BoolLit   False) = data_ "False"
+printExpr UnitLit           = data_ "()"
 printExpr (FCall proc args) =
   "$fcall" <+> pretty proc <+> hsep (map printExpr args)
 
@@ -337,14 +339,15 @@ prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 
 -- True if we would never need to parenthesise it
 singleton :: Syn -> Bool
-singleton (Var      _   ) = True
-singleton (Hole     _   ) = True
-singleton (Con      _   ) = True
-singleton (IntLit   _   ) = True
-singleton (TupleLit _   ) = True
-singleton (ListLit  _   ) = True
-singleton (StringLit _ _) = True
-singleton _               = False
+singleton (Var      _      ) = True
+singleton (Hole     _      ) = True
+singleton (Con      _      ) = True
+singleton (IntLit   _      ) = True
+singleton (TupleLit _      ) = True
+singleton (ListLit  _      ) = True
+singleton (StringInterp _ _) = True
+singleton (StringLit _     ) = True
+singleton _                  = False
 
 big :: Syn -> Bool
 big (Case _ _  ) = True

@@ -253,7 +253,8 @@ data Syn_ n v t = Var n
          | UnitLit
          | TupleLit [Syn_ n v t]
          | ListLit [Syn_ n v t]
-         | StringLit String [(Syn_ n v t, String)]
+         | StringInterp String [(Syn_ n v t, String)]
+         | StringLit String
          | CharLit Char
          | IntLit Int
          | BoolLit Bool

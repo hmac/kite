@@ -297,6 +297,8 @@ data Exp =
   | Let [(V, Exp)] Exp
   -- String literal
   | String String
+  -- String literal with interpolations
+  | StringInterp String [(Exp, String)]
   -- Char literal
   | Char Char
   -- Int literal
@@ -334,10 +336,14 @@ instance Debug Exp where
       <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc)
                 ("in" <+> debug e)
                 binds
-  debug (String s     ) = "\"" <> s <> "\""
-  debug (Char   c     ) = "'" <> [c] <> "'"
-  debug (Int    i     ) = show i
-  debug (Bool   b     ) = show b
+  debug (String s) = "\"" <> s <> "\""
+  debug (StringInterp s comps) =
+    let compStr =
+            concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
+    in  "\"" <> s <> compStr <> "\""
+  debug (Char c       ) = "'" <> [c] <> "'"
+  debug (Int  i       ) = show i
+  debug (Bool b       ) = show b
   debug (Unit         ) = "()"
   debug (List   elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
   debug (Tuple  elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
@@ -884,6 +890,14 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
 
     -- drop all these variables off the context
     pure (subst ctx''' ty, dropAfter (Marker alpha) ctx''')
+  StringInterp prefix comps -> do
+    -- Construct a nested application of appendString and infer the type of that
+    let append = VarExp (Free "Lam.Primitive.appendString")
+        expr   = foldl
+          (\acc (c, s) -> App (App append acc) (App (App append c) s))
+          (String prefix)
+          (mapSnd String comps)
+    infer ctx expr
   String _   -> pure (string, ctx)
   Char   _   -> pure (char, ctx)
   Int    _   -> pure (int, ctx)

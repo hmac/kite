@@ -33,7 +33,8 @@ data ExpT = VarT Name Type
           | IntLitT Int Type
           | BoolLitT Bool Type
           | CharLitT Char Type
-          | StringLitT String [(ExpT, String)] Type
+          | StringInterpT String [(ExpT, String)] Type
+          | StringLitT String Type
           | RecordT [(Name, ExpT)] Type
           | ProjectT ExpT Name Type
           | FCallT String [ExpT] Type
@@ -56,51 +57,54 @@ instance Sub ExpT where
   sub s (IntLitT   i  t      ) = IntLitT i (sub s t)
   sub s (BoolLitT  b  t      ) = BoolLitT b (sub s t)
   sub s (CharLitT  c  t      ) = CharLitT c (sub s t)
-  sub s (StringLitT p cs t   ) = StringLitT p (mapFst (sub s) cs) (sub s t)
-  sub s (RecordT fields t    ) = RecordT (mapSnd (sub s) fields) (sub s t)
+  sub s (StringInterpT p cs t) = StringInterpT p (mapFst (sub s) cs) (sub s t)
+  sub s (StringLitT str    t ) = StringLitT str (sub s t)
+  sub s (RecordT    fields t ) = RecordT (mapSnd (sub s) fields) (sub s t)
   sub s (ProjectT r    l    t) = ProjectT (sub s r) l (sub s t)
   sub s (FCallT   proc args t) = FCallT proc (map (sub s) args) (sub s t)
 
 instance Vars ExpT where
-  fuv (VarT _ t         ) = fuv t
-  fuv (ConT _           ) = mempty
-  fuv (AppT a     b     ) = fuv a <> fuv b
-  fuv (AbsT binds e     ) = fuv (map snd binds) <> fuv e
-  fuv (CaseT s alts t   ) = fuv s <> fuv (map (\(AltT _ e) -> e) alts) <> fuv t
-  fuv (MCaseT alts t    ) = fuv (map (\(_, e) -> e) alts) <> fuv t
-  fuv (LetT binds body t) = fuv (map snd binds) <> fuv body <> fuv t
-  fuv (LetAT _ sch e b t) = fuv sch <> fuv e <> fuv b <> fuv t
-  fuv (HoleT _ t        ) = fuv t
-  fuv (UnitLitT t       ) = fuv t
-  fuv (TupleLitT es t   ) = fuv es <> fuv t
-  fuv (ListLitT  es t   ) = fuv es <> fuv t
-  fuv (IntLitT   _  t   ) = fuv t
-  fuv (BoolLitT  _  t   ) = fuv t
-  fuv (CharLitT  _  t   ) = fuv t
-  fuv (StringLitT _ cs t) = fuv (map fst cs) <> fuv t
-  fuv (RecordT fields t ) = fuv (map snd fields) <> fuv t
-  fuv (ProjectT r _    t) = fuv r <> fuv t
-  fuv (FCallT   _ args t) = fuv args <> fuv t
+  fuv (VarT _ t            ) = fuv t
+  fuv (ConT _              ) = mempty
+  fuv (AppT a     b        ) = fuv a <> fuv b
+  fuv (AbsT binds e        ) = fuv (map snd binds) <> fuv e
+  fuv (CaseT s alts t) = fuv s <> fuv (map (\(AltT _ e) -> e) alts) <> fuv t
+  fuv (MCaseT alts t       ) = fuv (map (\(_, e) -> e) alts) <> fuv t
+  fuv (LetT binds body t   ) = fuv (map snd binds) <> fuv body <> fuv t
+  fuv (LetAT _ sch e b t   ) = fuv sch <> fuv e <> fuv b <> fuv t
+  fuv (HoleT _ t           ) = fuv t
+  fuv (UnitLitT t          ) = fuv t
+  fuv (TupleLitT es t      ) = fuv es <> fuv t
+  fuv (ListLitT  es t      ) = fuv es <> fuv t
+  fuv (IntLitT   _  t      ) = fuv t
+  fuv (BoolLitT  _  t      ) = fuv t
+  fuv (CharLitT  _  t      ) = fuv t
+  fuv (StringInterpT _ cs t) = fuv (map fst cs) <> fuv t
+  fuv (StringLitT _      t ) = fuv t
+  fuv (RecordT    fields t ) = fuv (map snd fields) <> fuv t
+  fuv (ProjectT r _    t   ) = fuv r <> fuv t
+  fuv (FCallT   _ args t   ) = fuv args <> fuv t
 
-  ftv (VarT _ t         ) = ftv t
-  ftv (ConT _           ) = mempty
-  ftv (AppT a     b     ) = ftv a <> ftv b
-  ftv (AbsT binds e     ) = ftv (map snd binds) <> ftv e
-  ftv (CaseT s alts t   ) = ftv s <> ftv (map (\(AltT _ e) -> e) alts) <> ftv t
-  ftv (MCaseT alts t    ) = ftv (map (\(_, e) -> e) alts) <> ftv t
-  ftv (LetT binds body t) = ftv (map snd binds) <> ftv body <> ftv t
-  ftv (LetAT _ sch e b t) = ftv sch <> ftv e <> ftv b <> ftv t
-  ftv (HoleT _ t        ) = ftv t
-  ftv (UnitLitT t       ) = ftv t
-  ftv (TupleLitT es t   ) = ftv es <> ftv t
-  ftv (ListLitT  es t   ) = ftv es <> ftv t
-  ftv (IntLitT   _  t   ) = ftv t
-  ftv (BoolLitT  _  t   ) = ftv t
-  ftv (CharLitT  _  t   ) = ftv t
-  ftv (StringLitT _ cs t) = ftv (map fst cs) <> ftv t
-  ftv (RecordT fields t ) = ftv (map snd fields) <> ftv t
-  ftv (ProjectT r _    t) = ftv r <> ftv t
-  ftv (FCallT   _ args t) = ftv args <> fuv t
+  ftv (VarT _ t            ) = ftv t
+  ftv (ConT _              ) = mempty
+  ftv (AppT a     b        ) = ftv a <> ftv b
+  ftv (AbsT binds e        ) = ftv (map snd binds) <> ftv e
+  ftv (CaseT s alts t) = ftv s <> ftv (map (\(AltT _ e) -> e) alts) <> ftv t
+  ftv (MCaseT alts t       ) = ftv (map (\(_, e) -> e) alts) <> ftv t
+  ftv (LetT binds body t   ) = ftv (map snd binds) <> ftv body <> ftv t
+  ftv (LetAT _ sch e b t   ) = ftv sch <> ftv e <> ftv b <> ftv t
+  ftv (HoleT _ t           ) = ftv t
+  ftv (UnitLitT t          ) = ftv t
+  ftv (TupleLitT es t      ) = ftv es <> ftv t
+  ftv (ListLitT  es t      ) = ftv es <> ftv t
+  ftv (IntLitT   _  t      ) = ftv t
+  ftv (BoolLitT  _  t      ) = ftv t
+  ftv (CharLitT  _  t      ) = ftv t
+  ftv (StringInterpT _ cs t) = ftv (map fst cs) <> ftv t
+  ftv (StringLitT _      t ) = ftv t
+  ftv (RecordT    fields t ) = ftv (map snd fields) <> ftv t
+  ftv (ProjectT r _    t   ) = ftv r <> ftv t
+  ftv (FCallT   _ args t   ) = ftv args <> fuv t
 
 -- TODO: replace with a tuple?
 data AltT = AltT Pattern ExpT

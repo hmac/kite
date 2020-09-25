@@ -38,16 +38,12 @@ fromSyn = \case
     body'  <- fromSyn body
     binds' <- mapM (bimapM (pure . T.Free) fromSyn) binds
     pure $ T.Let binds' body'
-  S.UnitLit             -> pure T.Unit
-  S.TupleLit es         -> T.Tuple <$> mapM fromSyn es
-  S.ListLit  es         -> T.List <$> mapM fromSyn es
-  S.StringLit prefix [] -> pure $ T.String prefix
-  S.StringLit prefix comps ->
-    let append = T.VarExp (T.Free "Lam.Primitive.appendString")
-    in  foldl
-            (\acc (c, s) -> T.App (T.App append acc) (T.App (T.App append c) s))
-            (T.String prefix)
-          <$> mapM (firstM fromSyn . second T.String) comps
+  S.UnitLit      -> pure T.Unit
+  S.TupleLit  es -> T.Tuple <$> mapM fromSyn es
+  S.ListLit   es -> T.List <$> mapM fromSyn es
+  S.StringLit s  -> pure $ T.String s
+  S.StringInterp prefix comps ->
+    T.StringInterp prefix <$> mapM (firstM fromSyn) comps
   S.CharLit c -> pure $ T.Char c
   S.IntLit  i -> pure $ T.Int i
   S.BoolLit b -> pure $ T.Bool b

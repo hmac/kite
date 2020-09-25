@@ -463,7 +463,9 @@ pStringLit = do
   pure
     $ let (prefix , rest   ) = first parts
           (prefix', interps) = comps rest
-      in  StringLit (prefix <> prefix') interps
+      in  if null interps
+            then StringLit (prefix <> prefix')
+            else StringInterp (prefix <> prefix') interps
  where
   lexChar :: Parser String
   lexChar = do

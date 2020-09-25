@@ -192,9 +192,10 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
                   (Gen.small genExpr)
                   (Gen.small genExpr)
                   (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
-  , StringLit
+  , StringInterp
   <$> genString (Range.linear 0 10)
-  <*> Gen.list (Range.linear 0 2) genStringInterpPair
+  <*> Gen.list (Range.linear 1 2) genStringInterpPair
+  , StringLit <$> genString (Range.linear 0 10)
   , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
   , genRecordProjection
   ]
@@ -234,9 +235,10 @@ shrinkExpr = \case
   LetA _n _sch _e body -> [body]
   Let  _binds body     -> [body]
   Case e      alts     -> [e] <> map snd alts
-  TupleLit es          -> (TupleLit <$> shrinkList1 es) <> es
-  ListLit  es          -> (ListLit <$> shrinkList es) <> es
-  StringLit p _        -> [StringLit p []]
+  TupleLit  es         -> (TupleLit <$> shrinkList1 es) <> es
+  ListLit   es         -> (ListLit <$> shrinkList es) <> es
+  StringLit s          -> []
+  StringInterp p _     -> [StringInterp p []]
   Record fields        -> Record <$> shrinkList1 fields
   Project r _          -> [r]
 

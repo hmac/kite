@@ -136,11 +136,12 @@ buildTuplePat elems = case length elems of
 
 translateExpr :: Env -> T.Exp -> NameGen Exp
 translateExpr env = \case
-  T.IntLitT  i _         -> pure $ Const (Int i) []
-  T.BoolLitT b _         -> pure $ Const (Bool b) []
-  T.CharLitT c _         -> pure $ Const (Char c) []
-  T.StringLitT s parts _ -> translateStringLit env s parts
-  T.ListLitT elems _     -> do
+  T.IntLitT  i _            -> pure $ Const (Int i) []
+  T.BoolLitT b _            -> pure $ Const (Bool b) []
+  T.CharLitT c _            -> pure $ Const (Char c) []
+  T.StringInterpT s parts _ -> translateStringLit env s parts
+  T.StringLitT s     _      -> translateStringLit env s []
+  T.ListLitT   elems _      -> do
     elems' <- mapM (translateExpr env) elems
     buildList elems'
   T.UnitLitT _        -> pure $ Const Unit []
