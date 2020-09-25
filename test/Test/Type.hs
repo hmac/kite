@@ -93,11 +93,10 @@ test = do
     it "multi-arg function application"
       $ infers ctx [syn|(\x y -> x) True (Suc Zero)|] bool
     it "compound lets"
-      -- $ let expr = [syn|let x = True
-      --                       id = \y -> y
-      --                    in id x|]
-      --    in infers ctx expr bool
-                       $ pendingWith "let typechecking not implemented yet"
+      $ let expr = [syn|let x = True
+                            id = \y -> y
+                         in id x|]
+        in  infers ctx expr bool
     it "simple case expressions"
       $ let expr = [syn|case True of
                               True -> False
@@ -108,18 +107,18 @@ test = do
                          True -> let id = \y -> y
                                   in id True
                          False -> True|]
-        in  pendingWith "let typechecking not implemented yet"
+        in  infers ctx expr bool
     it "expressions with annotated lets"
-      $ let expr = undefined
-                    -- [syn|let id : a -> a
-                    --        id = \x -> x
-                    --     in id True|]
-        in  pendingWith "let annotations not implemented yet"
+      $ pendingWith "Cannot parse annotated lets yet"
+      -- $ let expr = [syn|let id : a -> a
+      --                       id = \x -> x
+      --                   in id True|]
+      --   in  infers ctx expr bool
     it "simultaneous let definitions"
-      $ let expr = [syn|let x = y
-                           y = True
-                        in x|]
-        in  pendingWith "simultaneous lets not implemented yet"
+      $ let expr = [syn|let y = True
+                            x = y
+                         in x|]
+        in  infers ctx expr bool
     it "case expressions with variable patterns"
       $ let expr = [syn|case True of
                          x -> Zero|]
@@ -150,15 +149,14 @@ test = do
                          w -> MkWrap False|]
         in  infers ctx expr (wrap bool)
     it "an expression hole (1)"
-      -- let x = ?foo
-      --  in True
-      $ pendingWith "let typechecking not implemented yet"
+      $ let expr = [syn|let x = ?foo
+                         in True|]
+        in  pendingWith "this results in a type error: cannot infer hole"
     it "an expression hole (2)"
-      -- let not b = case b of
-      --               True -> False
-      --               False -> True
-      --  in not ?foo
-      $ pendingWith "let typechecking not implemented yet"
+      $ let expr = [syn|let not = True -> False
+                                  False -> True
+                         in not ?foo|]
+        in  pendingWith "this results in a type error: cannot check hole"
     it "a tuple"
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
@@ -172,10 +170,9 @@ test = do
       $ let expr = [syn|{ five = 5, msg = "Hello" }|]
         in  infers ctx expr (TRecord [("five", int), ("msg", string)])
     it "a record projection"
-      -- $ let expr = [syn|let r = { five = 5, msg = "Hello" }
-      --                   in r.five|]
-      --   in infers ctx expr int
-      $ pendingWith "let typechecking not implemented yet"
+      $ let expr = [syn|let r = { five = 5, msg = "Hello" }
+                         in r.five|]
+        in  infers ctx expr int
     -- fcalls have hardcoded types. putStrLn : String -> IO Unit
     it "a foreign call" $ checks ctx [syn|$fcall putStrLn "Hello"|] [ty|IO ()|]
     it "simple record extraction"

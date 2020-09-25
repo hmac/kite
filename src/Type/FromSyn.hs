@@ -38,7 +38,7 @@ fromSyn = \case
   S.Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM (secondM fromSyn) binds
-    pure $ foldr (\(x, e) b -> T.Let1 (T.Free x) e b) body' binds'
+    pure $ foldl (\b (x, e) -> T.Let1 (T.Free x) e b) body' binds'
   S.UnitLit -> pure $ T.Con (T.Free "Lam.Primitive.Unit")
   S.TupleLit es ->
     let con =

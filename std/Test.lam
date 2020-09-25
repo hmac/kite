@@ -18,7 +18,9 @@ e = Left True
 type Foo a = Foo { unFoo : a, tag : Int }
 
 foo : Foo String
-foo = Foo { unFoo = "isfoo", tag = 1 }
+foo = let x = "isfoo"
+          y = 1
+       in Foo { unFoo = x, tag = y }
 
 one : Int
 one = case foo of

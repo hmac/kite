@@ -743,7 +743,8 @@ check ctx expr ty =
     (Let1 x e body, c) -> do
       (a, ctx') <- infer ctx e
       ctx''     <- extendV x a ctx'
-      check ctx'' body c
+      ctx''' <- check ctx'' body c
+      pure $ dropAfter (Var x a) ctx'''
     (FCall name args, _) -> do
       case lookup name fcallInfo of
         Just fCallTy -> do
@@ -838,7 +839,11 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
     ctx'''           <- foldM (checkMCaseAlt patTys exprTy) ctx'' alts
     -- Now construct a result type and return it
     pure (foldFn patTys exprTy, ctx''')
-  Let1 _x _e _body -> error "Type.infer: Let1 not implemented"
+  Let1 x e body -> do
+    (a, ctx') <- infer ctx e
+    ctx''     <- extendV x a ctx'
+    (ty, ctx''') <- infer ctx'' body
+    pure $ (subst ctx''' ty, dropAfter (Var x a) ctx''')
   String _         -> pure (string, ctx)
   Char   _         -> pure (char, ctx)
   Int    _         -> pure (int, ctx)
