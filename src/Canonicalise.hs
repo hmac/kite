@@ -109,9 +109,6 @@ canonicaliseType env = \case
   TyAlias  n a    -> TyAlias (canonicaliseName env n) (canonicaliseType env a)
   TyForall v t    -> TyForall (Local v) (canonicaliseType env t)
 
-canonicaliseScheme :: Env -> Syn.Scheme -> Can.Scheme
-canonicaliseScheme _env _ = error "canonicaliseScheme: not implemented yet"
-
 canonicaliseData :: Env -> Syn.Data -> Can.Data
 canonicaliseData (mod, imps) d = d
   { dataName = TopLevel mod (dataName d)
@@ -139,13 +136,13 @@ canonicaliseExp env = go
     Ann e t -> Ann (canonicaliseExp env locals e) (canonicaliseType env t)
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
-    Abs ns    e       -> Abs (fmap Local ns) $ go (ns <> locals) e
-    App a     b       -> App (go locals a) (go locals b)
-    Let binds e       -> canonicaliseLet (binds, e)
-    LetA n sch e body -> LetA (canonicaliseName env n)
-                              (canonicaliseScheme env sch)
-                              (go locals e)
-                              (go (n : locals) body)
+    Abs ns    e      -> Abs (fmap Local ns) $ go (ns <> locals) e
+    App a     b      -> App (go locals a) (go locals b)
+    Let binds e      -> canonicaliseLet (binds, e)
+    LetA n ty e body -> LetA (canonicaliseName env n)
+                             (canonicaliseType env ty)
+                             (go locals e)
+                             (go (n : locals) body)
     Case e alts            -> canonicaliseCase (e, alts)
     MCase    alts          -> canonicaliseMCase alts
     TupleLit es            -> TupleLit $ fmap (go locals) es

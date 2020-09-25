@@ -15,7 +15,7 @@ import           Syn                            ( Pattern_
                                                 , Syn_(..)
                                                 )
 
-type Exp = Syn_ Name Var Type
+type Exp = Syn_ Name Type
 
 -- Exp with type annotations
 data ExpT = VarT Name Type

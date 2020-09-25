@@ -18,7 +18,7 @@ import qualified Syn                           as S
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
   S.LetA x ty e body -> do
-    e' <- T.Ann <$> fromSyn e <*> convertScheme ty
+    e' <- T.Ann <$> fromSyn e <*> convertType mempty ty
     T.Let [(T.Free x, e')] <$> fromSyn body
   S.Var n   -> pure $ T.VarExp (T.Free n)
   S.Con n   -> pure $ T.Con (T.Free n)
@@ -64,12 +64,6 @@ convertPattern = \case
   S.CharPat   c       -> S.CharPat c
   S.BoolPat   b       -> S.BoolPat b
   S.StringPat s       -> S.StringPat s
-
-convertScheme :: Can.Scheme -> T.TypeM T.Type
-convertScheme (S.Forall vars ty) = do
-  uMap <- mapM (\v -> (v, ) <$> T.newU v) vars
-  ty'  <- convertType uMap ty
-  pure $ foldr (T.Forall . snd) ty' uMap
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case

@@ -78,22 +78,22 @@ convertType = \case
   TyAlias  a t    -> T.TAlias a (convertType t)
   TyForall _ _    -> error "Type.ToTyped: Cannot convert TyForall to T.Type"
 
-convertScheme :: Can.Scheme -> T.Scheme
-convertScheme (Forall vars ty) = T.Forall (map C.R vars) (convertType ty)
-
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = coerce
 
 convertExpr :: Can.Exp -> T.Exp
 convertExpr = \case
-  Var v     -> T.VarT v unknown
-  Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
-  Con  c    -> T.ConT c
-  Hole n    -> T.HoleT n unknown
-  Abs x e   -> T.AbsT (map (, unknown) x) (convertExpr e)
-  App a b   -> T.AppT (convertExpr a) (convertExpr b)
-  LetA n sch v e ->
-    T.LetAT n (convertScheme sch) (convertExpr v) (convertExpr e) unknown
+  Var v         -> T.VarT v unknown
+  Ann _e _t     -> error "Type.ToTyped.convertExpr: cannot convert annotations"
+  Con  c        -> T.ConT c
+  Hole n        -> T.HoleT n unknown
+  Abs x e       -> T.AbsT (map (, unknown) x) (convertExpr e)
+  App a b       -> T.AppT (convertExpr a) (convertExpr b)
+  LetA n ty v e -> T.LetAT n
+                           (T.Forall [] (convertType ty))
+                           (convertExpr v)
+                           (convertExpr e)
+                           unknown
   Let  binds e    -> T.LetT (mapSnd convertExpr binds) (convertExpr e) unknown
   Case s     alts -> T.CaseT (convertExpr s) (map convertAlt alts) unknown
   MCase alts      -> T.MCaseT

@@ -107,9 +107,6 @@ printFun Fun { funComments = comments, funName = name, funExpr = defs, funType =
   printComments [] = []
   printComments cs = map printComment cs
 
-printScheme :: Scheme -> Document
-printScheme (Forall _ t) = printType t
-
 -- a -> b
 -- f a -> f b
 -- a -> b -> c
@@ -284,12 +281,12 @@ printLet binds e = keyword "let" <+> hang
   (vsep [hang 0 (vsep (map printLetBind binds)), keyword "in" <+> printExpr e])
   where printLetBind (name, expr) = printName name <+> "=" <+> printExpr expr
 
-printLetA :: RawName -> Scheme -> Syn -> Syn -> Document
-printLetA name sch val body = keyword "letA" <+> hang
+printLetA :: RawName -> Type -> Syn -> Syn -> Document
+printLetA name ty val body = keyword "letA" <+> hang
   (-3)
   (vsep [hang 0 (vsep [signature, bind]), keyword "in" <+> printExpr body])
  where
-  signature = printName name <> align (space <> colon <+> printScheme sch)
+  signature = printName name <> align (space <> colon <+> printType ty)
   bind      = printName name <+> "=" <+> printExpr val
 
 -- case expr of

@@ -23,8 +23,6 @@ module Syn
   , tyapp
   , fn
   , ftv
-  , Scheme
-  , Scheme_(..)
   , binOps
   , Syn
   , Syn_(..)
@@ -94,11 +92,6 @@ data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
                        | Comment String
                        deriving (Eq, Show, Typeable, Data.Data)
 
--- TODO: I think it'll simplify things down the line if we have a single
--- funScheme field that contains both the constraint and the type, instead of
--- splitting them. This is because after type inference we get a Scheme, and
--- splitting it back out into constraint and type (with free variables) seems a
--- bit pointless.
 type Fun exp = Fun_ RawName exp (Type_ RawName)
 data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
@@ -211,14 +204,6 @@ ftv = \case
   TyAlias _ a     -> ftv a
   _               -> mempty
 
--- Type schemes
--- v: the type of type variables
--- c: the type of constraints
--- t: the type of types
-type Scheme = Scheme_ RawName Type
-data Scheme_ v t = Forall [v] t
-  deriving (Eq, Show, Ord, Typeable, Data.Data)
-
 -- Syn: the surface syntax
 -- Syn represents the code that users write. It goes through several
 -- translations before being executed.
@@ -237,33 +222,33 @@ data Scheme_ v t = Forall [v] t
 -- TODO: type sigs in let bindings
 -- TODO: multi-definition functions in let bindings
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
-type Syn = Syn_ RawName RawName Type
-data Syn_ n v t = Var n
-         | Ann (Syn_ n v t) t
+type Syn = Syn_ RawName Type
+data Syn_ n t = Var n
+         | Ann (Syn_ n t) t
          | Con n
          | Hole n
-         | Abs [n] (Syn_ n v t)
-         | App (Syn_ n v t) (Syn_ n v t)
+         | Abs [n] (Syn_ n t)
+         | App (Syn_ n t) (Syn_ n t)
          -- Note: the parser can't currently produce LetAs but the typechecker
          -- can nonetheless handle them.
-         | LetA n (Scheme_ v t) (Syn_ n v t) (Syn_ n v t)
-         | Let [(n, Syn_ n v t)] (Syn_ n v t)
-         | Case (Syn_ n v t) [(Pattern_ n, Syn_ n v t)]
-         | MCase [([Pattern_ n], Syn_ n v t)]
+         | LetA n t (Syn_ n t) (Syn_ n t)
+         | Let [(n, Syn_ n t)] (Syn_ n t)
+         | Case (Syn_ n t) [(Pattern_ n, Syn_ n t)]
+         | MCase [([Pattern_ n], Syn_ n t)]
          | UnitLit
-         | TupleLit [Syn_ n v t]
-         | ListLit [Syn_ n v t]
-         | StringInterp String [(Syn_ n v t, String)]
+         | TupleLit [Syn_ n t]
+         | ListLit [Syn_ n t]
+         | StringInterp String [(Syn_ n t, String)]
          | StringLit String
          | CharLit Char
          | IntLit Int
          | BoolLit Bool
          -- Records
-         | Record [(n, Syn_ n v t)]
-         | Project (Syn_ n v t) n
+         | Record [(n, Syn_ n t)]
+         | Project (Syn_ n t) n
          -- FFI calls
          -- FCall stands for "foreign call"
-         | FCall String [Syn_ n v t]
+         | FCall String [Syn_ n t]
          deriving (Eq, Show, Typeable, Data.Data)
 
 -- Supported binary operators

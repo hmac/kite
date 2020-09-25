@@ -27,9 +27,10 @@ import           Type                           ( TypeM
                                                 , infer
                                                 , wellFormedType
                                                 , LocatedError(..)
+                                                , newU
                                                 )
-import           Type.FromSyn                   ( convertScheme
-                                                , fromSyn
+import           Type.FromSyn                   ( fromSyn
+                                                , convertType
                                                 )
 import           Control.Monad                  ( void )
 import qualified Control.Monad.Except          as Except
@@ -110,15 +111,17 @@ funToBind :: Can.Fun Can.Exp -> TypeM (Name, Maybe Type, Exp)
 funToBind fun = do
   rhs <- fromSyn (funExpr fun)
   sch <- case funType fun of
-    Just t  -> Just <$> quantify t
+    Just t  -> Just <$> quantify (Set.toList (S.ftv t)) t
     Nothing -> pure Nothing
   pure (funName fun, sch, rhs)
 
 -- Explicitly quantify all type variables, then convert the whole thing to a
 -- T.Type.
-quantify :: Can.Type -> TypeM Type
-quantify t =
-  let vars = Set.toList (S.ftv t) in convertScheme (S.Forall vars t)
+quantify :: [Name] -> Can.Type -> TypeM Type
+quantify vars t = do
+  uMap <- mapM (\v -> (v, ) <$> newU v) vars
+  t'   <- convertType uMap t
+  pure $ foldr (Forall . snd) t' uMap
 
 -- Convert data type definitions into a series of <constructor, type> bindings.
 --
@@ -140,8 +143,7 @@ translateData d =
   go dataTypeName tyvars datacon = do
     -- Construct a (Syn) Scheme for this constructor
     let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
-    let scheme = S.Forall tyvars $ foldr S.TyFun resultType (conArgs datacon)
-    ty <- convertScheme scheme
+    ty <- quantify tyvars $ foldr S.TyFun resultType (conArgs datacon)
     pure $ Var (Free (conName datacon)) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]

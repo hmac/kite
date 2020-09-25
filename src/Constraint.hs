@@ -34,7 +34,9 @@ import           Data.Set                       ( Set
                                                 )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
-import           Syn                            ( Scheme_(..) )
+
+data Scheme_ v t = Forall [v] t
+  deriving (Eq, Show, Ord)
 
 -- A list of constraints. Interpreted as a conjunction - i.e. all of them have
 -- to be satisfied.
