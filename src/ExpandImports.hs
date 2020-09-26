@@ -30,10 +30,10 @@ expandAllImports modul deps = do
   imps' <- mapM (expand (moduleName modul) deps) imps
   pure modul { moduleImports = imps' }
 
--- We don't support expanding imports for Lam.Primitive, since it's not a "real"
+-- We don't support expanding imports for Kite.Primitive, since it's not a "real"
 -- module.
 expand :: ModuleName -> [Module] -> Import -> Either Error Import
-expand _ _ imp | importName imp == "Lam.Primitive" = Right imp
+expand _ _ imp | importName imp == "Kite.Primitive" = Right imp
 expand modulName deps imp =
   let matchingModule = find ((== importName imp) . moduleName) deps
   in  case matchingModule of

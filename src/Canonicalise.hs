@@ -167,7 +167,7 @@ canonicaliseExp env = go
             (\(locals_, acc) (varName, expr) ->
               -- Note: to handle recursive lets, here we would extend the set of
               -- locals with the variable name before canonicalising the bound
-              -- expression. We currently don't do that because Lam's evaluation
+              -- expression. We currently don't do that because Kite's evaluation
               -- strategy is strict and the naive evaluation of recursive lets
               -- doesn't terminate. I'm not yet sure if we should support
               -- recursive lets at all - maybe you should always write a

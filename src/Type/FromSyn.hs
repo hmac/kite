@@ -75,7 +75,7 @@ convertType uVarCtx = \case
     T.throwError $ T.TodoError "Type.fromSyn: holes in types not implemented"
   S.TyFun a b -> T.Fn <$> convertType uVarCtx a <*> convertType uVarCtx b
   S.TyTuple as ->
-    let name = fromString $ "Lam.Primitive.Tuple" <> show (length as)
+    let name = fromString $ "Kite.Primitive.Tuple" <> show (length as)
     in  T.TCon name <$> mapM (convertType uVarCtx) as
   S.TyVar v -> case lookup v uVarCtx of
     Just u  -> pure $ T.UType u
@@ -90,7 +90,7 @@ convertType uVarCtx = \case
       T.TCon c args -> T.TCon c $ args ++ [b']
       T.TApp f args -> T.TApp f (args <> [b'])
       _             -> T.TApp a' [b']
-  S.TyList -> pure $ T.TCon "Lam.Primitive.List" []
+  S.TyList -> pure $ T.TCon "Kite.Primitive.List" []
   S.TyRecord fields ->
     T.TRecord <$> mapM (secondM (convertType uVarCtx) . first toString) fields
   S.TyAlias _ _ ->

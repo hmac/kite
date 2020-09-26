@@ -181,7 +181,7 @@ convertRefutableLetBinding (pat, val) = do
 
 -- Extract all variables bound in a pattern.
 -- Note: we remove duplicate pattern variables
--- Lam should disallow duplicate variables in a pattern but that's not yet
+-- Kite should disallow duplicate variables in a pattern but that's not yet
 -- implemented.
 extractPatternVars :: Pattern -> [Name]
 extractPatternVars (VarPat   v   ) = [v]

@@ -102,8 +102,8 @@ const = x y -> y|]
 ctx :: Ctx
 ctx =
   let nat    = TCon "QQ.Nat" []
-      int    = TCon "Lam.Primitive.Int" []
-      string = TCon "Lam.Primitive.String" []
+      int    = TCon "Kite.Primitive.Int" []
+      string = TCon "Kite.Primitive.String" []
       wrap a = TCon "QQ.Wrap" [a]
       pair a b = TCon "QQ.Pair" [a, b]
       either a b = TCon "QQ.Either" [a, b]

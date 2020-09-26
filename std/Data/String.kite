@@ -3,7 +3,7 @@ module Data.String
 import Data.Monoid (concat)
 import Data.Show (show)
 import Data.Char (showChar)
-import Lam.String (monoidString)
+import Kite.String (monoidString)
 import Data.Functor (map)
 import Data.List (functorList)
 

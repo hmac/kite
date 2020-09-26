@@ -14,7 +14,7 @@ import           ModuleLoader
 import           ModuleGroupTypechecker
 
 test :: Spec
-test = describe "typechecking Lam modules" $ do
+test = describe "typechecking Kite modules" $ do
   describe "expected passes"
     $ testEachFile expectTypecheckPass "test/fixtures/typecheck/pass"
   describe "expected failures"

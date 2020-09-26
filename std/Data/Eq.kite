@@ -1,6 +1,6 @@
 module Data.Eq
 
-import Lam.Bool (not)
+import Kite.Bool (not)
 
 type Eq a = Eq { eq : a -> a -> Bool }
 

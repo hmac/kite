@@ -1,6 +1,6 @@
-name:                lam
+name:                kite
 version:             0.1.0.0
-github:              "hmac/lam"
+github:              "hmac/kite"
 license:             BSD3
 author:              "Harry Maclean"
 maintainer:          "harry@hmac.dev"
@@ -17,13 +17,13 @@ category:            compiler
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
 description: |
-  Lam is a statically typed, strict, purely functional programming language with full type inference.
+  Kite is a statically typed, strict, purely functional programming language with full type inference.
   It's the core parts of Haskell with better ergonomics, an interpreter, native JS
   support and much better tooling.
 
-  Lam targets the Ruby use case: web applications and scripts. For teams building big
+  Kite targets the Ruby use case: web applications and scripts. For teams building big
   Rails apps that are struggling with stability and productivity as their codebase
-  grows, Lam should provide a compelling alternative.
+  grows, Kite should provide a compelling alternative.
 
 default-extensions:
 - OverloadedStrings
@@ -60,7 +60,7 @@ library:
   - -Wredundant-constraints
 
 executables:
-  lam:
+  kite:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -69,15 +69,15 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - lam
+    - kite
     - pretty-simple
-  lam-profiling:
+  kite-profiling:
     main: Main.hs
     source-dirs:         app
     ghc-options: -O2 -threaded -fprof-auto "-with-rtsopts=-N -p -s -h -i0.1"
     dependencies:
-    - lam
-  lam-bench:
+    - kite
+  kite-bench:
     source-dirs: benchmarks
     main: Main.hs
     ghc-options:
@@ -87,13 +87,13 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - lam
+    - kite
     - criterion
     - filepath
     - extra
 
 tests:
-  lam-test:
+  kite-test:
     main:                Main.hs
     source-dirs:         test
     ghc-options:
@@ -101,7 +101,7 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - lam
+    - kite
     - QuickCheck
     - hspec
     - hspec-megaparsec
@@ -109,12 +109,12 @@ tests:
     - hspec-hedgehog
     - filepath
     - template-haskell
-  lam-hlint:
+  kite-hlint:
     main: hlint.hs
     other-modules: []
     source-dirs:
     - test
     - src
     dependencies:
-    - lam
+    - kite
     - hlint

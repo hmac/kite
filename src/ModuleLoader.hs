@@ -10,7 +10,7 @@ where
 import           System.Directory               ( getCurrentDirectory )
 
 import           Data.Name                      ( showModuleName )
-import           Syn.Parse                      ( parseLamFile )
+import           Syn.Parse                      ( parseKiteFile )
 import           Syn
 import           AST                            ( Expr )
 import           Data.List                      ( intercalate )
@@ -25,10 +25,10 @@ import           Data.Graph                     ( stronglyConnCompR
                                                 )
 import           Util
 
--- This module is responsible for loading Lam modules. It should attempt to
+-- This module is responsible for loading Kite modules. It should attempt to
 -- cache modules so they're not loaded multiple times.
 
--- A typical Lam module might look like this:
+-- A typical Kite module might look like this:
 --
 -- module Foo where
 -- import Data.Map
@@ -50,7 +50,7 @@ loadFromPath path = do
 loadFromPathAndRootDirectory
   :: FilePath -> FilePath -> IO (Either String UntypedModuleGroup)
 loadFromPathAndRootDirectory path root = do
-  modul <- parseLamFile <$> readFile path
+  modul <- parseKiteFile <$> readFile path
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
@@ -86,18 +86,18 @@ loadAll root name = do
           pure $ Right $ m' : concat deps'
 
 load :: FilePath -> ModuleName -> IO (Either String Module)
-load root name = parseLamFile <$> readFile (filePath root name)
+load root name = parseKiteFile <$> readFile (filePath root name)
 
--- We skip any references to Lam.Primitive because it's not a normal module.
+-- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
 -- anyway.
 dependencies :: Module_ n (Expr n ty) ty -> [ModuleName]
 dependencies Module { moduleImports = imports } =
-  filter (/= ModuleName ["Lam", "Primitive"]) $ nub $ map importName imports
+  filter (/= ModuleName ["Kite", "Primitive"]) $ nub $ map importName imports
 
 filePath :: FilePath -> ModuleName -> FilePath
 filePath root (ModuleName components) =
-  root <> "/" <> intercalate "/" components <> ".lam"
+  root <> "/" <> intercalate "/" components <> ".kite"
 
 -- Sorts a set of modules in dependency order. Each module will only depend on
 -- modules before it in the list. Returns an error if there are cyclic

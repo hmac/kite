@@ -18,15 +18,15 @@ instance Eq Flip where
 ```
 
 This is useful because these typeclass instances are often obvious and dull to
-write. We want to support a similar thing in Lam, but how?
+write. We want to support a similar thing in Kite, but how?
 
-Lam's typeclasses look like this:
+Kite's typeclasses look like this:
 
 ```haskell
 type alias Eq a = { eq : a -> a -> Bool }
 ```
 
-So then the following Lam code
+So then the following Kite code
 
 ```haskell
 type Flip = Heads | Tails deriving Eq

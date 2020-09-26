@@ -1,9 +1,9 @@
 Typechecking
 ============
 
-Lam's type system is pretty much identical to Haskell 98, but written from
+Kite's type system is pretty much identical to Haskell 98, but written from
 scratch for simplicity, clarity and (eventually) speed. GHC has many complex
-type extensions that Lam intentionally avoids.
+type extensions that Kite intentionally avoids.
 
 The original design of the typechecker was built around a clone of the
 implementation in Typing Haskell in Haskell by Mark P Jones (from here on,
@@ -154,7 +154,7 @@ Constraint generation
 
 Closely following the approach in "Modular Type Inference with Local
 Assumptions", we have a constraint generator for a simple language that
-resembles Lam. The only big question left is how to deal with function
+resembles Kite. The only big question left is how to deal with function
 definitions that utilise multiple equations and pattern matching. Our small
 language supports case expressions with constructor and variable patterns, but
 doesn't directly support things like this:
@@ -174,11 +174,11 @@ length l = case l of
 Notice that we can only have a single equation for the function and we can't mix
 wildcard patterns with variable patterns.
 
-We can desugar Lam into this language, but it's not clear if we should. The
-alternative is to attempt to generate constraints directly from surface Lam
+We can desugar Kite into this language, but it's not clear if we should. The
+alternative is to attempt to generate constraints directly from surface Kite
 syntax, which gives the advantage that error messages relate to code that the
 programmer has directly written. The disadvantage is that it's significantly
-more complex to generate constraints for surface Lam code.
+more complex to generate constraints for surface Kite code.
 
 The other factor to consider is that we wish to take the output AST of the type
 checker and use it as input to the compiler. This means that any structures the

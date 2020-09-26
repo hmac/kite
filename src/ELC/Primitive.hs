@@ -6,7 +6,7 @@ import           Data.Name
 import           ELC
 
 modPrim :: ModuleName
-modPrim = ModuleName ["Lam", "Primitive"]
+modPrim = ModuleName ["Kite", "Primitive"]
 
 -- Constructors
 

@@ -1,3 +1,3 @@
-# Changelog for lam
+# Changelog for kite
 
 ## Unreleased changes

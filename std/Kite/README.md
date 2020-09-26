@@ -1,4 +1,4 @@
-# `std.Lam`
+# `std.Kite`
 
 These modules exist basically to break import cycles. They are required by one
 or more foundational modules, and provide just enough to support them. You
@@ -7,9 +7,9 @@ set of functions.
 
 For example, `Data.Bool` defines an `Eq` instance for `Bool`, but `Data.Eq`
 depends on `Bool` itself (since `eq : a -> a -> Bool`). Thus `Data.Bool` imports
-`Data.Eq` and `Data.Eq` imports `Lam.Bool`.
+`Data.Eq` and `Data.Eq` imports `Kite.Bool`.
 
 Currently this is a bit rubbish, because we don't support re-exports. Therefore
-to use the Bool type you need to import `Lam.Bool` but to use most of the
+to use the Bool type you need to import `Kite.Bool` but to use most of the
 functions on it you need to import `Data.Bool`. I'm leaving this structure in
 place because it will become less rubbish once we improve imports and exports.

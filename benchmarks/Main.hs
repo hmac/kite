@@ -3,7 +3,7 @@ module Main where
 
 import           Criterion.Main
 
-import           Syn.Parse                      ( parseLamFile )
+import           Syn.Parse                      ( parseKiteFile )
 import           AST
 import           Syn
 import           Canonicalise                   ( canonicaliseModule )
@@ -31,16 +31,18 @@ main :: IO ()
 main = defaultMain
   [ bgroup
     "parse"
-    [bench "Data.List" $ nfIO $ parseFromPath "std/Data/List.lam" "Data.List"]
+    [bench "Data.List" $ nfIO $ parseFromPath "std/Data/List.kite" "Data.List"]
   , bgroup
     "typecheck"
-    [ bench "Data.List" $ nfIO $ typecheckFromPathAndRoot "std/Data/List.lam"
+    [ bench "Data.List" $ nfIO $ typecheckFromPathAndRoot "std/Data/List.kite"
                                                           "std"
     , bench "Data.List.Intersperse" $ nfIO $ typecheckModule exampleModule
     ]
   , bgroup
     "eval"
-    [bench "Data.ListTest" $ nfIO $ runFromPathAndRoot "std/ListTest.lam" "std"]
+    [ bench "Data.ListTest" $ nfIO $ runFromPathAndRoot "std/ListTest.kite"
+                                                        "std"
+    ]
   ]
 
 runFromPathAndRoot :: FilePath -> FilePath -> IO Bool
@@ -75,7 +77,7 @@ typecheckModule m =
 parseFromPath :: String -> ModuleName -> IO Bool
 parseFromPath path modName = do
   contents <- readFile path
-  case parseLamFile contents of
+  case parseKiteFile contents of
     Left  err -> error $ path <> ": expected parse success but failed\n" <> err
     Right m   -> pure $ moduleName m == modName
 

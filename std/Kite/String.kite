@@ -1,4 +1,4 @@
-module Lam.String
+module Kite.String
 
 import Data.Semigroup (Semigroup)
 import Data.Monoid (Monoid)

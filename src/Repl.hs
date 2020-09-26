@@ -32,7 +32,7 @@ import           ModuleLoader                   ( ModuleGroup(..) )
 run :: IO ()
 run = do
   hSetBuffering stdout NoBuffering
-  putStrLn "Welcome to the Lam REPL."
+  putStrLn "Welcome to the Kite REPL."
   repl []
 
 repl :: [Decl Syn] -> IO ()

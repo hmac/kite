@@ -22,7 +22,7 @@ import           Type                           ( runTypeM
                                                 )
 
 
--- A QuasiQuoter for Lam surface syntax
+-- A QuasiQuoter for Kite surface syntax
 -- [syn|x -> x] ==> MCase [([VarPat x], Var x)]
 syn :: QuasiQuoter
 syn = QuasiQuoter { quoteExp  = f

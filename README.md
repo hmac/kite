@@ -1,21 +1,21 @@
-# Lam
+# Kite
 
 > Ruby and Haskell have a baby
 
-Lam is a statically typed, strict, purely functional programming language with full type inference.
+Kite is a statically typed, strict, purely functional programming language with full type inference.
 It's the core parts of Haskell with better ergonomics, an interpreter, native JS
 support and much better tooling.
 
-Lam targets the Ruby use case: web applications and scripts. For teams building big
+Kite targets the Ruby use case: web applications and scripts. For teams building big
 Rails apps that are struggling with stability and productivity as their codebase
-grows, Lam should provide a compelling alternative.
+grows, Kite should provide a compelling alternative.
 
-Lam is also intended to be a gateway drug to Haskell. Migration from Lam to
-Haskell should be feasible. Lam is _not_ intended to replace Haskell. Its type
+Kite is also intended to be a gateway drug to Haskell. Migration from Kite to
+Haskell should be feasible. Kite is _not_ intended to replace Haskell. Its type
 system is much less powerful than GHC's and its performance will be much lower.
 If you're happy with Haskell then please stick with it!
 
-An example Lam program:
+An example Kite program:
 
 ```haskell
 ---
@@ -40,18 +40,18 @@ greet User { name } = putLine "Hello #{toUpper name}!"
 ```
 
 A few things immediately jump out:
-- Lam files support arbitrary YAML frontmatter that you can use for metadata
-- Lam syntax is similar to Haskell, with some minor differences
+- Kite files support arbitrary YAML frontmatter that you can use for metadata
+- Kite syntax is similar to Haskell, with some minor differences
   - single colons for type annotations
   - `type` instead of `data` for declaring new data types
   - Ruby-esque string interpolation
-- Lam has more sophisticated record support built-in (more on that later)
+- Kite has more sophisticated record support built-in (more on that later)
 
-Lam has many other features which are described below.
+Kite has many other features which are described below.
 
 ## Status
 
-Lam is in early development and most of its features don't exist yet. Here's
+Kite is in early development and most of its features don't exist yet. Here's
 the current state of progress:
 
 - [x] Basic Haskell-style syntax
@@ -81,13 +81,13 @@ the current state of progress:
 
 ## Type system
 
-Lam's type system is basically Hindley-Milner plus extensible records. In this
-sense it's quite similar to Elm. However Lam's type system provides some
+Kite's type system is basically Hindley-Milner plus extensible records. In this
+sense it's quite similar to Elm. However Kite's type system provides some
 additional tools, including typed holes and implicit arguments.
 
 ### Typed Holes
 
-Lam supports typed holes in both terms and types. With this code:
+Kite supports typed holes in both terms and types. With this code:
 ```haskell
 foo : a -> Maybe a -> a
 foo x m = ?1
@@ -126,7 +126,7 @@ useful if you have half a program written and just want to try it out quickly.
 ### In the future: Case splitting
 
 Holes give a useful marker from which we can perform other interactive steps.
-When Lam gains LSP support, this will include case splitting on variables near
+When Kite gains LSP support, this will include case splitting on variables near
 holes, much like Agda and Idris.
 
 ```haskell
@@ -147,7 +147,7 @@ split to be used (otherwise we would clobber whatever definition was there).
 
 ### Totality
 
-Lam has a totality checker that will mark functions as total if it can be sure
+Kite has a totality checker that will mark functions as total if it can be sure
 that they are. A function is considered total if it:
 - isn't recursive
 - doesn't use IO or FFI
@@ -169,7 +169,7 @@ totalMap : Functor f => Total (a -> b) -> f a -> f b
 
 ### Safety
 
-Lam will also have a concept of module safety and a safety checker. This is
+Kite will also have a concept of module safety and a safety checker. This is
 similar to [Safe Haskell](https://wiki.haskell.org/Safe_Haskell). A safe module
 is guaranteed not to perform IO or FFI and therefore poses no security risk. The
 worst it can do is put your program in loop or throw an error. Therefore you can
@@ -179,9 +179,9 @@ either. A module is safe if none of the functions defined in it use IO or FFI.
 
 ### Typeclasses
 
-Lam doesn't support typeclasses in the traditional sense. Instead, it takes the
+Kite doesn't support typeclasses in the traditional sense. Instead, it takes the
 [Scrap Your Typeclasses](http://www.haskellforall.com/2012/05/scrap-your-type-classes.html)
-philosophy and extends it with some extra tooling.  Typeclasses in Lam are just
+philosophy and extends it with some extra tooling.  Typeclasses in Kite are just
 record types, like this:
 ```haskell
 type Eq a = Eq { eq : a -> a -> Bool }
@@ -205,7 +205,7 @@ nub r (x:y:xs) = case eq r x y of
 
 ## Implicit Arguments
 
-It's quite a drag to write these typeclass instances everywhere, so Lam supports
+It's quite a drag to write these typeclass instances everywhere, so Kite supports
 implicit arguments to automate this. You can declare a function with an implicit
 argument as follows:
 ```haskell
@@ -214,14 +214,14 @@ eq (Eq r) = r.eq
 ```
 
 The syntax `{{_}}` around an argument in a type signature indicates that the
-argument can be omitted in a call site, and Lam will attempt to infer a value
+argument can be omitted in a call site, and Kite will attempt to infer a value
 for it. `eq` is then used like this:
 
 ```haskell
 eq True True
 ```
 
-Lam will search the current scope for a value of type `Eq Bool`. If it finds
+Kite will search the current scope for a value of type `Eq Bool`. If it finds
 _exactly one_ match, it will insert it into the call site. If it finds zero or
 more than one match, it will report an error.
 
@@ -230,7 +230,7 @@ new syntactic forms, new namespaces, or complex resolution logic.
 
 ### Typeclass deriving
 
-Lam will be able to automatically generate typeclass instances for some common typeclasses:
+Kite will be able to automatically generate typeclass instances for some common typeclasses:
 - Eq, Show, Read, Functor, etc.
 - Generic
 - FromJSON, ToJSON
@@ -241,7 +241,7 @@ instances via Generics, but there won't initially be any support for that.
 
 ### Warnings
 
-Lam will have a small set of sensible warnings, all of which are enabled by
+Kite will have a small set of sensible warnings, all of which are enabled by
 default. These include:
 * Incomplete pattern matches
 * Unused variables
@@ -251,10 +251,10 @@ default. These include:
 
 ## Language
 
-Lam is very similar to Haskell 98, with a few differences intended to make it
+Kite is very similar to Haskell 98, with a few differences intended to make it
 less intimidating to programmers from other languages.
 
-The largest difference is that Lam is strict rather than lazy. I've chosen this
+The largest difference is that Kite is strict rather than lazy. I've chosen this
 option for a few reasons:
 - It is more familiar to programmers from other backgrounds
 - It gives more predictable memory usage
@@ -263,10 +263,10 @@ option for a few reasons:
   everything you can express in a lazy language can also be expressed in a
   strict one.
 
-However I'm not wedded to this choice. If it turns out that Lam would really
+However I'm not wedded to this choice. If it turns out that Kite would really
 benefit from laziness then it might change in the future.
 
-Lam has very few infix operators, preferring named functions instead. `map`
+Kite has very few infix operators, preferring named functions instead. `map`
 instead of `<$>`, brackets instead of `$`. Infix numeric and comparison
 operators will remain because they're familiar to everyone, and we still use `.`
 for function composition because it's so useful. A named function can be made
@@ -274,7 +274,7 @@ infix by placing it in backticks.
 
 ## Syntax
 
-Lam files start with optional YAML-style metadata delimited by `---`.
+Kite files start with optional YAML-style metadata delimited by `---`.
 
 ```haskell
 ---
@@ -283,7 +283,7 @@ someKey: someValue
 ---
 ```
 
-Every Lam file defines a module, which begins `module <name>`. The module name
+Every Kite file defines a module, which begins `module <name>`. The module name
 must begin with a capital letter. This is optionally followed by a list of
 exported definitions, and the `where` keyword.
 
@@ -291,7 +291,7 @@ exported definitions, and the `where` keyword.
 module Example (fun1, fun2, SomeType, SomeClass) where
 ```
 
-The contents of a Lam module is a series of definitions, which are either
+The contents of a Kite module is a series of definitions, which are either
 - Function definitions
 - Data type definitions
 - Typeclass definitions
@@ -333,7 +333,7 @@ you can use as function arguments. Here is a full list:
 
 In any expression (i.e. anywhere to the right of the `=` in an equation) you can
 use let expressions, which declare variables that you can use later on. All
-variables in Lam are immutable, so once you delcare them you cannot change their
+variables in Kite are immutable, so once you delcare them you cannot change their
 value.
 
 ```
@@ -412,10 +412,10 @@ TODO: identical to Haskell, so see there for details (for now)
 
 ## Records
 
-Lam has Haskell's ADTs and records, but aims to provide better ergonomics around
+Kite has Haskell's ADTs and records, but aims to provide better ergonomics around
 record field selection. Out of the box, Haskell doesn't deal well with multiple
 record types having the same field name. There are a variety of solutions to
-this, each with their own tradeoffs. Lam aims to find one which is both simple
+this, each with their own tradeoffs. Kite aims to find one which is both simple
 and unsurprising, though the exact solution is not yet settled.
 
 ### Solution 1. Dot notation for record selectors
@@ -476,7 +476,7 @@ Records for Haskell" by Mark P. Jones and Simon Peyton-Jones.
 
 ### Other language features
 
-Lam has some syntactic sugar borrowed from Haskell and Ruby:
+Kite has some syntactic sugar borrowed from Haskell and Ruby:
 ```haskell
 -- Haskell style comments
 -- # Markdown support
@@ -513,7 +513,7 @@ snd (_, x) = x
 
 -- use """ to delimit multiline strings
 help = """
-  Welcome to the Lam REPL.
+  Welcome to the Kite REPL.
   For general help, type :?
   To see documentation on a function or type, use :info
   Type :quit to exit.
@@ -531,7 +531,7 @@ safe SQL queries.
 
 ## Testing
 
-Lam supports at least two types of tests: doctests and test functions.
+Kite supports at least two types of tests: doctests and test functions.
 
 ### Doctests
 
@@ -550,9 +550,9 @@ head [] = error "head: empty list"
 head (x : xs) = x
 ```
 
-Any code blocks in comments in a Lam module will be extracted and run in the scope
+Any code blocks in comments in a Kite module will be extracted and run in the scope
 of the module itself. Each line in the code block is expected to be of type
-Bool, and `lam test` will expect every expression to evaluate to `True`. A test
+Bool, and `kite test` will expect every expression to evaluate to `True`. A test
 is considered failing if it evaluates to False or throws an error.
 
 This might need some rethinking for more complex tests, but it should work for
@@ -566,13 +566,13 @@ and run them - you don't need to set up a test harness.
 
 ## Interpretation and Compilation
 
-Lam will be interpreted like Ruby, but also support compilation to a static
+Kite will be interpreted like Ruby, but also support compilation to a static
 binary (via Go) and a Javascript file.  Go and JS compilation will be a bit like
 program extraction, as the main function for each will be different and will
 exist in a different monad, to express the fact that different effects are
 available. As a result you'll be able to write your frontend and backend app in
 the same project, sharing lots of code, and just compile each by specifying a
-different flag to `lam build`.
+different flag to `kite build`.
 
 Example:
 ```haskell
@@ -588,7 +588,7 @@ backendMain : IO Haskell ()
 backendMain =
   putLine "this is a message written to stdout. The 5th fibonacci number is #{fib 5}"
 
--- In practice this is tedious - Lam will have standard library modules that
+-- In practice this is tedious - Kite will have standard library modules that
 -- abstract over the backend.
 compiledMain : IO Go ()
 compiledMain =
@@ -602,7 +602,7 @@ fib n = fib (n - 2) + fib (n - 1)
 ```
 
 JS compilation will produce a single minified JS file that exports your main
-function. In addition, you can compile any individual Lam module to JS provided
+function. In addition, you can compile any individual Kite module to JS provided
 it doesn't export any IO functions.
 
 # Standard Library
@@ -615,50 +615,50 @@ only need packages for larger applications.
 
 # Tooling
 
-All Lam tools will be distributed in a single `lam` binary.
+All Kite tools will be distributed in a single `kite` binary.
 
-Lam will have a code formatter with a single style, a la gofmt.
+Kite will have a code formatter with a single style, a la gofmt.
 The formatter will insert type annotations for top level declarations if they
 are missing (and inferrable).
 
-As mentioned at the start, Lam files can optionally have a YAML frontmatter
+As mentioned at the start, Kite files can optionally have a YAML frontmatter
 section at the top. The syntax of this is a restricted subset of YAML that just
 supports keys and primitive values (this is just to prevent you doing crazy
 things with it). It's intended to be a lightweight and flexible store for
 metadata about the file, such as the code owner, contact information, license
-etc. Lam tooling will be able to extract and process this metadata.
+etc. Kite tooling will be able to extract and process this metadata.
 
-Lam source files have a `.lam` extension.
+Kite source files have a `.kite` extension.
 
 ## Packaging
 
-Lam's packaging system will be similar to Ruby and Bundler but integrated
+Kite's packaging system will be similar to Ruby and Bundler but integrated
 tightly into the language. You'll be able to create packages locally and push
-them up to a Lam package server, which will index them and generate
+them up to a Kite package server, which will index them and generate
 documentation (and possibly run tests). Versioning is SemVer and uses lockfiles
 for consistency. You'll also be able to run the server locally with no extra
 setup.
 
 There are a number of additional features that make life easier for maintainers
-and users of Lam packages.
+and users of Kite packages.
 
 ### Breaking change detection
 
-Like Elm, Lam will detect when your your package contains a breaking change from
+Like Elm, Kite will detect when your your package contains a breaking change from
 a previous version and prevent you from releasing that change as a patch or
 minor version.
 
 ### Breakage prediction
 
 For a widely used package it can often be difficult to know the impact of a
-breaking change until you release it and receive feedback from users. Lam will
+breaking change until you release it and receive feedback from users. Kite will
 allow you to automatically build every package in the ecosystem that depends on
 yours and thereby predict the amount of churn before you release the new
 version.
 
 ### Global search
 
-The Lam package server will support type-directed (i.e. Hoogle style) search
+The Kite package server will support type-directed (i.e. Hoogle style) search
 across the entire package ecosystem. If a package somewhere has a function to
 convert a type from package A into a type from package B, you'll be able to find
 it.
@@ -668,60 +668,60 @@ it.
 In some parts of the Haskell world, a lot of time is spent setting and updating
 upper bounds on package dependencies. Unmaintained (but useful) packages cause
 issues if their upper bounds don't get updated as new versions of their
-dependencies are released. Lam will attempt to automate the setting and updating
+dependencies are released. Kite will attempt to automate the setting and updating
 of upper bounds by determining the highest version at which the package builds
 successfully. This should remove a lot of work on the part of package
 maintainers.
 
 ### Safe builds
 
-Lam intends to have no support for running arbitrary code at build time. As a
-result, it should always be safe to build any Lam package in any environment.
+Kite intends to have no support for running arbitrary code at build time. As a
+result, it should always be safe to build any Kite package in any environment.
 
 ### Editor tools
 
-Lam will have native Language Server Protocol support, and this will be used to
-implement interactive editing features such as case split. Lam will also ship
-with a simple `ghcid` style command (`lam watch` or something) that gives near
+Kite will have native Language Server Protocol support, and this will be used to
+implement interactive editing features such as case split. Kite will also ship
+with a simple `ghcid` style command (`kite watch` or something) that gives near
 instant feedback on type errors.
 
 # Performance
 
 Much of the tooling described above depends heavily on typechecking being fast.
 One of the reasons this tooling is less common in other languages is the time it
-takes to build packages and find type errors. Lam's typechecker will be
-optimised to complete as quickly as possible, and Lam is willing to trade off
+takes to build packages and find type errors. Kite's typechecker will be
+optimised to complete as quickly as possible, and Kite is willing to trade off
 more advanced features in exchange for performance in this area.
 
-Full build performance and runtime performance is a lower priority. Lam's
+Full build performance and runtime performance is a lower priority. Kite's
 interpreter will aim to be as fast as Ruby's. Compiled performance should be
-stronger, but is unlikely to compete with Haskell or Go. Lam will make use of
+stronger, but is unlikely to compete with Haskell or Go. Kite will make use of
 common functional programming language optimisations such as inlining and beta
 reduction, but won't have anywhere near GHC's level of advanced optimisation.
 
 # Runtime
 
-Being a garbage collected language, Lam needs a runtime of some description.
+Being a garbage collected language, Kite needs a runtime of some description.
 The interpreter will piggyback off Haskell's runtime, and offer bindings to
 GHC's concurrency primitives (green threads, IORefs, MVars, STM etc). When
-compiled to Go, Lam will leverage the Go runtime and can use the concurrency
+compiled to Go, Kite will leverage the Go runtime and can use the concurrency
 primitives available there (goroutings, channels etc).
 
 # Exceptions
 
 Note: In the absence of a multithreaded runtime I am not sure whether it's necessary
-to have comprehensive exception support. Lam's initial behaviour will be the
+to have comprehensive exception support. Kite's initial behaviour will be the
 following, but this could change in the future.
 
-Lam has no exceptions. There are four ways that a Lam program can halt:
+Kite has no exceptions. There are four ways that a Kite program can halt:
 - The program calls `exit : IO ()` or a similar function to exit cleanly.
 - The program encounters an `error` call and panics.
 - The program receives a signal to halt, such as SIGQUIT. Unless a custom signal
   handler is installed, it panics.
 - The program encounters an unrecoverable error such as a memory allocation
   failure, and panics. If running in the interpreter this may be originally
-  triggered by an async Haskell exception but Lam will panic just the same.
+  triggered by an async Haskell exception but Kite will panic just the same.
 
-When a Lam program panics, the following happens:
+When a Kite program panics, the following happens:
 - The stack is immediately unwound, incrementally printing a stack trace to stderr.
 - The program exits with a non-zero exit code.

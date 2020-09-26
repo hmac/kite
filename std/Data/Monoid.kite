@@ -1,6 +1,6 @@
 module Data.Monoid
 
-import Lam.List (foldr)
+import Kite.List (foldr)
 import Data.Semigroup (Semigroup, append)
 
 type Monoid a = Monoid { empty : a, semigroup : Semigroup a }

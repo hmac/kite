@@ -1,5 +1,5 @@
 let
-  name = "lam";
+  name = "kite";
   compiler = "ghc883";
 
   sources = import ./nix/sources.nix {};

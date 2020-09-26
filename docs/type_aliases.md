@@ -2,7 +2,7 @@
 
 ## Motivation
 
-Lam supports type aliases, which look like this:
+Kite supports type aliases, which look like this:
 
 ```haskell
 type alias MyAlias a b = (a, List b)
@@ -10,7 +10,7 @@ type alias MyAlias a b = (a, List b)
 
 This defines a new alias called `MyAlias` which takes two type parameters `a`
 and `b`, and is identical to the type `(a, List b)`. This is useful in many
-scenarios, but in particular it can make it a lot easier to work with Lam's
+scenarios, but in particular it can make it a lot easier to work with Kite's
 typeclass-dictionary things.
 
 Currently we define the `Functor` typeclass like this:

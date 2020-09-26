@@ -6,7 +6,7 @@
 , text, transformers
 }:
 mkDerivation {
-  pname = "lam";
+  pname = "kite";
   version = "0.1.0.0";
   src = ./.;
   isLibrary = true;
@@ -36,7 +36,7 @@ mkDerivation {
     transformers
   ];
   prePatch = "hpack";
-  homepage = "https://github.com/hmac/lam#readme";
+  homepage = "https://github.com/hmac/kite#readme";
   description = "A Haskell-like language for scripting and web apps";
   license = stdenv.lib.licenses.bsd3;
 }

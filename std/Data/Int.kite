@@ -1,6 +1,6 @@
 module Data.Int
 
-import Lam.Primitive ($eqInt)
+import Kite.Primitive ($eqInt)
 import Data.Eq (Eq(..))
 
 eqInt : Eq Int

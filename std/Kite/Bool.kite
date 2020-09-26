@@ -1,4 +1,4 @@
-module Lam.Bool
+module Kite.Bool
 
 not : Bool -> Bool
 not =

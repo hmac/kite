@@ -1,6 +1,6 @@
 module Type.Module where
 
--- Typecheck a Lam module
+-- Typecheck a Kite module
 -- Currently we just return unit (and an updated type env) if the module
 -- typechecked. In future we will need to return a copy of the module with full
 -- type annotations.

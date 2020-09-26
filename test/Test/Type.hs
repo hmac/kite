@@ -31,8 +31,8 @@ test = do
         ctx  = [V (Free "Nothing") (Forall a0 (maybeType (UType a0)))]
         ty   = Forall a1 (list (maybeType (UType a1)))
         expr = App
-          (App (Var (Free "Lam.Primitive.::")) (Var (Free "Nothing")))
-          (Var (Free "Lam.Primitive.[]"))
+          (App (Var (Free "Kite.Primitive.::")) (Var (Free "Nothing")))
+          (Var (Free "Kite.Primitive.[]"))
         r = putCtx ctx >> check expr ty
     it "typechecks successfully" $ do
       runTypeM defaultTypeEnv r `shouldBe` Right ()
@@ -44,8 +44,8 @@ test = do
         funType = Forall
           (U 0 "a")
           (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
-        cons    = Free "Lam.Primitive.::"
-        nil     = Free "Lam.Primitive.[]"
+        cons    = Free "Kite.Primitive.::"
+        nil     = Free "Kite.Primitive.[]"
         nothing = Free "Nothing"
         fun     = MCase
           [ ( [ConsPat cons [ConsPat nothing [], VarPat (Free "rest")]]
@@ -62,8 +62,8 @@ test = do
         `shouldBe` Right ()
   describe "Simple inference" $ do
     let nat    = TCon "Nat" []
-        int    = TCon "Lam.Primitive.Int" []
-        string = TCon "Lam.Primitive.String" []
+        int    = TCon "Kite.Primitive.Int" []
+        string = TCon "Kite.Primitive.String" []
         wrap a = TCon "Wrap" [a]
         pair a b = TCon "Pair" [a, b]
 
@@ -154,7 +154,7 @@ test = do
     it "a tuple"
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
-        in  infers ctx expr (TCon "Lam.Primitive.Tuple3" [bool, bool, nat])
+        in  infers ctx expr (TCon "Kite.Primitive.Tuple3" [bool, bool, nat])
     it "a list"
       $ let expr = [syn|[True, False]|] in infers ctx expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in infers ctx expr int

@@ -1,6 +1,6 @@
 module Data.Maybe
 
-import Lam.Primitive (Bool, True, False)
+import Kite.Primitive (Bool, True, False)
 import Data.Functor (Functor(..))
 import Data.Applicative (Applicative)
 

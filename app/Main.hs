@@ -23,7 +23,7 @@ import           LC.Eval                        ( evalMain )
 import           LC.Execute                     ( executeMain )
 import           Options.Generic
 
-import           Syn.Parse                      ( parseLamFile )
+import           Syn.Parse                      ( parseKiteFile )
 
 import           Type.Print
 
@@ -50,13 +50,13 @@ instance ParseField DumpPhase
 instance ParseRecord DumpPhase
 instance ParseFields DumpPhase
 
--- Parse stdin as a Lam module and pretty print the result
+-- Parse stdin as a Kite module and pretty print the result
 main :: IO ()
 main = do
-  homeDir <- lookupEnv "LAM_HOME" >>= \case
+  homeDir <- lookupEnv "KITE_HOME" >>= \case
     Nothing -> getCurrentDirectory
     Just d  -> pure d
-  cfg <- getRecord "lam"
+  cfg <- getRecord "kite"
   case cfg of
     Repl         -> Repl.run
     Format    f  -> format f
@@ -98,7 +98,7 @@ typecheck homeDir = withParsedFile homeDir $ \g ->
     Right _   -> printNicely "Success."
 
 format :: FilePath -> IO ()
-format fp = parseLamFile <$> readFile fp >>= \case
+format fp = parseKiteFile <$> readFile fp >>= \case
   Right m   -> printNicely (printModule m)
   Left  err -> putStrLn err
 

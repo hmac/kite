@@ -1,6 +1,6 @@
 module Data.Show
 
-import Lam.Primitive ($showInt)
+import Kite.Primitive ($showInt)
 
 -- This is the interface for converting types to String, typically for printing.
 -- The compiler has built-in show functions for each base type (and eventually

@@ -10,12 +10,12 @@ module Data.List
   , intersperse
   )
 
-import Lam.Primitive (Bool, True, False)
+import Kite.Primitive (Bool, True, False)
 import Data.Semigroup (Semigroup(..))
 import Data.Maybe (Maybe(..))
 import Data.Bool (and)
 import Data.Monoid (Monoid(..))
-import Lam.List (foldr)
+import Kite.List (foldr)
 import Data.Functor (Functor(..))
 
 semigroupList : Semigroup [a]
