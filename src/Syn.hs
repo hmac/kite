@@ -38,7 +38,7 @@ import           Util
 
 import           Type.Reflection                ( Typeable )
 import qualified Data.Data                     as Data
-import qualified Expr                           ( Expr
+import qualified AST                            ( Expr
                                                 , Pat
                                                 )
 
@@ -126,7 +126,7 @@ data DataCon_ name = DataCon { conName :: name
                              deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
-type Pattern = Expr.Pat RawName
+type Pattern = AST.Pat RawName
 
 
 -- Int
@@ -194,7 +194,7 @@ ftv = \case
 -- TODO: type sigs in let bindings
 -- TODO: multi-definition functions in let bindings
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
-type Syn = Expr.Expr RawName Type
+type Syn = AST.Expr RawName Type
 
 -- Supported binary operators
 binOps :: [RawName]

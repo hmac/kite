@@ -4,7 +4,7 @@ module Syn.Typed
   , Constraint.Expr.ExpT(..)
   , Constraint.Expr.AltT(..)
   , Constraint.Expr.Scheme
-  , Expr.Pat(..)
+  , AST.Pat(..)
   , S.Import(..)
   , Scheme_(..)
   )
@@ -18,7 +18,7 @@ import           Constraint.Expr                ( ExpT(..)
                                                 , Scheme_(..)
                                                 )
 import           Constraint                     ( Type(..) )
-import qualified Expr
+import qualified AST
 
 -- This module contains the typed AST
 -- Any module that deals with the typed AST can just import this one to get all
@@ -28,7 +28,7 @@ import qualified Expr
 
 -- Constraint.Expr.ExpT reuses the Pattern type from Syn, so we do the same
 type Exp = ExpT
-type Pattern = Expr.Pat Name
+type Pattern = AST.Pat Name
 
 data Module = Module { moduleName :: ModuleName
                      , moduleImports :: [S.Import]

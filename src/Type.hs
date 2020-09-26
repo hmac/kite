@@ -42,7 +42,7 @@ import           Data.Name                      ( Name(..)
                                                 , RawName(..)
                                                 , ModuleName(..)
                                                 )
-import           Expr                           ( Expr(..)
+import           AST                            ( Expr(..)
                                                 , Pat(..)
                                                 )
 

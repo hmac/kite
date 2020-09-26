@@ -15,7 +15,7 @@ import qualified Text.Megaparsec.Char.Lexer    as L
 
 import qualified Syn
 import           Syn                     hiding ( Pattern )
-import           Expr
+import           AST
 
 -- TODO: markdown in comments & doctests
 -- TODO: heredocs

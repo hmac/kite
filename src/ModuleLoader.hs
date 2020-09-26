@@ -12,7 +12,7 @@ import           System.Directory               ( getCurrentDirectory )
 import           Data.Name                      ( showModuleName )
 import           Syn.Parse                      ( parseLamFile )
 import           Syn
-import           Expr                           ( Expr )
+import           AST                            ( Expr )
 import           Data.List                      ( intercalate )
 import           Canonicalise                   ( canonicaliseModule )
 import           ModuleGroup

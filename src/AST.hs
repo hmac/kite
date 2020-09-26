@@ -1,4 +1,4 @@
-module Expr
+module AST
   ( Expr(..)
   , Pat(..)
   )

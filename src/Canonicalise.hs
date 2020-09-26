@@ -7,7 +7,7 @@ import qualified Data.Map.Strict               as Map
 import           Data.List                      ( mapAccumL )
 import           Util
 import           Syn
-import           Expr                           ( Expr(..)
+import           AST                            ( Expr(..)
                                                 , Pat(..)
                                                 )
 import           Data.Name                      ( Name(..) )

@@ -9,7 +9,7 @@ import           Data.Text.Prettyprint.Doc
 
 import qualified Syn
 import           Syn                     hiding ( Pattern )
-import           Expr
+import           AST
 
 -- Semantic annotation
 data Style = VarStyle | KeywordStyle | FunctionStyle | TypeStyle | DataStyle | HoleStyle

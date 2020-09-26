@@ -10,11 +10,11 @@ import           Constraint
 import           Data.Name                      ( Name(..) )
 import           Util
 
-import qualified Expr                           ( Pat(..)
+import qualified AST                            ( Pat(..)
                                                 , Expr(..)
                                                 )
 
-type Exp = Expr.Expr Name Type
+type Exp = AST.Expr Name Type
 
 -- Exp with type annotations
 data ExpT = VarT Name Type
@@ -109,7 +109,7 @@ instance Vars ExpT where
 data AltT = AltT Pattern ExpT
   deriving (Eq, Show)
 
-type Pattern = Expr.Pat Name
+type Pattern = AST.Pat Name
 
 instance Sub AltT where
   sub s (AltT p e) = AltT p (sub s e)

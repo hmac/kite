@@ -20,7 +20,7 @@ import           Type.FromSyn                   ( fromSyn
                                                 , convertType
                                                 )
 import qualified Syn
-import           Expr
+import           AST
 
 test :: Spec
 test = do
