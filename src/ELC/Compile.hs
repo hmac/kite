@@ -136,15 +136,15 @@ buildTuplePat elems = case length elems of
 
 translateExpr :: Env -> T.Exp -> NameGen Exp
 translateExpr env = \case
-  T.IntLitT  i _            -> pure $ Const (Int i) []
-  T.BoolLitT b _            -> pure $ Const (Bool b) []
-  T.CharLitT c _            -> pure $ Const (Char c) []
-  T.StringInterpT s parts _ -> translateStringLit env s parts
-  T.StringLitT s     _      -> translateStringLit env s []
-  T.ListLitT   elems _      -> do
+  T.IntLitT  i            -> pure $ Const (Int i) []
+  T.BoolLitT b            -> pure $ Const (Bool b) []
+  T.CharLitT c            -> pure $ Const (Char c) []
+  T.UnitLitT              -> pure $ Const Unit []
+  T.StringInterpT s parts -> translateStringLit env s parts
+  T.StringLitT s          -> translateStringLit env s []
+  T.ListLitT elems _      -> do
     elems' <- mapM (translateExpr env) elems
     buildList elems'
-  T.UnitLitT _        -> pure $ Const Unit []
   T.TupleLitT elems _ -> do
     elems' <- mapM (translateExpr env) elems
     pure (buildTuple elems')
@@ -167,22 +167,23 @@ translateExpr env = \case
     v2 <- fresh
     pure $ Abs (VarPat v1)
                (Abs (VarPat v2) (Const (Prim PrimEqInt) [Var v1, Var v2]))
-  T.VarT n _ -> pure (Var n)
-  T.AppT a b -> do
+  T.VarT n _   -> pure (Var n)
+  T.AppT a b _ -> do
     a' <- translateExpr env a
     b' <- translateExpr env b
     pure $ App a' b'
+  T.AnnT e _ -> translateExpr env e
 
   -- We translate a constructor into a series of nested lambda abstractions, one
   -- for each argument to the constructor. When applied, the result is a fully
   -- saturated constructor.
-  T.ConT n -> do
+  T.ConT n   -> do
     let con = lookupCon n env
         a   = conArity con
     newVars <- replicateM a fresh
     pure $ buildAbs (Cons con (map Var newVars)) (map VarPat newVars)
-  T.HoleT n    _ -> pure $ Bottom ("Hole encountered: " <> show n)
-  T.AbsT  vars e -> do
+  T.HoleT n _     -> pure $ Bottom ("Hole encountered: " <> show n)
+  T.AbsT vars e _ -> do
     body <- translateExpr env e
     pure $ buildAbs body (map (VarPat . fst) vars)
   T.LetT alts expr _ -> do
@@ -206,7 +207,7 @@ translateExpr env = \case
     var    <- fresh
     scrut' <- translateExpr env scrut
     alts'  <- mapM
-      (\(T.AltT p e) -> do
+      (\(p, e) -> do
         p' <- translatePattern env p
         e' <- translateExpr env e
         pure $ App (Abs p' e') (Var var)

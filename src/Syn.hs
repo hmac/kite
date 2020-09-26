@@ -128,7 +128,6 @@ data DataCon_ name = DataCon { conName :: name
 -- TODO: record patterns
 type Pattern = AST.Pat RawName
 
-
 -- Int
 -- Maybe Int
 -- a
@@ -184,16 +183,11 @@ ftv = \case
 -- a process that qualifies all names with their full module path. This produces
 -- a Canonical.Exp which is another name for Syn (Canonical.Name).
 --
--- For typechecking we convert Syn to Constraint.Exp and typecheck that,
--- producing Constraint.ExpT. This is then converted to ELC and then to LC for
+-- For typechecking we convert Syn to Type.Exp and typecheck that,
+-- producing Syn.Typed. This is then converted to ELC and then to LC for
 -- evaluation.
 --
--- [Syn] -> [Can.Exp] -> [Constraint.Exp] -> [Constraint.ExpT] -> [ELC] -> [LC]
-
--- TODO: patterns in let bindings
--- TODO: type sigs in let bindings
--- TODO: multi-definition functions in let bindings
---       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
+-- [Syn] -> [Can.Exp] -> [Type.Exp] -> [Syn.Typed] -> [ELC] -> [LC]
 type Syn = AST.Expr RawName Type
 
 -- Supported binary operators

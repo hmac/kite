@@ -11,16 +11,16 @@ where
 -- actually construct T.Exp as it goes, inserting the correct type annotations.
 
 import qualified Canonical                     as Can
+import           Type                           ( Type(..)
+                                                , U(..)
+                                                )
 import           AST
-import           Syn                     hiding ( Name )
+import           Syn                     hiding ( Name
+                                                , Type
+                                                )
 import qualified Syn.Typed                     as T
 import           Data.Coerce                    ( coerce )
 import           Data.Name
-import qualified Constraint                    as C
-                                                ( Var(R)
-                                                , fn
-                                                )
-import           Data.String                    ( fromString )
 import           Util
 
 convertModule :: Can.Module -> T.Module
@@ -34,7 +34,7 @@ convertModule modul = T.Module
 
 convertFun :: Can.Fun Can.Exp -> T.Fun
 convertFun fun = T.Fun { T.funName = funName fun
-                       , T.funType = convertMaybeType (funType fun)
+                       , T.funType = unknown
                        , T.funExpr = convertExpr (funExpr fun)
                        }
 
@@ -47,73 +47,44 @@ convertData d = T.Data { T.dataName   = dataName d
 convertDataCon :: Can.DataCon -> T.DataCon
 convertDataCon con = T.DataCon { T.conName = conName con
                                , T.conArgs = map convertType (conArgs con)
-                               , T.conType = T.Forall [] unknown
+                               , T.conType = unknown
                                }
 
--- If nothing, return a hole
-convertMaybeType :: Maybe Can.Type -> T.Scheme
-convertMaybeType Nothing   = T.Forall [] unknown
-convertMaybeType (Just ty) = go [] ty
- where
-  go :: [Name] -> Can.Type -> T.Scheme
-  go vars (TyForall v t) = go (v : vars) t
-  go vars t              = T.Forall (map C.R (reverse vars)) (convertType t)
-
-convertType :: Can.Type -> T.Type
-convertType = \case
-  TyCon c   -> T.TCon c
-  TyApp a b -> T.TApp (convertType a) (convertType b)
-  TyVar v   -> T.TVar (C.R v)
-  TyList    -> T.TCon "Lam.Primitive.List"
-  TyTuple ts ->
-    let con = T.TCon $ fromString $ "Lam.Primitive.Tuple" <> show (length ts)
-    in  foldl T.TApp con (map convertType ts)
-  TyInt           -> T.TInt
-  TyChar          -> T.TChar
-  TyString        -> T.TString
-  TyBool          -> T.TBool
-  TyUnit          -> T.TUnit
-  TyHole n        -> T.THole (Local n)
-  TyFun a b       -> convertType a `C.fn` convertType b
-  TyRecord fields -> T.TRecord (mapSnd convertType fields)
-  TyAlias  a t    -> T.TAlias a (convertType t)
-  TyForall _ _    -> error "Type.ToTyped: Cannot convert TyForall to T.Type"
+convertType :: Can.Type -> Type
+convertType _ = unknown
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = coerce
 
 convertExpr :: Can.Exp -> T.Exp
 convertExpr = \case
-  Var v         -> T.VarT v unknown
-  Ann _e _t     -> error "Type.ToTyped.convertExpr: cannot convert annotations"
-  Con  c        -> T.ConT c
-  Hole n        -> T.HoleT n unknown
-  Abs x e       -> T.AbsT (map (, unknown) x) (convertExpr e)
-  App a b       -> T.AppT (convertExpr a) (convertExpr b)
-  LetA n ty v e -> T.LetAT n
-                           (T.Forall [] (convertType ty))
-                           (convertExpr v)
-                           (convertExpr e)
-                           unknown
+  Var v     -> T.VarT v unknown
+  Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
+  Con  c    -> T.ConT c
+  Hole n    -> T.HoleT n unknown
+  Abs xs e  -> T.AbsT (map (, unknown) xs) (convertExpr e) unknown
+  App a  b  -> T.AppT (convertExpr a) (convertExpr b) unknown
+  LetA n ty v e ->
+    T.LetAT n (convertType ty) (convertExpr v) (convertExpr e) unknown
   Let  binds e    -> T.LetT (mapSnd convertExpr binds) (convertExpr e) unknown
   Case s     alts -> T.CaseT (convertExpr s) (map convertAlt alts) unknown
   MCase alts      -> T.MCaseT
     (map (\(pats, expr) -> (map convertPattern pats, convertExpr expr)) alts)
     unknown
-  UnitLit              -> T.UnitLitT unknown
+  UnitLit              -> T.UnitLitT
   TupleLit es          -> T.TupleLitT (map convertExpr es) unknown
   ListLit  es          -> T.ListLitT (map convertExpr es) unknown
-  StringInterp s comps -> T.StringInterpT s (mapFst convertExpr comps) unknown
-  StringLit s          -> T.StringLitT s unknown
-  CharLit   c          -> T.CharLitT c unknown
-  IntLit    i          -> T.IntLitT i unknown
-  BoolLit   b          -> T.BoolLitT b unknown
+  StringInterp s comps -> T.StringInterpT s (mapFst convertExpr comps)
+  StringLit s          -> T.StringLitT s
+  CharLit   c          -> T.CharLitT c
+  IntLit    i          -> T.IntLitT i
+  BoolLit   b          -> T.BoolLitT b
   Record    fields     -> T.RecordT (mapSnd convertExpr fields) unknown
   Project r f          -> T.ProjectT (convertExpr r) f unknown
   FCall   f args       -> T.FCallT f (map convertExpr args) unknown
 
-convertAlt :: (Can.Pattern, Can.Exp) -> T.AltT
-convertAlt (p, e) = T.AltT (convertPattern p) (convertExpr e)
+convertAlt :: (Can.Pattern, Can.Exp) -> (T.Pattern, T.Exp)
+convertAlt (p, e) = (convertPattern p, convertExpr e)
 
-unknown :: T.Type
-unknown = T.THole "unknown"
+unknown :: Type
+unknown = UType (U 0 "unknown")

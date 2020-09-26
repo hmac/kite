@@ -1,24 +1,15 @@
 module Syn.Typed
   ( module Syn.Typed
-  , Constraint.Type(..)
-  , Constraint.Expr.ExpT(..)
-  , Constraint.Expr.AltT(..)
-  , Constraint.Expr.Scheme
   , AST.Pat(..)
+  , AST.ExprT(..)
   , S.Import(..)
-  , Scheme_(..)
   )
 where
 
 import           Data.Name
+import           Type                           ( Type )
 import qualified Syn                           as S
-import           Constraint.Expr                ( ExpT(..)
-                                                , AltT(..)
-                                                , Scheme
-                                                , Scheme_(..)
-                                                )
-import           Constraint                     ( Type(..) )
-import qualified AST
+import           AST
 
 -- This module contains the typed AST
 -- Any module that deals with the typed AST can just import this one to get all
@@ -26,8 +17,7 @@ import qualified AST
 -- We re-use any types that are unchanged from the untyped AST to avoid
 -- pointless conversions.
 
--- Constraint.Expr.ExpT reuses the Pattern type from Syn, so we do the same
-type Exp = ExpT
+type Exp = ExprT Name Type
 type Pattern = AST.Pat Name
 
 data Module = Module { moduleName :: ModuleName
@@ -43,7 +33,7 @@ data Decl = FunDecl Fun
             deriving (Eq, Show)
 
 data Fun = Fun { funName :: Name
-               , funType :: Scheme
+               , funType :: Type
                , funExpr :: Exp
                } deriving (Eq, Show)
 
@@ -52,6 +42,6 @@ data Data = Data { dataName :: Name
                  , dataCons :: [DataCon]
                  } deriving (Eq, Show)
 
-data DataCon = DataCon { conName :: Name, conArgs :: [Type], conType :: Scheme }
-             | RecordCon { conName :: Name, conFields :: [(Name, Type)], conType :: Scheme }
+data DataCon = DataCon { conName :: Name, conArgs :: [Type], conType :: Type }
+             | RecordCon { conName :: Name, conFields :: [(Name, Type)], conType :: Type }
                deriving (Eq, Show)
