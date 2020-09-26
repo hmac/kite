@@ -28,6 +28,7 @@ import           Type                           ( TypeM
                                                 , wellFormedType
                                                 , LocatedError(..)
                                                 , newU
+                                                , putCtx
                                                 )
 import           Type.FromSyn                   ( fromSyn
                                                 , convertType
@@ -78,8 +79,9 @@ checkModule ctx modul = do
   -- Typecheck each function definition
   -- For functions with type signatures, just check them against their signature
   -- For functions without type signatures, infer their type
+  putCtx ctx'
   mapM_ (checkFun ctx') funsWithSig
-  mapM_ (inferFun ctx') funsWithoutSig
+  mapM_ inferFun        funsWithoutSig
 
   -- Construct a typed module by converting every data & fun decl into the typed
   -- form, with empty type annotations. In the future this should be done during
@@ -95,17 +97,18 @@ checkFun ctx (name, ty, body) =
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
     $ do
   -- check the type is well-formed
-        void $ wellFormedType ctx ty
+        putCtx ctx
+        void $ wellFormedType ty
         -- check the body of the function
-        void $ check ctx body ty
+        void $ check body ty
 
-inferFun :: Ctx -> (Name, Exp) -> TypeM ()
-inferFun ctx (name, body) =
+inferFun :: (Name, Exp) -> TypeM ()
+inferFun (name, body) =
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
     $ do
         -- infer the body of the function
-        void $ infer ctx body
+        void $ infer body
 
 funToBind :: Can.Fun Can.Exp -> TypeM (Name, Maybe Type, Exp)
 funToBind fun = do

@@ -19,7 +19,9 @@ module Util
   , Data.Either.lefts
   , Data.Either.rights
   , Control.Monad.forM
+  , Control.Monad.forM_
   , Control.Monad.foldM
+  , Control.Monad.replicateM
   , Control.Monad.Extra.mconcatMapM
   , Debug.Trace.trace
   , Debug.Trace.traceShow
@@ -124,11 +126,11 @@ splitOn x xs = go xs []
 -- | Uses a function to determine which of two output lists an input element should join
 -- Taken from GHC.Util
 partitionWith :: (a -> Either b c) -> [a] -> ([b], [c])
-partitionWith _ [] = ([],[])
-partitionWith f (x:xs) = case f x of
-                         Left  b -> (b:bs, cs)
-                         Right c -> (bs, c:cs)
-    where (bs,cs) = partitionWith f xs
+partitionWith _ []       = ([], [])
+partitionWith f (x : xs) = case f x of
+  Left  b -> (b : bs, cs)
+  Right c -> (bs, c : cs)
+  where (bs, cs) = partitionWith f xs
 
 -- Pretty printing
 pShow :: Show a => a -> String

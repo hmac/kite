@@ -25,20 +25,17 @@ import           AST
 test :: Spec
 test = do
   describe "check [Nothing] : forall a. [Maybe a]" $ do
-    let
-      maybeType arg = TCon "Maybe" [arg]
-      expr = App (App (Var (Free "Lam.Primitive.::")) (Var (Free "Nothing")))
-                 (Var (Free "Lam.Primitive.[]"))
-      ctx =
-        [V (Free "Nothing") (Forall (U 0 "a") (maybeType (UType (U 0 "a"))))]
-      ty = Forall (U 1 "a") (list (maybeType (UType (U 1 "a"))))
+    let a0 = U 0 "a"
+        a1 = U 1 "a"
+        maybeType arg = TCon "Maybe" [arg]
+        ctx  = [V (Free "Nothing") (Forall a0 (maybeType (UType a0)))]
+        ty   = Forall a1 (list (maybeType (UType a1)))
+        expr = App
+          (App (Var (Free "Lam.Primitive.::")) (Var (Free "Nothing")))
+          (Var (Free "Lam.Primitive.[]"))
+        r = putCtx ctx >> check expr ty
     it "typechecks successfully" $ do
-      let r = do
-            lift $ lift $ put 2
-            _ <- check ctx expr ty
-            pure ()
-      runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
-        `shouldBe` Right ()
+      runTypeM defaultTypeEnv r `shouldBe` Right ()
   describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
@@ -60,10 +57,7 @@ test = do
           , V (Free "foo") funType
           ]
     it "typechecks successfully" $ do
-      let r = do
-            lift $ lift $ put 2
-            _ <- check ctx fun funType
-            pure ()
+      let r = putCtx ctx >> check fun funType
       runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
         `shouldBe` Right ()
   describe "Simple inference" $ do
@@ -238,9 +232,10 @@ infers ctx expr t = do
   let moduleName    = "QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
-        e          <- fromSyn canonicalExpr
-        (ty, ctx') <- infer ctx e
-        pure (subst ctx' ty)
+        e <- fromSyn canonicalExpr
+        putCtx ctx
+        ty <- infer e
+        subst ty
   let env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err      -> expectationFailure $ show (printLocatedError err)
@@ -255,10 +250,11 @@ infers' ctx expr ty = do
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
       canonicalType = canonicaliseType (moduleName, mempty) ty
   let r = do
-        e          <- fromSyn canonicalExpr
-        t          <- convertType mempty canonicalType
-        (t', ctx') <- infer ctx e
-        pure (t, subst ctx' t')
+        e <- fromSyn canonicalExpr
+        t <- convertType mempty canonicalType
+        putCtx ctx
+        t' <- infer e >>= subst
+        pure (t, t')
   let env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left err -> expectationFailure $ show (printLocatedError err)
@@ -278,7 +274,7 @@ checks ctx expr ty = do
                                ]
         , Syn.moduleMetadata = mempty
         }
-      r   = checkModule ctx modul >> pure ()
+      r   = replicateM 10 (newU "dummy") >> checkModule ctx modul >> pure ()
       env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err -> expectationFailure $ show (printLocatedError err)
