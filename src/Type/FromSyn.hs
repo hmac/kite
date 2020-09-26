@@ -14,6 +14,7 @@ import qualified Type                          as T
 
 import qualified Canonical                     as Can
 import qualified Syn                           as S
+import qualified Expr                          as S
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case

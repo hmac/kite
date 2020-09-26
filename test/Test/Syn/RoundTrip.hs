@@ -8,6 +8,7 @@ import           Text.Megaparsec                ( parse
                                                 , errorBundlePretty
                                                 )
 
+import           Expr
 import           Syn
 import           Syn.Parse
 import           Syn.Print

@@ -7,6 +7,9 @@ import qualified Data.Map.Strict               as Map
 import           Data.List                      ( mapAccumL )
 import           Util
 import           Syn
+import           Expr                           ( Expr(..)
+                                                , Pat(..)
+                                                )
 import           Data.Name                      ( Name(..) )
 import qualified Canonical                     as Can
 import qualified Canonical.Primitive
@@ -176,7 +179,7 @@ canonicaliseExp env = go
             binds
       in  Let binds' (go locals' e)
 
-    canonicaliseCase :: (Syn.Syn, [(Pattern, Syn.Syn)]) -> Can.Exp
+    canonicaliseCase :: (Syn.Syn, [(Syn.Pattern, Syn.Syn)]) -> Can.Exp
     canonicaliseCase (e, alts) =
       let alts' = map
             (\(pat, e_) ->
@@ -186,7 +189,7 @@ canonicaliseExp env = go
             )
             alts
       in  Case (go locals e) alts'
-    canonicaliseMCase :: [([Pattern], Syn)] -> Can.Exp
+    canonicaliseMCase :: [([Syn.Pattern], Syn)] -> Can.Exp
     canonicaliseMCase alts =
       let alts' = map
             (\(pats, e) ->

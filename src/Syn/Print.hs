@@ -7,7 +7,9 @@ import           Prelude                 hiding ( mod )
 
 import           Data.Text.Prettyprint.Doc
 
-import           Syn
+import qualified Syn
+import           Syn                     hiding ( Pattern )
+import           Expr
 
 -- Semantic annotation
 data Style = VarStyle | KeywordStyle | FunctionStyle | TypeStyle | DataStyle | HoleStyle
@@ -166,7 +168,7 @@ printDef name expr | big expr  = nest 2 $ vsep [lhs, printExpr expr]
                    | otherwise = lhs <+> printExpr expr
   where lhs = func (printName name) <+> equals
 
-printPattern :: Pattern -> Document
+printPattern :: Syn.Pattern -> Document
 printPattern (VarPat n)      = printName n
 printPattern WildPat         = "_"
 printPattern (IntPat    i)   = pretty i
@@ -292,14 +294,14 @@ printLetA name ty val body = keyword "letA" <+> hang
 -- case expr of
 --   pat1 x y -> e1
 --   pat2 z w -> e2
-printCase :: Syn -> [(Pattern, Syn)] -> Document
+printCase :: Syn -> [(Syn.Pattern, Syn)] -> Document
 printCase e alts = keyword "case"
   <+> hang (-3) (vsep ((printExpr e <+> keyword "of") : map printAlt alts))
   where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
 -- pat1 pat2 -> e1
 -- pat3 pat4 -> e2
-printMCase :: [([Pattern], Syn)] -> Document
+printMCase :: [([Syn.Pattern], Syn)] -> Document
 printMCase alts = hang 0 $ vsep $ map printAlt alts
  where
   printAlt (pats, expr) =

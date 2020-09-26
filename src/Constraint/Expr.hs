@@ -2,7 +2,6 @@
 module Constraint.Expr
   ( module Constraint.Expr
   , Scheme_(..)
-  , Syn_(..)
   , Scheme
   )
 where
@@ -11,11 +10,11 @@ import           Constraint
 import           Data.Name                      ( Name(..) )
 import           Util
 
-import           Syn                            ( Pattern_
-                                                , Syn_(..)
+import qualified Expr                           ( Pat(..)
+                                                , Expr(..)
                                                 )
 
-type Exp = Syn_ Name Type
+type Exp = Expr.Expr Name Type
 
 -- Exp with type annotations
 data ExpT = VarT Name Type
@@ -110,7 +109,7 @@ instance Vars ExpT where
 data AltT = AltT Pattern ExpT
   deriving (Eq, Show)
 
-type Pattern = Pattern_ Name
+type Pattern = Expr.Pat Name
 
 instance Sub AltT where
   sub s (AltT p e) = AltT p (sub s e)

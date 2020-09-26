@@ -11,6 +11,7 @@ where
 -- actually construct T.Exp as it goes, inserting the correct type annotations.
 
 import qualified Canonical                     as Can
+import           Expr
 import           Syn                     hiding ( Name )
 import qualified Syn.Typed                     as T
 import           Data.Coerce                    ( coerce )

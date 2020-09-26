@@ -8,7 +8,7 @@ module Type
   , V(..)
   , U(..)
   , Pattern
-  , Pattern_(..)
+  , Pat(..)
   , unfoldFn
   , foldFn
   , wellFormedType
@@ -42,7 +42,9 @@ import           Data.Name                      ( Name(..)
                                                 , RawName(..)
                                                 , ModuleName(..)
                                                 )
-import           Syn                            ( Pattern_(..) )
+import           Expr                           ( Expr(..)
+                                                , Pat(..)
+                                                )
 
 import           Prelude                 hiding ( splitAt )
 
@@ -111,11 +113,11 @@ io = TCon "Lam.Primitive.IO" []
 -- Primitive constructors
 primitiveConstructors :: Ctx
 primitiveConstructors =
-  [ Var (Free "Lam.Primitive.Unit")  unit
-  , Var (Free "Lam.Primitive.True")  bool
-  , Var (Free "Lam.Primitive.False") bool
-  , Var (Free "Lam.Primitive.[]") (Forall (U 0 "a") (list (UType (U 0 "a"))))
-  , Var
+  [ V (Free "Lam.Primitive.Unit")  unit
+  , V (Free "Lam.Primitive.True")  bool
+  , V (Free "Lam.Primitive.False") bool
+  , V (Free "Lam.Primitive.[]") (Forall (U 0 "a") (list (UType (U 0 "a"))))
+  , V
     (Free "Lam.Primitive.::")
     (Forall
       (U 0 "a")
@@ -123,24 +125,24 @@ primitiveConstructors =
           (Fn (list (UType (U 0 "a"))) (list (UType (U 0 "a"))))
       )
     )
-  , Var (Free "Lam.Primitive.Tuple2") (mkTupleCon 2 "Lam.Primitive.Tuple2")
-  , Var (Free "Lam.Primitive.Tuple3") (mkTupleCon 3 "Lam.Primitive.Tuple3")
-  , Var (Free "Lam.Primitive.Tuple4") (mkTupleCon 4 "Lam.Primitive.Tuple4")
-  , Var (Free "Lam.Primitive.Tuple5") (mkTupleCon 5 "Lam.Primitive.Tuple5")
-  , Var (Free "Lam.Primitive.Tuple6") (mkTupleCon 6 "Lam.Primitive.Tuple6")
-  , Var (Free "Lam.Primitive.Tuple7") (mkTupleCon 7 "Lam.Primitive.Tuple7")
-  , Var (Free "Lam.Primitive.Tuple8") (mkTupleCon 8 "Lam.Primitive.Tuple8")
+  , V (Free "Lam.Primitive.Tuple2") (mkTupleCon 2 "Lam.Primitive.Tuple2")
+  , V (Free "Lam.Primitive.Tuple3") (mkTupleCon 3 "Lam.Primitive.Tuple3")
+  , V (Free "Lam.Primitive.Tuple4") (mkTupleCon 4 "Lam.Primitive.Tuple4")
+  , V (Free "Lam.Primitive.Tuple5") (mkTupleCon 5 "Lam.Primitive.Tuple5")
+  , V (Free "Lam.Primitive.Tuple6") (mkTupleCon 6 "Lam.Primitive.Tuple6")
+  , V (Free "Lam.Primitive.Tuple7") (mkTupleCon 7 "Lam.Primitive.Tuple7")
+  , V (Free "Lam.Primitive.Tuple8") (mkTupleCon 8 "Lam.Primitive.Tuple8")
   ]
 
 -- Primitive functions
 primitiveFns :: Ctx
 primitiveFns =
-  [ Var (Free "Lam.Primitive.appendString") (Fn string (Fn string string))
-  , Var (Free "Lam.Primitive.+")            (Fn int (Fn int int))
-  , Var (Free "Lam.Primitive.-")            (Fn int (Fn int int))
-  , Var (Free "Lam.Primitive.*")            (Fn int (Fn int int))
-  , Var (Free "Lam.Primitive.$showInt")     (Fn int string)
-  , Var (Free "Lam.Primitive.$eqInt")       (Fn int (Fn int bool))
+  [ V (Free "Lam.Primitive.appendString") (Fn string (Fn string string))
+  , V (Free "Lam.Primitive.+")            (Fn int (Fn int int))
+  , V (Free "Lam.Primitive.-")            (Fn int (Fn int int))
+  , V (Free "Lam.Primitive.*")            (Fn int (Fn int int))
+  , V (Free "Lam.Primitive.$showInt")     (Fn int string)
+  , V (Free "Lam.Primitive.$eqInt")       (Fn int (Fn int bool))
   ]
 
 primCtx :: Ctx
@@ -275,84 +277,10 @@ instance Debug V where
 genV :: Gen V
 genV = G.choice [Free <$> genName, Bound <$> G.int (R.linear 0 100)]
 
--- | Expressions
-data Exp =
-  -- Variable
-    VarExp V
-  -- Annotation
-  | Ann Exp Type
-  -- Application
-  | App Exp Exp
-  -- Lambda
-  | Lam V Exp
-  -- Data constructor
-  | Con V
-  -- Hole
-  | Hole String
-  -- Case expression
-  | Case Exp [(Pattern, Exp)]
-  -- MCase expression
-  | MCase [([Pattern], Exp)]
-  -- Multi let expression
-  | Let [(V, Exp)] Exp
-  -- String literal
-  | String String
-  -- String literal with interpolations
-  | StringInterp String [(Exp, String)]
-  -- Char literal
-  | Char Char
-  -- Int literal
-  | Int Int
-  -- Bool literal
-  | Bool Bool
-  -- Unit literal
-  | Unit
-  -- List literal
-  | List [Exp]
-  -- Tuple literal
-  | Tuple [Exp]
-  -- Record
-  | Record [(String, Exp)]
-  -- Record projection
-  | Project Exp String
-  -- FFI Call
-  | FCall String [Exp]
-  deriving (Eq, Show, Typeable, Data)
+type Exp = Expr V Type
 
-instance Debug Exp where
-  debug (VarExp v) = debug v
-  debug (Ann e t ) = debug e <+> ":" <+> debug t
-  debug (App a b ) = debug a <+> debug b
-  debug (Lam v e ) = "λ" <> debug v <> "." <+> debug e
-  debug (Con  v  ) = debug v
-  debug (Hole s  ) = "?" <> s
-  debug (Case e alts) =
-    "case" <+> debug e <+> "of {" <+> sepBy "; " (map go alts) <+> "}"
-    where go (pat, expr) = debug pat <+> "->" <+> debug expr
-  debug (MCase alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
-    where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
-  debug (Let binds e) =
-    "let"
-      <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc)
-                ("in" <+> debug e)
-                binds
-  debug (String s) = "\"" <> s <> "\""
-  debug (StringInterp s comps) =
-    let compStr =
-            concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
-    in  "\"" <> s <> compStr <> "\""
-  debug (Char c       ) = "'" <> [c] <> "'"
-  debug (Int  i       ) = show i
-  debug (Bool b       ) = show b
-  debug (Unit         ) = "()"
-  debug (List   elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
-  debug (Tuple  elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
-  debug (Record fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
-    where go (name, expr) = debug name <+> "=" <+> debug expr
-  debug (Project r f   ) = debug r <> "." <> f
-  debug (FCall   f args) = "$fcall" <+> f <+> sepBy " " (map debug args)
 
-type Pattern = Pattern_ V
+type Pattern = Pat V
 
 -- | Contexts
 type Ctx = [CtxElem]
@@ -362,7 +290,7 @@ genCtx = G.list (R.linear 1 10) genCtxElem
 
 data CtxElem =
   -- Bound variable
-    Var V Type
+    V V Type
   -- Universal type variable
   | UVar U
   -- Existential type variable
@@ -374,7 +302,7 @@ data CtxElem =
   deriving (Eq, Show)
 
 instance Debug CtxElem where
-  debug (Var v t     ) = debug v <+> ":" <+> debug t
+  debug (V v t       ) = debug v <+> ":" <+> debug t
   debug (UVar u      ) = debug u
   debug (EVar e      ) = debug e
   debug (ESolved e ty) = debug e <+> "=" <+> debug ty
@@ -386,7 +314,7 @@ debugCtx ctx = "[" <> sepBy ", " (map debug ctx) <> "]"
 
 genCtxElem :: Gen CtxElem
 genCtxElem = G.choice
-  [ Var <$> genV <*> genType
+  [ V <$> genV <*> genType
   , UVar <$> genU
   , EVar <$> genE
   , ESolved <$> genE <*> genType
@@ -468,8 +396,8 @@ prop_substEForU_commutes = property $ do
 -- | The bound variables in a context
 domV :: Ctx -> [V]
 domV = mapMaybe $ \case
-  Var v _ -> Just v
-  _       -> Nothing
+  V v _ -> Just v
+  _     -> Nothing
 
 -- | The universal variables in a context
 domU :: Ctx -> [U]
@@ -519,8 +447,8 @@ lookupV v ctx = do
   liftMaybe (throwError (UnknownVariable v))
     $ flip firstJust (ctx <> globalCtx)
     $ \case
-        (Var v' t) | v' == v -> Just t
-        _                    -> Nothing
+        (V v' t) | v' == v -> Just t
+        _                  -> Nothing
 
 -- Context construction
 
@@ -535,7 +463,7 @@ extendU u ctx | u `notElem` domU ctx = pure $ UVar u : ctx
 -- | Extend a context with a bound variable
 extendV :: V -> Type -> Ctx -> TypeM Ctx
 extendV v t ctx
-  | v `notElem` domV ctx = wellFormedType ctx t >> pure (Var v t : ctx)
+  | v `notElem` domV ctx = wellFormedType ctx t >> pure (V v t : ctx)
   | otherwise            = todoError $ "extendV failed:" <+> debug v <+> debug t
 
 -- | Extend a context with an existential variable
@@ -756,10 +684,11 @@ instantiate dir ctx e ty =
 check :: Ctx -> Exp -> Type -> TypeM Ctx
 check ctx expr ty =
   trace' ctx ["check", debug expr, ":", debug ty] $ case (expr, ty) of
-    (Lam x e, Fn a b) -> do
+    (Abs []       e, a     ) -> check ctx e a
+    (Abs (x : xs) e, Fn a b) -> do
       ctx'  <- extendV x a ctx
-      ctx'' <- check ctx' e b
-      pure $ dropAfter (Var x a) ctx''
+      ctx'' <- check ctx' (Abs xs e) b
+      pure $ dropAfter (V x a) ctx''
     (e, Forall u a) -> do
       ctx'  <- extendU u ctx
       ctx'' <- check ctx' e a
@@ -832,7 +761,7 @@ infer' ctx e = trace' ctx ["infer'", debug e] $ do
 -- This fits with foldM and mapAccumLM
 infer :: Ctx -> Exp -> TypeM (Type, Ctx)
 infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
-  VarExp x -> do
+  Var x -> do
     a <- lookupV x ctx
     pure (a, ctx)
   Ann e a -> do
@@ -843,12 +772,13 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
     (a, ctx' ) <- infer ctx e1
     (c, ctx'') <- inferApp ctx' (subst ctx' a) e2
     pure (c, ctx'')
-  Lam x e -> do
+  Abs []       e -> infer ctx e
+  Abs (x : xs) e -> do
     alpha <- newE
     beta  <- newE
     ctx'  <- extendE alpha ctx >>= extendE beta >>= extendV x (EType alpha)
-    ctx'' <- check ctx' e (EType beta)
-    pure (Fn (EType alpha) (EType beta), dropAfter (Var x (EType alpha)) ctx'')
+    ctx'' <- check ctx' (Abs xs e) (EType beta)
+    pure (Fn (EType alpha) (EType beta), dropAfter (V x (EType alpha)) ctx'')
   Hole n -> throwError $ CannotInferHole (Hole n)
   Con  x -> do
     a <- lookupV x ctx
@@ -892,25 +822,25 @@ infer ctx expr_ = trace' ctx ["infer", debug expr_] $ case expr_ of
     pure (subst ctx''' ty, dropAfter (Marker alpha) ctx''')
   StringInterp prefix comps -> do
     -- Construct a nested application of appendString and infer the type of that
-    let append = VarExp (Free "Lam.Primitive.appendString")
+    let append = Var (Free "Lam.Primitive.appendString")
         expr   = foldl
           (\acc (c, s) -> App (App append acc) (App (App append c) s))
-          (String prefix)
-          (mapSnd String comps)
+          (StringLit prefix)
+          (mapSnd StringLit comps)
     infer ctx expr
-  String _   -> pure (string, ctx)
-  Char   _   -> pure (char, ctx)
-  Int    _   -> pure (int, ctx)
-  Bool   _   -> pure (bool, ctx)
-  Unit       -> pure (unit, ctx)
-  List elems -> do
+  StringLit _   -> pure (string, ctx)
+  CharLit   _   -> pure (char, ctx)
+  IntLit    _   -> pure (int, ctx)
+  BoolLit   _   -> pure (bool, ctx)
+  UnitLit       -> pure (unit, ctx)
+  ListLit elems -> do
     -- Construct a nested application of (::) and [] and infer the type of that
     let expr = foldr
           (\s acc -> App (App (Con (Free "Lam.Primitive.::")) s) acc)
           (Con (Free "Lam.Primitive.[]"))
           elems
     infer ctx expr
-  Tuple elems -> do
+  TupleLit elems -> do
     -- Construct an application of TupleN and infer the type of that
     let n    = length elems
         con  = Con (Free (fromString ("Lam.Primitive.Tuple" <> show n)))
@@ -1196,7 +1126,7 @@ prop_infers_simple_app = property $ do
   let ctx = primCtx
   v <- forAll genV
   let uval = Con (Free "Lam.Primitive.Unit")
-  let expr = App (Ann (Lam v uval) (Fn unit unit)) uval
+  let expr = App (Ann (Abs [v] uval) (Fn unit unit)) uval
   fmap fst (runTypeM defaultTypeEnv (infer ctx expr)) === Right unit
 
 prop_infers_app_with_context :: Property
