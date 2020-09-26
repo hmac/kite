@@ -21,6 +21,7 @@ let
       brittany
       hlint
       nixpkgs.nixpkgs-fmt
+      dhall
     ];
     withHoogle = true;
   };
