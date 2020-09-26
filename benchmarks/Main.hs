@@ -4,6 +4,7 @@ module Main where
 import           Criterion.Main
 
 import           Syn.Parse                      ( parseLamFile )
+import           Expr
 import           Syn
 import           Canonicalise                   ( canonicaliseModule )
 

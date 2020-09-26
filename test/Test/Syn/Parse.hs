@@ -15,6 +15,7 @@ import           Syn.Parse                      ( pModule
                                                 , pPattern
                                                 )
 
+import           Expr
 import           Syn
 
 -- Parse the string as an expression

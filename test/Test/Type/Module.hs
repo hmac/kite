@@ -108,11 +108,11 @@ ctx =
       pair a b = TCon "QQ.Pair" [a, b]
       either a b = TCon "QQ.Either" [a, b]
       maybe a = TCon "QQ.Maybe" [a]
-  in  [ Var (Free "QQ.Zero") nat
-      , Var (Free "QQ.Suc")  (Fn nat nat)
-      , Var (Free "QQ.MkWrap")
-            (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
-      , Var
+  in  [ V (Free "QQ.Zero") nat
+      , V (Free "QQ.Suc")  (Fn nat nat)
+      , V (Free "QQ.MkWrap")
+          (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
+      , V
         (Free "QQ.MkPair")
         (let a = U 1 "a"
              b = U 2 "b"
@@ -120,21 +120,21 @@ ctx =
                (UType a)
                (Fn (UType b) (pair (UType a) (UType b)))
         )
-      , Var
+      , V
         (Free "QQ.Left")
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn (UType a) (either (UType a) (UType b))
         )
-      , Var
+      , V
         (Free "QQ.Right")
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn (UType b) (either (UType a) (UType b))
         )
-      , Var (Free "QQ.Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
-      , Var (Free "QQ.Just")
-            (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
+      , V (Free "QQ.Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
+      , V (Free "QQ.Just")
+          (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
       ]
 
 checks :: Syn.Fun Syn.Syn -> Expectation

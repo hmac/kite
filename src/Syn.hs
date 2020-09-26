@@ -19,20 +19,17 @@ module Syn
   , DataCon
   , DataCon_(..)
   , Pattern
-  , Pattern_(..)
   , tyapp
   , fn
   , ftv
   , binOps
   , Syn
-  , Syn_(..)
   , Type
   , Type_(..)
   , module Data.Name
   )
 where
 
-import           Data.List                      ( intercalate )
 import qualified Data.Set                      as Set
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
@@ -41,6 +38,9 @@ import           Util
 
 import           Type.Reflection                ( Typeable )
 import qualified Data.Data                     as Data
+import qualified Expr                           ( Expr
+                                                , Pat
+                                                )
 
 -- module Foo
 type Module = Module_ RawName Syn Type
@@ -126,36 +126,8 @@ data DataCon_ name = DataCon { conName :: name
                              deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
-type Pattern = Pattern_ RawName
-data Pattern_ a = VarPat a
-             | WildPat
-             | IntPat Int
-             | CharPat Char
-             | BoolPat Bool
-             | UnitPat
-             | TuplePat [Pattern_ a]
-             | ListPat [Pattern_ a]
-             | ConsPat a [Pattern_ a]
-             | StringPat String
-             deriving (Eq, Show, Typeable, Data.Data)
+type Pattern = Expr.Pat RawName
 
-instance Debug a => Debug (Pattern_ a) where
-  debug (VarPat v)       = debug v
-  debug WildPat          = "_"
-  debug (IntPat  i)      = show i
-  debug (CharPat c)      = "'" <> [c] <> "'"
-  debug (BoolPat b)      = show b
-  debug UnitPat          = "()"
-  debug (TuplePat args ) = "(" <> sepBy ", " (map debug args) <> ")"
-  debug (ListPat  args ) = "[" <> sepBy ", " (map debug args) <> "]"
-  debug (ConsPat c args) = "(" <> debug c <+> sepBy " " (map debug args) <> ")"
-  debug (StringPat s   ) = "\"" <> s <> "\""
-
-sepBy :: String -> [String] -> String
-sepBy = intercalate
-
-(<+>) :: String -> String -> String
-a <+> b = a <> " " <> b
 
 -- Int
 -- Maybe Int
@@ -222,34 +194,7 @@ ftv = \case
 -- TODO: type sigs in let bindings
 -- TODO: multi-definition functions in let bindings
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
-type Syn = Syn_ RawName Type
-data Syn_ n t = Var n
-         | Ann (Syn_ n t) t
-         | Con n
-         | Hole n
-         | Abs [n] (Syn_ n t)
-         | App (Syn_ n t) (Syn_ n t)
-         -- Note: the parser can't currently produce LetAs but the typechecker
-         -- can nonetheless handle them.
-         | LetA n t (Syn_ n t) (Syn_ n t)
-         | Let [(n, Syn_ n t)] (Syn_ n t)
-         | Case (Syn_ n t) [(Pattern_ n, Syn_ n t)]
-         | MCase [([Pattern_ n], Syn_ n t)]
-         | UnitLit
-         | TupleLit [Syn_ n t]
-         | ListLit [Syn_ n t]
-         | StringInterp String [(Syn_ n t, String)]
-         | StringLit String
-         | CharLit Char
-         | IntLit Int
-         | BoolLit Bool
-         -- Records
-         | Record [(n, Syn_ n t)]
-         | Project (Syn_ n t) n
-         -- FFI calls
-         -- FCall stands for "foreign call"
-         | FCall String [Syn_ n t]
-         deriving (Eq, Show, Typeable, Data.Data)
+type Syn = Expr.Expr RawName Type
 
 -- Supported binary operators
 binOps :: [RawName]

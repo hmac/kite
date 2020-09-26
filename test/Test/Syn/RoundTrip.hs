@@ -8,6 +8,7 @@ import           Text.Megaparsec                ( parse
                                                 , errorBundlePretty
                                                 )
 
+import           Expr
 import           Syn
 import           Syn.Parse
 import           Syn.Print
@@ -214,7 +215,7 @@ genVar :: H.Gen Syn
 genVar = Var <$> genLowerName
 
 genRecordProjection :: H.Gen Syn
-genRecordProjection = Project <$> (Var <$> genLowerName) <*> genLowerName
+genRecordProjection = Project <$> (Var <$> genLowerName) <*> genLowerString
 
 genLet :: H.Gen Syn
 genLet = Gen.subtermM2 (Gen.small genExpr)
@@ -255,8 +256,8 @@ shrinkList2 = filter ((> 1) . length) . shrinkList
 
 genRecord :: Syn -> Syn -> H.Gen Syn
 genRecord e1 e2 = do
-  f1 <- genLowerName
-  f2 <- genLowerName
+  f1 <- genLowerString
+  f2 <- genLowerString
   pure (Record [(f1, e1), (f2, e2)])
 
 genStringInterpPair :: H.Gen (Syn, String)

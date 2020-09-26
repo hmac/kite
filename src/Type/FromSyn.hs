@@ -6,7 +6,6 @@ import           Util
 
 import           Data.String                    ( fromString )
 import           Data.Name                      ( Name
-                                                , fromLocal
                                                 , toString
                                                 )
 import           Type                           ( Exp )
@@ -14,56 +13,56 @@ import qualified Type                          as T
 
 import qualified Canonical                     as Can
 import qualified Syn                           as S
+import           Expr
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
-  S.LetA x ty e body -> do
-    e' <- T.Ann <$> fromSyn e <*> convertType mempty ty
-    T.Let [(T.Free x, e')] <$> fromSyn body
-  S.Var n   -> pure $ T.VarExp (T.Free n)
-  S.Con n   -> pure $ T.Con (T.Free n)
-  S.Ann e t -> T.Ann <$> fromSyn e <*> convertType mempty t
-  S.Hole n  -> pure $ T.Hole (show n)
-  S.App a b -> T.App <$> fromSyn a <*> fromSyn b
-  S.Case scrut alts ->
-    T.Case
+  LetA x ty e body -> do
+    e' <- Ann <$> fromSyn e <*> convertType mempty ty
+    Let [(T.Free x, e')] <$> fromSyn body
+  Var n   -> pure $ Var (T.Free n)
+  Con n   -> pure $ Con (T.Free n)
+  Ann e t -> Ann <$> fromSyn e <*> convertType mempty t
+  Hole n  -> pure $ Hole (T.Free n)
+  App a b -> App <$> fromSyn a <*> fromSyn b
+  Case scrut alts ->
+    Case
       <$> fromSyn scrut
       <*> mapM (bimapM (pure . convertPattern) fromSyn) alts
-  S.MCase alts ->
-    T.MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
-  S.Abs xs a -> do
+  MCase alts ->
+    MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
+  Abs xs a -> do
     a' <- fromSyn a
-    pure $ foldr (T.Lam . T.Free) a' xs
-  S.Let binds body -> do
+    pure $ Abs (map T.Free xs) a'
+  Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM (bimapM (pure . T.Free) fromSyn) binds
-    pure $ T.Let binds' body'
-  S.UnitLit      -> pure T.Unit
-  S.TupleLit  es -> T.Tuple <$> mapM fromSyn es
-  S.ListLit   es -> T.List <$> mapM fromSyn es
-  S.StringLit s  -> pure $ T.String s
-  S.StringInterp prefix comps ->
-    T.StringInterp prefix <$> mapM (firstM fromSyn) comps
-  S.CharLit c -> pure $ T.Char c
-  S.IntLit  i -> pure $ T.Int i
-  S.BoolLit b -> pure $ T.Bool b
-  S.Record r ->
-    T.Record <$> mapM (secondM fromSyn . first (show . fromLocal)) r
-  S.Project r f    -> T.Project <$> fromSyn r <*> pure (show (fromLocal f))
-  S.FCall   n args -> T.FCall n <$> mapM fromSyn args
+    pure $ Let binds' body'
+  UnitLit      -> pure UnitLit
+  TupleLit  es -> TupleLit <$> mapM fromSyn es
+  ListLit   es -> ListLit <$> mapM fromSyn es
+  StringLit s  -> pure $ StringLit s
+  StringInterp prefix comps ->
+    StringInterp prefix <$> mapM (firstM fromSyn) comps
+  CharLit c      -> pure $ CharLit c
+  IntLit  i      -> pure $ IntLit i
+  BoolLit b      -> pure $ BoolLit b
+  Record  r      -> Record <$> mapM (secondM fromSyn) r
+  Project r f    -> Project <$> fromSyn r <*> pure f
+  FCall   n args -> FCall n <$> mapM fromSyn args
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = \case
-  S.VarPat v          -> S.VarPat (T.Free v)
-  S.ConsPat c subpats -> S.ConsPat (T.Free c) (map convertPattern subpats)
-  S.TuplePat subpats  -> S.TuplePat (map convertPattern subpats)
-  S.ListPat  subpats  -> S.ListPat (map convertPattern subpats)
-  S.WildPat           -> S.WildPat
-  S.UnitPat           -> S.UnitPat
-  S.IntPat    i       -> S.IntPat i
-  S.CharPat   c       -> S.CharPat c
-  S.BoolPat   b       -> S.BoolPat b
-  S.StringPat s       -> S.StringPat s
+  VarPat v          -> VarPat (T.Free v)
+  ConsPat c subpats -> ConsPat (T.Free c) (map convertPattern subpats)
+  TuplePat subpats  -> TuplePat (map convertPattern subpats)
+  ListPat  subpats  -> ListPat (map convertPattern subpats)
+  WildPat           -> WildPat
+  UnitPat           -> UnitPat
+  IntPat    i       -> IntPat i
+  CharPat   c       -> CharPat c
+  BoolPat   b       -> BoolPat b
+  StringPat s       -> StringPat s
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case

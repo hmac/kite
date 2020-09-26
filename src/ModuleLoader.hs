@@ -12,6 +12,7 @@ import           System.Directory               ( getCurrentDirectory )
 import           Data.Name                      ( showModuleName )
 import           Syn.Parse                      ( parseLamFile )
 import           Syn
+import           Expr                           ( Expr )
 import           Data.List                      ( intercalate )
 import           Canonicalise                   ( canonicaliseModule )
 import           ModuleGroup
@@ -90,7 +91,7 @@ load root name = parseLamFile <$> readFile (filePath root name)
 -- We skip any references to Lam.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
 -- anyway.
-dependencies :: Module_ n (Syn_ n ty) ty -> [ModuleName]
+dependencies :: Module_ n (Expr n ty) ty -> [ModuleName]
 dependencies Module { moduleImports = imports } =
   filter (/= ModuleName ["Lam", "Primitive"]) $ nub $ map importName imports
 

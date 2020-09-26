@@ -20,17 +20,17 @@ import           Type.FromSyn                   ( fromSyn
                                                 , convertType
                                                 )
 import qualified Syn
+import           Expr
 
 test :: Spec
 test = do
   describe "check [Nothing] : forall a. [Maybe a]" $ do
     let
       maybeType arg = TCon "Maybe" [arg]
-      expr = App
-        (App (VarExp (Free "Lam.Primitive.::")) (VarExp (Free "Nothing")))
-        (VarExp (Free "Lam.Primitive.[]"))
+      expr = App (App (Var (Free "Lam.Primitive.::")) (Var (Free "Nothing")))
+                 (Var (Free "Lam.Primitive.[]"))
       ctx =
-        [Var (Free "Nothing") (Forall (U 0 "a") (maybeType (UType (U 0 "a"))))]
+        [V (Free "Nothing") (Forall (U 0 "a") (maybeType (UType (U 0 "a"))))]
       ty = Forall (U 1 "a") (list (maybeType (UType (U 1 "a"))))
     it "typechecks successfully" $ do
       let r = do
@@ -52,12 +52,12 @@ test = do
         nothing = Free "Nothing"
         fun     = MCase
           [ ( [ConsPat cons [ConsPat nothing [], VarPat (Free "rest")]]
-            , App (VarExp (Free "foo")) (VarExp (Free "rest"))
+            , App (Var (Free "foo")) (Var (Free "rest"))
             )
           ]
         ctx =
-          [ Var nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
-          , Var (Free "foo") funType
+          [ V nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
+          , V (Free "foo") funType
           ]
     it "typechecks successfully" $ do
       let r = do
@@ -74,11 +74,11 @@ test = do
         pair a b = TCon "Pair" [a, b]
 
         ctx =
-          [ Var (Free "QQ.Zero") nat
-          , Var (Free "QQ.Suc")  (Fn nat nat)
-          , Var (Free "QQ.MkWrap")
-                (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
-          , Var
+          [ V (Free "QQ.Zero") nat
+          , V (Free "QQ.Suc")  (Fn nat nat)
+          , V (Free "QQ.MkWrap")
+              (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
+          , V
             (Free "QQ.MkPair")
             (let a = U 1 "a"
                  b = U 2 "b"
@@ -182,7 +182,7 @@ test = do
       $ let
           a0 = U 0 "a"
           ctx' =
-            [ Var
+            [ V
                 (Free "QQ.D")
                 (Forall
                   a0
@@ -199,7 +199,7 @@ test = do
       -- f : a -> D a -> a
       -- f = x (D d) -> x
       $ let ctx' =
-              [ Var
+              [ V
                   (Free "QQ.D")
                   (Forall
                     (U 0 "a")
@@ -221,7 +221,7 @@ test = do
           a0 = U 0 "a"
           a1 = U 1 "a"
           ctx' =
-            [ Var
+            [ V
                 (Free "QQ.D")
                 (Forall
                   a0

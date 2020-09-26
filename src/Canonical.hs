@@ -10,10 +10,13 @@ where
 
 import           Data.Name
 import           Syn                     hiding ( Name )
+import qualified Expr                           ( Expr
+                                                , Pat
+                                                )
 
-type Exp = Syn_ Name (Type_ Name)
+type Exp = Expr.Expr Name (Type_ Name)
 type Type = Type_ Name
-type Pattern = Pattern_ Name
+type Pattern = Expr.Pat Name
 type DataCon = DataCon_ Name
 type Data = Data_ Name
 type Alias = Alias_ Name

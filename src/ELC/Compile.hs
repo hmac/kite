@@ -280,16 +280,14 @@ buildTuple elems = case length elems of
   6 -> Cons tuple6 elems
   n -> error $ "cannot handle tuples of length " <> show n
 
-translateRecord :: Env -> [(Name, T.Exp)] -> NameGen Exp
+translateRecord :: Env -> [(String, T.Exp)] -> NameGen Exp
 translateRecord env fields = do
-  fields' <- mapM (bimapM (pure . unName . toRaw) (translateExpr env)) fields
+  fields' <- mapM (secondM (translateExpr env)) fields
   (pure . Record . Map.fromList) fields'
-  where unName (Name n) = n
 
-translateRecordProjection :: Env -> T.Exp -> Name -> NameGen Exp
+translateRecordProjection :: Env -> T.Exp -> String -> NameGen Exp
 translateRecordProjection env expr label =
-  RecordProject <$> translateExpr env expr <*> pure (unName (toRaw label))
-  where unName (Name n) = n
+  RecordProject <$> translateExpr env expr <*> pure label
 
 binaryPrim :: Primitive -> NameGen Exp
 binaryPrim p = do

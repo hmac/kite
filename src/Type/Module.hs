@@ -20,7 +20,7 @@ import qualified Canonical                     as Can
 import           Type                           ( TypeM
                                                 , Type(..)
                                                 , Ctx
-                                                , CtxElem(Var)
+                                                , CtxElem(V)
                                                 , V(..)
                                                 , Exp
                                                 , check
@@ -71,7 +71,7 @@ checkModule ctx modul = do
   -- recursive calls.
   -- If the function has no type signature (should only happen when we're
   -- invoking this function via the REPL), skip it.
-  let funTypeCtx = map (\(name, ty, _exp) -> Var (Free name) ty) funsWithSig
+  let funTypeCtx = map (\(name, ty, _exp) -> V (Free name) ty) funsWithSig
 
   let ctx'       = ctx <> dataTypeCtx <> funTypeCtx
 
@@ -127,12 +127,12 @@ quantify vars t = do
 --
 --   type Maybe a = Just a | Nothing
 -- becomes
---   Var (Free "Just") (Forall a. a -> Maybe a)
---   Var (Free "Nothing") (Forall a. Maybe a)
+--   V (Free "Just") (Forall a. a -> Maybe a)
+--   V (Free "Nothing") (Forall a. Maybe a)
 --
 --   type Functor f = Functor { map : forall a b. (a -> b) -> f a -> f b }
 -- becomes
---   Var (Free "Functor") (Forall f. { map : Forall a b. (a -> b) -> f a -> f b })
+--   V (Free "Functor") (Forall f. { map : Forall a b. (a -> b) -> f a -> f b })
 --
 translateData :: Can.Data -> TypeM Ctx
 translateData d =
@@ -144,7 +144,7 @@ translateData d =
     -- Construct a (Syn) Scheme for this constructor
     let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
     ty <- quantify tyvars $ foldr S.TyFun resultType (conArgs datacon)
-    pure $ Var (Free (conName datacon)) ty
+    pure $ V (Free (conName datacon)) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
 getFunDecls = getDeclBy $ \case

@@ -13,7 +13,9 @@ import           Text.Megaparsec.Char.Lexer     ( indentGuard
                                                 )
 import qualified Text.Megaparsec.Char.Lexer    as L
 
-import           Syn
+import qualified Syn
+import           Syn                     hiding ( Pattern )
+import           Expr
 
 -- TODO: markdown in comments & doctests
 -- TODO: heredocs
@@ -260,7 +262,7 @@ pType' ctx = case ctx of
 pConType :: Parser Type
 pConType = pType' Paren
 
-pPattern :: Parser Pattern
+pPattern :: Parser Syn.Pattern
 pPattern = pPattern' <|> cons
  where
   tyCon      = uppercaseName
@@ -283,7 +285,7 @@ pPattern = pPattern' <|> cons
     args <- many pPattern
     pure $ ConsPat c args
 
-pPattern' :: Parser Pattern
+pPattern' :: Parser Syn.Pattern
 pPattern' =
   try pIntPat
     <|> pWildPat
@@ -302,7 +304,7 @@ pPattern' =
 -- foo Just x = ...
 -- is not the same as
 -- foo (Just x) = ...
-pCasePattern :: Parser Pattern
+pCasePattern :: Parser Syn.Pattern
 pCasePattern =
   pUnitPat
     <|> parens (try infixBinaryCon <|> tuplePattern <|> pPattern)
@@ -326,25 +328,25 @@ pCasePattern =
     right <- pPattern
     pure $ ConsPat tycon [left, right]
 
-pIntPat :: Parser Pattern
+pIntPat :: Parser Syn.Pattern
 pIntPat = IntPat <$> pInt
 
-pCharPat :: Parser Pattern
+pCharPat :: Parser Syn.Pattern
 pCharPat = CharPat <$> pChar
 
-pWildPat :: Parser Pattern
+pWildPat :: Parser Syn.Pattern
 pWildPat = symbol "_" >> pure WildPat
 
-pListPat :: Parser Pattern
+pListPat :: Parser Syn.Pattern
 pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
 
-pUnitPat :: Parser Pattern
+pUnitPat :: Parser Syn.Pattern
 pUnitPat = symbol "()" >> pure UnitPat
 
-pTuplePat :: Parser Pattern
+pTuplePat :: Parser Syn.Pattern
 pTuplePat = TuplePat <$> parens (pPattern `sepBy2` comma)
 
-pVarPat :: Parser Pattern
+pVarPat :: Parser Syn.Pattern
 pVarPat = VarPat <$> lowercaseName
 
 pInt :: Parser Int
@@ -412,7 +414,7 @@ pRecordProject :: Parser Syn
 pRecordProject = do
   record <- pVar
   void (string ".")
-  Project record <$> lowercaseName
+  Project record <$> lowercaseString
 
 pHole :: Parser Syn
 pHole = do
@@ -577,7 +579,7 @@ pCase = do
   rest        <- many $ try (newline >> string indentation >> pAlt)
   pure $ Case scrutinee (first : rest)
  where
-  pAlt :: Parser (Pattern, Syn)
+  pAlt :: Parser (Syn.Pattern, Syn)
   pAlt = do
     pat <- pCasePattern
     void (symbol "->")
@@ -609,7 +611,7 @@ pMultiCase = do
     pAlt
   pure $ MCase (first : rest)
  where
-  pAlt :: Parser ([Pattern], Syn)
+  pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do
     pats <- some pPattern
     void (symbol "->")
@@ -621,7 +623,7 @@ pRecord :: Parser Syn
 pRecord = Record <$> braces (pField `sepBy1` comma)
  where
   pField = do
-    name <- lowercaseName
+    name <- lowercaseString
     void (symbol "=")
     expr <- pExpr
     pure (name, expr)
