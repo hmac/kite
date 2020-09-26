@@ -2,12 +2,15 @@ module Repl where
 
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Text.Prettyprint.Doc
+import           System.Directory               ( getCurrentDirectory )
+import           System.Environment             ( lookupEnv )
 import           System.IO                      ( stdout
                                                 , hSetBuffering
                                                 , BufferMode(..)
                                                 )
 import           Syn.Parse                      ( pExpr
                                                 , pDecl
+                                                , pImport
                                                 , spaceConsumerN
                                                 )
 import           Text.Megaparsec                ( parse
@@ -21,30 +24,44 @@ import           Text.Megaparsec.Char           ( string )
 import qualified LC.Eval                        ( evalVar )
 import qualified LC.Print                       ( print )
 import           Syn
+import qualified Syn.Print
 import           Data.Name
-import qualified Canonical                     as Can
-import           Canonicalise                   ( canonicaliseModule )
 import qualified ModuleGroupTypechecker
 import           ModuleGroupCompiler            ( CompiledModule(..) )
 import qualified ModuleGroupCompiler
-import           ModuleLoader                   ( ModuleGroup(..) )
+import           ModuleLoader                   ( loadModule )
+import           Util
 
 run :: IO ()
 run = do
   hSetBuffering stdout NoBuffering
+  homeDir <- lookupEnv "KITE_HOME" >>= \case
+    Nothing -> getCurrentDirectory
+    Just d  -> pure d
   putStrLn "Welcome to the Kite REPL."
-  repl []
+  repl Env { root = homeDir, decls = mempty, imports = mempty }
 
-repl :: [Decl Syn] -> IO ()
+data Env = Env { root :: FilePath
+               , decls :: [Decl Syn]
+               , imports :: [Import]
+               }
+
+repl :: Env -> IO ()
 repl env = do
   input <- parseInput
   case input of
     Definition decl -> do
-      let env' = decl : env
+      let env' = env { decls = decl : decls env }
       ok <- processDecl env'
       if ok then repl env' else repl env
     Expression e -> do
       processExpr env e
+      repl env
+    DoImport i -> do
+      env' <- processImport env i
+      repl env'
+    Command PrintModule -> do
+      printModule env
       repl env
     Command Help -> do
       showHelp
@@ -58,57 +75,76 @@ showHelp = do
   putStrLn "Enter an expression to evaluate it"
   putStrLn "Enter a definition to add it to the local environment"
   putStrLn "Or enter a command:"
-  putStrLn ":help - show this help text"
-  putStrLn ":h    - show this help text"
-  putStrLn ":quit - exit the repl"
-  putStrLn ":q    - exit the repl"
+  putStrLn ":help  - show this help text"
+  putStrLn ":h     - show this help text"
+  putStrLn ":print - print the current module"
+  putStrLn ":quit  - exit the repl"
+  putStrLn ":q     - exit the repl"
 
+printModule :: Env -> IO ()
+printModule env = do
+  let m = buildModule env
+  Syn.Print.printNicely (Syn.Print.printModule m)
 
-processDecl :: [Decl Syn] -> IO Bool
-processDecl decls =
-  let g = ModuleGroup (buildModule decls) []
-  in  case ModuleGroupTypechecker.typecheckModuleGroup g of
-        Left err -> do
-          putStrLn $ "Type error: " <> show err
-          pure False
-        Right _ -> do
-          putStrLn "OK."
-          pure True
+processDecl :: Env -> IO Bool
+processDecl env = do
+  mg <- loadModule (root env) (buildModule env)
+  case mg of
+    Left err -> do
+      putStrLn $ "Error: " <> show err
+      pure False
+    Right g -> case ModuleGroupTypechecker.typecheckModuleGroup g of
+      Left err -> do
+        putStrLn $ "Type error: " <> show err
+        pure False
+      Right _ -> do
+        putStrLn "OK."
+        pure True
 
-processExpr :: [Decl Syn] -> Syn -> IO ()
-processExpr decls e =
+processExpr :: Env -> Syn -> IO ()
+processExpr env e =
   let
     main = FunDecl Fun { funComments = []
                        , funName     = "$main"
                        , funType     = Nothing
                        , funExpr     = e
                        }
-    g = ModuleGroup (buildModule (decls ++ [main])) []
+    modul = buildModule env { decls = (decls env ++ [main]) }
   in
-    case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left  err -> putStrLn $ "Type error: " <> show err
-      Right g'  -> do
-        let compiled = ModuleGroupCompiler.compileToLC g'
-        let answer = LC.Eval.evalVar
-              (TopLevel (cModuleName compiled) "$main")
-              (cModuleEnv compiled)
-        renderIO stdout
-                 (layoutSmart defaultLayoutOptions (LC.Print.print answer))
-        putStrLn ""
+    do
+      mg <- loadModule (root env) modul
+      case pTrace mg mg of
+        Left  err -> putStrLn $ "Parse error: " <> show err
+        Right g   -> case ModuleGroupTypechecker.typecheckModuleGroup g of
+          Left  err -> putStrLn $ "Type error: " <> show err
+          Right g'  -> do
+            let compiled = ModuleGroupCompiler.compileToLC g'
+            let answer = LC.Eval.evalVar
+                  (TopLevel (cModuleName compiled) "$main")
+                  (cModuleEnv compiled)
+            renderIO
+              stdout
+              (layoutSmart defaultLayoutOptions (LC.Print.print answer))
+            putStrLn ""
 
-buildModule :: [Decl Syn] -> Can.Module
-buildModule decls = canonicaliseModule Module
-  { moduleName     = ModuleName ["Repl"]
-  , moduleImports  = []
-  , moduleExports  = []
-  , moduleDecls    = decls
-  , moduleMetadata = []
-  }
+processImport :: Env -> Import -> IO Env
+processImport env imp = pure env { imports = imp : imports env }
 
-data Input = Command Command | Expression Syn | Definition (Decl Syn)
+buildModule :: Env -> Module
+buildModule env = Module { moduleName     = ModuleName ["Repl"]
+                         , moduleImports  = imports env
+                         , moduleExports  = []
+                         , moduleDecls    = decls env
+                         , moduleMetadata = []
+                         }
+
+data Input = Command Command
+           | Expression Syn
+           | Definition (Decl Syn)
+           | DoImport Import
   deriving (Eq, Show)
 
-data Command = Help | Quit
+data Command = Help | Quit | PrintModule
   deriving (Eq, Show)
 
 parseInput :: IO Input
@@ -135,8 +171,11 @@ parseInput = go []
       <|> try (Definition <$> pDecl)
       <|> Expression
       <$> pExpr
+      <|> DoImport
+      <$> pImport
   command =
     (string "help" *> pure Help)
       <|> (string "h" *> pure Help)
       <|> (string "quit" *> pure Quit)
       <|> (string "q" *> pure Quit)
+      <|> (string "print" *> pure PrintModule)

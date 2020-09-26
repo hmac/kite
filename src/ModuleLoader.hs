@@ -53,24 +53,26 @@ loadFromPathAndRootDirectory path root = do
   modul <- parseKiteFile <$> readFile path
   case modul of
     Left  err -> pure (Left err)
-    Right m   -> do
-      deps <- mapM (loadAll root) (dependencies m)
-      case sequence deps of
-        Left  err   -> pure (Left err)
-        Right deps' -> case sortModules (nub (concat deps')) of
-          Left err -> pure (Left err)
-          Right sortedDeps ->
-            case expandImports (expandExports m) sortedDeps of
-              Right (expandedModule, expandedDeps) -> pure $ pure $ ModuleGroup
-                (canonicaliseModule expandedModule)
-                (map canonicaliseModule expandedDeps)
-              Left (ExpandImports.CannotFindModule importingModule missingModule)
-                -> pure
-                  $  Left
-                  $  "In "
-                  <> showModuleName importingModule
-                  <> ", cannot find module "
-                  <> showModuleName missingModule
+    Right m   -> loadModule root m
+
+loadModule :: FilePath -> Module -> IO (Either String UntypedModuleGroup)
+loadModule root m = do
+  deps <- mapM (loadAll root) (dependencies m)
+  case sequence deps of
+    Left  err   -> pure (Left err)
+    Right deps' -> case sortModules (nub (concat deps')) of
+      Left  err        -> pure (Left err)
+      Right sortedDeps -> case expandImports (expandExports m) sortedDeps of
+        Right (expandedModule, expandedDeps) -> pure $ pure $ ModuleGroup
+          (canonicaliseModule expandedModule)
+          (map canonicaliseModule expandedDeps)
+        Left (ExpandImports.CannotFindModule importingModule missingModule) ->
+          pure
+            $  Left
+            $  "In "
+            <> showModuleName importingModule
+            <> ", cannot find module "
+            <> showModuleName missingModule
 
 loadAll :: FilePath -> ModuleName -> IO (Either String [Module])
 loadAll root name = do

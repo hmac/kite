@@ -6,6 +6,8 @@ import           Data.List                      ( intersperse )
 import           Prelude                 hiding ( mod )
 
 import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           System.IO                      ( stdout )
 
 import qualified Syn
 import           Syn                     hiding ( Pattern )
@@ -370,3 +372,21 @@ htupled elems = mconcat (zipWith (<>) (lparen : repeat comma) elems) <> rparen
 -- Like braces but will pad with a space on either side
 braces' :: Doc a -> Doc a
 braces' d = "{" <+> d <+> "}"
+
+-- IO helpers
+
+layout :: Document -> SimpleDocStream AnsiStyle
+layout doc = reAnnotateS styleToColor (layoutSmart defaultLayoutOptions doc)
+
+printNicely :: Document -> IO ()
+printNicely doc = renderIO stdout (layout doc) >> putStrLn ""
+
+-- Conor Colours
+-- https://github.com/idris-lang/Idris-dev/blob/master/docs/reference/semantic-highlighting.rst
+styleToColor :: Style -> AnsiStyle
+styleToColor VarStyle      = color Magenta
+styleToColor KeywordStyle  = bold
+styleToColor FunctionStyle = color Green
+styleToColor TypeStyle     = color Blue
+styleToColor DataStyle     = color Red
+styleToColor HoleStyle     = color Magenta <> italicized

@@ -4,9 +4,6 @@ module Main where
 import           Syn.Print
 
 import           Text.Pretty.Simple             ( pPrint )
-import           Data.Text.Prettyprint.Doc.Render.Terminal
-import           Data.Text.Prettyprint.Doc
-import           System.IO                      ( stdout )
 import           System.Environment             ( lookupEnv )
 import           System.Directory               ( getCurrentDirectory )
 import           Control.Monad                  ( void )
@@ -125,19 +122,3 @@ withParsedFile homeDir cb path = do
   case mgroup of
     Left  e -> putStrLn e
     Right g -> cb g
-
-layout :: Document -> SimpleDocStream AnsiStyle
-layout doc = reAnnotateS styleToColor (layoutSmart defaultLayoutOptions doc)
-
-printNicely :: Document -> IO ()
-printNicely doc = renderIO stdout (layout doc) >> putStrLn ""
-
--- Conor Colours
--- https://github.com/idris-lang/Idris-dev/blob/master/docs/reference/semantic-highlighting.rst
-styleToColor :: Style -> AnsiStyle
-styleToColor VarStyle      = color Magenta
-styleToColor KeywordStyle  = bold
-styleToColor FunctionStyle = color Green
-styleToColor TypeStyle     = color Blue
-styleToColor DataStyle     = color Red
-styleToColor HoleStyle     = color Magenta <> italicized
