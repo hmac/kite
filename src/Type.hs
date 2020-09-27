@@ -535,17 +535,17 @@ splitAt e = \case
   (e' : ctx) | e' == e -> ([], ctx)
   (c : ctx)            -> let (l, r) = splitAt e ctx in (c : l, r)
 
-dropAfter' :: CtxElem -> TypeM ()
-dropAfter' e = do
+dropAfter :: CtxElem -> TypeM ()
+dropAfter e = do
   ctx <- getCtx
-  putCtx (dropAfter e ctx)
+  putCtx (dropAfter' e ctx)
 
 -- | Drop all context elements after a particular element, inclusive
-dropAfter :: CtxElem -> Ctx -> Ctx
-dropAfter e = \case
+dropAfter' :: CtxElem -> Ctx -> Ctx
+dropAfter' e = \case
   [] -> []
   (e' : ctx) | e' == e   -> ctx
-             | otherwise -> dropAfter e ctx
+             | otherwise -> dropAfter' e ctx
 
 -- Check if a type is well-formed
 wellFormedType :: Type -> TypeM ()
@@ -640,13 +640,13 @@ subtype typeA typeB = do
     (a, Forall u b) -> do
       void $ extendU u
       subtype a b
-      dropAfter' (UVar u)
+      dropAfter (UVar u)
     (Forall u a, b) -> do
       alpha <- newE
       void $ extendMarker alpha
       void $ extendE alpha
       subtype (substEForU alpha u a) b
-      dropAfter' (Marker alpha)
+      dropAfter (Marker alpha)
     (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateL e a
     (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
@@ -728,12 +728,12 @@ instantiate dir e ty = do
       L -> do
         extendU u
         instantiate dir e a
-        dropAfter' (UVar u)
+        dropAfter (UVar u)
       R -> do
         beta <- newE
         extendMarker beta >> extendE beta
         instantiate dir e (substEForU beta u a)
-        dropAfter' (Marker beta)
+        dropAfter (Marker beta)
     TCon c [EType b] -> do
       -- hmac: custom rule for type applications
       -- G [e3, e1 = A e3][e2] |- e2 :=< e3   -| G'
@@ -764,11 +764,11 @@ check expr ty = do
     (Abs (x : xs) e, Fn a b) -> do
       void $ extendV x a
       _ <- check (Abs xs e) b
-      dropAfter' (V x a)
+      dropAfter (V x a)
     (e, Forall u a) -> do
       extendU u
       check e a
-      dropAfter' (UVar u)
+      dropAfter (UVar u)
     (Hole n        , a) -> throwError $ CannotCheckHole (Hole n) a
     (Let binds body, _) -> do
       -- generate a dummy existential that we'll use to cut the context
@@ -784,7 +784,7 @@ check expr ty = do
       check body ty
 
       -- drop all these variables off the context
-      dropAfter' (Marker alpha)
+      dropAfter (Marker alpha)
     (FCall name args, _) -> do
       case lookup name fcallInfo of
         Just fCallTy -> do
@@ -821,7 +821,7 @@ checkMCaseAlt patTys rhsTy (pats, rhs) = do
   check rhs rhsTy
 
   -- drop all context elements after and including the marker
-  dropAfter' (Marker alpha)
+  dropAfter (Marker alpha)
 
 -- Like infer but applies the resulting substitution to the type and returns
 -- just the type.
@@ -850,7 +850,7 @@ infer expr_ = do
       beta  <- newE
       extendE alpha >> extendE beta >> extendV x (EType alpha)
       _ <- check (Abs xs e) (EType beta)
-      dropAfter' (V x (EType alpha))
+      dropAfter (V x (EType alpha))
       pure $ Fn (EType alpha) (EType beta)
     Hole n                     -> throwError $ CannotInferHole (Hole n)
     Con  x                     -> lookupV x
@@ -886,7 +886,7 @@ infer expr_ = do
       bodyType  <- infer body
       -- drop the context after the binding
       bodyType' <- subst bodyType
-      dropAfter' (V name ty)
+      dropAfter (V name ty)
       pure bodyType'
     Let binds body -> do
       -- generate a dummy existential that we'll use to cut the context
@@ -902,7 +902,7 @@ infer expr_ = do
 
       -- drop all these variables off the context
       ty' <- subst ty
-      dropAfter' (Marker alpha)
+      dropAfter (Marker alpha)
       pure ty'
     StringInterp prefix comps -> do
       -- Construct a nested application of appendString and infer the type of that
