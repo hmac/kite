@@ -1,0 +1,4 @@
+module BadPatternMatch
+
+foo : Int -> Int
+foo = True -> 0

@@ -51,6 +51,11 @@ toRaw (TopLevel _ n) = n
 toString :: Name -> String
 toString = show . toRaw
 
+-- If the name belongs to the module given, drop the module prefix.
+localise :: ModuleName -> Name -> Name
+localise modName (TopLevel modName' n) | modName == modName' = Local n
+localise _ n = n
+
 -- If the name contains no dots, interpret it as local
 -- If it contains dots, interpret it as a top level name qualified with a
 -- module.

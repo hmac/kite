@@ -7,6 +7,7 @@ module Type
   , Exp
   , V(..)
   , U(..)
+  , E(..)
   , Pattern
   , Pat(..)
   , unfoldFn
@@ -572,7 +573,7 @@ data TypeEnv =
           } deriving (Eq, Show)
 
 defaultTypeEnv :: TypeEnv
-defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = False }
+defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = True }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
@@ -632,21 +633,30 @@ subtype typeA typeB = do
   trace' ["subtype", debug typeA, debug typeB] $ case (typeA, typeB) of
     (UType a, UType a') | a == a' -> lookupU a
     (EType a, EType a') | a == a' -> lookupE a
-    (Fn a1 a2, Fn b1 b2)          -> do
-      subtype b1 a1
-      a2' <- subst a2
-      b2' <- subst b2
-      subtype a2' b2'
-    (a, Forall u b) -> do
-      void $ extendU u
-      subtype a b
-      dropAfter (UVar u)
-    (Forall u a, b) -> do
-      alpha <- newE
-      void $ extendMarker alpha
-      void $ extendE alpha
-      subtype (substEForU alpha u a) b
-      dropAfter (Marker alpha)
+    (Fn a1 a2, Fn b1 b2) ->
+      (do
+          subtype b1 a1
+          a2' <- subst a2
+          b2' <- subst b2
+          subtype a2' b2'
+        )
+        `catchError` (\_ -> throwError $ SubtypingFailure (Fn a1 a2) (Fn b1 b2))
+    (a, Forall u b) ->
+      (do
+          void $ extendU u
+          subtype a b
+          dropAfter (UVar u)
+        )
+        `catchError` (\_ -> throwError $ SubtypingFailure a (Forall u b))
+    (Forall u a, b) ->
+      (do
+          alpha <- newE
+          void $ extendMarker alpha
+          void $ extendE alpha
+          subtype (substEForU alpha u a) b
+          dropAfter (Marker alpha)
+        )
+        `catchError` (\_ -> throwError $ SubtypingFailure (Forall u a) b)
     (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateL e a
     (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
@@ -1025,8 +1035,12 @@ inferPattern pattern = do
 checkPattern :: Pattern -> Type -> TypeM ()
 checkPattern pat ty = do
   trace' ["checkPattern", debug pat, ":", debug ty] $ case pat of
-    WildPat             -> pure ()
-    VarPat  x           -> void $ extendV x ty
+    WildPat  -> pure ()
+    VarPat x -> do
+      ctx <- getCtx
+      if x `elem` domV ctx
+        then throwError (DuplicateVariable x)
+        else void $ extendV x ty
     IntPat  _           -> subtype ty int
     CharPat _           -> subtype ty char
     BoolPat _           -> subtype ty bool
@@ -1167,6 +1181,7 @@ data Error = TodoError String
            | NotARecordType Type
            | CannotInferFCall Exp
            | TooManyPatterns
+           | DuplicateVariable V
            deriving (Eq, Show)
 
 todoError :: String -> TypeM a
