@@ -402,8 +402,11 @@ pBinApp = do
 
 pApp :: Parser Syn
 pApp = do
+  pos   <- indentLevel
   first <- pExpr'
-  rest  <- some pExpr'
+  skipNewlines
+  void $ indentGuard spaceConsumerN GT pos
+  rest <- some pExpr'
   pure $ foldl1 App (first : rest)
 
 -- foo.bar
@@ -520,23 +523,29 @@ pAbs = do
   void (symbol "->")
   Abs args <$> pExpr
 
+-- let foo = 1 in foo
+--
 -- let foo = 1
 --     bar = 2
---  in x
+--  in foo
+--
+-- let foo = 1
+--      bar = 2
+--  in foo
 pLet :: Parser Syn
 pLet = do
   void (symbolN "let")
-  binds <- many (lexemeN pBind)
+  pos <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
+  let pBind :: Parser (RawName, Syn)
+      pBind = do
+        void $ indentGuard spaceConsumerN GT pos
+        var <- lowercaseName
+        void (symbol "=")
+        val <- lexemeN pExpr
+        pure (var, val)
+  binds <- some pBind
   void (symbolN "in")
   Let binds <$> pExpr
- where
-  pBind :: Parser (RawName, Syn)
-  pBind = do
-    var <- lowercaseName
-    void (symbol "=")
-    val <- pExpr
-    lexemeN (void newline)
-    pure (var, val)
 
 pTuple :: Parser Syn
 pTuple = do
@@ -730,6 +739,10 @@ indent = char ' ' >> skipSome (char ' ')
 -- Skip one or more space characters
 someSpace :: Parser ()
 someSpace = skipSome (char ' ')
+
+-- Skip zero or more newlines
+skipNewlines :: Parser ()
+skipNewlines = skipMany newline
 
 parens :: Parser p -> Parser p
 parens = between (symbol "(") (symbol ")")

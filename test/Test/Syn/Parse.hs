@@ -227,10 +227,36 @@ test = parallel $ do
     it "parses a case with variable patterns" $ do
       parse pExpr "" "case x of\n  y -> y"
         `shouldParse` Case (Var "x") [(VarPat "y", Var "y")]
-    it "parses a let expression" $ do
+    it "parses a let expression on one line" $ do
+      parse pExpr "" "let x = 1 in add x 1"
+        `shouldParse` Let
+                        [("x", IntLit 1)]
+                        (App (App (Var "add") (Var "x")) (IntLit 1))
+    it "parses a let expression split over two lines" $ do
       parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
         [("x", IntLit 1), ("y", IntLit 2)]
         (App (App (Var "add") (Var "x")) (Var "y"))
+    it "parses a let expression with a multiline binding" $ do
+      -- let x = foo
+      --          bar
+      --     y = baz
+      --  in x
+      parseExpr "let x = foo\n         bar\n    y = baz\n in x"
+        `shouldParse` Let
+                        [("x", App (Var "foo") (Var "bar")), ("y", Var "baz")]
+                        (Var "x")
+    it "parses an annotated let expression" $ do
+      parseExpr "let f : Int -> Int\n    f = i -> i + 1\n in f 1"
+        `shouldParse` LetA
+                        "f"
+                        (TyFun TyInt TyInt)
+                        (MCase
+                          [ ( [VarPat "i"]
+                            , App (App (Var "+") (Var "i")) (IntLit 1)
+                            )
+                          ]
+                        )
+                        (App (Var "f") (IntLit 1))
     it "parses a binary operator" $ do
       parse pExpr "" "1 + 1"
         `shouldParse` App (App (Var "+") (IntLit 1)) (IntLit 1)
@@ -356,4 +382,3 @@ test = parallel $ do
           `fn` (TyVar "f" `tyapp` TyVar "b")
           )
         )
-
