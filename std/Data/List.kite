@@ -8,6 +8,10 @@ module Data.List
   , length
   , reverse
   , intersperse
+  , semigroupList
+  , functorList
+  , applicativeList
+  , monadList
   )
 
 import Kite.Primitive (Bool, True, False)
@@ -17,6 +21,8 @@ import Data.Bool (and)
 import Data.Monoid (Monoid(..))
 import Kite.List (foldr)
 import Data.Functor (Functor(..))
+import Data.Applicative (Applicative(..))
+import Data.Monad (Monad(..))
 
 semigroupList : Semigroup [a]
 semigroupList = Semigroup { append = listAppend }
@@ -34,6 +40,20 @@ functorList = Functor { map = mapList }
 mapList : (a -> b) -> [a] -> [b]
 mapList = _ [] -> []
           f (x :: xs) -> (f x) :: (mapList f xs)
+
+applicativeList : Applicative []
+applicativeList = Applicative { functor = functorList, pure = x -> [x], ap = apList }
+
+apList : [a -> b] -> [a] -> [b]
+apList = [] xs -> []
+         (f :: fs) xs -> listAppend (mapList f xs) (apList fs xs)
+
+monadList : Monad []
+monadList = Monad { applicative = applicativeList, bind = bindList }
+
+bindList : [a] -> (a -> [b]) -> [b]
+bindList = [] f        -> []
+           (x :: xs) f -> listAppend (f x) (bindList xs f)
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.

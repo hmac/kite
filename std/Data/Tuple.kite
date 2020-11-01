@@ -1,0 +1,19 @@
+module Data.Tuple
+
+fst : (a, b) -> a
+fst = (x, _) -> x
+
+snd : (a, b) -> b
+snd = (_, y) -> y
+
+first : (a -> b) -> (a, c) -> (b, c)
+first = f (x, y) -> (f x, y)
+
+second : (b -> c) -> (a, b) -> (a, c)
+second = f (x, y) -> (x, f y)
+
+curry : ((a, b) -> c) -> a -> b -> c
+curry = f x y -> f (x, y)
+
+uncurry : (a -> b -> c) -> (a, b) -> c
+uncurry = f (x, y) -> f x y

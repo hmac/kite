@@ -1,6 +1,11 @@
 module Data.Char
 
+import Kite.Primitive ($eqChar, $showChar)
 import Data.Show (Show(..))
+import Data.Eq (Eq(..))
 
 showChar : Show Char
-showChar = Show { show = \c -> $fcall showChar c }
+showChar = Show { show = \c -> $showChar c }
+
+eqChar : Eq Char
+eqChar = Eq { eq = $eqChar }

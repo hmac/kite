@@ -8,7 +8,7 @@ pure : Applicative f -> a -> f a
 pure = (Applicative d) -> d.pure
 
 -- Sequential application.
--- This is identical to <$> in Haskell.
+-- This is identical to <*> in Haskell.
 ap : Applicative f -> f (a -> b) -> f a -> f b
 ap = (Applicative d) -> d.ap
 

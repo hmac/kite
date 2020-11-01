@@ -1,0 +1,105 @@
+module Text.Parser
+
+import Data.String (chars, fromChars, consChar, unconsChar)
+import Data.Char (eqChar)
+import Data.Functor (Functor(Functor), map)
+import Data.Tuple (first, uncurry)
+import Data.List (head, functorList, monoidList, semigroupList)
+import Data.Applicative (Applicative(Applicative), ap)
+import Data.Monad (Monad(..), sequence)
+import Data.Monoid (concat)
+import Data.Semigroup (append)
+import Data.Eq (eq)
+import Data.Bool (or, monoidAny)
+import Data.Maybe (Maybe(..))
+
+
+main : [(String, String)]
+main = run (plus nonEmptyWord (result "")) "apple pie"
+
+type Parser a = P (String -> [(a, String)])
+
+run : Parser a -> String -> [(a, String)]
+run = (P f) -> f
+
+functor : Functor Parser
+functor = Functor { map = mapParser }
+
+mapParser : (a -> b) -> Parser a -> Parser b
+mapParser = f (P p) -> P (input -> map functorList (first f) (p input))
+
+applicative : Applicative Parser
+applicative = Applicative { functor = functor, pure = result, ap = apParser }
+
+apParser : Parser (a -> b) -> Parser a -> Parser b
+apParser = pf pa -> bind pf (x1 -> bind pa (x2 -> result (x1 x2)))
+
+monad : Monad Parser
+monad = Monad { applicative = applicative, bind = bind }
+
+bind : Parser a -> (a -> Parser b) -> Parser b
+bind = (P p) f -> P (bindHelper1 p f)
+
+bindHelper1 : (String -> [(a, String)]) -> (a -> Parser b) -> String -> [(b, String)]
+bindHelper1 = p f input -> concat monoidList (map functorList (bindHelper2 f) (p input))
+
+bindHelper2 : (a -> Parser b) -> (a, String) -> [(b, String)]
+bindHelper2 = f (x, input) -> run (f x) input
+
+result : a -> Parser a
+result = v -> P (input -> [(v, input)])
+
+zero : Parser a
+zero = P (_ -> [])
+
+plus : Parser a -> Parser a -> Parser a
+plus = p q -> P (\input -> case run p input of
+                             [] -> run q input
+                             r -> r)
+
+item : Parser Char
+item = P (input -> case unconsChar input of
+                     Nothing -> []
+                     Just (c, s) -> [(c, s)])
+
+sat : (Char -> Bool) -> Parser Char
+sat = p -> bind item (x -> case p x of
+                             True -> result x
+                             False -> zero)
+
+char : Char -> Parser Char
+char = x -> sat (y -> eq eqChar x y)
+
+oneOfLit : [Char] -> Parser Char
+oneOfLit = cs -> sat (x -> concat monoidAny (map functorList (eq eqChar x) cs))
+
+digit : Parser Char
+digit = oneOfLit ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+
+lower : Parser Char
+lower = oneOfLit ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+                  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+
+upper : Parser Char
+upper = oneOfLit ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+
+letter : Parser Char
+letter = plus lower upper
+
+alphanum : Parser Char
+alphanum = plus letter digit
+
+word : Parser String
+word = plus nonEmptyWord (result "")
+
+nonEmptyWord : Parser String
+nonEmptyWord = bind letter (\x -> bind word (\w -> result (consChar x w)))
+
+string : String -> Parser String
+string = str -> case unconsChar str of
+                  Nothing -> result ""
+                  Just (c, s) -> sequence monad (char c) (sequence monad (string s) (result str))
+
+many : Parser a -> Parser [a]
+many = p -> plus (bind p (\x -> bind (many p) (\xs -> result (x :: xs)))) (result [])

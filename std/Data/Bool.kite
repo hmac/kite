@@ -1,7 +1,7 @@
 module Data.Bool
 
 import Kite.Bool (not)
-
+import Data.Monoid (Monoid(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Eq (Eq(..))
 import Data.Ord (Ord(..), Ordering(..))
@@ -27,12 +27,17 @@ all = []           -> True
       (True :: bs) -> all bs
       (False :: _) -> False
 
--- This is the All semigroup
-semigroupBool : Semigroup Bool
-semigroupBool = Semigroup { append = appendBool }
+semigroupAll : Semigroup Bool
+semigroupAll = Semigroup { append = and }
 
-appendBool : Bool -> Bool -> Bool
-appendBool = and
+monoidAll : Monoid Bool
+monoidAll = Monoid { empty = True, semigroup = semigroupAll }
+
+semigroupAny : Semigroup Bool
+semigroupAny = Semigroup { append = or }
+
+monoidAny : Monoid Bool
+monoidAny = Monoid { empty = False, semigroup = semigroupAny }
 
 eqBool : Eq Bool
 eqBool = Eq { eq = xnor }

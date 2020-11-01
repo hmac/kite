@@ -1,14 +1,25 @@
 module Data.String
 
+import Kite.Primitive ($chars, $consChar, $unconsChar)
 import Data.Monoid (concat)
 import Data.Show (show)
 import Data.Char (showChar)
 import Kite.String (monoidString)
 import Data.Functor (map)
 import Data.List (functorList)
+import Data.Maybe (Maybe(..))
 
 chars : String -> [Char]
-chars = s -> $fcall chars s
+chars = s -> $chars s
 
 fromChars : [Char] -> String
 fromChars = cs -> concat monoidString (map functorList (show showChar) cs)
+
+consChar : Char -> String -> String
+consChar = c s -> $consChar c s
+
+unconsChar : String -> Maybe (Char, String)
+unconsChar = s -> $unconsChar s Nothing unconsCharHelper
+
+unconsCharHelper : Char -> String -> Maybe (Char, String)
+unconsCharHelper = c s -> Just (c, s)
