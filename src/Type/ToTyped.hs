@@ -66,8 +66,11 @@ convertExpr = \case
   App a  b  -> T.AppT (convertExpr a) (convertExpr b) unknown
   LetA n ty v e ->
     T.LetAT n (convertType ty) (convertExpr v) (convertExpr e) unknown
-  Let  binds e    -> T.LetT (mapSnd convertExpr binds) (convertExpr e) unknown
-  Case s     alts -> T.CaseT (convertExpr s) (map convertAlt alts) unknown
+  Let binds e -> T.LetT
+    (map (\(n, v, ty) -> (n, convertExpr v, convertType <$> ty)) binds)
+    (convertExpr e)
+    unknown
+  Case s alts -> T.CaseT (convertExpr s) (map convertAlt alts) unknown
   MCase alts ->
     T.MCaseT (map (bimap (map convertPattern) convertExpr) alts) unknown
   UnitLit              -> T.UnitLitT

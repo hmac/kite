@@ -141,7 +141,7 @@ canonicaliseExp env = go
           | otherwise       -> Con $ canonicaliseName env n
     Abs ns    e      -> Abs (fmap Local ns) $ go (ns <> locals) e
     App a     b      -> App (go locals a) (go locals b)
-    Let binds e      -> canonicaliseLet (binds, e)
+    Let binds e      -> canonicaliseLet binds e
     LetA n ty e body -> LetA (canonicaliseName env n)
                              (canonicaliseType env ty)
                              (go locals e)
@@ -161,23 +161,25 @@ canonicaliseExp env = go
     Project r    l         -> Project (go locals r) l
     FCall   proc args      -> FCall proc (map (go locals) args)
    where
-    canonicaliseLet :: ([(RawName, Syn.Syn)], Syn.Syn) -> Can.Exp
-    canonicaliseLet (binds, e) =
-      let (locals', binds') = foldl
-            (\(locals_, acc) (varName, expr) ->
-              -- Note: to handle recursive lets, here we would extend the set of
-              -- locals with the variable name before canonicalising the bound
-              -- expression. We currently don't do that because Kite's evaluation
-              -- strategy is strict and the naive evaluation of recursive lets
-              -- doesn't terminate. I'm not yet sure if we should support
-              -- recursive lets at all - maybe you should always write a
-              -- separate function if you want recursion?
-              let b = (Local varName, go locals_ expr)
-              in  (varName : locals_, b : acc)
-            )
-            (locals, [])
-            binds
-      in  Let binds' (go locals' e)
+    canonicaliseLet
+      :: [(RawName, Syn.Syn, Maybe Syn.Type)] -> Syn.Syn -> Can.Exp
+    canonicaliseLet binds expr =
+      let
+        (locals', binds') = foldl
+          (\(locals_, acc) (varName, e, ty) ->
+            -- Note: to handle recursive lets, here we would extend the set of
+            -- locals with the variable name before canonicalising the bound
+            -- expression. We currently don't do that because Kite's evaluation
+            -- strategy is strict and the naive evaluation of recursive lets
+            -- doesn't terminate. I'm not yet sure if we should support
+            -- recursive lets at all - maybe you should always write a
+            -- separate function if you want recursion?
+            let b = (Local varName, go locals_ e, canonicaliseType env <$> ty)
+            in  (varName : locals_, b : acc)
+          )
+          (locals, [])
+          binds
+      in  Let binds' (go locals' expr)
 
     canonicaliseCase :: (Syn.Syn, [(Syn.Pattern, Syn.Syn)]) -> Can.Exp
     canonicaliseCase (e, alts) =

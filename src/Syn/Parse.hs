@@ -536,13 +536,13 @@ pLet :: Parser Syn
 pLet = do
   void (symbolN "let")
   pos <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
-  let pBind :: Parser (RawName, Syn)
+  let pBind :: Parser (RawName, Syn, Maybe Type)
       pBind = do
         void $ indentGuard spaceConsumerN GT pos
         var <- lowercaseName
         void (symbol "=")
         val <- lexemeN pExpr
-        pure (var, val)
+        pure (var, val, Nothing)
   binds <- some pBind
   void (symbolN "in")
   Let binds <$> pExpr

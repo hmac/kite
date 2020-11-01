@@ -217,7 +217,7 @@ translateExpr env = \case
     pure $ buildAbs body (map (VarPat . fst) vars)
   T.LetT alts expr _ -> do
     alts' <- mapM
-      (\(n, e) -> do
+      (\(n, e, _type) -> do
         e' <- translateExpr env e
         pure (VarPat n, e')
       )

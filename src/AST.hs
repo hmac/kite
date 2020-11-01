@@ -22,7 +22,7 @@ data Expr n t = Var n
          -- Note: the parser can't currently produce LetAs but the typechecker
          -- can nonetheless handle them.
          | LetA n t (Expr n t) (Expr n t)
-         | Let [(n, Expr n t)] (Expr n t)
+         | Let [(n, Expr n t, Maybe t)] (Expr n t)
          | Case (Expr n t) [(Pat n, Expr n t)]
          | MCase [([Pat n], Expr n t)]
          | UnitLit
@@ -61,9 +61,14 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
       <+> debug body
   debug (Let binds e) =
     "let"
-      <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc)
-                ("in" <+> debug e)
-                binds
+      <+> foldl
+            (\acc (x, a, t) -> case t of
+              Just t' ->
+                debug x <+> ":" <+> debug t' <+> "=" <+> debug a <> ";" <+> acc
+              Nothing -> debug x <+> "=" <+> debug a <> ";" <+> acc
+            )
+            ("in" <+> debug e)
+            binds
   debug (StringLit s) = "\"" <> s <> "\""
   debug (StringInterp s comps) =
     let compStr =
@@ -91,7 +96,7 @@ data ExprT n t =
   | AbsT [(n, t)] (ExprT n t) t
   | AppT (ExprT n t) (ExprT n t) t
   | LetAT n t (ExprT n t) (ExprT n t) t
-  | LetT [(n, ExprT n t)] (ExprT n t) t
+  | LetT [(n, ExprT n t, Maybe t)] (ExprT n t) t
   | CaseT (ExprT n t) [(Pat n, ExprT n t)] t
   | MCaseT [([Pat n], ExprT n t)] t
   | UnitLitT
@@ -131,9 +136,14 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
       <+> debug body
   debug (LetT binds e _) =
     "let"
-      <+> foldl (\acc (x, a) -> debug x <+> "=" <+> debug a <> ";" <+> acc)
-                ("in" <+> debug e)
-                binds
+      <+> foldl
+            (\acc (x, a, t) -> case t of
+              Just t' ->
+                debug x <+> ":" <+> debug t' <+> "=" <+> debug a <> ";" <+> acc
+              Nothing -> debug x <+> "=" <+> debug a <> ";" <+> acc
+            )
+            ("in" <+> debug e)
+            binds
   debug (StringLitT s) = "\"" <> s <> "\""
   debug (StringInterpT s comps) =
     let compStr =

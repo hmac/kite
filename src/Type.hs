@@ -800,7 +800,7 @@ check expr ty = do
       void $ extendMarker alpha
 
       -- infer the type of each binding, adding to the context as we go
-      forM_ (reverse binds) $ \(x, e) -> do
+      forM_ (reverse binds) $ \(x, e, _type) -> do
         a <- infer e
         extendV x a
 
@@ -925,7 +925,7 @@ infer expr_ = do
       void $ extendMarker alpha
 
       -- infer the type of each binding, adding to the context as we go
-      forM_ (reverse binds) $ \(x, e) -> do
+      forM_ (reverse binds) $ \(x, e, _type) -> do
         a <- infer e
         extendV x a
       -- infer the type of the body

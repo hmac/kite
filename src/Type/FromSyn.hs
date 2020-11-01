@@ -18,8 +18,10 @@ import           AST
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
   LetA x ty e body -> do
-    e' <- Ann <$> fromSyn e <*> convertType mempty ty
-    Let [(T.Free x, e')] <$> fromSyn body
+    ty' <- convertType mempty ty
+    -- TODO: remove annotation once we handle types in lets properly
+    e'  <- Ann <$> fromSyn e <*> pure ty'
+    Let [(T.Free x, e', Just ty')] <$> fromSyn body
   Var n   -> pure $ Var (T.Free n)
   Con n   -> pure $ Con (T.Free n)
   Ann e t -> Ann <$> fromSyn e <*> convertType mempty t
@@ -36,7 +38,13 @@ fromSyn = \case
     pure $ Abs (map T.Free xs) a'
   Let binds body -> do
     body'  <- fromSyn body
-    binds' <- mapM (bimapM (pure . T.Free) fromSyn) binds
+    binds' <- mapM
+      (\(n, e, t) -> do
+        let t' = maybe (pure Nothing) ((fmap Just) . convertType mempty) t
+        (T.Free n, , ) <$> fromSyn e <*> t'
+      )
+      binds
+
     pure $ Let binds' body'
   UnitLit      -> pure UnitLit
   TupleLit  es -> TupleLit <$> mapM fromSyn es

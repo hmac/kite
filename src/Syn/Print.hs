@@ -277,11 +277,17 @@ printList es = nest
 --  in expr
 --
 --  The hang (-3) pushes 'in' back to end in line with 'let'
-printLet :: [(RawName, Syn)] -> Syn -> Document
+printLet :: [(RawName, Syn, Maybe Type)] -> Syn -> Document
 printLet binds e = keyword "let" <+> hang
   (-3)
   (vsep [hang 0 (vsep (map printLetBind binds)), keyword "in" <+> printExpr e])
-  where printLetBind (name, expr) = printName name <+> "=" <+> printExpr expr
+ where
+  printLetBind (name, expr, Nothing) =
+    printName name <+> "=" <+> printExpr expr
+  printLetBind (name, expr, Just ty) = vsep
+    [ printName name <+> ":" <+> printType ty
+    , printLetBind (name, expr, Nothing)
+    ]
 
 printLetA :: RawName -> Type -> Syn -> Syn -> Document
 printLetA name ty val body = keyword "letA" <+> hang
