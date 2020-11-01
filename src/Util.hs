@@ -173,4 +173,4 @@ instance Debug Char where
   debug c = [c]
 
 instance Debug a => Debug [a] where
-  debug xs = concat (map debug xs)
+  debug xs = concatMap debug xs

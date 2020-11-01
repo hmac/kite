@@ -1,6 +1,7 @@
 module Repl where
 
 import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Data.Functor                   ( ($>) )
 import           Data.Text.Prettyprint.Doc
 import           System.IO                      ( stdout
                                                 , hSetBuffering
@@ -136,7 +137,7 @@ parseInput = go []
       <|> Expression
       <$> pExpr
   command =
-    (string "help" *> pure Help)
-      <|> (string "h" *> pure Help)
-      <|> (string "quit" *> pure Quit)
-      <|> (string "q" *> pure Quit)
+    (string "help" $> Help)
+      <|> (string "h" $> Help)
+      <|> (string "quit" $> Quit)
+      <|> (string "q" $> Quit)

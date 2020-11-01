@@ -1,5 +1,4 @@
 .stack-work/
-lam.cabal
 *~
 .envrc
 dist/

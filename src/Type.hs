@@ -138,14 +138,33 @@ primitiveConstructors =
   ]
 
 -- Primitive functions
+-- Note: the type of unconsChar is weird because we want to implement it
+-- without any knowledge of the runtime structure of complex types like tuples
+-- or Maybe, since that may change in the future.
 primitiveFns :: Ctx
 primitiveFns =
   [ V (Free "Kite.Primitive.appendString") (Fn string (Fn string string))
-  , V (Free "Kite.Primitive.+")            (Fn int (Fn int int))
-  , V (Free "Kite.Primitive.-")            (Fn int (Fn int int))
-  , V (Free "Kite.Primitive.*")            (Fn int (Fn int int))
-  , V (Free "Kite.Primitive.$showInt")     (Fn int string)
-  , V (Free "Kite.Primitive.$eqInt")       (Fn int (Fn int bool))
+  , V (Free "Kite.Primitive.$chars")       (Fn string (list char))
+  , V (Free "Kite.Primitive.$consChar")    (Fn char (Fn string string))
+  -- unconsChar : String -> a -> (Char -> String -> a) -> a
+  , let a = U 0 "a"
+    in
+      V
+        (Free "Kite.Primitive.$unconsChar")
+
+        (Forall
+          a
+          (Fn string
+              (Fn (UType a) (Fn (Fn char (Fn string (UType a))) (UType a)))
+          )
+        )
+  , V (Free "Kite.Primitive.+")         (Fn int (Fn int int))
+  , V (Free "Kite.Primitive.-")         (Fn int (Fn int int))
+  , V (Free "Kite.Primitive.*")         (Fn int (Fn int int))
+  , V (Free "Kite.Primitive.$showInt")  (Fn int string)
+  , V (Free "Kite.Primitive.$showChar") (Fn char string)
+  , V (Free "Kite.Primitive.$eqInt")    (Fn int (Fn int bool))
+  , V (Free "Kite.Primitive.$eqChar")   (Fn char (Fn char bool))
   ]
 
 primCtx :: Ctx
@@ -180,8 +199,6 @@ fcallInfo =
       (Fn (UType (U 0 "a")) (TApp io [UType (U 1 "b")]))
       (TApp io [UType (U 1 "b")])
     )
-  , ("chars"   , Fn string (list char))
-  , ("showChar", Fn char string)
   ]
 
 -- | Types
@@ -487,17 +504,15 @@ call m = do
 extendU :: U -> TypeM ()
 extendU u = do
   ctx <- getCtx
-  case u `elem` domU ctx of
-    True  -> todoError "extendU failed"
-    False -> pushCtx (UVar u)
+  if u `elem` domU ctx then todoError "extendU failed" else pushCtx (UVar u)
 
 -- | Extend the current context with a bound variable
 extendV :: V -> Type -> TypeM ()
 extendV v t = do
   ctx <- getCtx
-  case v `elem` domV ctx of
-    True  -> todoError $ "extendV failed:" <+> debug v <+> debug t
-    False -> do
+  if v `elem` domV ctx
+    then todoError $ "extendV failed:" <+> debug v <+> debug t
+    else do
       wellFormedType t
       pushCtx (V v t)
 
@@ -505,18 +520,18 @@ extendV v t = do
 extendE :: E -> TypeM ()
 extendE e = do
   ctx <- getCtx
-  case e `elem` domE ctx of
-    True  -> todoError "extendE failed"
-    False -> do
+  if e `elem` domE ctx
+    then todoError "extendE failed"
+    else do
       pushCtx (EVar e)
 
 -- | Extend the current context with a solved existential variable
 extendSolved :: E -> Type -> TypeM ()
 extendSolved e t = do
   ctx <- getCtx
-  case e `elem` domE ctx of
-    True  -> todoError "extendSolved failed"
-    False -> do
+  if e `elem` domE ctx
+    then todoError "extendSolved failed"
+    else do
       wellFormedType t
       pushCtx (ESolved e t)
 
@@ -524,9 +539,9 @@ extendSolved e t = do
 extendMarker :: E -> TypeM ()
 extendMarker e = do
   ctx <- getCtx
-  case e `elem` (domE ctx <> markers ctx) of
-    True  -> todoError "extendMarker failed"
-    False -> do
+  if e `elem` (domE ctx <> markers ctx)
+    then todoError "extendMarker failed"
+    else do
       pushCtx (Marker e)
 
 -- | Split a context at a given element, dropping that element
@@ -573,7 +588,7 @@ data TypeEnv =
           } deriving (Eq, Show)
 
 defaultTypeEnv :: TypeEnv
-defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = True }
+defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = False }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
@@ -588,12 +603,12 @@ runTypeM env m =
 
 -- Increment the recursion depth
 incDepth :: TypeEnv -> TypeEnv
-incDepth t = t { envDepth = (envDepth t) + 1 }
+incDepth t = t { envDepth = envDepth t + 1 }
 
 newInt :: TypeM Int
 newInt = do
   i <- lift (lift (gets varCounter))
-  lift $ lift $ modify' (\st -> st { varCounter = (i + 1) })
+  lift $ lift $ modify' (\st -> st { varCounter = i + 1 })
   pure i
 
 newE :: TypeM E
@@ -629,54 +644,49 @@ liftMaybe1 err m x = maybe err pure (m x)
 -- | Under this input context, the first type is a subtype of the second type,
 -- with the given output context
 subtype :: Type -> Type -> TypeM ()
-subtype typeA typeB = do
-  trace' ["subtype", debug typeA, debug typeB] $ case (typeA, typeB) of
+subtype typeA typeB =
+  subtype' typeA typeB
+    `catchError` (\_ -> throwError $ SubtypingFailure typeA typeB)
+ where
+  subtype' :: Type -> Type -> TypeM ()
+  subtype' tA tB = trace' ["subtype", debug tA, debug tB] $ case (tA, tB) of
     (UType a, UType a') | a == a' -> lookupU a
     (EType a, EType a') | a == a' -> lookupE a
-    (Fn a1 a2, Fn b1 b2) ->
-      (do
-          subtype b1 a1
-          a2' <- subst a2
-          b2' <- subst b2
-          subtype a2' b2'
-        )
-        `catchError` (\_ -> throwError $ SubtypingFailure (Fn a1 a2) (Fn b1 b2))
-    (a, Forall u b) ->
-      (do
-          void $ extendU u
-          subtype a b
-          dropAfter (UVar u)
-        )
-        `catchError` (\_ -> throwError $ SubtypingFailure a (Forall u b))
-    (Forall u a, b) ->
-      (do
-          alpha <- newE
-          void $ extendMarker alpha
-          void $ extendE alpha
-          subtype (substEForU alpha u a) b
-          dropAfter (Marker alpha)
-        )
-        `catchError` (\_ -> throwError $ SubtypingFailure (Forall u a) b)
+    (Fn a1 a2, Fn b1 b2)          -> do
+      subtype' b1 a1
+      a2' <- subst a2
+      b2' <- subst b2
+      subtype' a2' b2'
+    (a, Forall u b) -> do
+      void $ extendU u
+      subtype' a b
+      dropAfter (UVar u)
+    (Forall u a, b) -> do
+      alpha <- newE
+      void $ extendMarker alpha
+      void $ extendE alpha
+      subtype' (substEForU alpha u a) b
+      dropAfter (Marker alpha)
     (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateL e a
     (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateR e a
-    (TCon v as, TCon v' bs) | v == v' -> mapM_ (uncurry subtype) (zip as bs)
+    (TCon v as, TCon v' bs) | v == v' -> mapM_ (uncurry subtype') (zip as bs)
     (TCon c as, TApp v bs)            -> do
-      subtype (TCon c []) v
-      mapM_ (uncurry subtype) (zip as bs)
+      subtype' (TCon c []) v
+      mapM_ (uncurry subtype') (zip as bs)
     (TApp v as, TCon c bs) -> do
-      subtype v (TCon c [])
-      mapM_ (uncurry subtype) (zip as bs)
+      subtype' v (TCon c [])
+      mapM_ (uncurry subtype') (zip as bs)
     (TApp v as, TApp u bs) -> do
-      subtype v u
-      mapM_ (uncurry subtype) (zip as bs)
+      subtype' v u
+      mapM_ (uncurry subtype') (zip as bs)
     (TRecord as, TRecord bs) -> do
       -- For any records A, B
       -- A < B if every field fB in B has a corresponding field fA such that fA < fB
       forM_ bs $ \(label, bTy) -> case lookup label bs of
         Nothing  -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
-        Just aTy -> subtype aTy bTy
+        Just aTy -> subtype' aTy bTy
 
     (a, b) -> do
       a' <- subst a
@@ -744,17 +754,20 @@ instantiate dir e ty = do
         extendMarker beta >> extendE beta
         instantiate dir e (substEForU beta u a)
         dropAfter (Marker beta)
-    TCon c [EType b] -> do
-      -- hmac: custom rule for type applications
-      -- G [e3, e1 = A e3][e2] |- e2 :=< e3   -| G'
-      -- ------------------------------------------
-      -- G[e1][e2]             |- A e2 <=: e1 -| G'
-      --
-      -- TODO: how do we handle multi-arg applications?
+    -- hmac: custom rule for type applications
+    -- G [e3, e1 = A e3][e2] |- e2 :=< e3   -| G'
+    -- ------------------------------------------
+    -- G[e1][e2]             |- A e2 <=: e1 -| G'
+    --
+    -- TODO: check that this doesn't have any nasty edge cases!
+    TCon c args -> do
       let (l, r) = splitAt (EVar e) ctx
-      e3 <- newE
-      putCtx $ l <> [ESolved e (TCon c [EType e3]), EVar e3] <> r
-      instantiate (flipDir dir) b (EType e3)
+      -- generate new Es for each arg
+      es <- mapM (const newE) args
+      -- insert them into the context before e, along with a solution e = TCon c es
+      putCtx $ l <> [ESolved e (TCon c (map EType es))] <> map EVar es <> r
+      -- instantiate each arg to its corresponding e
+      mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
     a -> do
       let (l, r) = splitAt (EVar e) ctx
       call $ do
@@ -767,6 +780,7 @@ instantiate dir e ty = do
   flipDir R = L
 
 -- Typing
+{-# ANN check ("HLint: ignore Reduce duplication" :: String) #-}
 check :: Exp -> Type -> TypeM ()
 check expr ty = do
   trace' ["check", debug expr, ":", debug ty] $ case (expr, ty) of
@@ -798,7 +812,7 @@ check expr ty = do
     (FCall name args, _) -> do
       case lookup name fcallInfo of
         Just fCallTy -> do
-          resultTy  <- foldM (\fTy arg -> inferApp fTy arg) fCallTy args
+          resultTy  <- foldM inferApp fCallTy args
           resultTy' <- subst resultTy
           subtype resultTy' ty
         Nothing -> throwError $ UnknownFCall name
@@ -868,7 +882,14 @@ infer expr_ = do
     Case scrut    (alt : alts) -> do
       scrutTy <- infer scrut
       altTy   <- inferCaseAlt scrutTy alt
-      mapM_ (checkCaseAlt altTy scrutTy) alts
+      -- altTy might have foralls in it, for example if alt is []
+      -- the other alts may have valid concrete types like [Int],
+      -- and if we blindly check that they are subtypes of [] then we'll raise a
+      -- type error.
+      -- Instead, we strip off all the foralls, generating existentials for each
+      -- one, and then check the alts.
+      altTy'  <- existentialiseOuterForalls altTy
+      mapM_ (checkCaseAlt altTy' scrutTy) alts
       pure altTy
     c@(MCase [])                -> throwError $ EmptyCase c
     MCase ((pats, expr) : alts) -> do
@@ -929,10 +950,9 @@ infer expr_ = do
     UnitLit       -> pure unit
     ListLit elems -> do
       -- Construct a nested application of (::) and [] and infer the type of that
-      let expr = foldr
-            (\s acc -> App (App (Con (Free "Kite.Primitive.::")) s) acc)
-            (Con (Free "Kite.Primitive.[]"))
-            elems
+      let expr = foldr (App . App (Con (Free "Kite.Primitive.::")))
+                       (Con (Free "Kite.Primitive.[]"))
+                       elems
       infer expr
     TupleLit elems -> do
       -- Construct an application of TupleN and infer the type of that
@@ -962,55 +982,64 @@ infer expr_ = do
         _ -> throwError $ NotARecordType recordTy
     e@(FCall _name _args) -> throwError $ CannotInferFCall e
 
+-- Strip off all the outer foralls from a type, replacing them with
+-- existentials.
+-- [] forall a b c. t ==> [e1 e2 e3] [e3/c][e2/b][e1/a]t
+existentialiseOuterForalls :: Type -> TypeM Type
+existentialiseOuterForalls (Forall u a) = do
+  alpha <- newE
+  extendE alpha
+  existentialiseOuterForalls (substEForU alpha u a)
+existentialiseOuterForalls t = pure t
+
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
 inferCaseAlt :: Type -> (Pattern, Exp) -> TypeM Type
 inferCaseAlt scrutTy (pat, expr) = do
-  trace' ["inferCaseAlt", debug pat, debug expr] $ do
+  trace' ["inferCaseAlt", debug scrutTy, debug pat, debug expr] $ do
     checkPattern pat scrutTy
     infer expr
 
+{-# ANN inferPattern ("HLint: ignore Reduce duplication" :: String) #-}
 inferPattern :: Pattern -> TypeM Type
-inferPattern pattern = do
-  trace' ["inferPattern", debug pattern] $ case pattern of
-    IntPat  _           -> pure int
-    CharPat _           -> pure char
-    BoolPat _           -> pure bool
-    UnitPat             -> pure unit
-    StringPat _         -> pure string
-    ConsPat con subpats -> do
-        -- Lookup the type of the constructor
-      conTy <- lookupV con
-      case second unfoldFn (unfoldForall conTy) of
-        (us, (argTys, tcon@TCon{})) -> do
-          -- Create new existentials for each universal in the forall
-          -- Add them to the context
-          eSub <- mapM (\u -> (, u) <$> newE) us
-          mapM_ (extendE . fst) eSub
+inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
+  IntPat  _           -> pure int
+  CharPat _           -> pure char
+  BoolPat _           -> pure bool
+  UnitPat             -> pure unit
+  StringPat _         -> pure string
+  ConsPat con subpats -> do
+      -- Lookup the type of the constructor
+    conTy <- lookupV con
+    case second unfoldFn (unfoldForall conTy) of
+      (us, (argTys, tcon@TCon{})) -> do
+        -- Create new existentials for each universal in the forall
+        -- Add them to the context
+        eSub <- mapM (\u -> (, u) <$> newE) us
+        mapM_ (extendE . fst) eSub
 
-          -- Substitute them into the argtys and the tcon
-          let
-            argTys' =
-              map (\t -> foldl (\t' (e, u) -> substEForU e u t') t eSub) argTys
+        -- Substitute them into the argtys and the tcon
+        let argTys' = map
+              (\t -> foldl (\t' (e, u) -> substEForU e u t') t eSub)
+              argTys
             tcon' = foldl (\t' (e, u) -> substEForU e u t') tcon eSub
 
-          -- Check each subpattern against the corresponding argty
-          mapM_ (uncurry checkPattern) (zip subpats argTys')
+        -- Check each subpattern against the corresponding argty
+        mapM_ (uncurry checkPattern) (zip subpats argTys')
 
-          -- Return the constructor type
-          pure tcon'
-        (_, (_, t)) -> throwError $ ExpectedConstructorType t
-    VarPat x -> do
-      alpha <- newE
-      extendE alpha >> extendV x (EType alpha)
-      pure (EType alpha)
-    WildPat -> do
-      alpha <- newE
-      extendE alpha
-      pure (EType alpha)
-    TuplePat subpats ->
-      let
-        con = case subpats of
+        -- Return the constructor type
+        pure tcon'
+      (_, (_, t)) -> throwError $ ExpectedConstructorType t
+  VarPat x -> do
+    alpha <- newE
+    extendE alpha >> extendV x (EType alpha)
+    pure (EType alpha)
+  WildPat -> do
+    alpha <- newE
+    extendE alpha
+    pure (EType alpha)
+  TuplePat subpats ->
+    let con = case subpats of
           []                       -> error "Type.inferPattern: empty tuple"
           [_] -> error "Type.inferPattern: single-element tuple"
           [_, _]                   -> Free "Kite.Primitive.Tuple2"
@@ -1024,13 +1053,13 @@ inferPattern pattern = do
             error
               $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
-      in  inferPattern (ConsPat con subpats)
-    ListPat []      -> inferPattern (ConsPat (Free "Kite.Primitive.[]") [])
-    ListPat subpats -> inferPattern
-      (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") [s, acc])
-             (ConsPat (Free "Kite.Primitive.[]") [])
-             subpats
-      )
+    in  inferPattern (ConsPat con subpats)
+  ListPat []      -> inferPattern (ConsPat (Free "Kite.Primitive.[]") [])
+  ListPat subpats -> inferPattern
+    (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") [s, acc])
+           (ConsPat (Free "Kite.Primitive.[]") [])
+           subpats
+    )
 
 checkPattern :: Pattern -> Type -> TypeM ()
 checkPattern pat ty = do
@@ -1116,7 +1145,7 @@ checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
   trace' ["checkCaseAlt", debug scrutTy, debug pat, debug expr] $ do
     inferredAltTy  <- inferCaseAlt scrutTy (pat, expr) >>= subst
     expectedAltTy' <- subst expectedAltTy
-    subtype expectedAltTy' inferredAltTy
+    subtype inferredAltTy expectedAltTy'
 
 -- Infer the type of the result when applying a function of type @ty@ to @e@
 inferApp :: Type -> Exp -> TypeM Type
@@ -1271,7 +1300,7 @@ prop_infers_bool_case = property $ do
         ]
   runTypeM defaultTypeEnv (infer expr1) === Right unit
   runTypeM defaultTypeEnv (infer expr2)
-    === Left (LocatedError Nothing (SubtypingFailure bool unit))
+    === Left (LocatedError Nothing (SubtypingFailure unit bool))
 
 prop_checks_higher_kinded_application :: Property
 prop_checks_higher_kinded_application = property $ do
@@ -1358,4 +1387,4 @@ trace' args m = do
 a <+> b = a <> " " <> b
 
 sepBy :: String -> [String] -> String
-sepBy sep xs = intercalate sep xs
+sepBy = intercalate

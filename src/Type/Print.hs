@@ -64,7 +64,7 @@ printType = go P0
     EType   e      -> printE e
     UType   u      -> printU u
     TRecord fields -> braces $ sep $ punctuate comma $ map
-      (\(f, ty) -> (pretty f) <+> colon <+> (printType ty))
+      (\(f, ty) -> pretty f <+> colon <+> printType ty)
       fields
     Forall v ty -> printForall [v] ty
      where

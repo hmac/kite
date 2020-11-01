@@ -183,13 +183,13 @@ pData = do
 pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
-  name     <- lowercaseName <?> "declaration type name"
+  name     <- lowercaseName <?> "function name"
   sig      <- symbol ":" >> pType
   _        <- indentGuard spaceConsumerN EQ pos1
   _        <- lexeme lowercaseName >>= \n -> guard (name == n)
-  _        <- void $ string "="
-  _        <- indentGuard spaceConsumerN GT (mkPos 2)
-  expr     <- pExpr
+  void $ string "="
+  _    <- indentGuard spaceConsumerN GT (mkPos 2)
+  expr <- pExpr
   pure Fun { funComments = comments
            , funName     = name
            , funType     = Just sig

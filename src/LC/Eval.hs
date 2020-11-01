@@ -1,12 +1,22 @@
+{-# LANGUAGE FlexibleContexts #-}
 module LC.Eval where
 
 import qualified Data.Map.Strict               as Map
 import           Data.Name
+import           Data.Functor                   ( (<&>) )
 import           ELC                            ( Con(..)
                                                 , Constant(..)
                                                 , Primitive(..)
                                                 )
+import           ELC.Primitive                  ( listNil
+                                                , listCons
+                                                )
 import           LC
+-- import           Util
+import           Control.Monad.Reader           ( MonadReader
+                                                , runReader
+                                                , ask
+                                                )
 
 evalMain :: ModuleName -> Env -> Exp
 evalMain mn = evalVar (TopLevel mn "main")
@@ -16,80 +26,86 @@ evalVar n env = eval env (Var n)
 
 -- TODO: this might be nicer if we have a new type for normal forms
 eval :: Env -> Exp -> Exp
-eval env expr = case expr of
-  Const c es -> evalConst env c es
-  Var n      -> case lookup n env of
-    Just e  -> eval env e
-    Nothing -> error $ "unknown variable: " <> show n
-  Cons c         es -> Cons c es
-  -- note that we evaluate the argument before substituting it - i.e. strict
-  -- evaluation.
-  App  (Abs n e) b  -> eval env $ subst (eval env b) n e
-  App  a         b  -> eval env $ App (eval env a) b
-  Abs  n         e  -> Abs n e
-  Let n v e         -> eval env $ subst v n e
-  Bottom s          -> Bottom s
-  Fail              -> Fail
-  Fatbar a b        -> case eval env a of
-    Fail       -> eval env b
-    (Bottom s) -> Bottom s
-    e          -> e
-  If c t e -> case eval env c of
-    Const (Bool True ) _ -> eval env t
-    Const (Bool False) _ -> eval env e
-    a                    -> error $ "Expected boolean but got " <> show a
-  Eq a b ->
-    let a' = eval env a
-        b' = eval env b
-    in  if a' == b' then Const (Bool True) [] else Const (Bool False) []
-  UnpackProduct i f (Cons c args) -> if conArity c == i
-    then eval env (buildApp f args)
-    else error $ "expected " <> show c <> " to have arity " <> show i
-  UnpackProduct i f e -> UnpackProduct i f (eval env e)
-  UnpackSum t i f (Cons c@Sum { sumTag = t', conArity = i' } args)
-    | t == t' && i == i'
-    -> eval env (buildApp f args)
-    | otherwise
-    -> error
-      $  "expected "
-      <> show c
-      <> " to have arity "
-      <> show i
-      <> " and tag "
-      <> show t
-  UnpackSum t i f e               -> eval env $ UnpackSum t i f (eval env e)
-  Project _a i (Cons _ args)      -> eval env (args !! i)
-  Project a  i e                  -> eval env $ Project a i (eval env e)
-  Y e                             -> eval env $ App e (Y e)
-  CaseN (Cons Sum { sumTag = t } _) branches -> eval env (branches !! t)
-  CaseN e branches                -> eval env $ CaseN (eval env e) branches
-  Record fields                   -> Record fields
-  RecordProject (Record fields) l -> case Map.lookup l fields of
-    Just e -> eval env e
-    Nothing ->
-      error
-        $  "Eval: expected "
-        <> show (Record fields)
-        <> "to have field "
-        <> show l
-  RecordProject e    l    -> eval env $ RecordProject (eval env e) l
-  FCall         proc args -> FCall proc (map (eval env) args)
+eval env = flip runReader env . go
+ where
+  go :: MonadReader Env m => Exp -> m Exp
+  go expr = case expr of
+    Const c es -> pure $ evalConst c es
+    Var n      -> (ask <&> lookup n) >>= \case
+      Just e  -> go e
+      Nothing -> error $ "unknown variable: " <> show n
+    Cons c         es -> pure $ Cons c es
+    -- note that we evaluate the argument before substituting it - i.e. strict
+    -- evaluation.
+    App  (Abs n e) b  -> go b >>= \b' -> go (subst b' n e)
+    App  a         b  -> go a >>= \a' -> go (App a' b)
+    Abs  n         e  -> pure $ Abs n e
+    Let n v e         -> go $ subst v n e
+    Bottom s          -> pure $ Bottom s
+    Fail              -> pure Fail
+    Fatbar a b        -> go a >>= \case
+      Fail       -> go b
+      (Bottom s) -> pure $ Bottom s
+      e          -> pure e
+    If c t e -> go c >>= \case
+      Const (Bool True ) _ -> go t
+      Const (Bool False) _ -> go e
+      a                    -> error $ "Expected boolean but got " <> show a
+    Eq a b -> do
+      a' <- go a
+      b' <- go b
+      pure $ if a' == b' then Const (Bool True) [] else Const (Bool False) []
+    UnpackProduct i f (Cons c args) -> if conArity c == i
+      then go (buildApp f args)
+      else error $ "expected " <> show c <> " to have arity " <> show i
+    UnpackProduct i f e -> UnpackProduct i f <$> go e
+    UnpackSum t i f (Cons Sum { sumTag = t', conArity = i' } args)
+      | t == t' && i == i' -> go (buildApp f args)
+      | otherwise          -> pure Fail
+    UnpackSum t i f e               -> go . UnpackSum t i f =<< go e
+    Project _a i (Cons _ args)      -> go (args !! i)
+    Project a  i e                  -> go . Project a i =<< go e
+    Y e                             -> go $ App e (Y e)
+    CaseN (Cons Sum { sumTag = t } _) branches -> go (branches !! t)
+    CaseN e branches                -> go e >>= \e' -> go $ CaseN e' branches
+    Record fields                   -> pure $ Record fields
+    RecordProject (Record fields) l -> case Map.lookup l fields of
+      Just e -> go e
+      Nothing ->
+        error
+          $  "Eval: expected "
+          <> show (Record fields)
+          <> "to have field "
+          <> show l
+    RecordProject e    l    -> go e >>= \e' -> go $ RecordProject e' l
+    FCall         proc args -> FCall proc <$> mapM go args
 
-evalConst :: Env -> Constant -> [Exp] -> Exp
-evalConst _ (Prim f) args = evalPrim f args
-evalConst _ c        es   = Const c es
+evalConst :: Constant -> [Exp] -> Exp
+evalConst (Prim f) args = evalPrim f args
+evalConst c        es   = Const c es
 
 evalPrim :: Primitive -> [Exp] -> Exp
 evalPrim PrimStringAppend [] = Const (String "") []
 evalPrim PrimStringAppend [Const (String a) _, Const (String b) _] =
   Const (String (a <> b)) []
+evalPrim PrimStringChars [Const (String s) _] =
+  foldr (\c cs -> Cons listCons [Const (Char c) [], cs]) (Cons listNil []) s
+evalPrim PrimStringConsChar [Const (Char c) _, Const (String s) _] =
+  Const (String (c : s)) []
+evalPrim PrimStringUnconsChar [Const (String s) _, def, f] = case s of
+  c : s' -> App (App f (Const (Char c) [])) (Const (String s') [])
+  []     -> def
 
-evalPrim PrimAdd     [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
-evalPrim PrimSub     [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
-evalPrim PrimMult    [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
-evalPrim PrimShow    [e              ]                  = primShow e
+evalPrim PrimAdd [Const (Int x) _, Const (Int y) _] = Const (Int (x + y)) []
+evalPrim PrimSub [Const (Int x) _, Const (Int y) _] = Const (Int (x - y)) []
+evalPrim PrimMult [Const (Int x) _, Const (Int y) _] = Const (Int (x * y)) []
+evalPrim PrimShow [e] = primShow e
 evalPrim PrimShowInt [Const (Int x) _] = Const (String (show x)) []
+evalPrim PrimShowChar [Const (Char x) _] = Const (String [x]) []
 evalPrim PrimEqInt [Const (Int x) _, Const (Int y) _]
+  | x == y    = Const (Bool True) []
+  | otherwise = Const (Bool False) []
+evalPrim PrimEqChar [Const (Char x) _, Const (Char y) _]
   | x == y    = Const (Bool True) []
   | otherwise = Const (Bool False) []
 

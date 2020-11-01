@@ -1,11 +1,5 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: 0f6fc8428079f786e4cfea2ff9614762321fa8ca08119795101451fe5b960367
-
 name:           kite
 version:        0.1.0.0
 synopsis:       A Haskell-like language for scripting and web apps

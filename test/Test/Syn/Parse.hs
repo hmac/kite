@@ -20,7 +20,7 @@ import           Syn
 
 -- Parse the string as an expression
 -- TODO: roll out to this whole module
-parseExpr str = parse (pExpr <* eof) "" str
+parseExpr = parse (pExpr <* eof) ""
 
 test :: Spec
 test = parallel $ do
@@ -347,14 +347,13 @@ test = parallel $ do
       parse pType "" "forall a b. a -> b"
         `shouldParse` TyForall "a" (TyForall "b" (TyVar "a" `fn` TyVar "b"))
     it "parses complex multi quantification" $ do
-      parse pType "" "forall a b. (a -> b) -> f a -> f b"
-        `shouldParse` (TyForall
-                        "a"
-                        (TyForall
-                          "b"
-                          (    (TyVar "a" `fn` TyVar "b")
-                          `fn` (TyVar "f" `tyapp` TyVar "a")
-                          `fn` (TyVar "f" `tyapp` TyVar "b")
-                          )
-                        )
-                      )
+      parse pType "" "forall a b. (a -> b) -> f a -> f b" `shouldParse` TyForall
+        "a"
+        (TyForall
+          "b"
+          (    (TyVar "a" `fn` TyVar "b")
+          `fn` (TyVar "f" `tyapp` TyVar "a")
+          `fn` (TyVar "f" `tyapp` TyVar "b")
+          )
+        )
+

@@ -138,35 +138,18 @@ ctx =
       ]
 
 checks :: Syn.Fun Syn.Syn -> Expectation
-checks fun = do
-  let modul = canonicaliseModule Syn.Module
-        { Syn.moduleName     = "QQ"
-        , Syn.moduleImports  = mempty
-        , Syn.moduleExports  = mempty
-        , Syn.moduleDecls    = [Syn.FunDecl fun]
-        , Syn.moduleMetadata = mempty
-        }
-      r   = checkModule ctx modul >> pure ()
-      env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
-    Left  err -> expectationFailure $ show (printLocatedError err)
-    Right ()  -> pure ()
+checks = checksModule . mkModule
 
 fails :: Syn.Fun Syn.Syn -> Expectation
-fails fun = do
-  let modul = canonicaliseModule Syn.Module
-        { Syn.moduleName     = "QQ"
-        , Syn.moduleImports  = mempty
-        , Syn.moduleExports  = mempty
-        , Syn.moduleDecls    = [Syn.FunDecl fun]
-        , Syn.moduleMetadata = mempty
-        }
-      r   = checkModule ctx modul >> pure ()
-      env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
-    Left err -> pure ()
-    Right () ->
-      expectationFailure "expected typechecking to fail, but it but succeeded"
+fails = failsModule . mkModule
+
+mkModule :: Syn.Fun Syn.Syn -> Syn.Module
+mkModule fun = Syn.Module { Syn.moduleName     = "QQ"
+                          , Syn.moduleImports  = mempty
+                          , Syn.moduleExports  = mempty
+                          , Syn.moduleDecls    = [Syn.FunDecl fun]
+                          , Syn.moduleMetadata = mempty
+                          }
 
 checksModule :: Syn.Module -> Expectation
 checksModule modul = do

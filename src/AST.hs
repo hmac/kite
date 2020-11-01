@@ -69,10 +69,10 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
     let compStr =
             concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
     in  "\"" <> s <> compStr <> "\""
-  debug (CharLit c      ) = "'" <> [c] <> "'"
-  debug (IntLit  i      ) = show i
-  debug (BoolLit b      ) = show b
-  debug (UnitLit        ) = "()"
+  debug (CharLit c)       = "'" <> [c] <> "'"
+  debug (IntLit  i)       = show i
+  debug (BoolLit b)       = show b
+  debug UnitLit           = "()"
   debug (ListLit  elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
   debug (TupleLit elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
   debug (Record   fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
@@ -139,10 +139,10 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
     let compStr =
             concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
     in  "\"" <> s <> compStr <> "\""
-  debug (CharLitT c        ) = "'" <> [c] <> "'"
-  debug (IntLitT  i        ) = show i
-  debug (BoolLitT b        ) = show b
-  debug (UnitLitT          ) = "()"
+  debug (CharLitT c)         = "'" <> [c] <> "'"
+  debug (IntLitT  i)         = show i
+  debug (BoolLitT b)         = show b
+  debug UnitLitT             = "()"
   debug (ListLitT  elems  _) = "[" <+> sepBy ", " (map debug elems) <+> "]"
   debug (TupleLitT elems  _) = "(" <+> sepBy ", " (map debug elems) <+> ")"
   debug (RecordT   fields _) = "{" <+> sepBy ", " (map go fields) <+> "}"

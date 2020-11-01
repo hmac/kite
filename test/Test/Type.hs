@@ -5,6 +5,7 @@ import           Test.Hspec
 import           Type
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
+import           Control.Monad                  ( replicateM_ )
 import           Data.Name
 import           Control.Monad.Trans.State.Strict
                                                 ( put )
@@ -274,7 +275,7 @@ checks ctx expr ty = do
                                ]
         , Syn.moduleMetadata = mempty
         }
-      r   = replicateM 10 (newU "dummy") >> checkModule ctx modul >> pure ()
+      r   = replicateM_ 10 (newU "dummy") >> checkModule ctx modul >> pure ()
       env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err -> expectationFailure $ show (printLocatedError err)

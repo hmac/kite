@@ -98,7 +98,7 @@ typecheck homeDir = withParsedFile homeDir $ \g ->
     Right _   -> printNicely "Success."
 
 format :: FilePath -> IO ()
-format fp = parseKiteFile <$> readFile fp >>= \case
+format fp = (parseKiteFile <$> readFile fp) >>= \case
   Right m   -> printNicely (printModule m)
   Left  err -> putStrLn err
 

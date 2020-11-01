@@ -44,12 +44,17 @@ data Constant = Int Int
 
 -- TODO: add PrimShowInt etc.
 data Primitive = PrimStringAppend
+               | PrimStringChars
+               | PrimStringConsChar
+               | PrimStringUnconsChar
                | PrimAdd
                | PrimSub
                | PrimMult
                | PrimShow -- TODO: this becomes PrimShowInt etc when we have a show typeclass
                | PrimShowInt
+               | PrimShowChar
                | PrimEqInt
+               | PrimEqChar
          deriving (Show, Eq)
 
 data Pattern = ConstPat Constant

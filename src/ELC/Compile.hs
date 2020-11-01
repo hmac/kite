@@ -156,9 +156,33 @@ translateExpr env = \case
   T.VarT (TopLevel m "-") _ | m == modPrim -> binaryPrim PrimSub
   T.VarT (TopLevel m "appendString") _ | m == modPrim ->
     binaryPrim PrimStringAppend
+  T.VarT (TopLevel m "$chars") _ | m == modPrim -> do
+    v <- fresh
+    pure $ Abs (VarPat v) (Const (Prim PrimStringChars) [Var v])
+  T.VarT (TopLevel m "$consChar") _ | m == modPrim -> do
+    v1 <- fresh
+    v2 <- fresh
+    pure $ Abs
+      (VarPat v1)
+      (Abs (VarPat v2) (Const (Prim PrimStringConsChar) [Var v1, Var v2]))
+  T.VarT (TopLevel m "$unconsChar") _ | m == modPrim -> do
+    v1 <- fresh
+    v2 <- fresh
+    v3 <- fresh
+    pure $ Abs
+      (VarPat v1)
+      (Abs
+        (VarPat v2)
+        (Abs (VarPat v3)
+             (Const (Prim PrimStringUnconsChar) [Var v1, Var v2, Var v3])
+        )
+      )
   T.VarT (TopLevel m "$showInt") _ | m == modPrim -> do
     v <- fresh
     pure $ Abs (VarPat v) (Const (Prim PrimShowInt) [Var v])
+  T.VarT (TopLevel m "$showChar") _ | m == modPrim -> do
+    v <- fresh
+    pure $ Abs (VarPat v) (Const (Prim PrimShowChar) [Var v])
   T.VarT (TopLevel m "show") _ | m == modPrim -> do
     v <- fresh
     pure $ Abs (VarPat v) (Const (Prim PrimShow) [Var v])
@@ -167,6 +191,11 @@ translateExpr env = \case
     v2 <- fresh
     pure $ Abs (VarPat v1)
                (Abs (VarPat v2) (Const (Prim PrimEqInt) [Var v1, Var v2]))
+  T.VarT (TopLevel m "$eqChar") _ | m == modPrim -> do
+    v1 <- fresh
+    v2 <- fresh
+    pure $ Abs (VarPat v1)
+               (Abs (VarPat v2) (Const (Prim PrimEqChar) [Var v1, Var v2]))
   T.VarT n _   -> pure (Var n)
   T.AppT a b _ -> do
     a' <- translateExpr env a
