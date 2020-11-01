@@ -40,7 +40,7 @@ fromSyn = \case
     body'  <- fromSyn body
     binds' <- mapM
       (\(n, e, t) -> do
-        let t' = maybe (pure Nothing) ((fmap Just) . convertType mempty) t
+        let t' = maybe (pure Nothing) (fmap Just . convertType mempty) t
         (T.Free n, , ) <$> fromSyn e <*> t'
       )
       binds

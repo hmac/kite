@@ -266,10 +266,11 @@ genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)
 genBinOp :: H.Gen Syn
 genBinOp = Var <$> Gen.element binOps
 
-genLetBinds :: Syn -> H.Gen [(RawName, Syn)]
+genLetBinds :: Syn -> H.Gen [(RawName, Syn, Maybe Type)]
 genLetBinds e = do
-  n <- genLowerName
-  pure [(n, e)]
+  n  <- genLowerName
+  ty <- Gen.maybe genType
+  pure [(n, e, ty)]
 
 genCaseAlts :: Syn -> Syn -> H.Gen [(Pattern, Syn)]
 genCaseAlts e1 e2 = do

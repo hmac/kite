@@ -532,20 +532,46 @@ pAbs = do
 -- let foo = 1
 --      bar = 2
 --  in foo
+--
+-- let foo : Int
+--     foo = 1
+--     bar : Bool -> Int
+--     bar = True -> 1
+--           False -> 0
+--  in foo
 pLet :: Parser Syn
 pLet = do
   void (symbolN "let")
-  pos <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
-  let pBind :: Parser (RawName, Syn, Maybe Type)
-      pBind = do
-        void $ indentGuard spaceConsumerN GT pos
-        var <- lowercaseName
-        void (symbol "=")
-        val <- lexemeN pExpr
-        pure (var, val, Nothing)
-  binds <- some pBind
+  pos   <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
+  binds <- some (pAnnotatedBind pos <|> pBind pos)
   void (symbolN "in")
   Let binds <$> pExpr
+ where
+  pBind :: Pos -> Parser (RawName, Syn, Maybe Type)
+  pBind pos = do
+    void $ indentGuard spaceConsumerN GT pos
+    var <- lowercaseName
+    void (symbol "=")
+    val <- lexemeN pExpr
+    pure (var, val, Nothing)
+  pAnnotatedBind :: Pos -> Parser (RawName, Syn, Maybe Type)
+  pAnnotatedBind pos = do
+    (var, ty) <- try $ pAnnotation pos
+    void $ indentGuard spaceConsumerN GT pos
+    var' <- lowercaseName
+    guard (var' == var)
+    void (symbol "=")
+    val <- lexemeN pExpr
+    pure (var, val, Just ty)
+  pAnnotation :: Pos -> Parser (RawName, Type)
+  pAnnotation pos = do
+    void $ indentGuard spaceConsumerN GT pos
+    var <- lowercaseName
+    void (symbol ":")
+    ty <- lexemeN pType
+    pure (var, ty)
+
+
 
 pTuple :: Parser Syn
 pTuple = do

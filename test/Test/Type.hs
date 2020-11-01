@@ -88,7 +88,8 @@ test = do
     it "multi-arg function application"
       $ infers ctx [syn|(\x y -> x) True (Suc Zero)|] bool
     it "compound lets"
-      $ let expr = [syn|let x = True
+      $ let expr = [syn|let
+                            x  = True
                             id = \y -> y
                          in id x|]
         in  infers ctx expr bool
@@ -110,7 +111,8 @@ test = do
       --                   in id True|]
       --   in  infers ctx expr bool
     it "simultaneous let definitions"
-      $ let expr = [syn|let y = True
+      $ let expr = [syn|let
+                            y = True
                             x = y
                          in x|]
         in  infers ctx expr bool
@@ -144,11 +146,11 @@ test = do
                          w -> MkWrap False|]
         in  infers ctx expr (wrap bool)
     it "an expression hole (1)"
-      $ let expr = [syn|let x = ?foo
-                         in True|]
+      $ let expr = [syn|let x = ?foo in True|]
         in  pendingWith "this results in a type error: cannot infer hole"
     it "an expression hole (2)"
-      $ let expr = [syn|let not = True -> False
+      $ let expr = [syn|let
+                            not = True -> False
                                   False -> True
                          in not ?foo|]
         in  pendingWith "this results in a type error: cannot check hole"
