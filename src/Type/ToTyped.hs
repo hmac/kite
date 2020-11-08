@@ -58,14 +58,12 @@ convertPattern = coerce
 
 convertExpr :: Can.Exp -> T.Exp
 convertExpr = \case
-  Var v     -> T.VarT v unknown
-  Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
-  Con  c    -> T.ConT c
-  Hole n    -> T.HoleT n unknown
-  Abs xs e  -> T.AbsT (map (, unknown) xs) (convertExpr e) unknown
-  App a  b  -> T.AppT (convertExpr a) (convertExpr b) unknown
-  LetA n ty v e ->
-    T.LetAT n (convertType ty) (convertExpr v) (convertExpr e) unknown
+  Var v       -> T.VarT v unknown
+  Ann _e _t   -> error "Type.ToTyped.convertExpr: cannot convert annotations"
+  Con  c      -> T.ConT c
+  Hole n      -> T.HoleT n unknown
+  Abs xs    e -> T.AbsT (map (, unknown) xs) (convertExpr e) unknown
+  App a     b -> T.AppT (convertExpr a) (convertExpr b) unknown
   Let binds e -> T.LetT
     (map (\(n, v, ty) -> (n, convertExpr v, convertType <$> ty)) binds)
     (convertExpr e)

@@ -224,24 +224,24 @@ genLet = Gen.subtermM2 (Gen.small genExpr)
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
-  Var     _            -> []
-  Con     _            -> []
-  Hole    _            -> []
-  IntLit  _            -> []
-  BoolLit _            -> []
-  UnitLit              -> []
-  Abs (v : vs) e       -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
-  Abs _        e       -> [e]
-  App _        b       -> [b]
-  LetA _n _sch _e body -> [body]
-  Let  _binds body     -> [body]
-  Case e      alts     -> [e] <> map snd alts
-  TupleLit  es         -> (TupleLit <$> shrinkList1 es) <> es
-  ListLit   es         -> (ListLit <$> shrinkList es) <> es
-  StringLit s          -> []
-  StringInterp p _     -> [StringInterp p []]
-  Record fields        -> Record <$> shrinkList1 fields
-  Project r _          -> [r]
+  Var     _             -> []
+  Con     _             -> []
+  Hole    _             -> []
+  IntLit  _             -> []
+  BoolLit _             -> []
+  UnitLit               -> []
+  Abs  (v : vs)    e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
+  Abs  _           e    -> [e]
+  App  _           b    -> [b]
+  Let  []          body -> [body]
+  Let  (b : binds) body -> [Let binds body]
+  Case e           alts -> [e] <> map snd alts
+  TupleLit  es          -> (TupleLit <$> shrinkList1 es) <> es
+  ListLit   es          -> (ListLit <$> shrinkList es) <> es
+  StringLit s           -> []
+  StringInterp p _      -> [StringInterp p []]
+  Record fields         -> Record <$> shrinkList1 fields
+  Project r _           -> [r]
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits

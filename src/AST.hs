@@ -19,9 +19,6 @@ data Expr n t = Var n
          | Hole n
          | Abs [n] (Expr n t)
          | App (Expr n t) (Expr n t)
-         -- Note: the parser can't currently produce LetAs but the typechecker
-         -- can nonetheless handle them.
-         | LetA n t (Expr n t) (Expr n t)
          | Let [(n, Expr n t, Maybe t)] (Expr n t)
          | Case (Expr n t) [(Pat n, Expr n t)]
          | MCase [([Pat n], Expr n t)]
@@ -50,15 +47,6 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
   debug (MCase alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
-  debug (LetA name ty expr body) =
-    "let"
-      <+> debug name
-      <+> ":"
-      <+> debug ty
-      <+> "="
-      <+> debug expr
-      <+> "in"
-      <+> debug body
   debug (Let binds e) =
     "let"
       <+> foldl
@@ -95,7 +83,6 @@ data ExprT n t =
   -- Note that each variable bound in lambda has an annotated type
   | AbsT [(n, t)] (ExprT n t) t
   | AppT (ExprT n t) (ExprT n t) t
-  | LetAT n t (ExprT n t) (ExprT n t) t
   | LetT [(n, ExprT n t, Maybe t)] (ExprT n t) t
   | CaseT (ExprT n t) [(Pat n, ExprT n t)] t
   | MCaseT [([Pat n], ExprT n t)] t
@@ -125,15 +112,6 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
   debug (MCaseT alts _) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
-  debug (LetAT name ty expr body _) =
-    "let"
-      <+> debug name
-      <+> ":"
-      <+> debug ty
-      <+> "="
-      <+> debug expr
-      <+> "in"
-      <+> debug body
   debug (LetT binds e _) =
     "let"
       <+> foldl

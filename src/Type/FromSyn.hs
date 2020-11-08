@@ -19,11 +19,6 @@ import           AST
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
-  LetA x ty e body -> do
-    ty' <- convertType mempty ty
-    -- TODO: remove annotation once we handle types in lets properly
-    e'  <- Ann <$> fromSyn e <*> pure ty'
-    Let [(T.Free x, e', Just ty')] <$> fromSyn body
   Var n   -> pure $ Var (T.Free n)
   Con n   -> pure $ Con (T.Free n)
   Ann e t -> Ann <$> fromSyn e <*> convertType mempty t

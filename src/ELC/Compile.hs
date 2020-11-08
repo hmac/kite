@@ -224,7 +224,6 @@ translateExpr env = \case
       alts
     expr' <- translateExpr env expr
     pure $ LetRec alts' expr'
-  T.LetAT{}            -> error "Cannot translate LetA yet"
   -- case (foo bar) of
   --   p1 -> e1
   --   p2 -> e2

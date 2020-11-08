@@ -913,17 +913,6 @@ infer expr_ = do
       mapM_ (checkMCaseAlt patTys exprTy) alts
       -- Now construct a result type and return it
       pure $ foldFn patTys exprTy
-    LetA name ty expr body -> do
-      -- check the expr against the type
-      check expr ty
-      -- extend the context with the binding
-      extendV name ty
-      -- infer the body
-      bodyType  <- infer body
-      -- drop the context after the binding
-      bodyType' <- subst bodyType
-      dropAfter (V name ty)
-      pure bodyType'
     Let binds body -> do
       -- generate a dummy existential that we'll use to cut the context
       alpha <- newE

@@ -195,12 +195,11 @@ printExpr (Project e f) = printExpr' e <> dot <> pretty f
 printExpr (Hole n     ) = hole ("?" <> printName n)
 printExpr (Abs args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
-printExpr (App a     b           ) = printApp a b
-printExpr (Let binds e           ) = printLet binds e
-printExpr (LetA name sch val body) = printLetA name sch val body
-printExpr (Case e alts           ) = printCase e alts
-printExpr (MCase    alts         ) = printMCase alts
-printExpr (TupleLit es           ) = tupled (map printExpr es)
+printExpr (App  a     b   ) = printApp a b
+printExpr (Let  binds e   ) = printLet binds e
+printExpr (Case e     alts) = printCase e alts
+printExpr (MCase    alts  ) = printMCase alts
+printExpr (TupleLit es    ) = tupled (map printExpr es)
 printExpr (ListLit es) | any big es = printList es
                        | otherwise  = list (map printExpr es)
 printExpr (IntLit i) = pretty i
@@ -218,7 +217,6 @@ printExpr (FCall proc args) =
 printExpr' :: Syn -> Document
 printExpr' e@App{}  = parens (printExpr e)
 printExpr' e@Let{}  = parens (printExpr e)
-printExpr' e@LetA{} = parens (printExpr e)
 printExpr' e@Case{} = parens (printExpr e)
 printExpr' e        = printExpr e
 
@@ -288,14 +286,6 @@ printLet binds e = keyword "let" <+> hang
     [ printName name <+> ":" <+> printType ty
     , printLetBind (name, expr, Nothing)
     ]
-
-printLetA :: RawName -> Type -> Syn -> Syn -> Document
-printLetA name ty val body = keyword "letA" <+> hang
-  (-3)
-  (vsep [hang 0 (vsep [signature, bind]), keyword "in" <+> printExpr body])
- where
-  signature = printName name <> align (space <> colon <+> printType ty)
-  bind      = printName name <+> "=" <+> printExpr val
 
 -- case expr of
 --   pat1 x y -> e1

@@ -139,14 +139,10 @@ canonicaliseExp env = go
     Ann e t -> Ann (canonicaliseExp env locals e) (canonicaliseType env t)
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
-    Abs ns    e      -> Abs (fmap Local ns) $ go (ns <> locals) e
-    App a     b      -> App (go locals a) (go locals b)
-    Let binds e      -> canonicaliseLet binds e
-    LetA n ty e body -> LetA (canonicaliseName env n)
-                             (canonicaliseType env ty)
-                             (go locals e)
-                             (go (n : locals) body)
-    Case e alts            -> canonicaliseCase (e, alts)
+    Abs  ns    e           -> Abs (fmap Local ns) $ go (ns <> locals) e
+    App  a     b           -> App (go locals a) (go locals b)
+    Let  binds e           -> canonicaliseLet binds e
+    Case e     alts        -> canonicaliseCase (e, alts)
     MCase    alts          -> canonicaliseMCase alts
     TupleLit es            -> TupleLit $ fmap (go locals) es
     ListLit  es            -> ListLit $ fmap (go locals) es
