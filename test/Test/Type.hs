@@ -105,11 +105,23 @@ test = do
                          False -> True|]
         in  infers ctx expr bool
     it "expressions with annotated lets"
-      $ pendingWith "Cannot parse annotated lets yet"
-      -- $ let expr = [syn|let id : a -> a
-      --                       id = \x -> x
-      --                   in id True|]
-      --   in  infers ctx expr bool
+      $ let expr = [syn|let
+                            id : Bool -> Bool
+                            id = x -> x
+                        in id True|]
+        in  infers ctx expr bool
+    it "expressions with badly annotated lets"
+      $ let expr = [syn|let
+                            id : Char
+                            id = x -> x
+                         in id True|]
+        in  failsToInfer
+              ctx
+              expr
+              (\case
+                SubtypingFailure _ _ -> True
+                _                    -> False
+              )
     it "simultaneous let definitions"
       $ let expr = [syn|let
                             y = True
@@ -232,6 +244,18 @@ test = do
 
 infers :: Ctx -> Syn.Syn -> Type -> Expectation
 infers ctx expr t = do
+  case runInfer ctx expr of
+    Left  err      -> expectationFailure $ show (printLocatedError err)
+    Right resultTy -> resultTy `shouldBe` t
+
+failsToInfer :: Ctx -> Syn.Syn -> (Error -> Bool) -> Expectation
+failsToInfer ctx expr matchesError = case runInfer ctx expr of
+  Right resultTy ->
+    expectationFailure $ "Expected type error but inferred " <> show resultTy
+  Left (LocatedError _ err) -> matchesError err `shouldBe` True
+
+runInfer :: Ctx -> Syn.Syn -> Either LocatedError Type
+runInfer ctx expr = do
   let moduleName    = "QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
@@ -239,10 +263,8 @@ infers ctx expr t = do
         putCtx ctx
         ty <- infer e
         subst ty
-  let env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
-    Left  err      -> expectationFailure $ show (printLocatedError err)
-    Right resultTy -> resultTy `shouldBe` t
+  let env = defaultTypeEnv { envCtx = primCtx <> ctx, envDebug = False }
+  runTypeM env r
 
 -- Like infers but takes a quasiquoted type expression.
 -- Currently unused because most of the time the type is Bool, which is easy to

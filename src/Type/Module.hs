@@ -27,11 +27,10 @@ import           Type                           ( TypeM
                                                 , infer
                                                 , wellFormedType
                                                 , LocatedError(..)
-                                                , newU
                                                 , putCtx
                                                 )
 import           Type.FromSyn                   ( fromSyn
-                                                , convertType
+                                                , quantify
                                                 )
 import           Control.Monad                  ( void )
 import qualified Control.Monad.Except          as Except
@@ -117,14 +116,6 @@ funToBind fun = do
     Just t  -> Just <$> quantify (Set.toList (S.ftv t)) t
     Nothing -> pure Nothing
   pure (funName fun, sch, rhs)
-
--- Explicitly quantify all type variables, then convert the whole thing to a
--- T.Type.
-quantify :: [Name] -> Can.Type -> TypeM Type
-quantify vars t = do
-  uMap <- mapM (\v -> (v, ) <$> newU v) vars
-  t'   <- convertType uMap t
-  pure $ foldr (Forall . snd) t' uMap
 
 -- Convert data type definitions into a series of <constructor, type> bindings.
 --

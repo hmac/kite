@@ -38,6 +38,7 @@ module Type
 where
 
 import           Util
+import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
 import           Data.String                    ( fromString )
 import           Data.Name                      ( Name(..)
@@ -799,10 +800,14 @@ check expr ty = do
       alpha <- newE
       void $ extendMarker alpha
 
-      -- infer the type of each binding, adding to the context as we go
-      forM_ (reverse binds) $ \(x, e, _type) -> do
-        a <- infer e
-        extendV x a
+      -- if the binding is annotated, check it against its annotation
+      -- otherwise infer a type for it
+      -- then add the type to the context
+      forM_ (reverse binds) $ \(x, e, maybeType) -> do
+        t <- case maybeType of
+          Just t  -> check e t $> t
+          Nothing -> infer e
+        extendV x t
 
       -- check the type of the body
       check body ty
@@ -924,10 +929,15 @@ infer expr_ = do
       alpha <- newE
       void $ extendMarker alpha
 
-      -- infer the type of each binding, adding to the context as we go
-      forM_ (reverse binds) $ \(x, e, _type) -> do
-        a <- infer e
-        extendV x a
+      -- if the binding is annotated, check it against its annotation
+      -- otherwise infer a type for it
+      -- then add the type to the context
+      forM_ (reverse binds) $ \(x, e, maybeType) -> do
+        t <- case maybeType of
+          Just t  -> check e t $> t
+          Nothing -> infer e
+        extendV x t
+
       -- infer the type of the body
       ty  <- infer body
 

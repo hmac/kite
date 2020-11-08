@@ -4,6 +4,8 @@ module Type.FromSyn where
 
 import           Util
 
+import           Data.Traversable               ( for )
+import qualified Data.Set                      as Set
 import           Data.String                    ( fromString )
 import           Data.Name                      ( Name
                                                 , toString
@@ -39,8 +41,8 @@ fromSyn = \case
   Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM
-      (\(n, e, t) -> do
-        let t' = maybe (pure Nothing) (fmap Just . convertType mempty) t
+      (\(n, e, maybeType) -> do
+        let t' = for maybeType $ \t -> quantify (Set.toList (S.ftv t)) t
         (T.Free n, , ) <$> fromSyn e <*> t'
       )
       binds
@@ -107,3 +109,11 @@ convertType uVarCtx = \case
     u  <- T.newU v
     t' <- convertType ((v, u) : uVarCtx) t
     pure $ T.Forall u t'
+
+-- Explicitly quantify all type variables, then convert the whole thing to a
+-- T.Type.
+quantify :: [Name] -> Can.Type -> T.TypeM T.Type
+quantify vars t = do
+  uMap <- mapM (\v -> (v, ) <$> T.newU v) vars
+  t'   <- convertType uMap t
+  pure $ foldr (T.Forall . snd) t' uMap
