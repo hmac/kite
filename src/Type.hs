@@ -40,6 +40,7 @@ where
 import           Util
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
+import           Text.Megaparsec                ( SourcePos )
 import           Data.String                    ( fromString )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
@@ -298,7 +299,7 @@ instance Debug V where
 genV :: Gen V
 genV = G.choice [Free <$> genName, Bound <$> G.int (R.linear 0 100)]
 
-type Exp = Expr V Type
+type Exp = Expr (Maybe (SourcePos, SourcePos)) V Type
 
 
 type Pattern = Pat V
@@ -785,17 +786,17 @@ instantiate dir e ty = do
 check :: Exp -> Type -> TypeM ()
 check expr ty = do
   trace' ["check", debug expr, ":", debug ty] $ case (expr, ty) of
-    (Abs []       e, a     ) -> check e a
-    (Abs (x : xs) e, Fn a b) -> do
+    (Abs _ []       e, a     ) -> check e a
+    (Abs s (x : xs) e, Fn a b) -> do
       void $ extendV x a
-      _ <- check (Abs xs e) b
+      _ <- check (Abs s xs e) b
       dropAfter (V x a)
     (e, Forall u a) -> do
       extendU u
       check e a
       dropAfter (UVar u)
-    (Hole n        , a) -> throwError $ CannotCheckHole (Hole n) a
-    (Let binds body, _) -> do
+    (Hole s n        , a) -> throwError $ CannotCheckHole (Hole s n) a
+    (Let _ binds body, _) -> do
       -- generate a dummy existential that we'll use to cut the context
       alpha <- newE
       void $ extendMarker alpha
@@ -814,15 +815,15 @@ check expr ty = do
 
       -- drop all these variables off the context
       dropAfter (Marker alpha)
-    (FCall name args, _) -> do
+    (FCall _ name args, _) -> do
       case lookup name fcallInfo of
         Just fCallTy -> do
           resultTy  <- foldM inferApp fCallTy args
           resultTy' <- subst resultTy
           subtype resultTy' ty
         Nothing -> throwError $ UnknownFCall name
-    (MCase []                  , _     ) -> throwError (EmptyCase expr)
-    (MCase alts@((pats, _) : _), Fn a b) -> do
+    (MCase _ []                  , _     ) -> throwError (EmptyCase expr)
+    (MCase _ alts@((pats, _) : _), Fn a b) -> do
       -- Split off as many args as there are patterns in the first alt
       let (argTys, exprTy) =
             let (as, b') = unfoldFn (Fn a b)
@@ -865,26 +866,26 @@ infer' e = trace' ["infer'", debug e] $ do
 infer :: Exp -> TypeM Type
 infer expr_ = do
   trace' ["infer", debug expr_] $ case expr_ of
-    Var x   -> lookupV x
-    Ann e a -> do
+    Var _ x   -> lookupV x
+    Ann _ e a -> do
       void $ wellFormedType a
       check e a
       pure a
-    App e1 e2 -> do
+    App _ e1 e2 -> do
       a <- infer e1 >>= subst
       inferApp a e2
-    Abs []       e -> infer e
-    Abs (x : xs) e -> do
+    Abs _ []       e -> infer e
+    Abs s (x : xs) e -> do
       alpha <- newE
       beta  <- newE
       extendE alpha >> extendE beta >> extendV x (EType alpha)
-      _ <- check (Abs xs e) (EType beta)
+      _ <- check (Abs s xs e) (EType beta)
       dropAfter (V x (EType alpha))
       pure $ Fn (EType alpha) (EType beta)
-    Hole n                     -> throwError $ CannotInferHole (Hole n)
-    Con  x                     -> lookupV x
-    c@(  Case _ [])            -> throwError $ EmptyCase c
-    Case scrut    (alt : alts) -> do
+    Hole s          n         -> throwError $ CannotInferHole (Hole s n)
+    Con  _          x         -> lookupV x
+    c@(  Case _ _ [])         -> throwError $ EmptyCase c
+    Case _ scrut (alt : alts) -> do
       scrutTy <- infer scrut
       altTy   <- inferCaseAlt scrutTy alt
       -- altTy might have foralls in it, for example if alt is []
@@ -896,8 +897,8 @@ infer expr_ = do
       altTy'  <- existentialiseOuterForalls altTy
       mapM_ (checkCaseAlt altTy' scrutTy) alts
       pure altTy
-    c@(MCase [])                -> throwError $ EmptyCase c
-    MCase ((pats, expr) : alts) -> do
+    c@(   MCase _ [])                     -> throwError $ EmptyCase c
+    MCase _         ((pats, expr) : alts) -> do
       -- The type of an mcase will be a function type taking as many arguments as
       -- there are patterns. Each alt should have the same number of patterns.
       -- Taking the first alt, we infer a type for each pattern and a type for the
@@ -913,7 +914,7 @@ infer expr_ = do
       mapM_ (checkMCaseAlt patTys exprTy) alts
       -- Now construct a result type and return it
       pure $ foldFn patTys exprTy
-    Let binds body -> do
+    Let _ binds body -> do
       -- generate a dummy existential that we'll use to cut the context
       alpha <- newE
       void $ extendMarker alpha
@@ -934,32 +935,37 @@ infer expr_ = do
       ty' <- subst ty
       dropAfter (Marker alpha)
       pure ty'
-    StringInterp prefix comps -> do
+    StringInterp _ prefix comps -> do
       -- Construct a nested application of appendString and infer the type of that
-      let append = Var (Free "Kite.Primitive.appendString")
+      let append = Var Nothing (Free "Kite.Primitive.appendString")
           expr   = foldl
-            (\acc (c, s) -> App (App append acc) (App (App append c) s))
-            (StringLit prefix)
-            (mapSnd StringLit comps)
+            (\acc (c, s) -> App Nothing
+                                (App Nothing append acc)
+                                (App Nothing (App Nothing append c) s)
+            )
+            (StringLit Nothing prefix)
+            (mapSnd (StringLit Nothing) comps)
       infer expr
-    StringLit _   -> pure string
-    CharLit   _   -> pure char
-    IntLit    _   -> pure int
-    BoolLit   _   -> pure bool
-    UnitLit       -> pure unit
-    ListLit elems -> do
+    StringLit _        _     -> pure string
+    CharLit   _        _     -> pure char
+    IntLit    _        _     -> pure int
+    BoolLit   _        _     -> pure bool
+    (         UnitLit _)     -> pure unit
+    ListLit   _        elems -> do
       -- Construct a nested application of (::) and [] and infer the type of that
-      let expr = foldr (App . App (Con (Free "Kite.Primitive.::")))
-                       (Con (Free "Kite.Primitive.[]"))
-                       elems
+      let expr = foldr
+            (App Nothing . App Nothing (Con Nothing (Free "Kite.Primitive.::")))
+            (Con Nothing (Free "Kite.Primitive.[]"))
+            elems
       infer expr
-    TupleLit elems -> do
+    TupleLit _ elems -> do
       -- Construct an application of TupleN and infer the type of that
-      let n    = length elems
-          con  = Con (Free (fromString ("Kite.Primitive.Tuple" <> show n)))
-          expr = foldl App con elems
+      let n = length elems
+          con =
+            Con Nothing (Free (fromString ("Kite.Primitive.Tuple" <> show n)))
+          expr = foldl (App Nothing) con elems
       infer expr
-    Record fields -> do
+    Record _ fields -> do
       -- To infer the type of a record, we must be able to infer types for all its
       -- fields
       fTypes <- forM
@@ -969,7 +975,7 @@ infer expr_ = do
           pure (name, ty)
         )
       pure $ TRecord fTypes
-    Project record fieldName -> do
+    Project _ record fieldName -> do
       -- To infer the type of a record projection, we must know the type of the
       -- record.
       recordTy <- infer record
@@ -979,7 +985,7 @@ infer expr_ = do
           Just fieldTy -> pure fieldTy
           Nothing      -> throwError $ RecordDoesNotHaveField recordTy fieldName
         _ -> throwError $ NotARecordType recordTy
-    e@(FCall _name _args) -> throwError $ CannotInferFCall e
+    e@(FCall _ _name _args) -> throwError $ CannotInferFCall e
 
 -- Strip off all the outer foralls from a type, replacing them with
 -- existentials.
@@ -1223,14 +1229,14 @@ throwError err = Control.Monad.Except.throwError (LocatedError Nothing err)
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
   ctx <- (primCtx <>) <$> forAll genCtx
-  let expr = Con (Free "Kite.Primitive.Unit")
+  let expr = Con Nothing (Free "Kite.Primitive.Unit")
       ty   = TCon "Kite.Primitive.Unit" []
   runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right ty
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
   ctx <- (primCtx <>) <$> forAll genCtx
-  let expr = Con (Free "Kite.Primitive.Unit")
+  let expr = Con Nothing (Free "Kite.Primitive.Unit")
       ty   = Fn unit unit
   runTypeM defaultTypeEnv (putCtx ctx >> check expr ty)
     === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
@@ -1239,17 +1245,18 @@ prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   let ctx = primCtx
   v <- forAll genV
-  let uval = Con (Free "Kite.Primitive.Unit")
-  let expr = App (Ann (Abs [v] uval) (Fn unit unit)) uval
+  let uval = Con Nothing (Free "Kite.Primitive.Unit")
+  let expr =
+        App Nothing (Ann Nothing (Abs Nothing [v] uval) (Fn unit unit)) uval
   runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
-  let uval = Con (Free "Kite.Primitive.Unit")
+  let uval = Con Nothing (Free "Kite.Primitive.Unit")
       ctx  = [V (Free "id") (Fn unit unit)] <> primCtx
   -- The expression is id Unit
-  let expr = App (Var (Free "id")) uval
+  let expr = App Nothing (Var Nothing (Free "id")) uval
   -- The inferred type should be Unit
   runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right unit
 
@@ -1257,7 +1264,7 @@ prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
-  let uval = Con (Free "Kite.Primitive.Unit")
+  let uval = Con Nothing (Free "Kite.Primitive.Unit")
       a    = U 0 "a"
       ctx =
         [ V (Free "id")     (Forall a (Fn (UType a) (UType a)))
@@ -1265,7 +1272,9 @@ prop_infers_polymorphic_app = property $ do
           ]
           <> primCtx
   -- The expression is idUnit (id Unit)
-  let expr = App (Var (Free "idUnit")) (App (Var (Free "id")) uval)
+  let expr = App Nothing
+                 (Var Nothing (Free "idUnit"))
+                 (App Nothing (Var Nothing (Free "id")) uval)
   -- The inferred type should be Unit
   runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right unit
 
@@ -1275,7 +1284,7 @@ prop_infers_list_app = property $ do
       ty   = Forall a (list (UType a))
       -- [] : forall a. List a
       ctx  = [V (Free "[]") ty]
-      expr = Var (Free "[]")
+      expr = Var Nothing (Free "[]")
   runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right ty
 
 prop_infers_bool_case :: Property
@@ -1285,17 +1294,19 @@ prop_infers_bool_case = property $ do
       --   True -> ()
       --   False -> ()
       expr1 = Case
-        (Con (Free "Kite.Primitive.True"))
-        [ (BoolPat True , Con (Free "Kite.Primitive.Unit"))
-        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
+        Nothing
+        (Con Nothing (Free "Kite.Primitive.True"))
+        [ (BoolPat True , Con Nothing (Free "Kite.Primitive.Unit"))
+        , (BoolPat False, Con Nothing (Free "Kite.Primitive.Unit"))
         ]
       -- case True of
       --   True -> True
       --   False -> ()
       expr2 = Case
-        (Con (Free "Kite.Primitive.True"))
-        [ (BoolPat True , Con (Free "Kite.Primitive.True"))
-        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
+        Nothing
+        (Con Nothing (Free "Kite.Primitive.True"))
+        [ (BoolPat True , Con Nothing (Free "Kite.Primitive.True"))
+        , (BoolPat False, Con Nothing (Free "Kite.Primitive.Unit"))
         ]
   runTypeM defaultTypeEnv (infer expr1) === Right unit
   runTypeM defaultTypeEnv (infer expr2)
@@ -1307,7 +1318,7 @@ prop_checks_higher_kinded_application = property $ do
   let
     f     = U 1 "f"
     a     = U 2 "a"
-    expr1 = Abs [Bound 0] (Var (Bound 0))
+    expr1 = Abs Nothing [Bound 0] (Var Nothing (Bound 0))
     type1 = Forall
       f
       (Forall a (Fn (TApp (UType f) [UType a]) (TApp (UType f) [UType a])))
@@ -1315,16 +1326,24 @@ prop_checks_higher_kinded_application = property $ do
   -- ((\x -> x) : f a -> f a) [1] : [Int] should check
   -- ((\x -> x) : f a -> f a) [1]         should infer [Int]
   let expr2 = App
-        (Ann expr1 type1)
-        (App (App (Var (Free "Kite.Primitive.::")) (IntLit 1))
-             (Var (Free "Kite.Primitive.[]"))
+        Nothing
+        (Ann Nothing expr1 type1)
+        (App
+          Nothing
+          (App Nothing
+               (Var Nothing (Free "Kite.Primitive.::"))
+               (IntLit Nothing 1)
+          )
+          (Var Nothing (Free "Kite.Primitive.[]"))
         )
       type2 = list int
   void (runTypeM defaultTypeEnv (check expr2 type2)) === Right ()
   runTypeM defaultTypeEnv (infer' expr2) === Right (list int)
   -- ((\x -> x) : f a -> f a) True : [Int] should fail to check
   -- ((\x -> x) : f a -> f a) True         should infer some unknown unification variables
-  let expr3 = App (Ann expr1 type1) (Var (Free "Kite.Primitive.True"))
+  let expr3 = App Nothing
+                  (Ann Nothing expr1 type1)
+                  (Var Nothing (Free "Kite.Primitive.True"))
       type3 = list int
   void (runTypeM defaultTypeEnv (check expr3 type3)) === Left
     (LocatedError

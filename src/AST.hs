@@ -13,41 +13,41 @@ import           Data.List                      ( intercalate )
 -- TODO: type sigs in let bindings
 -- TODO: multi-definition functions in let bindings
 --       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
-data Expr n t = Var n
-         | Ann (Expr n t) t
-         | Con n
-         | Hole n
-         | Abs [n] (Expr n t)
-         | App (Expr n t) (Expr n t)
-         | Let [(n, Expr n t, Maybe t)] (Expr n t)
-         | Case (Expr n t) [(Pat n, Expr n t)]
-         | MCase [([Pat n], Expr n t)]
-         | UnitLit
-         | TupleLit [Expr n t]
-         | ListLit [Expr n t]
-         | StringInterp String [(Expr n t, String)]
-         | StringLit String
-         | CharLit Char
-         | IntLit Int
-         | BoolLit Bool
-         | Record [(String, Expr n t)]
-         | Project (Expr n t) String
-         | FCall String [Expr n t]
+data Expr l n t = Var l n
+         | Ann l (Expr l n t) t
+         | Con l n
+         | Hole l n
+         | Abs l [n] (Expr l n t)
+         | App l (Expr l n t) (Expr l n t)
+         | Let l [(n, Expr l n t, Maybe t)] (Expr l n t)
+         | Case l (Expr l n t) [(Pat n, Expr l n t)]
+         | MCase l [([Pat n], Expr l n t)]
+         | UnitLit l
+         | TupleLit l [Expr l n t]
+         | ListLit l [Expr l n t]
+         | StringInterp l String [(Expr l n t, String)]
+         | StringLit l String
+         | CharLit l Char
+         | IntLit l Int
+         | BoolLit l Bool
+         | Record l [(String, Expr l n t)]
+         | Project l (Expr l n t) String
+         | FCall l String [Expr l n t]
          deriving (Eq, Show, Data)
 
-instance (Debug v, Debug t) => Debug (Expr v t) where
-  debug (Var v  ) = debug v
-  debug (Ann e t) = debug e <+> ":" <+> debug t
-  debug (App a b) = debug a <+> debug b
-  debug (Abs v e) = "λ" <> debug v <> "." <+> debug e
-  debug (Con  v ) = debug v
-  debug (Hole s ) = "?" <> debug s
-  debug (Case e alts) =
+instance (Debug v, Debug t) => Debug (Expr l v t) where
+  debug (Var _ v  ) = debug v
+  debug (Ann _ e t) = debug e <+> ":" <+> debug t
+  debug (App _ a b) = debug a <+> debug b
+  debug (Abs _ v e) = "λ" <> debug v <> "." <+> debug e
+  debug (Con  _ v ) = debug v
+  debug (Hole _ s ) = "?" <> debug s
+  debug (Case _ e alts) =
     "case" <+> debug e <+> "of {" <+> sepBy "; " (map go alts) <+> "}"
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
-  debug (MCase alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
+  debug (MCase _ alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
-  debug (Let binds e) =
+  debug (Let _ binds e) =
     "let"
       <+> foldl
             (\acc (x, a, t) -> case t of
@@ -57,24 +57,26 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
             )
             ("in" <+> debug e)
             binds
-  debug (StringLit s) = "\"" <> s <> "\""
-  debug (StringInterp s comps) =
+  debug (StringLit _ s) = "\"" <> s <> "\""
+  debug (StringInterp _ s comps) =
     let compStr =
             concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
     in  "\"" <> s <> compStr <> "\""
-  debug (CharLit c)       = "'" <> [c] <> "'"
-  debug (IntLit  i)       = show i
-  debug (BoolLit b)       = show b
-  debug UnitLit           = "()"
-  debug (ListLit  elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
-  debug (TupleLit elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
-  debug (Record   fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
+  debug (CharLit _ c      ) = "'" <> [c] <> "'"
+  debug (IntLit  _ i      ) = show i
+  debug (BoolLit _ b      ) = show b
+  debug (UnitLit _        ) = "()"
+  debug (ListLit  _ elems ) = "[" <+> sepBy ", " (map debug elems) <+> "]"
+  debug (TupleLit _ elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
+  debug (Record   _ fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
     where go (name, expr) = debug name <+> "=" <+> debug expr
-  debug (Project r f   ) = debug r <> "." <> debug f
-  debug (FCall   f args) = "$fcall" <+> f <+> sepBy " " (map debug args)
+  debug (Project _ r f   ) = debug r <> "." <> debug f
+  debug (FCall   _ f args) = "$fcall" <+> f <+> sepBy " " (map debug args)
 
 -- Like Expr, but with type annotations on everything
 -- This is the output from the typechecker (or will be, eventually)
+-- There's no parameter for annotations like source spans because we don't need
+-- that yet.
 data ExprT n t =
     VarT n t
   | AnnT (ExprT n t) t

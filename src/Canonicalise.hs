@@ -4,6 +4,7 @@ import           Prelude                 hiding ( mod )
 
 import qualified Data.Map.Strict               as Map
 
+import           Text.Megaparsec                ( SourcePos )
 import           Data.List                      ( mapAccumL )
 import           Util
 import           Syn
@@ -134,32 +135,35 @@ canonicaliseExp :: Env -> [RawName] -> Syn.Syn -> Can.Exp
 canonicaliseExp env = go
  where
   go locals = \case
-    Var n | n `elem` locals -> Var (Local n)
-          | otherwise       -> Var $ canonicaliseName env n
-    Ann e t -> Ann (canonicaliseExp env locals e) (canonicaliseType env t)
-    Con n | n `elem` locals -> Con (Local n)
-          | otherwise       -> Con $ canonicaliseName env n
-    Abs  ns    e           -> Abs (fmap Local ns) $ go (ns <> locals) e
-    App  a     b           -> App (go locals a) (go locals b)
-    Let  binds e           -> canonicaliseLet binds e
-    Case e     alts        -> canonicaliseCase (e, alts)
-    MCase    alts          -> canonicaliseMCase alts
-    TupleLit es            -> TupleLit $ fmap (go locals) es
-    ListLit  es            -> ListLit $ fmap (go locals) es
-    StringInterp pre parts -> StringInterp pre $ mapFst (go locals) parts
-    StringLit s            -> StringLit s
-    CharLit   c            -> CharLit c
-    Hole      n            -> Hole (canonicaliseName env n)
-    IntLit    i            -> IntLit i
-    BoolLit   b            -> BoolLit b
-    UnitLit                -> UnitLit
-    Record fields          -> Record $ mapSnd (go locals) fields
-    Project r    l         -> Project (go locals r) l
-    FCall   proc args      -> FCall proc (map (go locals) args)
+    Var s n | n `elem` locals -> Var s (Local n)
+            | otherwise       -> Var s $ canonicaliseName env n
+    Ann s e t -> Ann s (canonicaliseExp env locals e) (canonicaliseType env t)
+    Con s n | n `elem` locals -> Con s (Local n)
+            | otherwise       -> Con s $ canonicaliseName env n
+    Abs  s ns    e           -> Abs s (fmap Local ns) $ go (ns <> locals) e
+    App  s a     b           -> App s (go locals a) (go locals b)
+    Let  s binds e           -> canonicaliseLet s binds e
+    Case s e     alts        -> canonicaliseCase s (e, alts)
+    MCase    s alts          -> canonicaliseMCase s alts
+    TupleLit s es            -> TupleLit s $ fmap (go locals) es
+    ListLit  s es            -> ListLit s $ fmap (go locals) es
+    StringInterp s pre parts -> StringInterp s pre $ mapFst (go locals) parts
+    StringLit s str          -> StringLit s str
+    CharLit   s c            -> CharLit s c
+    Hole      s n            -> Hole s (canonicaliseName env n)
+    IntLit    s i            -> IntLit s i
+    BoolLit   s b            -> BoolLit s b
+    UnitLit s                -> UnitLit s
+    Record s fields          -> Record s $ mapSnd (go locals) fields
+    Project s r    l         -> Project s (go locals r) l
+    FCall   s proc args      -> FCall s proc (map (go locals) args)
    where
     canonicaliseLet
-      :: [(RawName, Syn.Syn, Maybe Syn.Type)] -> Syn.Syn -> Can.Exp
-    canonicaliseLet binds expr =
+      :: Maybe (SourcePos, SourcePos)
+      -> [(RawName, Syn.Syn, Maybe Syn.Type)]
+      -> Syn.Syn
+      -> Can.Exp
+    canonicaliseLet s binds expr =
       let
         (locals', binds') = foldl
           (\(locals_, acc) (varName, e, ty) ->
@@ -175,10 +179,13 @@ canonicaliseExp env = go
           )
           (locals, [])
           binds
-      in  Let binds' (go locals' expr)
+      in  Let s binds' (go locals' expr)
 
-    canonicaliseCase :: (Syn.Syn, [(Syn.Pattern, Syn.Syn)]) -> Can.Exp
-    canonicaliseCase (e, alts) =
+    canonicaliseCase
+      :: Maybe (SourcePos, SourcePos)
+      -> (Syn.Syn, [(Syn.Pattern, Syn.Syn)])
+      -> Can.Exp
+    canonicaliseCase s (e, alts) =
       let alts' = map
             (\(pat, e_) ->
               let (vars, pat') = canonicalisePattern env pat
@@ -186,9 +193,10 @@ canonicaliseExp env = go
               in  (pat', e')
             )
             alts
-      in  Case (go locals e) alts'
-    canonicaliseMCase :: [([Syn.Pattern], Syn)] -> Can.Exp
-    canonicaliseMCase alts =
+      in  Case s (go locals e) alts'
+    canonicaliseMCase
+      :: Maybe (SourcePos, SourcePos) -> [([Syn.Pattern], Syn)] -> Can.Exp
+    canonicaliseMCase s alts =
       let alts' = map
             (\(pats, e) ->
               let (vars, pats') = mapAccumL
@@ -199,7 +207,7 @@ canonicaliseExp env = go
               in  (pats', e')
             )
             alts
-      in  MCase alts'
+      in  MCase s alts'
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case

@@ -22,6 +22,7 @@ import           Type.FromSyn                   ( fromSyn
                                                 )
 import qualified Syn
 import           AST
+import           AST.DSL
 
 test :: Spec
 test = do
@@ -31,9 +32,9 @@ test = do
         maybeType arg = TCon "Maybe" [arg]
         ctx  = [V (Free "Nothing") (Forall a0 (maybeType (UType a0)))]
         ty   = Forall a1 (list (maybeType (UType a1)))
-        expr = App
-          (App (Var (Free "Kite.Primitive.::")) (Var (Free "Nothing")))
-          (Var (Free "Kite.Primitive.[]"))
+        expr = app_
+          (app_ (var_ (Free "Kite.Primitive.::")) (var_ (Free "Nothing")))
+          (var_ (Free "Kite.Primitive.[]"))
         r = putCtx ctx >> check expr ty
     it "typechecks successfully" $ do
       runTypeM defaultTypeEnv r `shouldBe` Right ()
@@ -48,9 +49,9 @@ test = do
         cons    = Free "Kite.Primitive.::"
         nil     = Free "Kite.Primitive.[]"
         nothing = Free "Nothing"
-        fun     = MCase
+        fun     = mcase_
           [ ( [ConsPat cons [ConsPat nothing [], VarPat (Free "rest")]]
-            , App (Var (Free "foo")) (Var (Free "rest"))
+            , app_ (var_ (Free "foo")) (var_ (Free "rest"))
             )
           ]
         ctx =

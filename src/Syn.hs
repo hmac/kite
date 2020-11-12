@@ -23,6 +23,7 @@ module Syn
   , fn
   , ftv
   , binOps
+  , setSourceSpan
   , Syn
   , Type
   , Type_(..)
@@ -31,6 +32,7 @@ module Syn
 where
 
 import qualified Data.Set                      as Set
+import           Text.Megaparsec                ( SourcePos )
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
                                                 )
@@ -38,7 +40,7 @@ import           Util
 
 import           Type.Reflection                ( Typeable )
 import qualified Data.Data                     as Data
-import qualified AST                            ( Expr
+import qualified AST                            ( Expr(..)
                                                 , Pat
                                                 )
 
@@ -188,7 +190,34 @@ ftv = \case
 -- evaluation.
 --
 -- [Syn] -> [Can.Exp] -> [Type.Exp] -> [Syn.Typed] -> [ELC] -> [LC]
-type Syn = AST.Expr RawName Type
+type Syn = AST.Expr (Maybe (SourcePos, SourcePos)) RawName Type
+
+-- Set the source span on an expression
+setSourceSpan :: (SourcePos, SourcePos) -> Syn -> Syn
+setSourceSpan sourceSpan =
+  let s = Just sourceSpan
+  in  \case
+        AST.Var _ a            -> AST.Var s a
+        AST.Ann _ a b          -> AST.Ann s a b
+        AST.Con  _ a           -> AST.Con s a
+        AST.Hole _ a           -> AST.Hole s a
+        AST.Abs  _ a b         -> AST.Abs s a b
+        AST.App  _ a b         -> AST.App s a b
+        AST.Let  _ a b         -> AST.Let s a b
+        AST.Case _ a b         -> AST.Case s a b
+        AST.MCase _ a          -> AST.MCase s a
+        AST.UnitLit _          -> AST.UnitLit s
+        AST.TupleLit _ a       -> AST.TupleLit s a
+        AST.ListLit  _ a       -> AST.ListLit s a
+        AST.StringInterp _ a b -> AST.StringInterp s a b
+        AST.StringLit _ a      -> AST.StringLit s a
+        AST.CharLit   _ a      -> AST.CharLit s a
+        AST.IntLit    _ a      -> AST.IntLit s a
+        AST.BoolLit   _ a      -> AST.BoolLit s a
+        AST.Record    _ a      -> AST.Record s a
+        AST.Project _ a b      -> AST.Project s a b
+        AST.FCall   _ a b      -> AST.FCall s a b
+
 
 -- Supported binary operators
 binOps :: [RawName]

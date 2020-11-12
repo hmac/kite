@@ -367,7 +367,7 @@ pExpr' =
     <|> pHole
     <|> pCharLit
     <|> try pStringLit
-    <|> try (IntLit <$> pInt)
+    <|> try (trackSource (IntLit Nothing <$> pInt))
     <|> try pRecordProject
     <|> pVar
     <|> pFCall
@@ -377,55 +377,65 @@ pExpr' =
     <|> pCons
     <|> pCase
 
+-- Run the parser, recording the source span
+trackSource :: Parser Syn -> Parser Syn
+trackSource p = do
+  startPos <- getSourcePos
+  result   <- p
+  endPos   <- getSourcePos
+  pure $ setSourceSpan (startPos, endPos) result
+
 pUnitLit :: Parser Syn
-pUnitLit = do
+pUnitLit = trackSource $ do
   void $ symbol "()"
-  pure UnitLit
+  pure $ UnitLit Nothing
 
 -- Application of a binary operator
 -- e.g. x + y
 -- TODO: fixity?
 -- Maybe handle this after parsing
 pBinApp :: Parser Syn
-pBinApp = do
+pBinApp = trackSource $ do
   left <- pExpr'
   op   <- pOp
   void $ some (char ' ')
-  App (App op left) <$> pExpr'
+  App Nothing (App Nothing op left) <$> pExpr'
  where
   pOp :: Parser Syn
   pOp =
-    (Con . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
+    trackSource
+      $   (Con Nothing . Name <$> string "::")
+      <|> (Var Nothing . Name <$> (twoCharOp <|> oneCharOp))
   twoCharOp =
     string "&&" <|> string "||" <|> string ">=" <|> string "<=" <|> string "<>"
   oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
 
 pApp :: Parser Syn
-pApp = do
+pApp = trackSource $ do
   pos   <- indentLevel
   first <- pExpr'
   skipNewlines
   void $ indentGuard spaceConsumerN GT pos
   rest <- some pExpr'
-  pure $ foldl1 App (first : rest)
+  pure $ foldl1 (App Nothing) (first : rest)
 
 -- foo.bar
 -- For ease of implementation we currently only support using projection on
 -- variables. In the future we may want to support arbitrary expressions, e.g.
 --   (let a = 1 in Foo { x = a }).x
 pRecordProject :: Parser Syn
-pRecordProject = do
+pRecordProject = trackSource $ do
   record <- pVar
   void (string ".")
-  Project record <$> lowercaseString
+  Project Nothing record <$> lowercaseString
 
 pHole :: Parser Syn
-pHole = do
+pHole = trackSource $ do
   void (string "?")
-  Hole <$> pHoleName
+  Hole Nothing <$> pHoleName
 
 pCharLit :: Parser Syn
-pCharLit = CharLit <$> pChar
+pCharLit = trackSource $ CharLit Nothing <$> pChar
 
 pChar :: Parser Char
 pChar = head <$> between (string "'") (symbol "'") (takeP (Just "char") 1)
@@ -447,7 +457,7 @@ data StrParse = Interp Syn | StrEnd | Str String
   deriving (Eq, Show)
 
 pStringLit :: Parser Syn
-pStringLit = do
+pStringLit = trackSource $ do
   void (char '"')
   parts <- pInner
   void (symbol "\"")
@@ -469,8 +479,8 @@ pStringLit = do
     $ let (prefix , rest   ) = first parts
           (prefix', interps) = comps rest
       in  if null interps
-            then StringLit (prefix <> prefix')
-            else StringInterp (prefix <> prefix') interps
+            then StringLit Nothing (prefix <> prefix')
+            else StringInterp Nothing (prefix <> prefix') interps
  where
   lexChar :: Parser String
   lexChar = do
@@ -507,21 +517,21 @@ pStringLit = do
         pure $ Str s : rest
 
 pVar :: Parser Syn
-pVar = Var <$> lowercaseName
+pVar = trackSource $ Var Nothing <$> lowercaseName
 
 pFCall :: Parser Syn
-pFCall = do
+pFCall = trackSource $ do
   void (symbol "$fcall")
   name <- lowercaseName
   args <- many pExpr'
-  pure $ FCall (unName name) args
+  pure $ FCall Nothing (unName name) args
 
 pAbs :: Parser Syn
-pAbs = do
+pAbs = trackSource $ do
   void (string "\\")
   args <- many lowercaseName
   void (symbol "->")
-  Abs args <$> pExpr
+  Abs Nothing args <$> pExpr
 
 -- let foo = 1 in foo
 --
@@ -540,12 +550,12 @@ pAbs = do
 --           False -> 0
 --  in foo
 pLet :: Parser Syn
-pLet = do
+pLet = trackSource $ do
   void (symbolN "let")
   pos   <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
   binds <- some (pAnnotatedBind pos <|> pBind pos)
   void (symbolN "in")
-  Let binds <$> pExpr
+  Let Nothing binds <$> pExpr
  where
   pBind :: Pos -> Parser (RawName, Syn, Maybe Type)
   pBind pos = do
@@ -574,7 +584,7 @@ pLet = do
 
 
 pTuple :: Parser Syn
-pTuple = do
+pTuple = trackSource $ do
   _     <- symbol "("
   pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
   expr1 <- pExpr
@@ -585,26 +595,28 @@ pTuple = do
     pExpr
   spaceConsumerN
   _ <- symbol ")"
-  pure $ TupleLit (expr1 : exprs)
+  pure $ TupleLit Nothing (expr1 : exprs)
 
 makePositive :: Int -> Int
 makePositive n | n < 1     = 1
                | otherwise = n
 
 pList :: Parser Syn
-pList = ListLit
-  <$> between (symbolN "[") (symbol "]") (lexemeN pExpr `sepBy` lexemeN comma)
+pList = trackSource $ ListLit Nothing <$> between
+  (symbolN "[")
+  (symbol "]")
+  (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
-pCons = do
+pCons = trackSource $ do
   name <- uppercaseName
   pure $ case name of
-    "True"  -> BoolLit True
-    "False" -> BoolLit False
-    n       -> Con n
+    "True"  -> BoolLit Nothing True
+    "False" -> BoolLit Nothing False
+    n       -> Con Nothing n
 
 pCase :: Parser Syn
-pCase = do
+pCase = trackSource $ do
   void (symbol "case")
   scrutinee <- pExpr
   void (symbol "of")
@@ -612,7 +624,7 @@ pCase = do
   indentation <- some (char ' ')
   first       <- pAlt
   rest        <- many $ try (newline >> string indentation >> pAlt)
-  pure $ Case scrutinee (first : rest)
+  pure $ Case Nothing scrutinee (first : rest)
  where
   pAlt :: Parser (Syn.Pattern, Syn)
   pAlt = do
@@ -638,13 +650,13 @@ pCase = do
 -- multiple independent patterns. This is why we use pPattern rather than
 -- pCasePattern.
 pMultiCase :: Parser Syn
-pMultiCase = do
+pMultiCase = trackSource $ do
   pos   <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
   first <- pAlt
   rest  <- many $ try $ do
     void $ indentGuard spaceConsumerN GT pos
     pAlt
-  pure $ MCase (first : rest)
+  pure $ MCase Nothing (first : rest)
  where
   pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do
@@ -655,7 +667,7 @@ pMultiCase = do
 
 
 pRecord :: Parser Syn
-pRecord = Record <$> braces (pField `sepBy1` comma)
+pRecord = trackSource $ Record Nothing <$> braces (pField `sepBy1` comma)
  where
   pField = do
     name <- lowercaseString

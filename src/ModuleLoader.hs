@@ -91,7 +91,7 @@ load root name = parseKiteFile <$> readFile (filePath root name)
 -- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
 -- anyway.
-dependencies :: Module_ n (Expr n ty) ty -> [ModuleName]
+dependencies :: Module_ n (Expr s n ty) ty -> [ModuleName]
 dependencies Module { moduleImports = imports } =
   filter (/= ModuleName ["Kite", "Primitive"]) $ nub $ map importName imports
 

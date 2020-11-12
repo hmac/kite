@@ -13,6 +13,11 @@ import Data.Eq (eq)
 import Data.Bool (or, monoidAny)
 import Data.Maybe (Maybe(..))
 
+foo : Bool
+foo = let id : Char
+          id = y -> y
+          y = id True
+       in id True
 
 main : [(String, String)]
 main = run (plus nonEmptyWord (result "")) "apple pie"

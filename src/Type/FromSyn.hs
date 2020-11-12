@@ -19,21 +19,21 @@ import           AST
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
-  Var n   -> pure $ Var (T.Free n)
-  Con n   -> pure $ Con (T.Free n)
-  Ann e t -> Ann <$> fromSyn e <*> convertType mempty t
-  Hole n  -> pure $ Hole (T.Free n)
-  App a b -> App <$> fromSyn a <*> fromSyn b
-  Case scrut alts ->
-    Case
+  Var s n   -> pure $ Var s (T.Free n)
+  Con s n   -> pure $ Con s (T.Free n)
+  Ann s e t -> Ann s <$> fromSyn e <*> convertType mempty t
+  Hole s n  -> pure $ Hole s (T.Free n)
+  App s a b -> App s <$> fromSyn a <*> fromSyn b
+  Case s scrut alts ->
+    Case s
       <$> fromSyn scrut
       <*> mapM (bimapM (pure . convertPattern) fromSyn) alts
-  MCase alts ->
-    MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
-  Abs xs a -> do
+  MCase s alts ->
+    MCase s <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
+  Abs s xs a -> do
     a' <- fromSyn a
-    pure $ Abs (map T.Free xs) a'
-  Let binds body -> do
+    pure $ Abs s (map T.Free xs) a'
+  Let s binds body -> do
     body'  <- fromSyn body
     binds' <- mapM
       (\(n, e, maybeType) -> do
@@ -42,19 +42,19 @@ fromSyn = \case
       )
       binds
 
-    pure $ Let binds' body'
-  UnitLit      -> pure UnitLit
-  TupleLit  es -> TupleLit <$> mapM fromSyn es
-  ListLit   es -> ListLit <$> mapM fromSyn es
-  StringLit s  -> pure $ StringLit s
-  StringInterp prefix comps ->
-    StringInterp prefix <$> mapM (firstM fromSyn) comps
-  CharLit c      -> pure $ CharLit c
-  IntLit  i      -> pure $ IntLit i
-  BoolLit b      -> pure $ BoolLit b
-  Record  r      -> Record <$> mapM (secondM fromSyn) r
-  Project r f    -> Project <$> fromSyn r <*> pure f
-  FCall   n args -> FCall n <$> mapM fromSyn args
+    pure $ Let s binds' body'
+  UnitLit s       -> pure $ UnitLit s
+  TupleLit  s es  -> TupleLit s <$> mapM fromSyn es
+  ListLit   s es  -> ListLit s <$> mapM fromSyn es
+  StringLit s str -> pure $ StringLit s str
+  StringInterp s prefix comps ->
+    StringInterp s prefix <$> mapM (firstM fromSyn) comps
+  CharLit s c      -> pure $ CharLit s c
+  IntLit  s i      -> pure $ IntLit s i
+  BoolLit s b      -> pure $ BoolLit s b
+  Record  s r      -> Record s <$> mapM (secondM fromSyn) r
+  Project s r f    -> Project s <$> fromSyn r <*> pure f
+  FCall   s n args -> FCall s n <$> mapM fromSyn args
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = \case

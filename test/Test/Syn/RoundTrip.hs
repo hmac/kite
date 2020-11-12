@@ -9,6 +9,7 @@ import           Text.Megaparsec                ( parse
                                                 )
 
 import           AST
+import           AST.DSL
 import           Syn
 import           Syn.Parse
 import           Syn.Print
@@ -176,27 +177,27 @@ genExpr :: H.Gen Syn
 genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   Gen.choice
   [ genVar
-  , Con <$> genUpperName
-  , Hole <$> genHoleName
-  , IntLit <$> genInt
-  , BoolLit <$> Gen.bool
-  , CharLit <$> Gen.unicode
-  , pure UnitLit
+  , con_ <$> genUpperName
+  , hole_ <$> genHoleName
+  , int_ <$> genInt
+  , bool_ <$> Gen.bool
+  , char_ <$> Gen.unicode
+  , pure unit_
   ]
   [ genAbs
-  , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
+  , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) app_
   , Gen.subtermM2 (Gen.small genExpr)
                   (Gen.small genExpr)
-                  (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
+                  (\e1 e2 -> genBinOp >>= \op -> pure (app_ (app_ op e1) e2))
   , genLet
   , Gen.subtermM3 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (Gen.small genExpr)
-                  (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
-  , StringInterp
+                  (\e1 e2 e3 -> case_ e1 <$> genCaseAlts e2 e3)
+  , stringInterp_
   <$> genString (Range.linear 0 10)
   <*> Gen.list (Range.linear 1 2) genStringInterpPair
-  , StringLit <$> genString (Range.linear 0 10)
+  , string_ <$> genString (Range.linear 0 10)
   , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
   , genRecordProjection
   ]
@@ -209,39 +210,39 @@ genFunExpr =
 genAbs :: H.Gen Syn
 genAbs = Gen.subtermM
   (Gen.small genExpr)
-  (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
+  (\e -> abs_ <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
 
 genVar :: H.Gen Syn
-genVar = Var <$> genLowerName
+genVar = var_ <$> genLowerName
 
 genRecordProjection :: H.Gen Syn
-genRecordProjection = Project <$> (Var <$> genLowerName) <*> genLowerString
+genRecordProjection = project_ <$> (var_ <$> genLowerName) <*> genLowerString
 
 genLet :: H.Gen Syn
 genLet = Gen.subtermM2 (Gen.small genExpr)
                        (Gen.small genExpr)
-                       (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
+                       (\e1 e2 -> let_ <$> genLetBinds e1 <*> pure e2)
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
-  Var     _             -> []
-  Con     _             -> []
-  Hole    _             -> []
-  IntLit  _             -> []
-  BoolLit _             -> []
-  UnitLit               -> []
-  Abs  (v : vs)    e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
-  Abs  _           e    -> [e]
-  App  _           b    -> [b]
-  Let  []          body -> [body]
-  Let  (b : binds) body -> [Let binds body]
-  Case e           alts -> [e] <> map snd alts
-  TupleLit  es          -> (TupleLit <$> shrinkList1 es) <> es
-  ListLit   es          -> (ListLit <$> shrinkList es) <> es
-  StringLit s           -> []
-  StringInterp p _      -> [StringInterp p []]
-  Record fields         -> Record <$> shrinkList1 fields
-  Project r _           -> [r]
+  Var     _ _             -> []
+  Con     _ _             -> []
+  Hole    _ _             -> []
+  IntLit  _ _             -> []
+  BoolLit _ _             -> []
+  UnitLit _               -> []
+  Abs  _ (v : vs)    e    -> fmap (\vars -> abs_ (v : vars) e) (shrinkList1 vs)
+  Abs  _ _           e    -> [e]
+  App  _ _           b    -> [b]
+  Let  _ []          body -> [body]
+  Let  _ (b : binds) body -> [let_ binds body]
+  Case _ e           alts -> [e] <> map snd alts
+  TupleLit  _ es          -> (tuple_ <$> shrinkList1 es) <> es
+  ListLit   _ es          -> (list_ <$> shrinkList es) <> es
+  StringLit _ s           -> []
+  StringInterp _ p _      -> [stringInterp_ p []]
+  Record _ fields         -> record_ <$> shrinkList1 fields
+  Project _ r _           -> [r]
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits
@@ -258,13 +259,13 @@ genRecord :: Syn -> Syn -> H.Gen Syn
 genRecord e1 e2 = do
   f1 <- genLowerString
   f2 <- genLowerString
-  pure (Record [(f1, e1), (f2, e2)])
+  pure (record_ [(f1, e1), (f2, e2)])
 
 genStringInterpPair :: H.Gen (Syn, String)
 genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)
 
 genBinOp :: H.Gen Syn
-genBinOp = Var <$> Gen.element binOps
+genBinOp = var_ <$> Gen.element binOps
 
 genLetBinds :: Syn -> H.Gen [(RawName, Syn, Maybe Type)]
 genLetBinds e = do

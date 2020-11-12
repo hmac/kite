@@ -8,13 +8,14 @@ where
 -- This means all names are resolved to a specific scope, i.e. local or from a
 -- particular named module.
 
+import           Text.Megaparsec                ( SourcePos )
 import           Data.Name
 import           Syn                     hiding ( Name )
 import qualified AST                            ( Expr
                                                 , Pat
                                                 )
 
-type Exp = AST.Expr Name (Type_ Name)
+type Exp = AST.Expr (Maybe (SourcePos, SourcePos)) Name (Type_ Name)
 type Type = Type_ Name
 type Pattern = AST.Pat Name
 type DataCon = DataCon_ Name

@@ -16,6 +16,7 @@ import           Syn.Parse                      ( pModule
                                                 )
 
 import           AST
+import           AST.DSL
 import           Syn
 
 -- Parse the string as an expression
@@ -30,7 +31,7 @@ test = parallel $ do
         { funComments = []
         , funName     = "id"
         , funType     = Just (TyVar "a" `fn` TyVar "a")
-        , funExpr     = MCase [([VarPat "x"], Var "x")]
+        , funExpr     = mcase_ [([VarPat "x"], var_ "x")]
         }
     it "requires a line fold to be indented" $ do
       parse pDecl "" `shouldFailOn` "id : a -> a\nid x =\nx"
@@ -39,10 +40,11 @@ test = parallel $ do
       parse pDecl "" "const : a -> b -> a\nconst = x y -> x"
         `shouldParse` FunDecl Fun
                         { funComments = []
-                        , funName = "const"
+                        , funName     = "const"
                         , funType = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar
                                       "a"
-                        , funExpr = MCase [([VarPat "x", VarPat "y"], Var "x")]
+                        , funExpr     = mcase_
+                                          [([VarPat "x", VarPat "y"], var_ "x")]
                         }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap = f m -> undefined"
@@ -53,8 +55,8 @@ test = parallel $ do
                                         $    (TyVar "a" `fn` TyVar "b")
                                         `fn` TyApp (TyVar "f") (TyVar "a")
                                         `fn` TyApp (TyVar "f") (TyVar "b")
-                        , funExpr     = MCase
-                          [([VarPat "f", VarPat "m"], Var "undefined")]
+                        , funExpr     = mcase_
+                          [([VarPat "f", VarPat "m"], var_ "undefined")]
                         }
     it "parses a multiline function definition" $ do
       parse
@@ -66,12 +68,12 @@ test = parallel $ do
                         , funName     = "head"
                         , funType = Just $ TyApp TyList (TyVar "a") `fn` TyVar
                                       "a"
-                        , funExpr     = MCase
+                        , funExpr     = mcase_
                           [ ( [ListPat []]
-                            , App (Var "error") (StringLit "head: empty list")
+                            , app_ (var_ "error") (string_ "head: empty list")
                             )
                           , ( [ConsPat "Cons" [VarPat "x", VarPat "xs"]]
-                            , Var "x"
+                            , var_ "x"
                             )
                           ]
                         }
@@ -88,12 +90,12 @@ test = parallel $ do
                           $    TyApp (TyApp (TyCon "Either") (TyVar "a"))
                                      (TyVar "b")
                           `fn` TyApp (TyCon "Maybe") (TyVar "a")
-                        , funExpr     = MCase
+                        , funExpr     = mcase_
                                           [ ( [ConsPat "Left" [VarPat "x"]]
-                                            , App (Con "Just") (Var "x")
+                                            , app_ (con_ "Just") (var_ "x")
                                             )
                                           , ( [ConsPat "Right" [WildPat]]
-                                            , Con "Nothing"
+                                            , con_ "Nothing"
                                             )
                                           ]
                         }
@@ -158,10 +160,10 @@ test = parallel $ do
                         { moduleName     = "Foo"
                         , moduleImports  = []
                         , moduleExports  = []
-                        , moduleDecls    = [ FunDecl Fun { funName = "one"
+                        , moduleDecls    = [ FunDecl Fun { funName     = "one"
                                                          , funComments = []
                                                          , funType = Just TyInt
-                                                         , funExpr = IntLit 1
+                                                         , funExpr     = int_ 1
                                                          }
                                            ]
                         , moduleMetadata = [("key", "val")]
@@ -213,113 +215,116 @@ test = parallel $ do
   describe "parsing expressions" $ do
     it "parses an application" $ do
       parse pExpr "" "foo x y z"
-        `shouldParse` App (App (App (Var "foo") (Var "x")) (Var "y")) (Var "z")
+        `shouldParse` app_
+                        (app_ (app_ (var_ "foo") (var_ "x")) (var_ "y"))
+                        (var_ "z")
     it "parses an infix application" $ do
       parse pExpr "" "(a <= a)"
-        `shouldParse` App (App (Var "<=") (Var "a")) (Var "a")
+        `shouldParse` app_ (app_ (var_ "<=") (var_ "a")) (var_ "a")
     it "parses a case expression" $ do
       parse pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
-        `shouldParse` Case
-                        (Var "x")
-                        [ (ConsPat "Just" [VarPat "y"], Var "y")
-                        , (ConsPat "Nothing" []       , Var "z")
+        `shouldParse` case_
+                        (var_ "x")
+                        [ (ConsPat "Just" [VarPat "y"], var_ "y")
+                        , (ConsPat "Nothing" []       , var_ "z")
                         ]
     it "parses a case with variable patterns" $ do
       parse pExpr "" "case x of\n  y -> y"
-        `shouldParse` Case (Var "x") [(VarPat "y", Var "y")]
+        `shouldParse` case_ (var_ "x") [(VarPat "y", var_ "y")]
     it "parses a let expression on one line" $ do
-      parse pExpr "" "let x = 1 in add x 1" `shouldParse` Let
-        [("x", IntLit 1, Nothing)]
-        (App (App (Var "add") (Var "x")) (IntLit 1))
+      parse pExpr "" "let x = 1 in add x 1" `shouldParse` let_
+        [("x", int_ 1, Nothing)]
+        (app_ (app_ (var_ "add") (var_ "x")) (int_ 1))
     it "parses a let expression split over two lines" $ do
-      parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
-        [("x", IntLit 1, Nothing), ("y", IntLit 2, Nothing)]
-        (App (App (Var "add") (Var "x")) (Var "y"))
+      parse pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` let_
+        [("x", int_ 1, Nothing), ("y", int_ 2, Nothing)]
+        (app_ (app_ (var_ "add") (var_ "x")) (var_ "y"))
     it "parses a let expression with a multiline binding" $ do
       -- let x = foo
       --          bar
       --     y = baz
       --  in x
       parseExpr "let x = foo\n         bar\n    y = baz\n in x"
-        `shouldParse` Let
-                        [ ("x", App (Var "foo") (Var "bar"), Nothing)
-                        , ("y", Var "baz"                  , Nothing)
+        `shouldParse` let_
+                        [ ("x", app_ (var_ "foo") (var_ "bar"), Nothing)
+                        , ("y", var_ "baz"                    , Nothing)
                         ]
-                        (Var "x")
+                        (var_ "x")
     it "parses an annotated let expression" $ do
       parseExpr "let f : Int -> Int\n    f = i -> i + 1\n in f 1"
-        `shouldParse` Let
+        `shouldParse` let_
                         [ ( "f"
-                          , MCase
+                          , mcase_
                             [ ( [VarPat "i"]
-                              , App (App (Var "+") (Var "i")) (IntLit 1)
+                              , app_ (app_ (var_ "+") (var_ "i")) (int_ 1)
                               )
                             ]
                           , Just (TyFun TyInt TyInt)
                           )
                         ]
-                        (App (Var "f") (IntLit 1))
+                        (app_ (var_ "f") (int_ 1))
     it "parses multiple annotated let bindings" $ do
       parseExpr
           "let f : Int -> Int\n    f = i -> i + 1\n    g : Bool -> Int\n    g = True -> 1\n        False -> 0\n in 1"
-        `shouldParse` Let
+        `shouldParse` let_
                         [ ( "f"
-                          , MCase
+                          , mcase_
                             [ ( [VarPat "i"]
-                              , App (App (Var "+") (Var "i")) (IntLit 1)
+                              , app_ (app_ (var_ "+") (var_ "i")) (int_ 1)
                               )
                             ]
                           , Just (TyFun TyInt TyInt)
                           )
                         , ( "g"
-                          , MCase
-                            [ ([BoolPat True] , IntLit 1)
-                            , ([BoolPat False], IntLit 0)
+                          , mcase_
+                            [ ([BoolPat True] , int_ 1)
+                            , ([BoolPat False], int_ 0)
                             ]
                           , Just (TyFun TyBool TyInt)
                           )
                         ]
-                        (IntLit 1)
+                        (int_ 1)
     it "parses a binary operator" $ do
       parse pExpr "" "1 + 1"
-        `shouldParse` App (App (Var "+") (IntLit 1)) (IntLit 1)
+        `shouldParse` app_ (app_ (var_ "+") (int_ 1)) (int_ 1)
     it "parses a tuple" $ do
-      parse pExpr "" "(\"\", 0)" `shouldParse` TupleLit [StringLit "", IntLit 0]
+      parse pExpr "" "(\"\", 0)" `shouldParse` tuple_ [string_ "", int_ 0]
     it "parses a record" $ do
       parse pExpr "" "{ a = a, b = b }"
-        `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
+        `shouldParse` record_ [("a", var_ "a"), ("b", var_ "b")]
     it "parses record projection" $ do
-      parseExpr "a.b" `shouldParse` Project (Var "a") "b"
-      parse pExpr "" "f a.b" `shouldParse` App (Var "f") (Project (Var "a") "b")
+      parseExpr "a.b" `shouldParse` project_ (var_ "a") "b"
+      parse pExpr "" "f a.b"
+        `shouldParse` app_ (var_ "f") (project_ (var_ "a") "b")
       -- Not currently supported
       -- parseExpr "{ a = a }.b"
-      --   `shouldParse` (Project (Record [("a", Var "a")]) "b")
+      --   `shouldParse` (project_ (record_ [("a", var_ "a")]) "b")
   describe "parsing string literals" $ do
     it "parses a simple string" $ do
-      parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello"
+      parse pExpr "" "\"hello\"" `shouldParse` string_ "hello"
     it "parses a string with escaped double quotes" $ do
       parse pExpr "" "\"hello quote: \\\"\""
-        `shouldParse` StringLit "hello quote: \""
+        `shouldParse` string_ "hello quote: \""
     it "parses a string with an escaped backslash" $ do
       parse pExpr "" "\"hello backslash: \\\\\""
-        `shouldParse` StringLit "hello backslash: \\"
+        `shouldParse` string_ "hello backslash: \\"
     it "parses a string with an escaped newline" $ do
       parse pExpr "" "\"hello newline: \\n\""
-        `shouldParse` StringLit "hello newline: \n"
+        `shouldParse` string_ "hello newline: \n"
     it "parses a string with an interpolation" $ do
       parse pExpr "" "\"hello #{name}\""
-        `shouldParse` StringInterp "hello " [(Var "name", "")]
+        `shouldParse` stringInterp_ "hello " [(var_ "name", "")]
     it "parses a string with more complex interpolation" $ do
-      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringInterp
+      parse pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` stringInterp_
         "hello "
-        [(App (App (Var "+") (Var "name")) (StringLit "!"), "")]
+        [(app_ (app_ (var_ "+") (var_ "name")) (string_ "!"), "")]
     it "parses a string with a lone hash" $ do
-      parse pExpr "" "\"hello hash: #\"" `shouldParse` StringLit "hello hash: #"
+      parse pExpr "" "\"hello hash: #\"" `shouldParse` string_ "hello hash: #"
     it "parses a string with an escaped hash bracket" $ do
       parse pExpr "" "\"hello hash bracket: #\\{\""
-        `shouldParse` StringLit "hello hash bracket: #{"
+        `shouldParse` string_ "hello hash bracket: #{"
     it "parses a string with several escaped backslashes" $ do
-      parse pExpr "" "\"\\\\\\\\\"" `shouldParse` StringLit "\\\\"
+      parse pExpr "" "\"\\\\\\\\\"" `shouldParse` string_ "\\\\"
   describe "parsing types" $ do
     it "basic applications" $ do
       parse pType "" "f a" `shouldParse` (TyVar "f" `tyapp` TyVar "a")

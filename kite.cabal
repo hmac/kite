@@ -30,6 +30,7 @@ source-repository head
 library
   exposed-modules:
       AST
+      AST.DSL
       Canonical
       Canonical.Primitive
       Canonicalise

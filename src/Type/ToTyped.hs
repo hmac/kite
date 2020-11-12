@@ -58,30 +58,30 @@ convertPattern = coerce
 
 convertExpr :: Can.Exp -> T.Exp
 convertExpr = \case
-  Var v       -> T.VarT v unknown
-  Ann _e _t   -> error "Type.ToTyped.convertExpr: cannot convert annotations"
-  Con  c      -> T.ConT c
-  Hole n      -> T.HoleT n unknown
-  Abs xs    e -> T.AbsT (map (, unknown) xs) (convertExpr e) unknown
-  App a     b -> T.AppT (convertExpr a) (convertExpr b) unknown
-  Let binds e -> T.LetT
+  Var _ v       -> T.VarT v unknown
+  Ann _ _e _t   -> error "Type.ToTyped.convertExpr: cannot convert annotations"
+  Con  _ c      -> T.ConT c
+  Hole _ n      -> T.HoleT n unknown
+  Abs _ xs    e -> T.AbsT (map (, unknown) xs) (convertExpr e) unknown
+  App _ a     b -> T.AppT (convertExpr a) (convertExpr b) unknown
+  Let _ binds e -> T.LetT
     (map (\(n, v, ty) -> (n, convertExpr v, convertType <$> ty)) binds)
     (convertExpr e)
     unknown
-  Case s alts -> T.CaseT (convertExpr s) (map convertAlt alts) unknown
-  MCase alts ->
+  Case _ s alts -> T.CaseT (convertExpr s) (map convertAlt alts) unknown
+  MCase _ alts ->
     T.MCaseT (map (bimap (map convertPattern) convertExpr) alts) unknown
-  UnitLit              -> T.UnitLitT
-  TupleLit es          -> T.TupleLitT (map convertExpr es) unknown
-  ListLit  es          -> T.ListLitT (map convertExpr es) unknown
-  StringInterp s comps -> T.StringInterpT s (mapFst convertExpr comps)
-  StringLit s          -> T.StringLitT s
-  CharLit   c          -> T.CharLitT c
-  IntLit    i          -> T.IntLitT i
-  BoolLit   b          -> T.BoolLitT b
-  Record    fields     -> T.RecordT (mapSnd convertExpr fields) unknown
-  Project r f          -> T.ProjectT (convertExpr r) f unknown
-  FCall   f args       -> T.FCallT f (map convertExpr args) unknown
+  UnitLit _              -> T.UnitLitT
+  TupleLit _ es          -> T.TupleLitT (map convertExpr es) unknown
+  ListLit  _ es          -> T.ListLitT (map convertExpr es) unknown
+  StringInterp _ s comps -> T.StringInterpT s (mapFst convertExpr comps)
+  StringLit _ s          -> T.StringLitT s
+  CharLit   _ c          -> T.CharLitT c
+  IntLit    _ i          -> T.IntLitT i
+  BoolLit   _ b          -> T.BoolLitT b
+  Record    _ fields     -> T.RecordT (mapSnd convertExpr fields) unknown
+  Project _ r f          -> T.ProjectT (convertExpr r) f unknown
+  FCall   _ f args       -> T.FCallT f (map convertExpr args) unknown
 
 convertAlt :: (Can.Pattern, Can.Exp) -> (T.Pattern, T.Exp)
 convertAlt (p, e) = (convertPattern p, convertExpr e)

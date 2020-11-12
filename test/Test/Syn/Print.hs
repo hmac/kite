@@ -6,6 +6,7 @@ where
 import           Test.Hspec
 import Syn.Print
 import AST
+import AST.DSL
 import           Syn
 import Data.Maybe (fromMaybe)
 import Data.Text.Prettyprint.Doc (Doc)
@@ -50,9 +51,9 @@ test = parallel $ do
     it "prints a string with an escaped backslash" $ do
       show (printInterpolatedString "hello backslash: \\" []) `shouldBe` "\"hello backslash: \\\\\""
     it "prints a string with an interpolation" $ do
-        show (printInterpolatedString "hello " [(Var "name", "")]) `shouldBe` "\"hello #{name}\""
+        show (printInterpolatedString "hello " [(var_ "name", "")]) `shouldBe` "\"hello #{name}\""
     it "prints a string with more complex interpolation" $ do
-        show (printInterpolatedString "hello " [(App (App (Var "+") (Var "name")) (StringInterp "!" []), "")])
+        show (printInterpolatedString "hello " [(app_ (app_ (var_ "+") (var_ "name")) (stringInterp_ "!" []), "")])
           `shouldBe` "\"hello #{(name + \"!\")}\""
     it "prints a string with a lone hash" $ do
         show (printInterpolatedString "hello hash: #" []) `shouldBe` "\"hello hash: #\""

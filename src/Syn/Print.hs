@@ -186,31 +186,31 @@ printPattern (ConsPat n pats) =
 
 -- TODO: binary operators
 printExpr :: Syn -> Document
-printExpr (Var n  ) = printName n
-printExpr (Ann e t) = printExpr e <+> colon <+> printType t
-printExpr (Con n  ) = data_ (printName n)
-printExpr (Record fields) =
+printExpr (Var _ n  ) = printName n
+printExpr (Ann _ e t) = printExpr e <+> colon <+> printType t
+printExpr (Con _ n  ) = data_ (printName n)
+printExpr (Record _ fields) =
   data_ $ printRecordSyntax "=" $ map (bimap pretty printExpr) fields
-printExpr (Project e f) = printExpr' e <> dot <> pretty f
-printExpr (Hole n     ) = hole ("?" <> printName n)
-printExpr (Abs args e) =
+printExpr (Project _ e f) = printExpr' e <> dot <> pretty f
+printExpr (Hole _ n     ) = hole ("?" <> printName n)
+printExpr (Abs _ args e) =
   parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
-printExpr (App  a     b   ) = printApp a b
-printExpr (Let  binds e   ) = printLet binds e
-printExpr (Case e     alts) = printCase e alts
-printExpr (MCase    alts  ) = printMCase alts
-printExpr (TupleLit es    ) = tupled (map printExpr es)
-printExpr (ListLit es) | any big es = printList es
-                       | otherwise  = list (map printExpr es)
-printExpr (IntLit i) = pretty i
-printExpr (StringInterp prefix interps) =
+printExpr (App  _ a     b   ) = printApp a b
+printExpr (Let  _ binds e   ) = printLet binds e
+printExpr (Case _ e     alts) = printCase e alts
+printExpr (MCase    _ alts  ) = printMCase alts
+printExpr (TupleLit _ es    ) = tupled (map printExpr es)
+printExpr (ListLit _ es) | any big es = printList es
+                         | otherwise  = list (map printExpr es)
+printExpr (IntLit _ i) = pretty i
+printExpr (StringInterp _ prefix interps) =
   printInterpolatedString prefix interps
-printExpr (StringLit s    ) = printInterpolatedString s []
-printExpr (CharLit   c    ) = squotes $ pretty c
-printExpr (BoolLit   True ) = data_ "True"
-printExpr (BoolLit   False) = data_ "False"
-printExpr UnitLit           = data_ "()"
-printExpr (FCall proc args) =
+printExpr (StringLit _ s    ) = printInterpolatedString s []
+printExpr (CharLit   _ c    ) = squotes $ pretty c
+printExpr (BoolLit   _ True ) = data_ "True"
+printExpr (BoolLit   _ False) = data_ "False"
+printExpr (UnitLit _        ) = data_ "()"
+printExpr (FCall _ proc args) =
   "$fcall" <+> pretty proc <+> hsep (map printExpr args)
 
 -- print an expression with unambiguous precendence
@@ -238,26 +238,26 @@ escape []              = []
 -- Can we simplify this by introducting printExpr' which behaves like printExpr
 -- but always parenthesises applications?
 printApp :: Syn -> Syn -> Document
-printApp (App (Var op) a) b | op `elem` binOps =
+printApp (App _ (Var aVar op) a) b | op `elem` binOps =
   parens $ case (singleton a, singleton b) of
-    (True, True) -> printExpr a <+> printExpr (Var op) <+> printExpr b
+    (True, True) -> printExpr a <+> printExpr (Var aVar op) <+> printExpr b
     (False, False) ->
-      parens (printExpr a) <+> printExpr (Var op) <+> parens (printExpr b)
+      parens (printExpr a) <+> printExpr (Var aVar op) <+> parens (printExpr b)
     (True, False) ->
-      printExpr a <+> printExpr (Var op) <+> parens (printExpr b)
+      printExpr a <+> printExpr (Var aVar op) <+> parens (printExpr b)
     (False, True) ->
-      parens (printExpr a) <+> printExpr (Var op) <+> printExpr b
+      parens (printExpr a) <+> printExpr (Var aVar op) <+> printExpr b
 
 -- special case for the only infix constructor: (::)
-printApp (App (Con "::") a) b = parens $ case (singleton a, singleton b) of
+printApp (App _ (Con _ "::") a) b = parens $ case (singleton a, singleton b) of
   (True , True ) -> printExpr a <+> "::" <+> printExpr b
   (False, False) -> parens (printExpr a) <+> "::" <+> parens (printExpr b)
   (True , False) -> printExpr a <+> "::" <+> parens (printExpr b)
   (False, True ) -> parens (printExpr a) <+> "::" <+> printExpr b
 
-printApp a (App b c) = if big a
-  then parens (printExpr a) <+> nest 2 (parens (printExpr (App b c)))
-  else printExpr a <+> parens (printExpr (App b c))
+printApp a (App aApp b c) = if big a
+  then parens (printExpr a) <+> nest 2 (parens (printExpr (App aApp b c)))
+  else printExpr a <+> parens (printExpr (App aApp b c))
 printApp a b | big a && big b =
   parens (printExpr a) <+> nest 2 (parens (printExpr b))
 printApp a b | big a = parens (printExpr a) <+> nest 2 (printExpr b)
@@ -334,26 +334,26 @@ prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 
 -- True if we would never need to parenthesise it
 singleton :: Syn -> Bool
-singleton (Var      _      ) = True
-singleton (Hole     _      ) = True
-singleton (Con      _      ) = True
-singleton (IntLit   _      ) = True
-singleton (TupleLit _      ) = True
-singleton (ListLit  _      ) = True
-singleton (StringInterp _ _) = True
-singleton (StringLit _     ) = True
-singleton _                  = False
+singleton (Var      _ _      ) = True
+singleton (Hole     _ _      ) = True
+singleton (Con      _ _      ) = True
+singleton (IntLit   _ _      ) = True
+singleton (TupleLit _ _      ) = True
+singleton (ListLit  _ _      ) = True
+singleton (StringInterp _ _ _) = True
+singleton (StringLit _ _     ) = True
+singleton _                    = False
 
 big :: Syn -> Bool
-big (Case _ _  ) = True
-big (Let  _ _  ) = True
-big (App  a b  ) = size (App a b) > 5
-big (ListLit xs) = any big xs
-big _            = False
+big (Case _ _ _  ) = True
+big (Let  _ _ _  ) = True
+big (App  s a b  ) = size (App s a b) > 5
+big (ListLit _ xs) = any big xs
+big _              = False
 
 size :: Syn -> Int
-size (App a b) = size a + size b
-size _         = 1
+size (App _ a b) = size a + size b
+size _           = 1
 
 printRecordSyntax :: Doc a -> [(Doc a, Doc a)] -> Doc a
 printRecordSyntax separator rec =
