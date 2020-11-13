@@ -1,0 +1,6 @@
+module NotEnoughRecordFields
+
+type Foo = Foo { a : Int, b : Bool }
+
+f : Foo
+f = Foo { a = 0 }
