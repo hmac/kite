@@ -1,0 +1,26 @@
+module ApplicativeList
+
+type Functor f = Functor { map : forall a b. (a -> b) -> f a -> f b }
+
+type Applicative f = Applicative { functor : Functor f, pure : forall a. a -> f a, ap : forall a b. f (a -> b) -> f a -> f b }
+
+functorList : Functor []
+functorList = Functor { map = mapList }
+
+mapList : (a -> b) -> [a] -> [b]
+mapList = _ [] -> []
+          f (x :: xs) -> (f x) :: (mapList f xs)
+
+pureList : a -> [a]
+pureList = x -> [x]
+
+applicativeList : Applicative []
+applicativeList = Applicative { functor = functorList, pure = pureList, ap = apList }
+
+apList : [a -> b] -> [a] -> [b]
+apList = [] xs -> []
+         (f :: fs) xs -> listAppend (mapList f xs) (apList fs xs)
+
+listAppend : [a] -> [a] -> [a]
+listAppend = [] ys -> ys
+             (x :: xs) ys -> x :: (listAppend xs ys)

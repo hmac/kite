@@ -41,8 +41,11 @@ mapList : (a -> b) -> [a] -> [b]
 mapList = _ [] -> []
           f (x :: xs) -> (f x) :: (mapList f xs)
 
+singleton : a -> [a]
+singleton = x -> [x]
+
 applicativeList : Applicative []
-applicativeList = Applicative { functor = functorList, pure = x -> [x], ap = apList }
+applicativeList = Applicative { functor = functorList, pure = singleton, ap = apList }
 
 apList : [a -> b] -> [a] -> [b]
 apList = [] xs -> []

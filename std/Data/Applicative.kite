@@ -14,4 +14,4 @@ ap = (Applicative d) -> d.ap
 
 -- Lift a binary function to actions.
 liftA2 : Applicative f -> (a -> b -> c) -> f a -> f b -> f c
-liftA2 = (Applicative d) g x y -> ap (Applicative d) (map (d.functor) g x) y
+liftA2 = (Applicative d) g x y -> d.ap (map (d.functor) g x) y

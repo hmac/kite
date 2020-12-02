@@ -38,6 +38,8 @@ module Type
 where
 
 import           Util
+import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
+import           System.Environment             ( lookupEnv )
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
 import           Data.String                    ( fromString )
@@ -589,7 +591,12 @@ data TypeEnv =
           } deriving (Eq, Show)
 
 defaultTypeEnv :: TypeEnv
-defaultTypeEnv = TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = False }
+defaultTypeEnv =
+  let debugOn =
+          case unsafePerformIO (fmap (== "true") <$> lookupEnv "KITE_DEBUG") of
+            Just True -> True
+            _         -> False
+  in  TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = debugOn }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
@@ -643,11 +650,17 @@ liftMaybe1 err m x = maybe err pure (m x)
 
 -- Subtyping
 -- | Under this input context, the first type is a subtype of the second type,
--- with the given output context
+-- with the given output context.
+-- Note: this subtyping relation is only about polymorphism: A < B means "A is
+-- more polymorphic than B".
+-- For example, (∀a. a -> a) < (Int -> Int)
+--
+-- Record subtyping is an entirely different matter that we need to model separately (and haven't, yet).
 subtype :: Type -> Type -> TypeM ()
 subtype typeA typeB =
   subtype' typeA typeB
     `catchError` (\_ -> throwError $ SubtypingFailure typeA typeB)
+
  where
   subtype' :: Type -> Type -> TypeM ()
   subtype' tA tB = trace' ["subtype", debug tA, debug tB] $ case (tA, tB) of
@@ -676,18 +689,32 @@ subtype typeA typeB =
     (TCon c as, TApp v bs)            -> do
       subtype' (TCon c []) v
       mapM_ (uncurry subtype') (zip as bs)
+    -- Note: this rule (and/or one like it) is wrong. Consider this example:
+    --   A b c < f d
+    -- We want to unify f ~ A b and d ~ c
+    -- Currently, we unify f ~ A and d ~ b
+    -- The correct way to do this seems to be to consider each argument in reverse.
     (TApp v as, TCon c bs) -> do
-      subtype' v (TCon c [])
-      mapM_ (uncurry subtype') (zip as bs)
+      -- let aArgs = reverse (v : as)
+      --     bArgs = reverse (TCon c [] : bs)
+      let a = foldApp v as
+      let b = foldApp (TCon c []) bs
+      subtype' a b
+      -- subtype' v (TCon c [])
+      -- mapM_ (uncurry subtype') (zip aArgs bArgs)
     (TApp v as, TApp u bs) -> do
       subtype' v u
       mapM_ (uncurry subtype') (zip as bs)
     (TRecord as, TRecord bs) -> do
       -- For any records A, B
-      -- A < B if every field fB in B has a corresponding field fA such that fA < fB
-      forM_ bs $ \(label, bTy) -> case lookup label bs of
+      -- A < B if A and B have the same set of labels and every field fB in B
+      -- has a corresponding field fA in A such that fA < fB
+      forM_ bs $ \(label, bTy) -> case lookup label as of
         Nothing  -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
         Just aTy -> subtype' aTy bTy
+      forM_ as $ \(label, _) -> case lookup label bs of
+        Just _  -> pure ()
+        Nothing -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
 
     (a, b) -> do
       a' <- subst a
@@ -1138,6 +1165,10 @@ foldFn :: [Type] -> Type -> Type
 foldFn []       t = t
 foldFn [a     ] t = Fn a t
 foldFn (a : as) t = Fn a (foldFn as t)
+
+-- | foldApp A [b, c, d] = TApp (TApp (TApp A b) c) d
+foldApp :: Type -> [Type] -> Type
+foldApp = foldl (\f t -> TApp f [t])
 
 checkCaseAlt :: Type -> Type -> (Pattern, Exp) -> TypeM ()
 checkCaseAlt expectedAltTy scrutTy (pat, expr) = do

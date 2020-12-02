@@ -11,9 +11,14 @@ fromLeft : Either a b -> Maybe a
 fromLeft = (Left x) -> Just x
            (Right _) -> Nothing
 
-mapEither : (a -> b) -> Either c a -> Either c b
+mapEither : (a -> b) -> (Either c) a -> (Either c) b
 mapEither = _ (Left l) -> Left l
             f (Right r) -> Right (f r)
+
+type Functor2 f = Functor2 (forall a b. (a -> b) -> f a -> f b)
+
+functorEither2 : Functor2 (Either a)
+functorEither2 = Functor2 mapEither
 
 functorEither : Functor (Either a)
 functorEither = Functor { map = mapEither }
@@ -22,8 +27,11 @@ apEither : Either a (b -> c) -> Either a b -> Either a c
 apEither = (Left e) _ -> Left e
            (Right f) r -> mapEither f r
 
+pureEither : a -> Either a b
+pureEither = Right
+
 applicativeEither : Applicative (Either c)
-applicativeEither = Applicative { functor = functorEither, pure = Right, ap = apEither }
+applicativeEither = Applicative { functor = functorEither, pure = pureEither, ap = apEither }
 
 either : (a -> c) -> (b -> c) -> Either a b -> c
 either = f _ (Left x) -> f x

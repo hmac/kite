@@ -5,34 +5,37 @@ import Data.Char (eqChar)
 import Data.Functor (Functor(Functor), map)
 import Data.Tuple (first, uncurry)
 import Data.List (head, functorList, monoidList, semigroupList)
-import Data.Applicative (Applicative(Applicative), ap)
+import Data.Applicative (Applicative(Applicative), ap, pure)
 import Data.Monad (Monad(..), sequence)
 import Data.Monoid (concat)
 import Data.Semigroup (append)
 import Data.Eq (eq)
 import Data.Bool (or, monoidAny)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), functorMaybe, applicativeMaybe)
+import Control.Monad.State (State(..), runState, monadState, functorState, applicativeState)
 
 
-main : [(String, String)]
-main = run (plus nonEmptyWord (result "")) "apple pie"
+-- main : [(String, String)]
+-- main = run (plus nonEmptyWord (result "")) "apple pie"
 
-type Parser a = P (String -> [(a, String)])
+-- type Parser a = P (String -> [(a, String)])
 
-run : Parser a -> String -> [(a, String)]
-run = (P f) -> f
+type Parser a = P (State String (Maybe a))
+
+run : Parser a -> String -> (Maybe a, String)
+run = (P st) -> runState st
 
 functor : Functor Parser
 functor = Functor { map = mapParser }
 
 mapParser : (a -> b) -> Parser a -> Parser b
-mapParser = f (P p) -> P (input -> map functorList (first f) (p input))
+mapParser = f (P s) -> P (map functorState (map functorMaybe f) s)
 
 applicative : Applicative Parser
 applicative = Applicative { functor = functor, pure = result, ap = apParser }
 
 apParser : Parser (a -> b) -> Parser a -> Parser b
-apParser = pf pa -> bind pf (x1 -> bind pa (x2 -> result (x1 x2)))
+apParser = (P f) (P a) -> P (ap applicativeState (map functorState (pure applicativeMaybe) f) a)
 
 monad : Monad Parser
 monad = Monad { applicative = applicative, bind = bind }

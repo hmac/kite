@@ -4,3 +4,6 @@ type Foo = Foo { a : Int, b : Bool }
 
 f : Foo
 f = Foo { a = 0 }
+
+g : { a : Int, b : Bool }
+g = { a = 0 }
