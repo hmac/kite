@@ -1,0 +1,23 @@
+module MonadState
+
+fst : (a, b) -> a
+fst = (x, _) -> x
+
+snd : (a, b) -> b
+snd = (_, y) -> y
+
+type State s a = State { runState : s -> (a, s) }
+
+runState : State s a -> s -> (a, s)
+runState = (State st) s -> st.runState s
+
+apState : State s (a -> b) -> State s a -> State s b
+apState = (State sf) (State sa) -> State { runState = s -> let sf1 = sf.runState s
+                                                               sa1 = sa.runState (snd sf1)
+                                                            in ((fst sf1) (fst sa1), snd sa1) }
+
+gets : (s -> t) -> State s t
+gets = f -> State { runState = s -> (f s, s) }
+
+get : State s s
+get = gets (s -> s)

@@ -38,6 +38,7 @@ module Type
 where
 
 import           Util
+import           Control.Monad                  ( (>=>) )
 import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
 import           System.Environment             ( lookupEnv )
 import           Data.Functor                   ( ($>) )
@@ -651,10 +652,10 @@ liftMaybe1 err m x = maybe err pure (m x)
 -- Subtyping
 -- | Under this input context, the first type is a subtype of the second type,
 -- with the given output context.
+--
 -- Note: this subtyping relation is only about polymorphism: A < B means "A is
 -- more polymorphic than B".
 -- For example, (∀a. a -> a) < (Int -> Int)
---
 -- Record subtyping is an entirely different matter that we need to model separately (and haven't, yet).
 subtype :: Type -> Type -> TypeM ()
 subtype typeA typeB =
@@ -685,23 +686,15 @@ subtype typeA typeB =
                  | otherwise     -> instantiateL e a
     (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateR e a
-    (TCon v as, TCon v' bs) | v == v' -> mapM_ (uncurry subtype') (zip as bs)
-    (TCon c as, TApp v bs)            -> do
+    (TCon v as, TCon v' bs) | v == v' ->
+      forM_ (zip as bs) (bimapM subst subst >=> uncurry subtype')
+    (TCon c as, TApp v bs) -> do
       subtype' (TCon c []) v
       mapM_ (uncurry subtype') (zip as bs)
-    -- Note: this rule (and/or one like it) is wrong. Consider this example:
-    --   A b c < f d
-    -- We want to unify f ~ A b and d ~ c
-    -- Currently, we unify f ~ A and d ~ b
-    -- The correct way to do this seems to be to consider each argument in reverse.
     (TApp v as, TCon c bs) -> do
-      -- let aArgs = reverse (v : as)
-      --     bArgs = reverse (TCon c [] : bs)
       let a = foldApp v as
       let b = foldApp (TCon c []) bs
       subtype' a b
-      -- subtype' v (TCon c [])
-      -- mapM_ (uncurry subtype') (zip aArgs bArgs)
     (TApp v as, TApp u bs) -> do
       subtype' v u
       mapM_ (uncurry subtype') (zip as bs)
@@ -711,7 +704,10 @@ subtype typeA typeB =
       -- has a corresponding field fA in A such that fA < fB
       forM_ bs $ \(label, bTy) -> case lookup label as of
         Nothing  -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
-        Just aTy -> subtype' aTy bTy
+        Just aTy -> do
+          aTy' <- subst aTy
+          bTy' <- subst bTy
+          subtype' aTy' bTy'
       forM_ as $ \(label, _) -> case lookup label bs of
         Just _  -> pure ()
         Nothing -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
@@ -794,6 +790,17 @@ instantiate dir e ty = do
       es <- mapM (const newE) args
       -- insert them into the context before e, along with a solution e = TCon c es
       putCtx $ l <> [ESolved e (TCon c (map EType es))] <> map EVar es <> r
+      -- instantiate each arg to its corresponding e
+      mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
+
+    -- We do the same for type applications
+    -- TODO: does this work if f contains existential vars?
+    TApp f args -> do
+      let (l, r) = splitAt (EVar e) ctx
+      -- generate new Es for each arg
+      es <- mapM (const newE) args
+      -- insert them into the context before e, along with a solution e = f es
+      putCtx $ l <> [ESolved e (TApp f (map EType es))] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
       mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
     a -> do

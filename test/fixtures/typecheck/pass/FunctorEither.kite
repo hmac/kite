@@ -11,5 +11,5 @@ type Functor f = Functor (forall a b. (a -> b) -> f a -> f b)
 -- Functor   : forall f. (forall a b. (a -> b) -> f a -> f b)
 -- mapEither : forall c. (forall a b. (a -> b) -> Either c a -> Either c b)
 
-functorEither2 : Functor (Either c)
-functorEither2 = Functor mapEither
+functorEither : Functor (Either c)
+functorEither = Functor mapEither

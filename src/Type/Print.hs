@@ -4,6 +4,7 @@ import           Data.Text.Prettyprint.Doc
 import           Type
 import           Data.Name
 import           Data.List                      ( intersperse )
+import           ELC.Primitive                  ( modPrim )
 
 printModuleName :: ModuleName -> Doc a
 printModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
@@ -59,8 +60,11 @@ printType = go P0
     Fn a b | prec >= P1 -> parens $ go P0 (Fn a b)
            | otherwise  -> go P1 a <+> "->" <+> go P0 b
     TCon "Kite.Primitive.List" [arg] -> brackets $ go P0 arg
+    TCon "Kite.Primitive.Tuple2" args ->
+      parens $ concatWith (surround ", ") $ map (go P0) args
+    TCon con [] -> printConName con
     TCon con args | prec >= P2 -> parens $ go P0 (TCon con args)
-                  | otherwise  -> printName con <+> hsep (map (go P0) args)
+                  | otherwise  -> printConName con <+> hsep (map (go P0) args)
     EType   e      -> printE e
     UType   u      -> printU u
     TRecord fields -> braces $ sep $ punctuate comma $ map
@@ -71,6 +75,11 @@ printType = go P0
       printForall us (Forall u a) = printForall (u : us) a
       printForall us a =
         "forall" <+> hsep (map printU (reverse us)) <> "." <+> printType a
+
+-- If the constructor is in the Kite.Primitive module, omit the module qualifier
+printConName :: Name -> Doc a
+printConName (TopLevel moduleName (Name n)) | moduleName == modPrim = pretty n
+printConName n = printName n
 
 printU :: U -> Doc a
 printU (U n v) = printName v <> pretty n

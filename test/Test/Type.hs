@@ -241,6 +241,73 @@ test = do
           e = [syn|(D f) -> f|]
         in
           checks ctx' e t
+    it "higher kinded application" $ do
+      let a = U 0 "a"
+          b = U 1 "b"
+          c = U 2 "c"
+          t = U 3 "t"
+          ctx =
+            [ V
+              (Free "QQ.MkF")
+              (Forall
+                t
+                (Forall
+                  a
+                  (Fn
+                    (Fn (TApp (UType t) [UType a]) (TApp (UType t) [UType a]))
+                    (TCon "F" [UType t])
+                  )
+                )
+              )
+            , V
+              (Free "QQ.f")
+              (Forall
+                b
+                (Forall
+                  c
+                  (Fn (TCon "T" [UType b, UType c])
+                      (TCon "T" [UType b, UType c])
+                  )
+                )
+              )
+            ]
+          e   = [syn|MkF f|]
+          ty_ = [ty|forall b. F (T b)|]
+      checks ctx e ty_
+    it "higher kinded application (with ->)" $ do
+      let
+        a = U 0 "a"
+        b = U 1 "b"
+        c = U 2 "c"
+        t = U 3 "t"
+        ctx =
+          [ V
+            (Free "QQ.MkF")
+            (Forall
+              t
+              (Forall
+                a
+                (Fn (Fn (Fn (UType t) (UType a)) (Fn (UType t) (UType a)))
+                    (TCon "F" [UType t])
+                )
+              )
+            )
+          , V
+            (Free "QQ.f")
+            (Forall
+              b
+              (Forall
+                c
+                (Fn (Fn (UType c) (Fn (TCon "T" []) (UType b)))
+                    (Fn (UType c) (Fn (TCon "T" []) (UType b)))
+                )
+              )
+            )
+          ]
+        e = [syn|MkF f|]
+      case runInfer ctx e of
+        Left  err -> expectationFailure $ show (printLocatedError err)
+        Right ty  -> expectationFailure $ show ty
 
 infers :: Ctx -> Syn.Syn -> Type -> Expectation
 infers ctx expr t = do
