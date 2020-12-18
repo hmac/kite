@@ -8,3 +8,6 @@ const = x _ -> x
 
 flip : (a -> b -> c) -> b -> a -> c
 flip = f x y -> f y x
+
+compose : (b -> c) -> (a -> b) -> a -> c
+compose = f g x -> f (g x)

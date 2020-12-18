@@ -3,27 +3,37 @@ module Text.Parser
 import Data.String (chars, fromChars, consChar, unconsChar)
 import Data.Char (eqChar)
 import Data.Functor (Functor(Functor), map)
-import Data.Tuple (first, uncurry)
+import Data.Function (compose, const)
+import Data.Tuple (first, uncurry, fst)
 import Data.List (head, functorList, monoidList, semigroupList)
 import Data.Applicative (Applicative(Applicative), ap, pure)
-import Data.Monad (Monad(..), sequence)
+import Data.Monad (Monad(..), sequence, bind)
 import Data.Monoid (concat)
 import Data.Semigroup (append)
 import Data.Eq (eq)
 import Data.Bool (or, monoidAny)
 import Data.Maybe (Maybe(..), functorMaybe, applicativeMaybe)
-import Control.Monad.State (State(..), runState, monadState, functorState, applicativeState)
+import Control.Monad.State (State(..), runState, monadState, functorState, applicativeState, gets, put)
 
 
--- main : [(String, String)]
--- main = run (plus nonEmptyWord (result "")) "apple pie"
+--main = run (plus nonEmptyWord (result "")) "apple pie"
+-- main : (Maybe Char, String)
+-- main = run item "apple pie"
+
+main : Char
+main = case fst (runState (gets unconsChar) "foo") of
+         Just (x, s) -> x
+         Nothing -> ' '
 
 -- type Parser a = P (String -> [(a, String)])
 
 type Parser a = P (State String (Maybe a))
 
-run : Parser a -> String -> (Maybe a, String)
-run = (P st) -> runState st
+unP : Parser a -> State String (Maybe a)
+unP = (P st) -> st
+
+run : Parser a -> String -> Maybe a
+run = (P st) -> compose fst (runState st)
 
 functor : Functor Parser
 functor = Functor { map = mapParser }
@@ -31,44 +41,57 @@ functor = Functor { map = mapParser }
 mapParser : (a -> b) -> Parser a -> Parser b
 mapParser = f (P s) -> P (map functorState (map functorMaybe f) s)
 
+pureParser : a -> Parser a
+pureParser = x -> P (pure applicativeState (Just x))
+
 applicative : Applicative Parser
-applicative = Applicative { functor = functor, pure = result, ap = apParser }
+applicative = Applicative { functor = functor, pure = pureParser, ap = apParser }
 
 apParser : Parser (a -> b) -> Parser a -> Parser b
-apParser = (P f) (P a) -> P (ap applicativeState (map functorState (pure applicativeMaybe) f) a)
+apParser = (P f) (P a) -> P (ap applicativeState (map functorState (ap applicativeMaybe) f) a)
 
 monad : Monad Parser
-monad = Monad { applicative = applicative, bind = bind }
+monad = Monad { applicative = applicative, bind = bindParser }
 
-bind : Parser a -> (a -> Parser b) -> Parser b
-bind = (P p) f -> P (bindHelper1 p f)
+bindHelper : State String (Maybe a) -> (a -> State String (Maybe b)) -> State String (Maybe b)
+bindHelper = sa asb -> bind monadState sa (ma -> case ma of
+                                                   Just a -> asb a
+                                                   Nothing -> pure applicativeState Nothing)
 
-bindHelper1 : (String -> [(a, String)]) -> (a -> Parser b) -> String -> [(b, String)]
-bindHelper1 = p f input -> concat monoidList (map functorList (bindHelper2 f) (p input))
-
-bindHelper2 : (a -> Parser b) -> (a, String) -> [(b, String)]
-bindHelper2 = f (x, input) -> run (f x) input
+bindParser : Parser a -> (a -> Parser b) -> Parser b
+bindParser = (P p) f -> P (bindHelper p (compose unP f))
 
 result : a -> Parser a
-result = v -> P (input -> [(v, input)])
+result = pure applicative
 
 zero : Parser a
-zero = P (_ -> [])
+zero = P (pure applicativeState Nothing)
 
+-- TODO: define using MonadPlus (requires Alternative)
 plus : Parser a -> Parser a -> Parser a
-plus = p q -> P (\input -> case run p input of
-                             [] -> run q input
-                             r -> r)
+plus = p q -> P (State { runState = plusHelper (unP p) (unP q) })
+                                           
+-- This is written awkwardly because the parser doesn't seem to like
+-- case expressions with tuple patterns.
+plusHelper : State String (Maybe a) -> State String (Maybe a) -> String -> (Maybe a, String)
+plusHelper = s1 s2 s -> case runState s1 s of
+                           s1res -> case fst s1res of
+                                      Nothing -> runState s2 s
+                                      Just a -> s1res
+
+fail : Parser a
+fail = P (State { runState = s -> (Nothing, s) })
+
+itemHelper : (Char, String) -> Parser Char
+itemHelper = (c, s) -> sequence monad (P (map functorState (pure applicativeMaybe) (put s))) (pure applicative c)
 
 item : Parser Char
-item = P (input -> case unconsChar input of
-                     Nothing -> []
-                     Just (c, s) -> [(c, s)])
+item = bind monad (P (gets unconsChar)) itemHelper
 
 sat : (Char -> Bool) -> Parser Char
-sat = p -> bind item (x -> case p x of
-                             True -> result x
-                             False -> zero)
+sat = p -> bind monad item (x -> case p x of
+                                   True -> result x
+                                   False -> zero)
 
 char : Char -> Parser Char
 char = x -> sat (y -> eq eqChar x y)
@@ -97,7 +120,7 @@ word : Parser String
 word = plus nonEmptyWord (result "")
 
 nonEmptyWord : Parser String
-nonEmptyWord = bind letter (\x -> bind word (\w -> result (consChar x w)))
+nonEmptyWord = bind monad letter (\x -> bind monad word (\w -> result (consChar x w)))
 
 string : String -> Parser String
 string = str -> case unconsChar str of
@@ -105,4 +128,4 @@ string = str -> case unconsChar str of
                   Just (c, s) -> sequence monad (char c) (sequence monad (string s) (result str))
 
 many : Parser a -> Parser [a]
-many = p -> plus (bind p (\x -> bind (many p) (\xs -> result (x :: xs)))) (result [])
+many = p -> plus (bind monad p (\x -> bind monad (many p) (\xs -> result (x :: xs)))) (result [])

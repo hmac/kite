@@ -27,7 +27,7 @@ apEither : Either a (b -> c) -> Either a b -> Either a c
 apEither = (Left e) _ -> Left e
            (Right f) r -> mapEither f r
 
-pureEither : a -> Either a b
+pureEither : b -> Either a b
 pureEither = Right
 
 applicativeEither : Applicative (Either c)

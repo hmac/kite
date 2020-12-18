@@ -2,13 +2,26 @@ module Control.Monad.State
 
 import Data.Tuple (fst, snd, first)
 import Data.Functor (Functor(..), map)
+import Data.Function (id, compose)
 import Data.Applicative (Applicative(..))
 import Data.Monad (Monad(..))
 
 type State s a = State { runState : s -> (a, s) }
 
+gets : (s -> t) -> State s t
+gets = f -> State { runState = s -> (f s, s) }
+
+get : State s s
+get = gets (s -> s)
+
+put : s -> State s ()
+put = s -> State { runState = _ -> ((), s) }
+
 runState : State s a -> s -> (a, s)
 runState = (State st) s -> st.runState s
+
+execState : State s a -> s -> a
+execState = s -> compose fst (runState s)
 
 mapState : (a -> b) -> State s a -> State s b
 mapState = f (State st) -> State { runState = s -> first f (st.runState s) }
@@ -19,7 +32,7 @@ functorState = Functor { map = mapState }
 pureState : a -> State s a
 pureState = x -> State { runState = \s -> (x, s) }
 
-apState : State s (a -> b) -> State s a -> State a b
+apState : State s (a -> b) -> State s a -> State s b
 apState = (State sf) (State sa) -> State { runState = s -> let sf1 = sf.runState s
                                                                sa1 = sa.runState (snd sf1)
                                                             in ((fst sf1) (fst sa1), snd sa1) }
