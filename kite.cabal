@@ -60,6 +60,7 @@ library
       Type.Print
       Type.ToTyped
       Util
+      Interpret
   other-modules:
       Paths_kite
   hs-source-dirs:

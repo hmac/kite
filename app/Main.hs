@@ -18,14 +18,15 @@ import qualified ModuleGroupTypechecker
 import qualified ModuleGroupCompiler
 
 import qualified Repl                           ( run )
-import qualified LC.Print                       ( print )
-import           LC.Eval                        ( evalMain )
 import           LC.Execute                     ( executeMain )
 import           Options.Generic
 
 import           Syn.Parse                      ( parseKiteFile )
 
 import           Type.Print
+import           Interpret                      ( interpretAndRunMain
+                                                , printValue
+                                                )
 
 data Config =
       Repl
@@ -107,9 +108,7 @@ eval homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> print (printLocatedError err)
     Right g' ->
-      let cm     = ModuleGroupCompiler.compileToLC g'
-          answer = evalMain (cModuleName cm) (cModuleEnv cm)
-      in  printNicely (LC.Print.print answer)
+      let answer = interpretAndRunMain g' in printNicely (printValue answer)
 
 run :: FilePath -> FilePath -> IO ()
 run homeDir = withParsedFile homeDir $ \g ->

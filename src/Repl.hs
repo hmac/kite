@@ -19,16 +19,15 @@ import           Text.Megaparsec                ( parse
                                                 )
 import           Text.Megaparsec.Char           ( string )
 
-import qualified LC.Eval                        ( evalVar )
-import qualified LC.Print                       ( print )
 import           Syn
 import           Data.Name
 import qualified Canonical                     as Can
 import           Canonicalise                   ( canonicaliseModule )
 import qualified ModuleGroupTypechecker
-import           ModuleGroupCompiler            ( CompiledModule(..) )
-import qualified ModuleGroupCompiler
 import           ModuleLoader                   ( ModuleGroup(..) )
+import           Interpret                      ( printValue
+                                                , interpretAndRun
+                                                )
 
 run :: IO ()
 run = do
@@ -78,24 +77,19 @@ processDecl decls =
 
 processExpr :: [Decl Syn] -> Syn -> IO ()
 processExpr decls e =
-  let
-    main = FunDecl Fun { funComments = []
-                       , funName     = "$main"
-                       , funType     = Nothing
-                       , funExpr     = e
-                       }
-    g = ModuleGroup (buildModule (decls ++ [main])) []
-  in
-    case ModuleGroupTypechecker.typecheckModuleGroup g of
-      Left  err -> putStrLn $ "Type error: " <> show err
-      Right g'  -> do
-        let compiled = ModuleGroupCompiler.compileToLC g'
-        let answer = LC.Eval.evalVar
-              (TopLevel (cModuleName compiled) "$main")
-              (cModuleEnv compiled)
-        renderIO stdout
-                 (layoutSmart defaultLayoutOptions (LC.Print.print answer))
-        putStrLn ""
+  let main = FunDecl Fun { funComments = []
+                         , funName     = "$main"
+                         , funType     = Nothing
+                         , funExpr     = e
+                         }
+      g = ModuleGroup (buildModule (decls ++ [main])) []
+  in  case ModuleGroupTypechecker.typecheckModuleGroup g of
+        Left  err -> putStrLn $ "Type error: " <> show err
+        Right g'  -> do
+          let modName = let (ModuleGroup m _) = g in moduleName m
+          let answer  = interpretAndRun (TopLevel modName "$main") g'
+          renderIO stdout (layoutSmart defaultLayoutOptions (printValue answer))
+          putStrLn ""
 
 buildModule :: [Decl Syn] -> Can.Module
 buildModule decls = canonicaliseModule Module

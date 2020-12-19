@@ -13,6 +13,7 @@ module Util
   , Data.List.unzip3
   , Data.List.unzip4
   , Data.List.unzip5
+  , Data.List.foldl'
   , Data.List.Extra.nubOn
   , Data.List.Extra.nubOrdOn
   , Data.List.Extra.snoc
