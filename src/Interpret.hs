@@ -177,15 +177,16 @@ interpretPrim = \case
   "appendString" -> binaryPrim PrimStringAppend
   "$chars"       -> unaryPrim PrimStringChars
   "$consChar"    -> binaryPrim PrimStringConsChar
-  "$unconsChar"  -> unaryPrim PrimStringUnconsChar
+  "$unconsChar"  -> ternaryPrim PrimStringUnconsChar
   "$showInt"     -> unaryPrim PrimShowInt
   "$showChar"    -> unaryPrim PrimShowChar
   "$eqInt"       -> binaryPrim PrimEqInt
   "$eqChar"      -> binaryPrim PrimEqChar
   p -> error $ "Interpret.interpretPrim: unknown primitive " <> show p
  where
-  binaryPrim p = Abs (\x -> (Abs (\y -> applyPrim p [x, y])))
   unaryPrim p = Abs (\x -> applyPrim p [x])
+  binaryPrim p = Abs (\x -> (Abs (\y -> applyPrim p [x, y])))
+  ternaryPrim p = Abs (\x -> Abs (\y -> Abs (\z -> applyPrim p [x, y, z])))
 
 applyPrim :: Primitive -> [Value] -> Value
 applyPrim PrimAdd  [Const (Int x), Const (Int y)] = Const $ Int $ x + y
@@ -196,8 +197,11 @@ applyPrim PrimStringAppend [Const (String x), Const (String y)] =
 applyPrim PrimStringChars [Const (String s)] = List $ map (Const . Char) s
 applyPrim PrimStringConsChar [Const (Char c), Const (String s)] =
   Const $ String (c : s)
-applyPrim PrimStringUnconsChar [Const (String (c : s))] =
-  Tuple [Const (Char c), Const (String s)]
+applyPrim PrimStringUnconsChar [Const (String s), def, Abs f] = case s of
+  ""       -> def
+  (c : cs) -> case f (Const (Char c)) of
+    Abs f' -> f' (Const (String cs))
+    _      -> error $ "Interpret.applyPrim: unconsChar: bad argument"
 applyPrim PrimShowInt [Const (Int x)] = Const $ String $ show x
 applyPrim PrimShowChar [Const (Char c)]                 = Const $ String $ [c]
 applyPrim PrimEqInt    [Const (Int  x), Const (Int y) ] = Const $ Bool $ x == y
