@@ -11,7 +11,6 @@ where
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Util
-import           Control.Monad.State.Strict
 import           Data.List.Extra                ( groupOn )
 import           Data.Foldable                  ( foldrM )
 
@@ -76,27 +75,10 @@ translateDecl _env (T.DataDecl d) = do
 translateSumCon :: [Con] -> Int -> T.DataCon -> Con
 translateSumCon f t T.DataCon { T.conName = n, T.conArgs = args } =
   Sum { conName = n, conArity = length args, sumTag = t, sumFamily = f }
-translateSumCon _ _ T.RecordCon{} =
-  error "Cannot translate record constructors in sums yet"
 
 translateProdCon :: T.DataCon -> NameGen [(Name, Exp)]
 translateProdCon T.DataCon { T.conName = n, T.conArgs = args } =
   pure [(n, Cons Prod { conName = n, conArity = length args } [])]
-translateProdCon T.RecordCon { T.conName = n, T.conFields = fields } = do
-  let constructor = Prod { conName = n, conArity = length fields }
-      wildPat     = VarPat <$> fresh
-      selectorPat i var = mapM
-        (\x -> if x == i then pure (VarPat var) else wildPat)
-        [0 .. length fields - 1]
-  selectors <- zipWithM
-    (\i (fieldName, _) -> do
-      var    <- fresh
-      selPat <- selectorPat i var
-      pure (fieldName, Abs (ConPat constructor selPat) (Var var))
-    )
-    [0 ..]
-    fields
-  pure $ (n, Cons constructor []) : selectors
 
 translatePattern :: Env -> T.Pattern -> NameGen Pattern
 translatePattern _   (T.VarPat  n)    = pure (VarPat n)

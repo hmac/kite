@@ -43,5 +43,4 @@ data Data = Data { dataName :: Name
                  } deriving (Eq, Show)
 
 data DataCon = DataCon { conName :: Name, conArgs :: [Type], conType :: Type }
-             | RecordCon { conName :: Name, conFields :: [(Name, Type)], conType :: Type }
                deriving (Eq, Show)
