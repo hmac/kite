@@ -7,6 +7,7 @@ module ModuleGroupCompiler where
 import           ModuleGroup
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
+import qualified Chez.Compile                  as Chez
 import           Syn.Typed
 import           Data.Name
 
@@ -53,6 +54,16 @@ compileToELC (TypedModuleGroup m deps) = CompiledModule
   , cModuleDeps    = []
   }
   where env = foldl compileModuleToELC ELC.defaultEnv (deps ++ [m])
+
+compileToChez :: TypedModuleGroup -> CompiledModule Chez.Env
+compileToChez (TypedModuleGroup m deps) = CompiledModule
+  { cModuleName    = moduleName m
+  , cModuleImports = moduleImports m
+  , cModuleExports = moduleExports m
+  , cModuleEnv     = env
+  , cModuleDeps    = []
+  }
+  where env = foldl Chez.compileModule mempty (deps ++ [m])
 
 compileModuleToELC :: ELC.Env -> Module -> ELC.Env
 compileModuleToELC env m = LC.runConvert (ELC.translateModule env m)

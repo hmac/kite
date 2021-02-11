@@ -23,10 +23,15 @@ import           Options.Generic
 
 import           Syn.Parse                      ( parseKiteFile )
 
+import           Print                          ( Document
+                                                , Style(..)
+                                                )
 import           Type.Print
 import           Interpret                      ( interpretAndRunMain
                                                 , printValue
                                                 )
+import qualified Chez.Compile                  as Chez
+import qualified Chez.Print
 
 data Config =
       Repl
@@ -45,6 +50,7 @@ data DumpPhase =
   | AfterTypecheck
   | LC
   | ELC
+  | Chez
   deriving (Read, Eq, Generic, Show)
 
 instance ParseField DumpPhase
@@ -70,6 +76,7 @@ main = do
       AfterTypecheck  -> dumpTypeEnv homeDir f -- TODO: currently this is before typechecking
       LC              -> dumpLC homeDir f
       ELC             -> dumpELC homeDir f
+      Chez            -> dumpChez homeDir f
 
 parse :: FilePath -> FilePath -> IO ()
 parse homeDir = withParsedFile homeDir pPrint
@@ -85,6 +92,15 @@ dumpELC homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely (printLocatedError err)
     Right g'  -> pPrint (ModuleGroupCompiler.compileToELC g')
+
+dumpChez :: FilePath -> FilePath -> IO ()
+dumpChez homeDir = withParsedFile homeDir $ \g ->
+  case ModuleGroupTypechecker.typecheckModuleGroup g of
+    Left err -> printNicely (printLocatedError err)
+    Right g' ->
+      let cg   = ModuleGroupCompiler.compileToChez g'
+          defs = Chez.envDefs $ cModuleEnv cg
+      in  mapM_ (printNicely . Chez.Print.printDef) defs
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()
 dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
