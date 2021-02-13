@@ -2,7 +2,9 @@ module Syn.Typed
   ( module Syn.Typed
   , AST.Pat(..)
   , AST.ExprT(..)
+  , AST.ConMeta(..)
   , S.Import(..)
+  , Type
   )
 where
 

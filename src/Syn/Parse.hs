@@ -272,18 +272,18 @@ pPattern = pPattern' <|> cons
     pure $ case name of
       "True"  -> BoolPat True
       "False" -> BoolPat False
-      n       -> ConsPat n []
+      n       -> ConsPat n Nothing []
   infixBinaryCon = parens $ do
     left  <- pPattern
     tycon <- binTyCon
     right <- pPattern
-    pure $ ConsPat tycon [left, right]
+    pure $ ConsPat tycon Nothing [left, right]
   -- For now, the only infix constructor is (::)
   binTyCon = Name <$> symbol "::"
   con      = parens $ do
     c    <- tyCon
     args <- many pPattern
-    pure $ ConsPat c args
+    pure $ ConsPat c Nothing args
 
 pPattern' :: Parser Syn.Pattern
 pPattern' =
@@ -321,12 +321,12 @@ pCasePattern =
     case name of
       "True"  -> pure $ BoolPat True
       "False" -> pure $ BoolPat False
-      n       -> ConsPat n <$> many pPattern
+      n       -> ConsPat n Nothing <$> many pPattern
   infixBinaryCon = do
     left  <- pPattern
     tycon <- Name <$> symbol "::"
     right <- pPattern
-    pure $ ConsPat tycon [left, right]
+    pure $ ConsPat tycon Nothing [left, right]
 
 pIntPat :: Parser Syn.Pattern
 pIntPat = IntPat <$> pInt

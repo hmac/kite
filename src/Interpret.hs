@@ -124,8 +124,11 @@ interpretExpr env expr_ = case expr_ of
     Nothing -> error $ "Interpret.interpretExpr: unknown variable " <> show n
   AppT a b _ -> case interpretExpr env a of
     Abs f -> f (interpretExpr env b)
-    _     -> error $ "Interpret.interpretExpr: non-function in application head"
-  ConT c
+    e ->
+      error
+        $  "Interpret.interpretExpr: non-function in application head: "
+        <> show e
+  ConT c _ _
     | c == TopLevel modPrim "[]" -> List []
     | c == TopLevel modPrim "::" -> Abs
       (\x ->
@@ -264,12 +267,12 @@ applyPattern env val pattern = case (pattern, val) of
       env
       (zip args pats)
     | otherwise -> Nothing
-  (ConsPat c pats, Cons c' args)
+  (ConsPat c _meta pats, Cons c' args)
     | c == c' -> foldM (\env_ (arg, pat) -> applyPattern env_ arg pat)
                        env
                        (zip args pats)
     | otherwise -> Nothing
-  (ConsPat (TopLevel m "::") pats, List elems) | m == modPrim ->
+  (ConsPat (TopLevel m "::") _meta pats, List elems) | m == modPrim ->
     case (elems, pats) of
       ((e : es), [p1, p2]) -> do
         env' <- applyPattern env e p1

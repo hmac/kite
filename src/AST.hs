@@ -2,9 +2,11 @@ module AST
   ( Expr(..)
   , ExprT(..)
   , Pat(..)
+  , ConMeta(..)
   )
 where
 
+import           Data.Name                      ( Name )
 import           Data.Data                      ( Data )
 import           Util                           ( Debug(debug) )
 import           Data.List                      ( intercalate )
@@ -78,7 +80,7 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
 data ExprT n t =
     VarT n t
   | AnnT (ExprT n t) t
-  | ConT n
+  | ConT n ConMeta t
   | HoleT n t
   -- Note that each variable bound in lambda has an annotated type
   | AbsT [(n, t)] (ExprT n t) t
@@ -105,8 +107,8 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (AppT a b _) = debug a <+> debug b
   debug (AbsT xs e _) =
     "λ" <> sepBy " " (map (debug . fst) xs) <> "." <+> debug e
-  debug (ConT v   ) = debug v
-  debug (HoleT s _) = "?" <> debug s
+  debug (ConT v meta t) = debug v <+> debug meta <+> debug t
+  debug (HoleT s _    ) = "?" <> debug s
   debug (CaseT e alts _) =
     "case" <+> debug e <+> "of {" <+> sepBy "; " (map go alts) <+> "}"
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
@@ -138,6 +140,18 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (ProjectT r f    _) = debug r <> "." <> debug f
   debug (FCallT   f args _) = "$fcall" <+> f <+> sepBy " " (map debug args)
 
+data ConMeta = ConMeta { conMetaTag :: Int, conMetaArity :: Int, conMetaTypeName :: Name }
+  deriving (Eq, Show, Data)
+
+instance Debug ConMeta where
+  debug (ConMeta tag arity typeName) =
+    "tag="
+      <>  show tag
+      <+> "arity="
+      <>  show arity
+      <+> "typename="
+      <>  show typeName
+
 data Pat a = VarPat a
              | WildPat
              | IntPat Int
@@ -146,21 +160,26 @@ data Pat a = VarPat a
              | UnitPat
              | TuplePat [Pat a]
              | ListPat [Pat a]
-             | ConsPat a [Pat a]
+             | ConsPat a (Maybe ConMeta) [Pat a]
              | StringPat String
              deriving (Eq, Show, Data)
 
 instance Debug a => Debug (Pat a) where
-  debug (VarPat v)       = debug v
-  debug WildPat          = "_"
-  debug (IntPat  i)      = show i
-  debug (CharPat c)      = "'" <> [c] <> "'"
-  debug (BoolPat b)      = show b
-  debug UnitPat          = "()"
-  debug (TuplePat args ) = "(" <> sepBy ", " (map debug args) <> ")"
-  debug (ListPat  args ) = "[" <> sepBy ", " (map debug args) <> "]"
-  debug (ConsPat c args) = "(" <> debug c <+> sepBy " " (map debug args) <> ")"
-  debug (StringPat s   ) = "\"" <> s <> "\""
+  debug (VarPat v)      = debug v
+  debug WildPat         = "_"
+  debug (IntPat  i)     = show i
+  debug (CharPat c)     = "'" <> [c] <> "'"
+  debug (BoolPat b)     = show b
+  debug UnitPat         = "()"
+  debug (TuplePat args) = "(" <> sepBy ", " (map debug args) <> ")"
+  debug (ListPat  args) = "[" <> sepBy ", " (map debug args) <> "]"
+  debug (ConsPat c meta args) =
+    "("
+      <>  debug c
+      <+> maybe mempty debug meta
+      <+> sepBy " " (map debug args)
+      <>  ")"
+  debug (StringPat s) = "\"" <> s <> "\""
 
 sepBy :: String -> [String] -> String
 sepBy = intercalate

@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Type
   ( tests
+  , CtorInfo
   , Ctx
   , CtxElem(..)
   , Type(..)
@@ -94,6 +95,9 @@ import           Data.Data                      ( Data )
 -- Bidirectional typechecker
 -- Following:
 -- Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
+
+-- | A mapping from constructor names to their tag, arity and type name.
+type CtorInfo = [(Name, (Int, Int, Name))]
 
 -- Primitive types
 string :: Type
@@ -307,6 +311,8 @@ type Exp = Expr V Type
 type Pattern = Pat V
 
 -- | Contexts
+
+-- | A local context, holding top level definitions and local variables
 type Ctx = [CtxElem]
 
 genCtx :: Gen Ctx
@@ -1036,12 +1042,12 @@ inferCaseAlt scrutTy (pat, expr) = do
 {-# ANN inferPattern ("HLint: ignore Reduce duplication" :: String) #-}
 inferPattern :: Pattern -> TypeM Type
 inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
-  IntPat  _           -> pure int
-  CharPat _           -> pure char
-  BoolPat _           -> pure bool
-  UnitPat             -> pure unit
-  StringPat _         -> pure string
-  ConsPat con subpats -> do
+  IntPat  _                 -> pure int
+  CharPat _                 -> pure char
+  BoolPat _                 -> pure bool
+  UnitPat                   -> pure unit
+  StringPat _               -> pure string
+  ConsPat con _meta subpats -> do
       -- Lookup the type of the constructor
     conTy <- lookupV con
     case second unfoldFn (unfoldForall conTy) of
@@ -1086,11 +1092,11 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
             error
               $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
-    in  inferPattern (ConsPat con subpats)
-  ListPat []      -> inferPattern (ConsPat (Free "Kite.Primitive.[]") [])
+    in  inferPattern (ConsPat con Nothing subpats)
+  ListPat [] -> inferPattern (ConsPat (Free "Kite.Primitive.[]") Nothing [])
   ListPat subpats -> inferPattern
-    (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") [s, acc])
-           (ConsPat (Free "Kite.Primitive.[]") [])
+    (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") Nothing [s, acc])
+           (ConsPat (Free "Kite.Primitive.[]") Nothing [])
            subpats
     )
 
@@ -1103,12 +1109,12 @@ checkPattern pat ty = do
       if x `elem` domV ctx
         then throwError (DuplicateVariable x)
         else void $ extendV x ty
-    IntPat  _           -> subtype ty int
-    CharPat _           -> subtype ty char
-    BoolPat _           -> subtype ty bool
-    UnitPat             -> subtype ty unit
-    StringPat _         -> subtype ty string
-    ConsPat con subpats -> do
+    IntPat  _                 -> subtype ty int
+    CharPat _                 -> subtype ty char
+    BoolPat _                 -> subtype ty bool
+    UnitPat                   -> subtype ty unit
+    StringPat _               -> subtype ty string
+    ConsPat con _meta subpats -> do
       constructorType <- lookupV con
       case second unfoldFn (unfoldForall constructorType) of
         (us, (argTys, tcon@TCon{})) -> do
@@ -1132,10 +1138,11 @@ checkPattern pat ty = do
           ty'    <- subst ty
           subtype tcon'' ty'
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
-    ListPat []      -> checkPattern (ConsPat (Free "Kite.Primitive.[]") []) ty
+    ListPat [] ->
+      checkPattern (ConsPat (Free "Kite.Primitive.[]") Nothing []) ty
     ListPat subpats -> checkPattern
-      (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") [s, acc])
-             (ConsPat (Free "Kite.Primitive.[]") [])
+      (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") Nothing [s, acc])
+             (ConsPat (Free "Kite.Primitive.[]") Nothing [])
              subpats
       )
       ty
@@ -1155,7 +1162,7 @@ checkPattern pat ty = do
             error
               $  "Type.checkPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
-      in  checkPattern (ConsPat con subpats) ty
+      in  checkPattern (ConsPat con Nothing subpats) ty
 
 -- | unfoldForall (Forall a (Forall b t)) == ([a, b], t)
 unfoldForall :: Type -> ([U], Type)

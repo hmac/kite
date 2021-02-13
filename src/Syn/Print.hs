@@ -163,9 +163,9 @@ printPattern UnitPat         = "()"
 printPattern (TuplePat pats) = align $ htupled (map printPattern pats)
 printPattern (ListPat  pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
-printPattern (ConsPat "::" [x, y]) =
+printPattern (ConsPat "::" _ [x, y]) =
   parens $ printPattern x <+> "::" <+> printPattern y
-printPattern (ConsPat n pats) =
+printPattern (ConsPat n _ pats) =
   parens $ data_ (printName n) <+> hsep (map printPattern pats)
 
 -- TODO: binary operators

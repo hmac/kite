@@ -58,16 +58,17 @@ fromSyn = \case
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = \case
-  VarPat v          -> VarPat (T.Free v)
-  ConsPat c subpats -> ConsPat (T.Free c) (map convertPattern subpats)
-  TuplePat subpats  -> TuplePat (map convertPattern subpats)
-  ListPat  subpats  -> ListPat (map convertPattern subpats)
-  WildPat           -> WildPat
-  UnitPat           -> UnitPat
-  IntPat    i       -> IntPat i
-  CharPat   c       -> CharPat c
-  BoolPat   b       -> BoolPat b
-  StringPat s       -> StringPat s
+  VarPat v -> VarPat (T.Free v)
+  ConsPat c _ subpats ->
+    ConsPat (T.Free c) Nothing (map convertPattern subpats)
+  TuplePat subpats -> TuplePat (map convertPattern subpats)
+  ListPat  subpats -> ListPat (map convertPattern subpats)
+  WildPat          -> WildPat
+  UnitPat          -> UnitPat
+  IntPat    i      -> IntPat i
+  CharPat   c      -> CharPat c
+  BoolPat   b      -> BoolPat b
+  StringPat s      -> StringPat s
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case

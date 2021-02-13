@@ -93,7 +93,7 @@ translatePattern env (T.ListPat   es) = do
 translatePattern env (T.TuplePat es) = do
   pats <- mapM (translatePattern env) es
   pure (buildTuplePat pats)
-translatePattern env (T.ConsPat n pats) = do
+translatePattern env (T.ConsPat n _meta pats) = do
   pats' <- mapM (translatePattern env) pats
   pure $ ConPat (lookupCon n env) pats'
 translatePattern _ T.WildPat = VarPat <$> fresh
@@ -183,12 +183,12 @@ translateExpr env = \case
     a' <- translateExpr env a
     b' <- translateExpr env b
     pure $ App a' b'
-  T.AnnT e _ -> translateExpr env e
+  T.AnnT e _   -> translateExpr env e
 
   -- We translate a constructor into a series of nested lambda abstractions, one
   -- for each argument to the constructor. When applied, the result is a fully
   -- saturated constructor.
-  T.ConT n   -> do
+  T.ConT n _ _ -> do
     let con = lookupCon n env
         a   = conArity con
     newVars <- replicateM a fresh
