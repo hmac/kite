@@ -51,6 +51,7 @@ import           Data.Name                      ( Name(..)
                                                 )
 import           AST                            ( Expr(..)
                                                 , Pat(..)
+                                                , ConMeta(..)
                                                 )
 
 import           Prelude                 hiding ( splitAt )
@@ -90,6 +91,9 @@ import           Hedgehog                       ( Property
 import qualified Hedgehog
 
 import           Type.Reflection                ( Typeable )
+import           Type.Primitive                 ( listNilMeta
+                                                , listConsMeta
+                                                )
 import           Data.Data                      ( Data )
 
 -- Bidirectional typechecker
@@ -97,7 +101,7 @@ import           Data.Data                      ( Data )
 -- Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
 
 -- | A mapping from constructor names to their tag, arity and type name.
-type CtorInfo = [(Name, (Int, Int, Name))]
+type CtorInfo = [(Name, ConMeta)]
 
 -- Primitive types
 string :: Type
@@ -122,6 +126,7 @@ io :: Type
 io = TCon "Kite.Primitive.IO" []
 
 -- Primitive constructors
+
 primitiveConstructors :: Ctx
 primitiveConstructors =
   [ V (Free "Kite.Primitive.Unit")  unit
@@ -1094,11 +1099,14 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
               $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
     in  inferPattern (ConsPat con Nothing subpats)
-  ListPat [] -> inferPattern (ConsPat (Free "Kite.Primitive.[]") Nothing [])
+  ListPat [] ->
+    inferPattern (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
   ListPat subpats -> inferPattern
-    (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") Nothing [s, acc])
-           (ConsPat (Free "Kite.Primitive.[]") Nothing [])
-           subpats
+    (foldr
+      (\s acc -> ConsPat (Free "Kite.Primitive.::") (Just listConsMeta) [s, acc]
+      )
+      (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
+      subpats
     )
 
 checkPattern :: Pattern -> Type -> TypeM ()
@@ -1139,12 +1147,16 @@ checkPattern pat ty = do
           ty'    <- subst ty
           subtype tcon'' ty'
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
-    ListPat [] ->
-      checkPattern (ConsPat (Free "Kite.Primitive.[]") Nothing []) ty
+    ListPat [] -> checkPattern
+      (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
+      ty
     ListPat subpats -> checkPattern
-      (foldr (\s acc -> ConsPat (Free "Kite.Primitive.::") Nothing [s, acc])
-             (ConsPat (Free "Kite.Primitive.[]") Nothing [])
-             subpats
+      (foldr
+        (\s acc ->
+          ConsPat (Free "Kite.Primitive.::") (Just listConsMeta) [s, acc]
+        )
+        (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
+        subpats
       )
       ty
     TuplePat subpats ->

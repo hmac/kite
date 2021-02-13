@@ -60,6 +60,7 @@ library
       Type.Module
       Type.Print
       Type.ToTyped
+      Type.Primitive
       Util
       Interpret
       Chez

@@ -33,6 +33,7 @@ import           Type                           ( TypeM
 import           Type.FromSyn                   ( fromSyn
                                                 , quantify
                                                 )
+import           AST                            ( ConMeta(..) )
 import           Control.Monad                  ( void )
 import qualified Control.Monad.Except          as Except
                                                 ( throwError
@@ -137,7 +138,7 @@ translateData :: Can.Data -> TypeM (Ctx, CtorInfo)
 translateData d = do
   let tyvars = map Local (dataTyVars d)
       info   = zipWith
-        (\tag c -> (conName c, (tag, length (conArgs c), dataName d)))
+        (\tag c -> (conName c, ConMeta tag (length (conArgs c)) (dataName d)))
         [0 ..]
         (dataCons d)
   ctx <- mapM (buildCtx (dataName d) tyvars) (dataCons d)

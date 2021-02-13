@@ -20,6 +20,7 @@ import           Syn                     hiding ( Name
                                                 )
 import qualified Syn.Typed                     as T
 import           Type                           ( CtorInfo )
+import           Type.Primitive                 ( primitiveCtorInfo )
 import           Data.Name
 import           Util
 
@@ -56,11 +57,8 @@ convertType _ = unknown
 
 convertPattern :: CtorInfo -> Can.Pattern -> T.Pattern
 convertPattern ctorInfo = \case
-  ConsPat c _ args -> case lookup c ctorInfo of
-    Just (tag, arity, typeName) -> T.ConsPat
-      c
-      (Just (ConMeta tag arity typeName))
-      (map (convertPattern ctorInfo) args)
+  ConsPat c _ args -> case lookup c (ctorInfo <> primitiveCtorInfo) of
+    Just meta -> T.ConsPat c (Just meta) (map (convertPattern ctorInfo) args)
     Nothing ->
       error
         $  "Type.ToTyped.convertPattern: No metadata for constructor "
@@ -76,8 +74,7 @@ convertExpr ctorInfo expr = go expr
     Var v     -> T.VarT v unknown
     Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
     Con c     -> case lookup c ctorInfo of
-      Just (tag, arity, typeName) ->
-        T.ConT c (ConMeta tag arity typeName) unknown
+      Just meta -> T.ConT c meta unknown
       Nothing ->
         error
           $  "Type.ToTyped.convertExpr: No metadata for constructor "
