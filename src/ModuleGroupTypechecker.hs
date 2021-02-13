@@ -30,7 +30,7 @@ typecheckModuleGroup
   :: UntypedModuleGroup -> Either Type.LocatedError TypedModuleGroup
 typecheckModuleGroup (ModuleGroup m deps) = do
   let ms = deps ++ [m]
-  (_env', typedModules) <- Type.runTypeM Type.defaultTypeEnv
+  (_, typedModules) <- Type.runTypeM Type.defaultTypeEnv
     $ mapAccumLM checkModule mempty ms
   case reverse typedModules of
     (typedModule : typedDeps) ->

@@ -19,9 +19,11 @@ printDef (DefRecord name fields) =
 
 printSExpr :: SExpr -> Doc a
 printSExpr = \case
-  Lit  l     -> printLit l
-  List xs    -> parens $ "list" <+> sepMap printSExpr xs
-  Var  v     -> pretty v
+  Quote e    -> "'" <> printSExpr e
+  Lit   l    -> printLit l
+  List  xs   -> parens $ sepMap printSExpr xs
+  Vec   xs   -> "#" <> parens (sepMap printSExpr xs)
+  Var   v    -> pretty v
   App f args -> parens $ printSExpr f <+> sepMap printSExpr args
   Abs vars body ->
     parens $ "lambda" <+> parens (sepMap pretty vars) <+> printSExpr body
@@ -42,7 +44,7 @@ printLit = \case
   Bool   True  -> "#t"
   Bool   False -> "#f"
   Int    n     -> pretty n
-  Char   c     -> squotes (pretty c)
+  Char   c     -> "#\\" <> pretty c
   String s     -> dquotes (pretty s)
   Unit         -> "'()"
 

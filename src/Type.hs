@@ -607,6 +607,7 @@ defaultTypeEnv =
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
+
 data TypeState = TypeState { varCounter :: Int -- A counter for generating fresh names
                            , context :: Ctx    -- The local type context
                            }

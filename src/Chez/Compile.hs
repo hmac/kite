@@ -5,15 +5,20 @@ module Chez.Compile
   )
 where
 
-import           Data.Name                      ( Name )
+import           Prelude                 hiding ( null )
+import           Data.Name                      ( Name(..)
+                                                , RawName(..)
+                                                )
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
 import           Chez                           ( SExpr(..)
                                                 , Lit(..)
                                                 , Def(..)
+                                                , null
                                                 )
 import qualified Syn.Typed                     as T
+import           Data.List.Extra                ( concatUnzip )
 
 -- Compile Kite to Chez Scheme
 
@@ -85,23 +90,27 @@ compileDecl = \case
 compileData :: T.Data -> [Def]
 compileData dat =
       -- The maximum number of fields for a constructor of this type
-  let maxFields        = maximum $ map (length . T.conArgs) (T.dataCons dat)
-      fields = "_tag" : map (pack . ('_' :) . show) [0 .. maxFields - 1]
-      typeName         = name2Text $ T.dataName dat
-      recordDefinition = DefRecord typeName fields
-      -- Each data type constructor is compiled to a function which constructs an object of that type with
-      -- the correct _tag.
-      mkConstructor :: Int -> T.DataCon -> Def
-      mkConstructor tag con =
-          let maxArgs     = length $ T.conArgs con
-              parameters  = map (pack . ('_' :) . show) [0 .. maxArgs - 1]
-              fieldValues = Lit (Int tag) : map Var parameters <> take
-                (maxFields - maxArgs)
-                (repeat (List []))
-          in  Def (name2Text (T.conName con)) $ Abs parameters $ App
-                (Var ("make-" <> typeName))
-                fieldValues
-  in  recordDefinition : zipWith mkConstructor [0 ..] (T.dataCons dat)
+  let
+    maxFields        = maximum $ map (length . T.conArgs) (T.dataCons dat)
+    fields           = "_tag" : map (pack . ('_' :) . show) [0 .. maxFields - 1]
+    typeName         = name2Text $ T.dataName dat
+    recordDefinition = DefRecord typeName fields
+    -- Each data type constructor is compiled to a function which constructs an object of that type with
+    -- the correct _tag.
+    mkConstructor :: Int -> T.DataCon -> Def
+    mkConstructor tag con =
+      let
+        maxArgs     = length $ T.conArgs con
+        parameters  = map (pack . ('_' :) . show) [0 .. maxArgs - 1]
+        fieldValues = Lit (Int tag) : map Var parameters <> take
+          (maxFields - maxArgs)
+          (repeat null)
+      in
+        Def (name2Text (T.conName con)) $ Abs parameters $ App
+          (Var ("make-" <> typeName))
+          fieldValues
+  in
+    recordDefinition : zipWith mkConstructor [0 ..] (T.dataCons dat)
 
 compileExpr :: T.Exp -> SExpr
 compileExpr = \case
@@ -111,22 +120,99 @@ compileExpr = \case
   T.UnitLitT             -> Lit Unit
   T.StringLitT s         -> Lit (String s)
   T.TupleLitT elems _    -> List (map compileExpr elems)
-  T.ListLitT  elems _    -> List (map compileExpr elems)
+  T.ListLitT  elems _    -> Vec (map compileExpr elems)
   T.AnnT      e     _    -> compileExpr e
   T.VarT      v     _    -> Var $ name2Text v
-  T.ConT c               -> Var $ name2Text c
+  T.ConT c        _    _ -> Var $ name2Text c
   T.AbsT vars     body _ -> Abs (map (name2Text . fst) vars) (compileExpr body)
   T.AppT f        arg  _ -> App (compileExpr f) [compileExpr arg]
   T.LetT bindings body _ -> Let
     (map (\(n, e, _) -> (name2Text n, compileExpr e)) bindings)
     (compileExpr body)
+  -- TODO: we duplicate the scrutinee here, which is inefficient if it's not a variable.
+  -- We should bind it in a let first (generating a fresh name)
+  T.CaseT scrut alts _ ->
+    let scrutExpr = compileExpr scrut
+    -- We need to convert each constructor pattern into a test on the tag, but to do that we need to
+    -- know how to map constructors to tags.
+        altExprs  = map (uncurry compileAlt) alts
+        -- Each case alt is compiled to a test ((eq? <tag> (<type>-_tag <scrut>)) <rhs>)
+        compileAlt :: T.Pattern -> T.Exp -> SExpr
+        compileAlt pat rhs =
+            let (tests, bindings) = compilePat pat scrutExpr
+            in  List [App (Var "and") tests, Let bindings (compileExpr rhs)]
+    in  App (Var "cond") altExprs
+  -- An mcase takes N arguments and matches each against a pattern simultaneously.
+  -- We compile it to a lambda that takes N arguments and then tests them in a cond, similar to
+  -- case.
+  T.MCaseT [] _ ->
+    error $ "Chez.Compile.compileExpr: Cannot compile empty mcase"
+  T.MCaseT alts@((ps, _) : _) _ ->
+    let argNum = length ps
+        vars   = map (\n -> "fixme" <> pack (show n)) [0 .. argNum - 1]
+        compileAlt :: [T.Pattern] -> T.Exp -> SExpr
+        compileAlt pats rhs =
+            let (tests, bindings) = compileMCaseBranch (map Var vars) pats
+            in  List [App (Var "and") tests, Let bindings (compileExpr rhs)]
+        altExprs = map (uncurry compileAlt) alts
+    in  Abs vars $ App (Var "cond") altExprs
   -- TODO:
-  -- - Case expressions
   -- - String interpolation
   -- - Records
   -- - Foreign calls
   -- - Holes
   e -> error $ "Cannot compile " <> show e <> "yet"
 
+compileMCaseBranch :: [SExpr] -> [T.Pattern] -> ([SExpr], [(Text, SExpr)])
+compileMCaseBranch _ [] = ([], [])
+compileMCaseBranch (v : vars) (p : pats) =
+  let (tests     , bindings     ) = compilePat p v
+      (innerTests, innerBindings) = compileMCaseBranch vars pats
+  in  (tests <> innerTests, bindings <> innerBindings)
+compileMCaseBranch [] _ =
+  error "Chez.Compile.compileMCaseBranch: empty set of variables"
+
+-- Given a pattern p, and a scrutinee s, 'compilePat p s' compiles the pattern, returning a list of
+-- tests to determine if the pattern matches and a list of bindings to construct if it matches.
+-- TODO: the scrutinee should be a variable, to avoid duplicating it.
+compilePat :: T.Pattern -> SExpr -> ([SExpr], [(Text, SExpr)])
+compilePat pattern scrut = case pattern of
+  T.VarPat x       -> ([], [(name2Text x, scrut)])
+  T.WildPat        -> ([], [])
+  T.UnitPat        -> ([], [])
+  T.IntPat    n    -> ([App (Var "eq?") [scrut, Lit (Int n)]], [])
+  T.CharPat   c    -> ([App (Var "eq?") [scrut, Lit (Char c)]], [])
+  T.StringPat s    -> ([App (Var "eq?") [scrut, Lit (String s)]], [])
+  T.BoolPat   b    -> ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
+  T.TuplePat  pats -> concatUnzip $ zipWith
+    (\p i -> compilePat p (App (Var "vector-ref") [scrut, Lit (Int i)]))
+    pats
+    [0 :: Int ..]
+  T.ListPat pats ->
+    let (tests, bindings) = concatUnzip $ zipWith
+          (\p i -> compilePat p (App (Var "list-ref") [scrut, Lit (Int i)]))
+          pats
+          [0 :: Int ..]
+        lengthTest = App
+          (Var "eq?")
+          [App (Var "length") [scrut], Lit (Int (length pats))]
+    in  (lengthTest : tests, bindings)
+  -- TODO: we could use record-accessor to index into the fields of the constructor
+  -- https://scheme.com/tspl4/records.html#./records:h1
+  T.ConsPat c Nothing _ ->
+    error $ "Chez.Compile.compilePat: no metadata for constructor " <> show c
+  T.ConsPat _c (Just meta) pats ->
+    let tag      = T.conMetaTag meta
+        ty       = name2Text $ T.conMetaTypeName meta
+        tagField = ty <> "-" <> "_tag"
+        fieldAtIndex i = ty <> "-_" <> pack (show i)
+        ctorTest = App (Var "eq?") [App (Var tagField) [scrut], Lit (Int tag)]
+        (tests, bindings) = concatUnzip $ zipWith
+          (\p i -> compilePat p (App (Var (fieldAtIndex i)) [scrut]))
+          pats
+          [0 :: Int ..]
+    in  (ctorTest : tests, bindings)
+
 name2Text :: Name -> Text
-name2Text = pack . show
+name2Text (Local (Name n)              ) = pack n
+name2Text (TopLevel moduleName (Name n)) = pack $ show moduleName ++ "." ++ n
