@@ -5,6 +5,7 @@ module Chez.Compile
   )
 where
 
+import           Util
 import           Prelude                 hiding ( null )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
@@ -19,6 +20,10 @@ import           Chez                           ( SExpr(..)
                                                 )
 import qualified Syn.Typed                     as T
 import           Data.List.Extra                ( concatUnzip )
+import qualified NameGen
+import           NameGen                        ( NameGen
+                                                , freshM
+                                                )
 
 -- Compile Kite to Chez Scheme
 
@@ -73,18 +78,22 @@ import           Data.List.Extra                ( concatUnzip )
 -- Multi-scrutinee case expressions (i.e. mcase) are more difficult to compile efficiently, because
 -- we want to minimise the number of tests we do. The pattern match compiler from ELC shows how to
 -- do this, so we should be able to port that logic here.
+--
+freshName :: NameGen Text
+freshName = freshM (\i -> ("$" <> pack (show i)))
 
 newtype Env = Env { envDefs :: [Def] }
   deriving (Eq, Show, Semigroup, Monoid)
 
 compileModule :: Env -> T.Module -> Env
 compileModule Env { envDefs = defs } m =
-  Env { envDefs = defs ++ concatMap compileDecl (T.moduleDecls m) }
+  Env { envDefs = defs <> concatMap compileDecl (T.moduleDecls m) }
 
 compileDecl :: T.Decl -> [Def]
 compileDecl = \case
   T.FunDecl fun ->
-    [Def (name2Text (T.funName fun)) (compileExpr (T.funExpr fun))]
+    let expr = NameGen.run $ compileExpr $ T.funExpr fun
+    in  [Def (name2Text (T.funName fun)) expr]
   T.DataDecl d -> compileData d
 
 compileData :: T.Data -> [Def]
@@ -112,50 +121,53 @@ compileData dat =
   in
     recordDefinition : zipWith mkConstructor [0 ..] (T.dataCons dat)
 
-compileExpr :: T.Exp -> SExpr
+compileExpr :: T.Exp -> NameGen SExpr
 compileExpr = \case
-  T.IntLitT  n           -> Lit (Int n)
-  T.BoolLitT b           -> Lit (Bool b)
-  T.CharLitT c           -> Lit (Char c)
-  T.UnitLitT             -> Lit Unit
-  T.StringLitT s         -> Lit (String s)
-  T.TupleLitT elems _    -> List (map compileExpr elems)
-  T.ListLitT  elems _    -> Vec (map compileExpr elems)
-  T.AnnT      e     _    -> compileExpr e
-  T.VarT      v     _    -> Var $ name2Text v
-  T.ConT c        _    _ -> Var $ name2Text c
-  T.AbsT vars     body _ -> Abs (map (name2Text . fst) vars) (compileExpr body)
-  T.AppT f        arg  _ -> App (compileExpr f) [compileExpr arg]
-  T.LetT bindings body _ -> Let
-    (map (\(n, e, _) -> (name2Text n, compileExpr e)) bindings)
-    (compileExpr body)
-  -- TODO: we duplicate the scrutinee here, which is inefficient if it's not a variable.
-  -- We should bind it in a let first (generating a fresh name)
-  T.CaseT scrut alts _ ->
-    let scrutExpr = compileExpr scrut
-    -- We need to convert each constructor pattern into a test on the tag, but to do that we need to
-    -- know how to map constructors to tags.
-        altExprs  = map (uncurry compileAlt) alts
-        -- Each case alt is compiled to a test ((eq? <tag> (<type>-_tag <scrut>)) <rhs>)
-        compileAlt :: T.Pattern -> T.Exp -> SExpr
-        compileAlt pat rhs =
-            let (tests, bindings) = compilePat pat scrutExpr
-            in  List [App (Var "and") tests, Let bindings (compileExpr rhs)]
-    in  App (Var "cond") altExprs
+  T.IntLitT  n        -> pure $ Lit (Int n)
+  T.BoolLitT b        -> pure $ Lit (Bool b)
+  T.CharLitT c        -> pure $ Lit (Char c)
+  T.UnitLitT          -> pure $ Lit Unit
+  T.StringLitT s      -> pure $ Lit (String s)
+  T.TupleLitT elems _ -> List <$> mapM compileExpr elems
+  T.ListLitT  elems _ -> Vec <$> mapM compileExpr elems
+  T.AnnT      e     _ -> compileExpr e
+  T.VarT      v     _ -> pure $ Var $ name2Text v
+  T.ConT c    _    _  -> pure $ Var $ name2Text c
+  T.AbsT vars body _  -> Abs (map (name2Text . fst) vars) <$> (compileExpr body)
+  T.AppT f    arg  _  -> do
+    argExpr <- compileExpr arg
+    App <$> compileExpr f <*> pure [argExpr]
+  T.LetT bindings body _ ->
+    Let
+      <$> mapM (\(n, e, _) -> (name2Text n, ) <$> compileExpr e) bindings
+      <*> (compileExpr body)
+  T.CaseT scrut alts _ -> do
+    scrutVar <- freshName
+    let
+      -- Each case alt is compiled to a test ((eq? <tag> (<type>-_tag <scrut>)) <rhs>)
+        compileAlt :: T.Pattern -> T.Exp -> NameGen SExpr
+        compileAlt pat rhs = do
+          let (tests, bindings) = compilePat pat (Var scrutVar)
+          rhsExpr <- compileExpr rhs
+          pure $ List [App (Var "and") tests, Let bindings rhsExpr]
+    scrutExpr <- compileExpr scrut
+    Let [(scrutVar, scrutExpr)]
+      <$> App (Var "cond")
+      <$> mapM (uncurry compileAlt) alts
   -- An mcase takes N arguments and matches each against a pattern simultaneously.
   -- We compile it to a lambda that takes N arguments and then tests them in a cond, similar to
   -- case.
   T.MCaseT [] _ ->
     error $ "Chez.Compile.compileExpr: Cannot compile empty mcase"
-  T.MCaseT alts@((ps, _) : _) _ ->
+  T.MCaseT alts@((ps, _) : _) _ -> do
     let argNum = length ps
-        vars   = map (\n -> "fixme" <> pack (show n)) [0 .. argNum - 1]
-        compileAlt :: [T.Pattern] -> T.Exp -> SExpr
-        compileAlt pats rhs =
-            let (tests, bindings) = compileMCaseBranch (map Var vars) pats
-            in  List [App (Var "and") tests, Let bindings (compileExpr rhs)]
-        altExprs = map (uncurry compileAlt) alts
-    in  Abs vars $ App (Var "cond") altExprs
+    vars <- replicateM argNum freshName
+    let compileAlt :: [T.Pattern] -> T.Exp -> NameGen SExpr
+        compileAlt pats rhs = do
+          rhsExpr <- compileExpr rhs
+          let (tests, bindings) = compileMCaseBranch (map Var vars) pats
+          pure $ List [App (Var "and") tests, Let bindings rhsExpr]
+    Abs vars <$> App (Var "cond") <$> mapM (uncurry compileAlt) alts
   -- TODO:
   -- - String interpolation
   -- - Records
