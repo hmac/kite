@@ -44,6 +44,7 @@ library
       LC.Eval
       LC.Execute
       LC.Print
+      Print
       ModuleGroup
       ModuleGroupCompiler
       ModuleGroupTypechecker
@@ -61,6 +62,9 @@ library
       Type.ToTyped
       Util
       Interpret
+      Chez
+      Chez.Compile
+      Chez.Print
   other-modules:
       Paths_kite
   hs-source-dirs:
