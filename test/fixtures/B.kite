@@ -2,10 +2,20 @@ module B
 
 import C (c)
 
-data Bar = MkBar Int
+type Bar = MkBar Int
+
+type Baz = BazLeft | BazRight Int
 
 defaultInt : Int
 defaultInt = 3
 
 otherBar : Int
 otherBar = 2
+
+getBaz : Int -> Baz -> Int
+getBaz =
+  def BazLeft      -> def
+  _   (BazRight n) -> n
+
+test : Int
+test = getBaz 0 BazLeft
