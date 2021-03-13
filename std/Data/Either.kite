@@ -2,7 +2,7 @@ module Data.Either
 
 import Data.Maybe (Just, Nothing, Maybe)
 import Data.Functor (Functor(..))
-import Data.Applicative (Applicative)
+import Control.Applicative (Applicative)
 import Data.Eq (Eq, eq)
 
 type Either a b = Left a | Right b

@@ -3,7 +3,7 @@ module Control.Monad.State
 import Data.Tuple (fst, snd, first)
 import Data.Functor (Functor(..), map)
 import Data.Function (id, compose)
-import Data.Applicative (Applicative(..))
+import Control.Applicative (Applicative(..))
 import Data.Monad (Monad(..))
 
 type State s a = State { runState : s -> (a, s) }

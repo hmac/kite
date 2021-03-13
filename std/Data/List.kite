@@ -21,42 +21,42 @@ import Data.Bool (and)
 import Data.Monoid (Monoid(..))
 import Kite.List (foldr)
 import Data.Functor (Functor(..))
-import Data.Applicative (Applicative(..))
+import Control.Applicative (Applicative(..))
 import Data.Monad (Monad(..))
-
-semigroupList : Semigroup [a]
-semigroupList = Semigroup { append = listAppend }
 
 listAppend : [a] -> [a] -> [a]
 listAppend = [] ys -> ys
              (x :: xs) ys -> x :: (listAppend xs ys)
 
+semigroupList : Semigroup [a]
+semigroupList = Semigroup { append = listAppend }
+
 monoidList : Monoid [a]
 monoidList = Monoid { empty = [], semigroup = semigroupList }
-
-functorList : Functor []
-functorList = Functor { map = mapList }
 
 mapList : (a -> b) -> [a] -> [b]
 mapList = _ [] -> []
           f (x :: xs) -> (f x) :: (mapList f xs)
 
+functorList : Functor []
+functorList = Functor { map = mapList }
+
 singleton : a -> [a]
 singleton = x -> [x]
-
-applicativeList : Applicative []
-applicativeList = Applicative { functor = functorList, pure = singleton, ap = apList }
 
 apList : [a -> b] -> [a] -> [b]
 apList = [] xs -> []
          (f :: fs) xs -> listAppend (mapList f xs) (apList fs xs)
 
-monadList : Monad []
-monadList = Monad { applicative = applicativeList, bind = bindList }
+applicativeList : Applicative []
+applicativeList = Applicative { functor = functorList, pure = singleton, ap = apList }
 
 bindList : [a] -> (a -> [b]) -> [b]
 bindList = [] f        -> []
            (x :: xs) f -> listAppend (f x) (bindList xs f)
+
+monadList : Monad []
+monadList = Monad { applicative = applicativeList, bind = bindList }
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.

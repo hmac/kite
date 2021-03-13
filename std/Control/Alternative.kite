@@ -1,0 +1,26 @@
+module Control.Alternative
+
+import Data.Functor (map)
+import Control.Applicative (Applicative, liftA2, pure)
+import Lazy (Lazy, force, defer, functorLazy)
+
+type Alternative f = Alternative { applicative : Applicative f, zero : forall a. f a, plus : forall a. f a -> f a -> f a }
+
+zero : Alternative f -> f a
+zero = (Alternative d) -> d.zero
+
+plus : Alternative f -> f a -> f a -> f a
+plus = (Alternative d) -> d.plus
+
+applicative : Alternative f -> Applicative f
+applicative = (Alternative d) -> d.applicative
+
+functor : Alternative f -> Functor f
+functor = f -> case applicative f of
+                 (Applicative g) -> g.functor
+
+some : Alternative f -> f a -> Lazy (f [a])
+some = alt v -> liftA2 (applicative alt) (x xs -> x :: xs) v (defer (_ -> many alt v))
+
+many : Alternative f -> f a -> Lazy (f [a])
+many = alt v -> plus alt (some alt v) (pure (applicative alt) [])

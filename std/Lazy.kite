@@ -1,0 +1,33 @@
+module Lazy (defer, Lazy, force, functorLazy)
+
+import Data.Functor (Functor(Functor))
+
+-- A type with a Lazy instance is not immediately evaluated, but can be 'force'd to reduce it.
+-- It's useful to prevent evaluation in cases where it would cause an infinite loop.
+-- Note: another way to do this is to define Lazy as an alias for () -> a.
+-- See https://nikita-volkov.github.io/if-haskell-were-strict/
+
+--type Lazy a = Lazy { force : (() -> a) -> a }
+--
+--force : forall a. Lazy a -> (() -> a) -> a
+--force = (Lazy d) -> d.force
+--
+--forceFunction : forall a b. (() -> (a -> b)) -> (a -> b)
+--forceFunction = f x -> f () x
+--
+--lazyFunction : forall a b. Lazy (a -> b)
+--lazyFunction = Lazy { force = forceFunction }
+
+type Lazy a = Lazy (() -> a)
+
+defer : (() -> a) -> Lazy a
+defer = f -> Lazy f
+
+force : Lazy a -> a
+force = (Lazy f) -> f ()
+
+mapLazy : (a -> b) -> Lazy a -> Lazy b
+mapLazy = f (Lazy l) -> Lazy (_ -> f (l ()))
+
+functorLazy : Functor Lazy
+functorLazy = Functor { map = mapLazy }

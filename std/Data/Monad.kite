@@ -1,6 +1,6 @@
 module Data.Monad
 
-import Data.Applicative (Applicative)
+import Control.Applicative (Applicative)
 import Data.Function (const)
 
 type Monad m = Monad { applicative : Applicative m, bind : forall a b. m a -> (a -> m b) -> m b }

@@ -2,10 +2,11 @@ module Data.Maybe
 
 import Kite.Primitive (Bool, True, False)
 import Data.Functor (Functor(..))
-import Data.Applicative (Applicative, pure)
+import Control.Applicative (Applicative, pure)
 import Control.Monad.State (State, monadState, applicativeState)
 import Data.Monad (Monad, bind)
 import Data.Function (compose, flip)
+import Control.Alternative (Alternative)
 
 type Maybe a = Just a | Nothing
 
@@ -29,6 +30,13 @@ bindMaybe = Nothing _  -> Nothing
 
 monadMaybe : Monad Maybe
 monadMaybe = Monad { applicative = applicativeMaybe, bind = bindMaybe }
+
+plusMaybe : Maybe a -> Maybe a -> Maybe a
+plusMaybe = Nothing r -> r
+            l       _ -> l
+
+alternativeMaybe : Alternative Maybe
+alternativeMaybe = Alternative { applicative = applicativeMaybe, zero = Nothing, plus = plusMaybe }
 
 maybe : b -> (a -> b) -> Maybe a -> b
 maybe = n _ Nothing  -> n

@@ -18,8 +18,8 @@ fromChars = cs -> concat monoidString (map functorList (show showChar) cs)
 consChar : Char -> String -> String
 consChar = c s -> $consChar c s
 
-unconsChar : String -> Maybe (Char, String)
-unconsChar = s -> $unconsChar s Nothing unconsCharHelper
-
 unconsCharHelper : Char -> String -> Maybe (Char, String)
 unconsCharHelper = c s -> Just (c, s)
+
+unconsChar : String -> Maybe (Char, String)
+unconsChar = s -> $unconsChar s Nothing unconsCharHelper
