@@ -1,7 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Chez.Compile
-  ( Env(..)
+  ( Env
   , compileModule
+  , builtins
   )
 where
 
@@ -17,6 +18,9 @@ import           Chez                           ( SExpr(..)
                                                 , Lit(..)
                                                 , Def(..)
                                                 , null
+                                                , true
+                                                , false
+                                                , begin
                                                 )
 import qualified Syn.Typed                     as T
 import           Data.List.Extra                ( concatUnzip )
@@ -82,12 +86,15 @@ import           NameGen                        ( NameGen
 freshName :: NameGen Text
 freshName = freshM (\i -> ("$" <> pack (show i)))
 
-newtype Env = Env { envDefs :: [Def] }
-  deriving (Eq, Show, Semigroup, Monoid)
+type Env = [Def]
 
 compileModule :: Env -> T.Module -> Env
-compileModule Env { envDefs = defs } m =
-  Env { envDefs = defs <> concatMap compileDecl (T.moduleDecls m) }
+compileModule defs m =
+  let ordering :: T.Decl -> Int
+      ordering = \case
+        (T.DataDecl _) -> 0
+        (T.FunDecl  _) -> 1
+  in  defs <> concatMap compileDecl (sortOn ordering (T.moduleDecls m))
 
 compileDecl :: T.Decl -> [Def]
 compileDecl = \case
@@ -114,10 +121,11 @@ compileData dat =
         fieldValues = Lit (Int tag) : map Var parameters <> take
           (maxFields - maxArgs)
           (repeat null)
+        body = case parameters of
+          [] -> App (Var ("make-" <> typeName)) fieldValues
+          _  -> Abs parameters $ App (Var ("make-" <> typeName)) fieldValues
       in
-        Def (name2Text (T.conName con)) $ Abs parameters $ App
-          (Var ("make-" <> typeName))
-          fieldValues
+        Def (name2Text (T.conName con)) body
   in
     recordDefinition : zipWith mkConstructor [0 ..] (T.dataCons dat)
 
@@ -128,15 +136,17 @@ compileExpr = \case
   T.CharLitT c        -> pure $ Lit (Char c)
   T.UnitLitT          -> pure $ Lit Unit
   T.StringLitT s      -> pure $ Lit (String s)
-  T.TupleLitT elems _ -> List <$> mapM compileExpr elems
-  T.ListLitT  elems _ -> Vec <$> mapM compileExpr elems
+  T.TupleLitT elems _ -> App (Var "vector") <$> mapM compileExpr elems
+  T.ListLitT  elems _ -> App (Var "list") <$> mapM compileExpr elems
   T.AnnT      e     _ -> compileExpr e
   T.VarT      v     _ -> pure $ Var $ name2Text v
-  T.ConT c    _    _  -> pure $ Var $ name2Text c
-  T.AbsT vars body _  -> Abs (map (name2Text . fst) vars) <$> (compileExpr body)
-  T.AppT f    arg  _  -> do
+  T.ConT c _ _        -> pure $ Var $ name2Text c
+  T.AbsT vars body _ ->
+    foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
+  T.AppT f arg _ -> do
     argExpr <- compileExpr arg
-    App <$> compileExpr f <*> pure [argExpr]
+    fExpr   <- compileExpr f
+    pure $ App fExpr [argExpr]
   T.LetT bindings body _ ->
     Let
       <$> mapM (\(n, e, _) -> (name2Text n, ) <$> compileExpr e) bindings
@@ -151,6 +161,7 @@ compileExpr = \case
           rhsExpr <- compileExpr rhs
           pure $ List [App (Var "and") tests, Let bindings rhsExpr]
     scrutExpr <- compileExpr scrut
+    -- TODO: Use the Cond constructor
     Let [(scrutVar, scrutExpr)]
       <$> App (Var "cond")
       <$> mapM (uncurry compileAlt) alts
@@ -167,12 +178,40 @@ compileExpr = \case
           rhsExpr <- compileExpr rhs
           let (tests, bindings) = compileMCaseBranch (map Var vars) pats
           pure $ List [App (Var "and") tests, Let bindings rhsExpr]
-    Abs vars <$> App (Var "cond") <$> mapM (uncurry compileAlt) alts
+    flip (foldr (Abs . (: []))) vars
+      <$> App (Var "cond")
+      <$> mapM (uncurry compileAlt) alts
+  T.RecordT kvs _ -> do
+    r       <- freshName
+    assigns <- mapM (bimapM (pure . pack) compileExpr) kvs
+    pure
+      $  Let [(r, App (Var "make-hashtable") [Var "symbol-hash", Var "eq?"])]
+      $  begin
+      $  (map
+           (\(k, v) ->
+             App (Var "symbol-hashtable-set!") [Var r, Quote (Var k), v]
+           )
+           assigns
+         )
+      <> [Var r]
+  T.ProjectT r k _ -> do
+    rExpr <- compileExpr r
+    pure $ App (Var "symbol-hashtable-ref") [rExpr, Quote (Var (pack k)), false]
+  T.StringInterpT prefix comps -> do
+    args <- mconcatMapM
+      (\(e, s) -> compileExpr e >>= \e' -> pure [e', Lit (String s)])
+      comps
+    pure $ App (Var "string-append") (Lit (String prefix) : args)
+  T.FCallT f args _ -> do
+    argExprs <- mapM compileExpr args
+    let fExpr = compileFCall f
+    case argExprs of
+      [] -> pure fExpr
+      _  -> pure $ App fExpr argExprs
+
   -- TODO:
-  -- - String interpolation
-  -- - Records
-  -- - Foreign calls
   -- - Holes
+
   e -> error $ "Cannot compile " <> show e <> "yet"
 
 compileMCaseBranch :: [SExpr] -> [T.Pattern] -> ([SExpr], [(Text, SExpr)])
@@ -186,7 +225,6 @@ compileMCaseBranch [] _ =
 
 -- Given a pattern p, and a scrutinee s, 'compilePat p s' compiles the pattern, returning a list of
 -- tests to determine if the pattern matches and a list of bindings to construct if it matches.
--- TODO: the scrutinee should be a variable, to avoid duplicating it.
 compilePat :: T.Pattern -> SExpr -> ([SExpr], [(Text, SExpr)])
 compilePat pattern scrut = case pattern of
   T.VarPat x       -> ([], [(name2Text x, scrut)])
@@ -213,6 +251,16 @@ compilePat pattern scrut = case pattern of
   -- https://scheme.com/tspl4/records.html#./records:h1
   T.ConsPat c Nothing _ ->
     error $ "Chez.Compile.compilePat: no metadata for constructor " <> show c
+  T.ConsPat c _ [] | c == "Kite.Primitive.[]" ->
+    ([App (Var "null?") [scrut]], [])
+  T.ConsPat c _ [headPat, tailPat] | c == "Kite.Primitive.::" ->
+    let (headTests, headBindings) =
+            compilePat headPat (App (Var "car") [scrut])
+        (tailTests, tailBindings) =
+            compilePat tailPat (App (Var "cdr") [scrut])
+        notNullTest = App (Var "not") [App (Var "null?") [scrut]]
+    in  (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
+
   T.ConsPat _c (Just meta) pats ->
     let tag      = T.conMetaTag meta
         ty       = name2Text $ T.conMetaTypeName meta
@@ -228,3 +276,79 @@ compilePat pattern scrut = case pattern of
 name2Text :: Name -> Text
 name2Text (Local (Name n)              ) = pack n
 name2Text (TopLevel moduleName (Name n)) = pack $ show moduleName ++ "." ++ n
+
+-- Foreign calls are compiled to Chez functions or expressions
+-- Some of these aren't implemented
+compileFCall :: String -> SExpr
+compileFCall = \case
+  "getLine" -> App (Var "get-line") [App (Var "current-input-port") []]
+  "putStr"  -> Abs ["s"] $ begin
+    [App (Var "put-string") [App (Var "current-output-port") [], Var "s"]]
+  "putStrLn" -> Abs ["s"] $ begin
+    [ App (Var "put-string") [App (Var "current-output-port") [], Var "s"]
+    , App (Var "newline")    [App (Var "current-output-port") []]
+    ]
+  f -> error $ "Unknown foreign call: " <> f
+
+-- Implementations for compiler built-in functions like showInt
+builtins :: [Def]
+builtins =
+  let prim s = "Kite.Primitive." <> s
+  in
+    [ DefRecord (prim "IO") ["_tag", "_0"]
+    , Def
+      (prim "MkIO")
+      (Abs ["f"] (App (Var ("make-" <> prim "IO")) [Lit (Int 0), Var "f"]))
+    , Def
+      (prim "runIO")
+      (Abs
+        ["m"]
+        (App (App (Var (prim "IO" <> "-_0")) [Var "m"]) [Abs ["r"] (Var "r")])
+      )
+    , Def (prim "appendString") (Var "string-append")
+    , Def (prim "$showInt") (Var "number->string")
+    , Def (prim "$eqInt") (Var "eq?")
+    , Def (prim "*") (Abs ["x"] (Abs ["y"] (App (Var "*") [Var "x", Var "y"])))
+    , Def (prim "+") (Abs ["x"] (Abs ["y"] (App (Var "+") [Var "x", Var "y"])))
+    , Def (prim "::")
+          (Abs ["x"] (Abs ["xs"] (App (Var "cons") [Var "x", Var "xs"])))
+    , Def (prim "$eqChar")
+          (Abs ["c1"] (Abs ["c2"] (App (Var "eq?") [Var "c1", Var "c2"])))
+    , Def
+      (prim "$consChar")
+      (Abs
+        ["c"]
+        (Abs
+          ["s"]
+          (App
+            (Var "string-append")
+            [App (Var "list->string") [App (Var "list") [Var "c"]], Var "s"]
+          )
+        )
+      )
+    , Def
+      (prim "$unconsChar")
+      (Abs
+        ["s"]
+        (Abs
+          ["def"]
+          (Abs
+            ["f"]
+            (Let
+              [ ("len", App (Var "string-length") [Var "s"])
+              , ("l"  , App (Var "string->list") [Var "s"])
+              ]
+              (Cond
+                [ (App (Var "eq?") [Var "len", Lit (Int 0)], Var "def")
+                , ( true
+                  , App
+                    (App (Var "f") [App (Var "car") [Var "l"]])
+                    [App (Var "substring") [Var "s", Lit (Int 1), Var "len"]]
+                  )
+                ]
+              )
+            )
+          )
+        )
+      )
+    ]

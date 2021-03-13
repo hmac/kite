@@ -60,7 +60,7 @@ compileToChez (TypedModuleGroup m deps) = CompiledModule
   { cModuleName    = moduleName m
   , cModuleImports = moduleImports m
   , cModuleExports = moduleExports m
-  , cModuleEnv     = env
+  , cModuleEnv     = Chez.builtins <> env
   , cModuleDeps    = []
   }
   where env = foldl Chez.compileModule mempty (deps ++ [m])

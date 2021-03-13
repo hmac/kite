@@ -16,24 +16,25 @@ printDef (Def name body) =
 printDef (DefRecord name fields) =
   parens $ "define-record-type" <+> pretty name <+> parens
     ("fields" <+> sepMap pretty fields)
+printDef (DefFunc name args body) =
+  parens $ "define" <+> parens (sepMap pretty (name : args)) <+> printSExpr body
 
 printSExpr :: SExpr -> Doc a
 printSExpr = \case
   Quote e    -> "'" <> printSExpr e
   Lit   l    -> printLit l
   List  xs   -> parens $ sepMap printSExpr xs
-  Vec   xs   -> "#" <> parens (sepMap printSExpr xs)
+  Vec   xs   -> "'#" <> parens (sepMap printSExpr xs)
   Var   v    -> pretty v
   App f args -> parens $ printSExpr f <+> sepMap printSExpr args
   Abs vars body ->
     parens $ "lambda" <+> parens (sepMap pretty vars) <+> printSExpr body
   Let binds body ->
     parens
-      $   "letrec"
+      $   "let*"
       <+> parens
             (sepMap (\(v, e) -> parens (sep [pretty v, printSExpr e])) binds)
       <+> printSExpr body
-  If c t e -> parens $ "if" <+> printSExpr c <+> printSExpr t <+> printSExpr e
   Cond alts ->
     parens
       $   "cond"

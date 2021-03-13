@@ -122,10 +122,11 @@ unit = TCon "Kite.Primitive.Unit" []
 list :: Type -> Type
 list a = TCon "Kite.Primitive.List" [a]
 
-io :: Type
-io = TCon "Kite.Primitive.IO" []
+io :: Type -> Type
+io a = TCon "Kite.Primitive.IO" [a]
 
 -- Primitive constructors
+-- TODO: move all primitive stuff to Type.Primitive
 
 primitiveConstructors :: Ctx
 primitiveConstructors =
@@ -148,6 +149,11 @@ primitiveConstructors =
   , V (Free "Kite.Primitive.Tuple6") (mkTupleCon 6 "Kite.Primitive.Tuple6")
   , V (Free "Kite.Primitive.Tuple7") (mkTupleCon 7 "Kite.Primitive.Tuple7")
   , V (Free "Kite.Primitive.Tuple8") (mkTupleCon 8 "Kite.Primitive.Tuple8")
+  , V
+    (Free "Kite.Primitive.MkIO")
+    (Forall (U 0 "a")
+            (Fn (Fn (Fn (UType (U 0 "a")) unit) unit) (io (UType (U 0 "a"))))
+    )
   ]
 
 -- Primitive functions
@@ -201,17 +207,15 @@ mkTupleCon len tcon =
 fcallInfo :: [(String, Type)]
 fcallInfo =
   -- name        type
-  [ ("putStrLn", Fn string (TApp io [unit]))
-  , ("putStr"  , Fn string (TApp io [unit]))
-  , ("getLine" , TApp io [string])
-  , ( "pureIO"
-    , Forall (U 0 "a") (Fn (UType (U 0 "a")) (TApp io [UType (U 0 "a")]))
-    )
-  , ( "bindIO"
-    , Forall (U 0 "a") $ Forall (U 1 "b") $ Fn (TApp io [UType (U 0 "a")]) $ Fn
-      (Fn (UType (U 0 "a")) (TApp io [UType (U 1 "b")]))
-      (TApp io [UType (U 1 "b")])
-    )
+  [ ("putStrLn", Fn string unit)
+  , ("putStr"  , Fn string unit)
+  , ("getLine" , string)
+  -- , ("pureIO", Forall (U 0 "a") (Fn (UType (U 0 "a")) (io (UType (U 0 "a")))))
+  -- , ( "bindIO"
+  --   , Forall (U 0 "a") $ Forall (U 1 "b") $ Fn (io (UType (U 0 "a"))) $ Fn
+  --     (Fn (UType (U 0 "a")) (io (UType (U 1 "b"))))
+  --     (io (UType (U 1 "b")))
+  --   )
   ]
 
 -- | Types
@@ -849,7 +853,7 @@ check expr ty = do
       -- if the binding is annotated, check it against its annotation
       -- otherwise infer a type for it
       -- then add the type to the context
-      forM_ (reverse binds) $ \(x, e, maybeType) -> do
+      forM_ binds $ \(x, e, maybeType) -> do
         t <- case maybeType of
           Just t  -> check e t $> t
           Nothing -> infer e
@@ -967,7 +971,7 @@ infer expr_ = do
       -- if the binding is annotated, check it against its annotation
       -- otherwise infer a type for it
       -- then add the type to the context
-      forM_ (reverse binds) $ \(x, e, maybeType) -> do
+      forM_ binds $ \(x, e, maybeType) -> do
         t <- case maybeType of
           Just t  -> check e t $> t
           Nothing -> infer e

@@ -5,7 +5,10 @@ import           Data.Name                      ( Name )
 
 primitiveCtorInfo :: [(Name, ConMeta)]
 primitiveCtorInfo =
-  [("Kite.Primitive.[]", listNilMeta), ("Kite.Primitive.::", listConsMeta)]
+  [ ("Kite.Primitive.[]"  , listNilMeta)
+  , ("Kite.Primitive.::"  , listConsMeta)
+  , ("Kite.Primitive.MkIO", mkIO)
+  ]
 
 listNilMeta :: ConMeta
 listNilMeta = ConMeta { conMetaTag      = 0
@@ -18,3 +21,9 @@ listConsMeta = ConMeta { conMetaTag      = 1
                        , conMetaArity    = 2
                        , conMetaTypeName = "Kite.Primitive.List"
                        }
+
+mkIO :: ConMeta
+mkIO = ConMeta { conMetaTag      = 0
+               , conMetaArity    = 1
+               , conMetaTypeName = "Kite.Primitive.IO"
+               }

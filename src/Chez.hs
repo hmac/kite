@@ -4,6 +4,7 @@ import           Data.Text                      ( Text )
 
 data Def = Def Text SExpr
          | DefRecord Text [Text]
+         | DefFunc Text [Text] SExpr
   deriving (Eq, Show)
 
 data SExpr = Lit Lit
@@ -15,7 +16,6 @@ data SExpr = Lit Lit
            | App SExpr [SExpr]
            | Abs [Text] SExpr
            | Let [(Text, SExpr)] SExpr
-           | If SExpr SExpr SExpr
            | Cond [(SExpr, SExpr)]
            | Quote SExpr
   deriving (Eq, Show)
@@ -48,3 +48,7 @@ false = Var "#f"
 
 null :: SExpr
 null = Quote (List [])
+
+-- Sequence a series of expressions, returning the result of the last one
+begin :: [SExpr] -> SExpr
+begin es = App (Var "begin") es

@@ -30,7 +30,6 @@ import           Type.Print
 import           Interpret                      ( interpretAndRunMain
                                                 , printValue
                                                 )
-import qualified Chez.Compile                  as Chez
 import qualified Chez.Print
 
 data Config =
@@ -99,7 +98,7 @@ dumpChez homeDir = withParsedFile homeDir $ \g ->
     Left err -> printNicely (printLocatedError err)
     Right g' ->
       let cg   = ModuleGroupCompiler.compileToChez g'
-          defs = Chez.envDefs $ cModuleEnv cg
+          defs = cModuleEnv cg
       in  mapM_ (printNicely . Chez.Print.printDef) defs
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()

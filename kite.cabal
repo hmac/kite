@@ -66,8 +66,10 @@ library
       Chez
       Chez.Compile
       Chez.Print
+      Chez.Optimise
   other-modules:
       Paths_kite
+
   hs-source-dirs:
       src
   default-extensions: OverloadedStrings LambdaCase TupleSections DeriveDataTypeable Rank2Types TemplateHaskell

@@ -73,7 +73,7 @@ convertExpr ctorInfo expr = go expr
   go = \case
     Var v     -> T.VarT v unknown
     Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
-    Con c     -> case lookup c ctorInfo of
+    Con c     -> case lookup c (ctorInfo <> primitiveCtorInfo) of
       Just meta -> T.ConT c meta unknown
       Nothing ->
         error

@@ -175,7 +175,7 @@ canonicaliseExp env = go
           )
           (locals, [])
           binds
-      in  Let binds' (go locals' expr)
+      in  Let (reverse binds') (go locals' expr)
 
     canonicaliseCase :: (Syn.Syn, [(Syn.Pattern, Syn.Syn)]) -> Can.Exp
     canonicaliseCase (e, alts) =
