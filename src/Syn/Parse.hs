@@ -59,8 +59,8 @@ instance ShowErrorComponent Error where
   showErrorComponent (VarKeyword v) =
     show v <> " is a reserved keyword and cannot be used as a variable name."
 
-parseKiteFile :: String -> Either String Module
-parseKiteFile input = case parse (pModule <* eof) "" input of
+parseKiteFile :: FilePath -> String -> Either String Module
+parseKiteFile path input = case parse (pModule <* eof) path input of
   Left  e -> Left (errorBundlePretty e)
   Right e -> Right e
 

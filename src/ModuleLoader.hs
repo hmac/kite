@@ -50,7 +50,7 @@ loadFromPath path = do
 loadFromPathAndRootDirectory
   :: FilePath -> FilePath -> IO (Either String UntypedModuleGroup)
 loadFromPathAndRootDirectory path root = do
-  modul <- parseKiteFile <$> readFile path
+  modul <- parseKiteFile path <$> readFile path
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
@@ -86,7 +86,8 @@ loadAll root name = do
           pure $ Right $ m' : concat deps'
 
 load :: FilePath -> ModuleName -> IO (Either String Module)
-load root name = parseKiteFile <$> readFile (filePath root name)
+load root name = let path = filePath root name
+                  in parseKiteFile path <$> readFile path
 
 -- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
