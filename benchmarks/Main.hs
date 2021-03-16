@@ -101,7 +101,7 @@ exampleModule = Module
           `tyapp` TyVar "a"
         , funExpr     = MCase
                           [ ([WildPat, ListPat []], ListLit [])
-                          , ( [VarPat "e", ConsPat "::" [VarPat "x", VarPat "xs"]]
+                          , ( [VarPat "e", ConsPat "::" Nothing [VarPat "x", VarPat "xs"]]
                             , App
                               (App (Con "::") (Var "x"))
                               (App (App (Var "intersperseHelper") (Var "e"))
@@ -124,7 +124,7 @@ exampleModule = Module
           `tyapp` TyVar "a"
         , funExpr     = MCase
                           [ ([WildPat, ListPat []], ListLit [])
-                          , ( [VarPat "e", ConsPat "::" [VarPat "x", VarPat "xs"]]
+                          , ( [VarPat "e", ConsPat "::" Nothing [VarPat "x", VarPat "xs"]]
                             , App
                               (App (Con "::") (Var "e"))
                               (App

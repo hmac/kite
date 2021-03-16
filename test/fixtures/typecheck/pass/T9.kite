@@ -1,7 +1,7 @@
 module SomeIOFunctions
 
-returnsNothing : IO ()
+returnsNothing : ()
 returnsNothing = $fcall putStrLn "hi"
 
-returnsSomething : IO String
+returnsSomething : String
 returnsSomething = $fcall getLine

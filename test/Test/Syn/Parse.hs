@@ -70,7 +70,7 @@ test = parallel $ do
                           [ ( [ListPat []]
                             , App (Var "error") (StringLit "head: empty list")
                             )
-                          , ( [ConsPat "Cons" [VarPat "x", VarPat "xs"]]
+                          , ( [ConsPat "Cons" Nothing [VarPat "x", VarPat "xs"]]
                             , Var "x"
                             )
                           ]
@@ -89,10 +89,10 @@ test = parallel $ do
                                      (TyVar "b")
                           `fn` TyApp (TyCon "Maybe") (TyVar "a")
                         , funExpr     = MCase
-                                          [ ( [ConsPat "Left" [VarPat "x"]]
+                                          [ ( [ConsPat "Left" Nothing [VarPat "x"]]
                                             , App (Con "Just") (Var "x")
                                             )
-                                          , ( [ConsPat "Right" [WildPat]]
+                                          , ( [ConsPat "Right" Nothing [WildPat]]
                                             , Con "Nothing"
                                             )
                                           ]
@@ -221,8 +221,8 @@ test = parallel $ do
       parse pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
         `shouldParse` Case
                         (Var "x")
-                        [ (ConsPat "Just" [VarPat "y"], Var "y")
-                        , (ConsPat "Nothing" []       , Var "z")
+                        [ (ConsPat "Just" Nothing [VarPat "y"], Var "y")
+                        , (ConsPat "Nothing" Nothing []       , Var "z")
                         ]
     it "parses a case with variable patterns" $ do
       parse pExpr "" "case x of\n  y -> y"

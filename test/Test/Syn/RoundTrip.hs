@@ -293,7 +293,7 @@ shrinkPattern = \case
   UnitPat        -> []
   TuplePat pats  -> TuplePat <$> shrinkList2 pats
   ListPat  pats  -> ListPat <$> shrinkList pats
-  ConsPat c pats -> ConsPat c <$> shrinkList pats
+  ConsPat c meta pats -> ConsPat c meta <$> shrinkList pats
   StringPat _    -> []
 
 genInt :: H.Gen Int

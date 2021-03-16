@@ -52,7 +52,7 @@ f : Maybe Bool -> Bool
 f = (Just b) -> b
     Nothing  -> False|]
     it "A foreign call" $ checks [fn|
-f : String -> IO ()
+f : String -> ()
 f = s -> $fcall putStrLn s|]
   describe "expected type failures" $ do
     -- TODO: check the error message matches what we expect
@@ -153,7 +153,7 @@ mkModule fun = Syn.Module { Syn.moduleName     = "QQ"
 
 checksModule :: Syn.Module -> Expectation
 checksModule modul = do
-  let r   = checkModule ctx (canonicaliseModule modul) >> pure ()
+  let r   = checkModule (ctx, mempty) (canonicaliseModule modul) >> pure ()
       env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err -> expectationFailure $ show (printLocatedError err)
@@ -161,7 +161,7 @@ checksModule modul = do
 
 failsModule :: Syn.Module -> Expectation
 failsModule modul = do
-  let r   = checkModule ctx (canonicaliseModule modul) >> pure ()
+  let r   = checkModule (ctx, mempty) (canonicaliseModule modul) >> pure ()
       env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left _ -> pure ()

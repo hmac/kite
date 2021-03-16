@@ -1,6 +1,8 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.Type where
 
+import qualified Data.Set                      as Set
+
 import           Test.Hspec
 import           Type
 import           Type.Module                    ( checkModule )
@@ -49,7 +51,7 @@ test = do
         nil     = Free "Kite.Primitive.[]"
         nothing = Free "Nothing"
         fun     = MCase
-          [ ( [ConsPat cons [ConsPat nothing [], VarPat (Free "rest")]]
+          [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat (Free "rest")]]
             , App (Var (Free "foo")) (Var (Free "rest"))
             )
           ]
@@ -182,7 +184,9 @@ test = do
                          in r.five|]
         in  infers ctx expr int
     -- fcalls have hardcoded types. putStrLn : String -> IO Unit
-    it "a foreign call" $ checks ctx [syn|$fcall putStrLn "Hello"|] [ty|IO ()|]
+    -- Currently we are omitting the IO part as we figure out fcalls.
+    -- This may change.
+    it "a foreign call" $ checks ctx [syn|$fcall putStrLn "Hello"|] [ty|()|]
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -242,6 +246,11 @@ test = do
         in
           checks ctx' e t
     it "higher kinded application" $ do
+      -- type F t a = MkF (t a -> t a)
+      -- f : T b c -> T b c
+      --
+      -- e : forall b. F (T b)
+      -- e = MkF f
       let a = U 0 "a"
           b = U 1 "b"
           c = U 2 "c"
@@ -255,7 +264,7 @@ test = do
                   a
                   (Fn
                     (Fn (TApp (UType t) [UType a]) (TApp (UType t) [UType a]))
-                    (TCon "F" [UType t])
+                    (TCon "QQ.F" [UType t])
                   )
                 )
               )
@@ -265,8 +274,8 @@ test = do
                 b
                 (Forall
                   c
-                  (Fn (TCon "T" [UType b, UType c])
-                      (TCon "T" [UType b, UType c])
+                  (Fn (TCon "QQ.T" [UType b, UType c])
+                      (TCon "QQ.T" [UType b, UType c])
                   )
                 )
               )
@@ -275,6 +284,10 @@ test = do
           ty_ = [ty|forall b. F (T b)|]
       checks ctx e ty_
     it "higher kinded application (with ->)" $ do
+      -- type F t a = MkF ((t -> a) -> (t -> a))
+      -- f : (c -> T -> b) -> (c -> T -> b)
+      --
+      -- e = MkF f
       let
         a = U 0 "a"
         b = U 1 "b"
@@ -288,7 +301,7 @@ test = do
               (Forall
                 a
                 (Fn (Fn (Fn (UType t) (UType a)) (Fn (UType t) (UType a)))
-                    (TCon "F" [UType t])
+                    (TCon "QQ.F" [UType t, UType a])
                 )
               )
             )
@@ -298,16 +311,15 @@ test = do
               b
               (Forall
                 c
-                (Fn (Fn (UType c) (Fn (TCon "T" []) (UType b)))
-                    (Fn (UType c) (Fn (TCon "T" []) (UType b)))
+                (Fn (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
+                    (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
                 )
               )
             )
           ]
         e = [syn|MkF f|]
-      case runInfer ctx e of
-        Left  err -> expectationFailure $ show (printLocatedError err)
-        Right ty  -> expectationFailure $ show ty
+        ty_ = [ty|forall a b. F a (T -> b)|]
+      checks ctx e ty_
 
 infers :: Ctx -> Syn.Syn -> Type -> Expectation
 infers ctx expr t = do
@@ -328,9 +340,10 @@ runInfer ctx expr = do
   let r = do
         e <- fromSyn canonicalExpr
         putCtx ctx
-        ty <- infer e
-        subst ty
-  let env = defaultTypeEnv { envCtx = primCtx <> ctx, envDebug = False }
+        ty <- infer e >>= subst
+        ty' <- subst ty
+        quantify (fv ty') ty'
+  let env = defaultTypeEnv { envCtx = primCtx <> ctx }
   runTypeM env r
 
 -- Like infers but takes a quasiquoted type expression.
@@ -366,7 +379,7 @@ checks ctx expr ty = do
                                ]
         , Syn.moduleMetadata = mempty
         }
-      r   = replicateM_ 10 (newU "dummy") >> checkModule ctx modul >> pure ()
+      r   = replicateM_ 10 (newU "dummy") >> checkModule (ctx, mempty) modul >> pure ()
       env = defaultTypeEnv { envCtx = primCtx <> ctx }
   case runTypeM env r of
     Left  err -> expectationFailure $ show (printLocatedError err)

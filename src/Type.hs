@@ -35,6 +35,8 @@ module Type
   , TypeEnv(..)
   , subst
   , putCtx
+  , fv
+  , quantify
   )
 where
 
@@ -370,6 +372,19 @@ fv = \case
   TCon _ as      -> concatMap fv as
   TRecord fields -> concatMap (fv . snd) fields
   TApp f as      -> fv f <> concatMap fv as
+
+-- | Quantify the given existential variables by replacing them with forall-bound universal
+-- variables.
+quantify :: [E] -> Type -> TypeM Type
+quantify vars t = do
+  -- Generate a fresh UVar for each E
+  uMap <- mapM (\e -> (e, ) <$> newU "") vars
+  -- Construct a context mapping each E to its replacement UType
+  let ctx = map (\(e, u) -> ESolved e (UType u)) uMap
+  -- Apply the substitution to the type
+  let t' = subst' ctx t
+  -- Wrap the result in foralls to bind each UType
+  pure $ foldr Forall t' (map snd uMap)
 
 prop_fv_commutes :: Property
 prop_fv_commutes = property $ do
