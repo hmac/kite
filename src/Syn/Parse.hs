@@ -263,27 +263,7 @@ pConType :: Parser Type
 pConType = pType' Paren
 
 pPattern :: Parser Syn.Pattern
-pPattern = pPattern' <|> cons
- where
-  tyCon      = uppercaseName
-  cons       = try nullaryCon <|> try infixBinaryCon <|> con
-  nullaryCon = do
-    name <- tyCon
-    pure $ case name of
-      "True"  -> BoolPat True
-      "False" -> BoolPat False
-      n       -> ConsPat n Nothing []
-  infixBinaryCon = parens $ do
-    left  <- pPattern
-    tycon <- binTyCon
-    right <- pPattern
-    pure $ ConsPat tycon Nothing [left, right]
-  -- For now, the only infix constructor is (::)
-  binTyCon = Name <$> symbol "::"
-  con      = parens $ do
-    c    <- tyCon
-    args <- many pPattern
-    pure $ ConsPat c Nothing args
+pPattern = try pPattern' <|> pConPat True
 
 pPattern' :: Parser Syn.Pattern
 pPattern' =
@@ -306,27 +286,16 @@ pPattern' =
 -- foo (Just x) = ...
 pCasePattern :: Parser Syn.Pattern
 pCasePattern =
-  pUnitPat
-    <|> parens (try infixBinaryCon <|> tuplePattern <|> pPattern)
+  try (pConPat False)
+    <|> pUnitPat
+    <|> parens tuplePattern
     <|> pIntPat
     <|> pCharPat
     <|> pWildPat
     <|> pListPat
-    <|> con
     <|> pVarPat
  where
   tuplePattern = TuplePat <$> pPattern `sepBy2` comma
-  con          = do
-    name <- uppercaseName
-    case name of
-      "True"  -> pure $ BoolPat True
-      "False" -> pure $ BoolPat False
-      n       -> ConsPat n Nothing <$> many pPattern
-  infixBinaryCon = do
-    left  <- pPattern
-    tycon <- Name <$> symbol "::"
-    right <- pPattern
-    pure $ ConsPat tycon Nothing [left, right]
 
 pIntPat :: Parser Syn.Pattern
 pIntPat = IntPat <$> pInt
@@ -348,6 +317,37 @@ pTuplePat = TuplePat <$> parens (pPattern `sepBy2` comma)
 
 pVarPat :: Parser Syn.Pattern
 pVarPat = VarPat <$> lowercaseName
+
+-- Parse a constructor pattern
+-- The argument specifies whether we require parentheses around constructor patterns with arguments,
+-- like (Just x).
+-- We don't need these in case expressions, but we do in multi-case expressions.
+pConPat :: Bool -> Parser Syn.Pattern
+pConPat needParens = if needParens
+                      then try nullaryCon <|> parens (try infixBinaryCon <|> con)
+                      else try infixBinaryCon <|> con <|> parens (pConPat False)
+ where
+  tyCon      = uppercaseName
+  nullaryCon = do
+    name <- tyCon
+    pure $ case name of
+      "True"  -> BoolPat True
+      "False" -> BoolPat False
+      n       -> ConsPat n Nothing []
+  infixBinaryCon = do
+    left  <- pPattern
+    tycon <- binTyCon
+    right <- pPattern
+    pure $ ConsPat tycon Nothing [left, right]
+  -- For now, the only infix constructor is (::)
+  binTyCon = Name <$> symbol "::"
+  con      = do
+    tyCon >>= \case
+      "True"  -> pure $ BoolPat True
+      "False" -> pure $ BoolPat False
+      c -> do
+            args <- many pPattern
+            pure $ ConsPat c Nothing args
 
 pInt :: Parser Int
 pInt = do

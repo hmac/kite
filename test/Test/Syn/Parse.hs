@@ -97,6 +97,22 @@ test = parallel $ do
                                             )
                                           ]
                         }
+    it "parses a case expression inside an mcase" $ do
+      let str ="functor : Alternative f -> Functor f\nfunctor = f -> case applicative f of\n                 (Applicative g) -> g.functor"
+      parse pDecl "" str `shouldParse` FunDecl Fun
+                                         { funComments = []
+                                         , funName     = "functor"
+                                         , funType     =
+                                           Just
+                                           $    TyApp (TyCon "Alternative") (TyVar "f")
+                                            `fn`
+                                                TyApp (TyCon "Functor") (TyVar "f")
+                                         , funExpr     = MCase
+                                                           [ ( [VarPat "f" ]
+                                                             , Case (App (Var "applicative") (Var "f")) [(ConsPat "Applicative" Nothing [VarPat "g"], Project (Var "g") "functor")]
+                                                             )
+                                                           ]
+                                         }
 
     it "parses a simple type definition" $ do
       parse pDecl "" "type Unit = Unit" `shouldParse` DataDecl Data
