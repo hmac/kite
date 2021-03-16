@@ -135,7 +135,7 @@ compileExpr = \case
   T.BoolLitT b        -> pure $ Lit (Bool b)
   T.CharLitT c        -> pure $ Lit (Char c)
   T.UnitLitT          -> pure $ Lit Unit
-  T.StringLitT s      -> pure $ Lit (String s)
+  T.StringLitT s      -> pure $ Lit (String (pack s))
   T.TupleLitT elems _ -> App (Var "vector") <$> mapM compileExpr elems
   T.ListLitT  elems _ -> App (Var "list") <$> mapM compileExpr elems
   T.AnnT      e     _ -> compileExpr e
@@ -199,9 +199,9 @@ compileExpr = \case
     pure $ App (Var "symbol-hashtable-ref") [rExpr, Quote (Var (pack k)), false]
   T.StringInterpT prefix comps -> do
     args <- mconcatMapM
-      (\(e, s) -> compileExpr e >>= \e' -> pure [e', Lit (String s)])
+      (\(e, s) -> compileExpr e >>= \e' -> pure [e', Lit (String (pack s))])
       comps
-    pure $ App (Var "string-append") (Lit (String prefix) : args)
+    pure $ App (Var "string-append") (Lit (String (pack prefix)) : args)
   T.FCallT f args _ -> do
     argExprs <- mapM compileExpr args
     let fExpr = compileFCall f
@@ -232,7 +232,7 @@ compilePat pattern scrut = case pattern of
   T.UnitPat        -> ([], [])
   T.IntPat    n    -> ([App (Var "eq?") [scrut, Lit (Int n)]], [])
   T.CharPat   c    -> ([App (Var "eq?") [scrut, Lit (Char c)]], [])
-  T.StringPat s    -> ([App (Var "eq?") [scrut, Lit (String s)]], [])
+  T.StringPat s    -> ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
   T.BoolPat   b    -> ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
   T.TuplePat  pats -> concatUnzip $ zipWith
     (\p i -> compilePat p (App (Var "vector-ref") [scrut, Lit (Int i)]))

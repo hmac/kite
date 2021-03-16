@@ -22,7 +22,7 @@ data SExpr = Lit Lit
 
 data Lit = Int Int
          | Char Char
-         | String String
+         | String Text
          | Bool Bool
          | Unit
   deriving (Eq, Show)
@@ -52,3 +52,8 @@ null = Quote (List [])
 -- Sequence a series of expressions, returning the result of the last one
 begin :: [SExpr] -> SExpr
 begin = App (Var "begin")
+
+-- Raise a non-continuable exception with the given message.
+-- This will (or should) halt the program.
+panic :: Text -> SExpr
+panic msg = App (Var "raise") [App (Var "condition") [App (Var "make-violation") [], App (Var "make-message-condition") [Lit (String msg)]]]
