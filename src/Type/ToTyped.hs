@@ -13,13 +13,13 @@ where
 import qualified Canonical                     as Can
 import           Type                           ( Type(..)
                                                 , U(..)
+                                                , CtorInfo
                                                 )
 import           AST
 import           Syn                     hiding ( Name
                                                 , Type
                                                 )
 import qualified Syn.Typed                     as T
-import           Type                           ( CtorInfo )
 import           Type.Primitive                 ( primitiveCtorInfo )
 import           Data.Name
 import           Util
@@ -68,7 +68,7 @@ convertPattern ctorInfo = \case
   p             -> p
 
 convertExpr :: CtorInfo -> Can.Exp -> T.Exp
-convertExpr ctorInfo expr = go expr
+convertExpr ctorInfo = go
  where
   go = \case
     Var v     -> T.VarT v unknown

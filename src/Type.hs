@@ -41,7 +41,7 @@ module Type
 where
 
 import           Util
-import           Control.Monad                  ( (>=>) )
+import           Control.Monad                  ( (>=>), void )
 import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
 import           System.Environment             ( lookupEnv )
 import           Data.Functor                   ( ($>) )
@@ -59,7 +59,6 @@ import           AST                            ( Expr(..)
 import           Prelude                 hiding ( splitAt )
 
 import           Data.Maybe                     ( listToMaybe )
-import           Control.Monad                  ( void )
 
 import           Control.Monad.Trans.State.Strict
                                                 ( State
@@ -384,7 +383,7 @@ quantify vars t = do
   -- Apply the substitution to the type
   let t' = subst' ctx t
   -- Wrap the result in foralls to bind each UType
-  pure $ foldr Forall t' (map snd uMap)
+  pure $ foldr (Forall . snd) t' uMap
 
 prop_fv_commutes :: Property
 prop_fv_commutes = property $ do

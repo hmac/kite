@@ -262,10 +262,7 @@ applyPattern env val pattern = case (pattern, val) of
       (zip args pats)
     | otherwise -> Nothing
   (ListPat pats, List args)
-    | length pats == length args -> foldM
-      (\env_ (arg, pat) -> applyPattern env_ arg pat)
-      env
-      (zip args pats)
+    | length pats == length args -> foldM (\env_ (arg, pat) -> applyPattern env_ arg pat) env (zip args pats)
     | otherwise -> Nothing
   (ConsPat c _meta pats, Cons c' args)
     | c == c' -> foldM (\env_ (arg, pat) -> applyPattern env_ arg pat)

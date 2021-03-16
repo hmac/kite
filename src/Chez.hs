@@ -51,4 +51,4 @@ null = Quote (List [])
 
 -- Sequence a series of expressions, returning the result of the last one
 begin :: [SExpr] -> SExpr
-begin es = App (Var "begin") es
+begin = App (Var "begin")
