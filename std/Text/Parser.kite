@@ -68,6 +68,12 @@ bindParser = (P p) f -> P (bindHelper p (compose unP f))
 monad : Monad Parser
 monad = Monad { applicative = applicative, bind = bindParser }
 
+forceParser : (() -> Parser a) -> Parser a
+forceParser = f -> f ()
+
+lazyParser : Lazy (Parser a)
+lazyParser = Lazy { force = forceParser }
+
 result : a -> Parser a
 result = pure applicative
 
@@ -119,8 +125,5 @@ string = str -> case unconsChar str of
                   Nothing -> result ""
                   Just (c, s) -> sequence monad (char c) (sequence monad (string s) (result str))
 
--- many : Parser a -> Parser [a]
--- many = p -> plus alternative (bind monad p (\x -> bind monad (many p) (\xs -> result (x :: xs)))) (result [])
-
-main : () -> Maybe [String]
-main = _ -> run (many alternative word) "apple pie"
+main : () -> Maybe [Char]
+main = _ -> run (many alternative lazyParser lower) "apple pie"
