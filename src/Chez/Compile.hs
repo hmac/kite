@@ -53,13 +53,13 @@ import           NameGen                        ( NameGen
 -- Examples:
 --
 -- type Pair a b = Pair a b
--- (define-record-type Pair (fields _0 _1))
+-- (define-record-type $Pair (fields _0 _1))
 --
 -- type List a = Nil | Cons a (List a)
--- (define-record-type List (fields _tag _0 _1))
+-- (define-record-type $List (fields _tag _0 _1))
 --
 -- type Functor f = Functor { map : forall a b. (a -> b) -> f a -> f b }
--- (define record-type Functor (fields _0))
+-- (define record-type $Functor (fields _0))
 
 -- Case expressions
 -- ----------------
@@ -109,7 +109,7 @@ compileData dat =
   let
     maxFields        = maximum $ map (length . T.conArgs) (T.dataCons dat)
     fields           = "_tag" : map (pack . ('_' :) . show) [0 .. maxFields - 1]
-    typeName         = name2Text $ T.dataName dat
+    typeName         = "$" <> name2Text (T.dataName dat)
     recordDefinition = DefRecord typeName fields
     -- Each data type constructor is compiled to a function which constructs an object of that type with
     -- the correct _tag.
@@ -263,7 +263,7 @@ compilePat pattern scrut = case pattern of
 
   T.ConsPat _c (Just meta) pats ->
     let tag      = T.conMetaTag meta
-        ty       = name2Text $ T.conMetaTypeName meta
+        ty       = "$" <> name2Text (T.conMetaTypeName meta)
         tagField = ty <> "-" <> "_tag"
         fieldAtIndex i = ty <> "-_" <> pack (show i)
         ctorTest = App (Var "eq?") [App (Var tagField) [scrut], Lit (Int tag)]
@@ -307,7 +307,7 @@ builtins =
       )
     , Def (prim "appendString") (Var "string-append")
     , Def (prim "$showInt") (Var "number->string")
-    , Def (prim "$eqInt") (Var "eq?")
+    , Def (prim "$eqInt") (Abs ["x"] (Abs ["y"] (App (Var "eq?") [Var "x", Var "y"])))
     , Def (prim "*") (Abs ["x"] (Abs ["y"] (App (Var "*") [Var "x", Var "y"])))
     , Def (prim "+") (Abs ["x"] (Abs ["y"] (App (Var "+") [Var "x", Var "y"])))
     , Def (prim "::")
