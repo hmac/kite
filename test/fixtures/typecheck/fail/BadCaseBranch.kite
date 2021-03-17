@@ -1,0 +1,11 @@
+module BadCaseBranch
+
+type Maybe a = Nothing | Just a
+
+-- The second case branch is badly typed, since returns Just 0 where it should return Maybe Bool.
+-- The typechecker doesn't seem to catch this.
+
+foo : (Int, Int) -> Maybe Bool
+foo = xy -> case xy of
+  _ -> Nothing
+  (x, y) -> Just 0
