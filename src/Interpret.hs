@@ -9,6 +9,7 @@ module Interpret
 where
 
 
+import Text.Read (readMaybe)
 import           Util
 import           Data.Map.Lazy                  ( Map )
 import qualified Data.Map.Lazy                 as Map
@@ -184,6 +185,7 @@ interpretPrim = \case
   "$showInt"     -> unaryPrim PrimShowInt
   "$showChar"    -> unaryPrim PrimShowChar
   "$eqInt"       -> binaryPrim PrimEqInt
+  "$readInt"     -> ternaryPrim PrimReadInt
   "$eqChar"      -> binaryPrim PrimEqChar
   p -> error $ "Interpret.interpretPrim: unknown primitive " <> show p
  where
@@ -209,6 +211,9 @@ applyPrim PrimShowInt [Const (Int x)] = Const $ String $ show x
 applyPrim PrimShowChar [Const (Char c)]                 = Const $ String $ [c]
 applyPrim PrimEqInt    [Const (Int  x), Const (Int y) ] = Const $ Bool $ x == y
 applyPrim PrimEqChar   [Const (Char x), Const (Char y)] = Const $ Bool $ x == y
+applyPrim PrimReadInt [Const (String s), def, Abs f] = case readMaybe s of
+  Just i -> f (Const (Int i))
+  Nothing -> def
 applyPrim p _ =
   error $ "Interpret.applyPrim: bad application of primitive " <> show p
 

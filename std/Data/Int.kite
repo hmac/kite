@@ -1,7 +1,12 @@
 module Data.Int
 
-import Kite.Primitive ($eqInt)
+import Kite.Primitive ($eqInt, $readInt)
 import Data.Eq (Eq(..))
+import Data.Read (Read(..))
+import Data.Maybe (Maybe(..))
 
 eqInt : Eq Int
 eqInt = Eq { eq = $eqInt }
+
+readInt : Read Int
+readInt = Read { read = s -> $readInt s Nothing Just }

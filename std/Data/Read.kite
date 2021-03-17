@@ -1,0 +1,8 @@
+module Data.Read (Read(Read), read)
+
+import Data.Maybe (Maybe)
+
+type Read a = Read { read : String -> Maybe a }
+
+read : Read a -> String -> Maybe a
+read = (Read d) -> d.read

@@ -305,7 +305,7 @@ builtins =
         ["m"]
         (App (App (Var (prim "IO" <> "-_0")) [Var "m"]) [Abs ["r"] (Var "r")])
       )
-    , Def (prim "appendString") (Var "string-append")
+    , Def (prim "appendString") (Abs ["x"] (Abs ["y"] (App (Var "string-append") [Var "x", Var "y"])))
     , Def (prim "$showInt") (Var "number->string")
     , Def (prim "$eqInt") (Abs ["x"] (Abs ["y"] (App (Var "eq?") [Var "x", Var "y"])))
     , Def (prim "*") (Abs ["x"] (Abs ["y"] (App (Var "*") [Var "x", Var "y"])))
@@ -326,6 +326,8 @@ builtins =
           )
         )
       )
+    , Def (prim "$showChar") (Abs ["c"] (App (Var "list->string") [App (Var "list") [Var "c"]]))
+    , Def (prim "$chars") (Abs ["s"] (App (Var "string->list") [Var "s"]))
     , Def
       (prim "$unconsChar")
       (Abs
@@ -345,6 +347,27 @@ builtins =
                     (App (Var "f") [App (Var "car") [Var "l"]])
                     [App (Var "substring") [Var "s", Lit (Int 1), Var "len"]]
                   )
+                ]
+              )
+            )
+          )
+        )
+      )
+    , Def
+      (prim "$readInt")
+      (Abs
+        ["s"]
+        (Abs
+          ["def"]
+          (Abs
+            ["f"]
+            (Let
+              [ ("result", App (Var "string->number") [Var "s"])
+              , ("result-is-fixnum"  , App (Var "fixnum?") [Var "result"])
+              ]
+              (Cond
+                [ (Var "result-is-fixnum", App (Var "f") [Var "result"])
+                , (true, Var "def")
                 ]
               )
             )

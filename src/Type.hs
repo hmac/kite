@@ -185,6 +185,18 @@ primitiveFns =
   , V (Free "Kite.Primitive.$showChar") (Fn char string)
   , V (Free "Kite.Primitive.$eqInt")    (Fn int (Fn int bool))
   , V (Free "Kite.Primitive.$eqChar")   (Fn char (Fn char bool))
+  -- readInt : String -> a -> (Int -> a) -> a
+  , let a = U 0 "a"
+    in
+      V
+        (Free "Kite.Primitive.$readInt")
+
+        (Forall
+          a
+          (Fn string
+              (Fn (UType a) (Fn (Fn int (UType a)) (UType a)))
+          )
+        )
   ]
 
 primCtx :: Ctx

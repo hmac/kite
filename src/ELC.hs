@@ -55,6 +55,7 @@ data Primitive = PrimStringAppend
                | PrimShowChar
                | PrimEqInt
                | PrimEqChar
+               | PrimReadInt
          deriving (Show, Eq)
 
 data Pattern = ConstPat Constant

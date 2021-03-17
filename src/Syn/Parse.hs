@@ -432,7 +432,7 @@ pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap head (takeP (Ju
   -- Escaped special characters like \n
   -- Currently we only support \n
   -- TODO: what's the full list of escape sequences we should support here?
-    where escapedChar = try (char '\\' >> char 'n' $> '\n')
+    where escapedChar = char '\\' >> char 'n' $> '\n'
 
 -- String literals are quite complex. These are some of the variations we need
 -- to handle:
