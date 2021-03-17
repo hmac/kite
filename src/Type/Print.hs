@@ -98,6 +98,8 @@ printError modName = \case
       ]
   UnknownVariable (Free v) ->
     "Variable not in scope:" <+> printName (maybe v (`localise` v) modName)
+  UnknownType t ->
+    "Type not in scope:" <+> printName (maybe t (`localise` t) modName)
   DuplicateVariable (Free v) ->
     "The variable"
       <+> printName (maybe v (`localise` v) modName)

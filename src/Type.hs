@@ -3,6 +3,7 @@ module Type
   ( tests
   , CtorInfo
   , Ctx
+  , TypeCtx
   , CtxElem(..)
   , Type(..)
   , Exp
@@ -35,6 +36,7 @@ module Type
   , TypeEnv(..)
   , subst
   , putCtx
+  , putTypeCtx
   , fv
   , quantify
   )
@@ -101,9 +103,6 @@ import           Data.Data                      ( Data )
 -- Following:
 -- Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
 
--- | A mapping from constructor names to their tag, arity and type name.
-type CtorInfo = [(Name, ConMeta)]
-
 -- Primitive types
 string :: Type
 string = TCon "Kite.Primitive.String" []
@@ -125,6 +124,24 @@ list a = TCon "Kite.Primitive.List" [a]
 
 io :: Type -> Type
 io a = TCon "Kite.Primitive.IO" [a]
+
+primTypeCtx :: TypeCtx
+primTypeCtx =
+  map (,()) ["Kite.Primitive.String"
+            , "Kite.Primitive.Int"
+            , "Kite.Primitive.Char"
+            , "Kite.Primitive.Bool"
+            , "Kite.Primitive.Unit"
+            , "Kite.Primitive.List"
+            , "Kite.Primitive.IO"
+            , "Kite.Primitive.Tuple2"
+            , "Kite.Primitive.Tuple3"
+            , "Kite.Primitive.Tuple4"
+            , "Kite.Primitive.Tuple5"
+            , "Kite.Primitive.Tuple6"
+            , "Kite.Primitive.Tuple7"
+            , "Kite.Primitive.Tuple8"
+            ]
 
 -- Primitive constructors
 -- TODO: move all primitive stuff to Type.Primitive
@@ -334,6 +351,13 @@ type Pattern = Pat V
 
 -- | Contexts
 
+-- | A mapping from constructor names to their tag, arity and type name.
+type CtorInfo = [(Name, ConMeta)]
+
+-- | A mapping of in-scope types to their kinds
+-- We don't yet have kinds, so we just store () instead for the moment.
+type TypeCtx = [(Name, ())]
+
 -- | A local context, holding top level definitions and local variables
 type Ctx = [CtxElem]
 
@@ -531,6 +555,16 @@ lookupV v = do
         (V v' t) | v' == v -> Just t
         _                  -> Nothing
 
+-- | Lookup a type in the type context.
+-- If it's not in the local context, we check the global context.
+lookupType :: Name -> TypeM ()
+lookupType name = do
+  tctx <- getTypeCtx
+  TypeEnv { envTypeCtx = globalCtx } <- ask
+  case lookup name (tctx <> globalCtx) of
+    Just _ -> pure ()
+    Nothing -> throwError (UnknownType name)
+
 -- Context construction
 
 emptyCtx :: Ctx
@@ -620,14 +654,15 @@ wellFormedType ty = do
     UType u -> lookupU u
     EType e -> do
       lookupE e `catchError` const (void (lookupSolved e))
-    -- TODO: check that c exists
-    TCon _c as     -> mapM_ wellFormedType as
+    -- TODO: check that c has the correct kind (i.e. for all its args)
+    TCon c _as     -> lookupType c
     TRecord fields -> mapM_ (\(n, t) -> (n, ) <$> wellFormedType t) fields
     TApp f b       -> wellFormedType f >> mapM_ wellFormedType b
 
 -- Typechecking monad
 data TypeEnv =
   TypeEnv { envCtx :: Ctx    -- The global type context
+          , envTypeCtx :: TypeCtx -- Global type info (primitive types)
           , envDepth :: Int  -- The recursion depth, used for debugging
           , envDebug :: Bool -- Whether to output debug messages
           } deriving (Eq, Show)
@@ -638,18 +673,19 @@ defaultTypeEnv =
           case unsafePerformIO (fmap (== "true") <$> lookupEnv "KITE_DEBUG") of
             Just True -> True
             _         -> False
-  in  TypeEnv { envCtx = primCtx, envDepth = 0, envDebug = debugOn }
+   in  TypeEnv { envCtx = primCtx, envTypeCtx = primTypeCtx, envDepth = 0, envDebug = debugOn }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
 
 data TypeState = TypeState { varCounter :: Int -- A counter for generating fresh names
                            , context :: Ctx    -- The local type context
+                           , typeContext :: TypeCtx -- In-scope types
                            }
 
 runTypeM :: TypeEnv -> TypeM a -> Either LocatedError a
 runTypeM env m =
-  let defaultState = TypeState { varCounter = 0, context = mempty }
+  let defaultState = TypeState { varCounter = 0, context = mempty, typeContext = mempty }
   in  evalState (runExceptT (runReaderT m env)) defaultState
 
 -- Increment the recursion depth
@@ -681,6 +717,14 @@ pushCtx :: CtxElem -> TypeM ()
 pushCtx e = do
   ctx <- getCtx
   putCtx (e : ctx)
+
+-- | Get the current type context
+getTypeCtx :: TypeM TypeCtx
+getTypeCtx = lift $ lift $ gets typeContext
+
+-- | Replace the current type context
+putTypeCtx :: TypeCtx -> TypeM ()
+putTypeCtx tctx = lift $ lift $ modify' $ \st -> st { typeContext = tctx }
 
 
 -- | Lift a 'Maybe' value into the 'MaybeT' monad transformer.
@@ -1300,6 +1344,7 @@ data Error = TodoError String
            | CannotInferFCall Exp
            | TooManyPatterns
            | DuplicateVariable V
+           | UnknownType Name
            deriving (Eq, Show)
 
 todoError :: String -> TypeM a

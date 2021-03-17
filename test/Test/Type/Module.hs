@@ -99,7 +99,7 @@ module Foo
 const : a -> b -> a
 const = x y -> y|]
 
-ctx :: Ctx
+ctx :: (TypeCtx, Ctx)
 ctx =
   let nat    = TCon "QQ.Nat" []
       int    = TCon "Kite.Primitive.Int" []
@@ -108,34 +108,37 @@ ctx =
       pair a b = TCon "QQ.Pair" [a, b]
       either a b = TCon "QQ.Either" [a, b]
       maybe a = TCon "QQ.Maybe" [a]
-  in  [ V (Free "QQ.Zero") nat
-      , V (Free "QQ.Suc")  (Fn nat nat)
-      , V (Free "QQ.MkWrap")
-          (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
-      , V
-        (Free "QQ.MkPair")
-        (let a = U 1 "a"
-             b = U 2 "b"
-         in  Forall a $ Forall b $ Fn
-               (UType a)
-               (Fn (UType b) (pair (UType a) (UType b)))
-        )
-      , V
-        (Free "QQ.Left")
-        (let a = U 1 "a"
-             b = U 2 "b"
-         in  Forall a $ Forall b $ Fn (UType a) (either (UType a) (UType b))
-        )
-      , V
-        (Free "QQ.Right")
-        (let a = U 1 "a"
-             b = U 2 "b"
-         in  Forall a $ Forall b $ Fn (UType b) (either (UType a) (UType b))
-        )
-      , V (Free "QQ.Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
-      , V (Free "QQ.Just")
-          (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
-      ]
+      termCtx =
+        [ V (Free "QQ.Zero") nat
+        , V (Free "QQ.Suc")  (Fn nat nat)
+        , V (Free "QQ.MkWrap")
+            (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
+        , V
+          (Free "QQ.MkPair")
+          (let a = U 1 "a"
+               b = U 2 "b"
+           in  Forall a $ Forall b $ Fn
+                 (UType a)
+                 (Fn (UType b) (pair (UType a) (UType b)))
+          )
+        , V
+          (Free "QQ.Left")
+          (let a = U 1 "a"
+               b = U 2 "b"
+           in  Forall a $ Forall b $ Fn (UType a) (either (UType a) (UType b))
+          )
+        , V
+          (Free "QQ.Right")
+          (let a = U 1 "a"
+               b = U 2 "b"
+           in  Forall a $ Forall b $ Fn (UType b) (either (UType a) (UType b))
+          )
+        , V (Free "QQ.Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
+        , V (Free "QQ.Just")
+            (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
+        ]
+      typeCtx = map (,()) $ ["QQ.Nat", "QQ.Wrap", "QQ.Pair", "QQ.Either", "QQ.Maybe"]
+   in (typeCtx, termCtx)
 
 checks :: Syn.Fun Syn.Syn -> Expectation
 checks = checksModule . mkModule
@@ -153,17 +156,17 @@ mkModule fun = Syn.Module { Syn.moduleName     = "QQ"
 
 checksModule :: Syn.Module -> Expectation
 checksModule modul = do
-  let r   = checkModule (ctx, mempty) (canonicaliseModule modul) >> pure ()
-      env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
+  let (typeCtx, termCtx) = ctx
+      r   = checkModule (typeCtx, termCtx, mempty) (canonicaliseModule modul) >> pure ()
+  case runTypeM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()
 
 failsModule :: Syn.Module -> Expectation
 failsModule modul = do
-  let r   = checkModule (ctx, mempty) (canonicaliseModule modul) >> pure ()
-      env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
+  let (typeCtx, termCtx) = ctx
+      r   = checkModule (typeCtx, termCtx, mempty) (canonicaliseModule modul) >> pure ()
+  case runTypeM defaultTypeEnv r of
     Left _ -> pure ()
     Right () ->
       expectationFailure "expected typechecking to fail, but it succeeded"

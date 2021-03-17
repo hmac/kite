@@ -21,6 +21,7 @@ import           Type                           ( TypeM
                                                 , Type(..)
                                                 , CtorInfo
                                                 , Ctx
+                                                , TypeCtx
                                                 , CtxElem(V)
                                                 , V(..)
                                                 , Exp
@@ -29,6 +30,7 @@ import           Type                           ( TypeM
                                                 , wellFormedType
                                                 , LocatedError(..)
                                                 , putCtx
+                                                , putTypeCtx
                                                 )
 import           Type.FromSyn                   ( fromSyn
                                                 , quantify
@@ -41,14 +43,14 @@ import qualified Control.Monad.Except          as Except
                                                 )
 import qualified Syn.Typed                     as T
 import qualified Type.ToTyped                   ( convertModule )
-import           Data.List.Extra                ( concatUnzip )
+import           Data.List.Extra                ( concatUnzip3 )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
 translateModule
   :: Can.Module -> TypeM (Ctx, CtorInfo, [(Name, Maybe Type, Exp)])
 translateModule modul = do
-  (dataTypeCtx, dataTypeInfo) <- concatUnzip
+  (_, dataTypeCtx, dataTypeInfo) <- concatUnzip3
     <$> mapM translateData (getDataDecls (moduleDecls modul))
   funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
   pure (dataTypeCtx, dataTypeInfo, funs)
@@ -56,10 +58,10 @@ translateModule modul = do
 -- TODO: return a type-annotated module
 -- TODO: check that data type definitions are well-formed
 checkModule
-  :: (Ctx, CtorInfo) -> Can.Module -> TypeM ((Ctx, CtorInfo), T.Module)
-checkModule (ctx, ctorInfo) modul = do
+  :: (TypeCtx, Ctx, CtorInfo) -> Can.Module -> TypeM ((TypeCtx, Ctx, CtorInfo), T.Module)
+checkModule (typeCtx, ctx, ctorInfo) modul = do
   -- Extract type signatures from all datatype definitions in the module
-  (dataTypeCtx, dataTypeInfo) <- concatUnzip
+  (typeNames, dataTypeCtx, dataTypeInfo) <- concatUnzip3
     <$> mapM translateData (getDataDecls (moduleDecls modul))
 
   -- Get all the functions defined in the module
@@ -80,10 +82,12 @@ checkModule (ctx, ctorInfo) modul = do
 
   let ctx'       = ctx <> dataTypeCtx <> funTypeCtx
   let ctorInfo'  = ctorInfo <> dataTypeInfo
+  let typeCtx' = map (,()) typeNames <> typeCtx
 
   -- Typecheck each function definition
   -- For functions with type signatures, just check them against their signature
   -- For functions without type signatures, infer their type
+  putTypeCtx typeCtx'
   putCtx ctx'
   mapM_ (checkFun ctx') funsWithSig
   mapM_ inferFun        funsWithoutSig
@@ -94,7 +98,7 @@ checkModule (ctx, ctorInfo) modul = do
   let typedModule = Type.ToTyped.convertModule ctorInfo' modul
 
   -- Done
-  pure ((ctx', ctorInfo'), typedModule)
+  pure ((typeCtx', ctx', ctorInfo'), typedModule)
 
 checkFun :: Ctx -> (Name, Type, Exp) -> TypeM ()
 checkFun ctx (name, ty, body) =
@@ -134,7 +138,7 @@ funToBind fun = do
 -- becomes
 --   V (Free "Functor") (Forall f. { map : Forall a b. (a -> b) -> f a -> f b })
 --
-translateData :: Can.Data -> TypeM (Ctx, CtorInfo)
+translateData :: Can.Data -> TypeM ([Name], Ctx, CtorInfo)
 translateData d = do
   let tyvars = map Local (dataTyVars d)
       info   = zipWith
@@ -142,7 +146,7 @@ translateData d = do
         [0 ..]
         (dataCons d)
   ctx <- mapM (buildCtx (dataName d) tyvars) (dataCons d)
-  pure (ctx, info)
+  pure ([dataName d], ctx, info)
  where
   buildCtx :: Name -> [Name] -> Can.DataCon -> TypeM CtxElem
   buildCtx dataTypeName tyvars datacon = do

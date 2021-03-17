@@ -1,5 +1,6 @@
 module UnknownDataType
 
-fromMaybe : Maybe a -> a -> a
-fromMaybe = (Just x) _ -> x
-            _        y -> y
+-- This function is valid, except that Maybe isn't defined anywhere.
+
+idMaybe : Maybe a -> Maybe a
+idMaybe = x -> x

@@ -1,0 +1,5 @@
+module UnknownDataType
+
+fromMaybe : Maybe a -> a -> a
+fromMaybe = (Just x) _ -> x
+            _        y -> y

@@ -70,6 +70,8 @@ test = do
         wrap a = TCon "Wrap" [a]
         pair a b = TCon "Pair" [a, b]
 
+        tctx = map (,()) $ ["Nat", "Wrap", "Pair"]
+
         ctx =
           [ V (Free "QQ.Zero") nat
           , V (Free "QQ.Suc")  (Fn nat nat)
@@ -85,39 +87,43 @@ test = do
             )
           ]
 
-    it "True" $ infers ctx [syn|True|] bool
-    it "simple function application" $ infers ctx [syn|(\x -> x) True|] bool
+        -- The contexts don't change for most of these tests, so define a shortcut
+        inf = infers tctx ctx
+
+    it "True" $ inf [syn|True|] bool
+    it "simple function application" $ inf [syn|(\x -> x) True|] bool
     it "multi-arg function application"
-      $ infers ctx [syn|(\x y -> x) True (Suc Zero)|] bool
+      $ inf [syn|(\x y -> x) True (Suc Zero)|] bool
     it "compound lets"
       $ let expr = [syn|let
                             x  = True
                             id = \y -> y
                          in id x|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "simple case expressions"
       $ let expr = [syn|case True of
                               True -> False
                               False -> True|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "combined case and let expressions"
       $ let expr = [syn|case True of
                          True -> let id = \y -> y
                                   in id True
                          False -> True|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "expressions with annotated lets"
       $ let expr = [syn|let
                             id : Bool -> Bool
                             id = x -> x
                         in id True|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "expressions with badly annotated lets"
       $ let expr = [syn|let
                             id : Char
                             id = x -> x
                          in id True|]
         in  failsToInfer
+              tctx
               ctx
               expr
               (\case
@@ -129,36 +135,36 @@ test = do
                             y = True
                             x = y
                          in x|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "case expressions with variable patterns"
       $ let expr = [syn|case True of
                          x -> Zero|]
-        in  infers ctx expr nat
+        in  inf expr nat
     it "case expressions that use bound variables"
       $ let expr = [syn|case True of
                          False -> False
                          x -> x|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "case expressions with wildcard patterns"
       $ let expr = [syn|case True of
                         _ -> False|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "case expressions with a mixture of patterns"
       $ let expr = [syn|case True of
                          True -> False
                          x -> True|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "creating an instance of a parameterised type"
-      $ let expr = [syn|MkPair False Zero|] in infers ctx expr (pair bool nat)
+      $ let expr = [syn|MkPair False Zero|] in inf expr (pair bool nat)
     it "deconstructing a parameterised type with a case expression (Wrap)"
       $ let expr = [syn|case (MkWrap True) of
                          MkWrap y -> y|]
-        in  infers ctx expr bool
+        in  inf expr bool
     it "deconstructing a parameterised type with a case expression (Pair)"
       $ let expr = [syn|case (MkPair False Zero) of
                          MkPair y z -> MkWrap y
                          w -> MkWrap False|]
-        in  infers ctx expr (wrap bool)
+        in  inf expr (wrap bool)
     it "an expression hole (1)"
       $ let expr = [syn|let x = ?foo in True|]
         in  pendingWith "this results in a type error: cannot infer hole"
@@ -171,22 +177,22 @@ test = do
     it "a tuple"
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
-        in  infers ctx expr (TCon "Kite.Primitive.Tuple3" [bool, bool, nat])
+        in  inf expr (TCon "Kite.Primitive.Tuple3" [bool, bool, nat])
     it "a list"
-      $ let expr = [syn|[True, False]|] in infers ctx expr (list bool)
-    it "an integer literal" $ let expr = [syn|6|] in infers ctx expr int
-    it "a string literal" $ let expr = [syn|"Hello"|] in infers ctx expr string
+      $ let expr = [syn|[True, False]|] in inf expr (list bool)
+    it "an integer literal" $ let expr = [syn|6|] in inf expr int
+    it "a string literal" $ let expr = [syn|"Hello"|] in inf expr string
     it "a record"
       $ let expr = [syn|{ five = 5, msg = "Hello" }|]
-        in  infers ctx expr (TRecord [("five", int), ("msg", string)])
+        in  inf expr (TRecord [("five", int), ("msg", string)])
     it "a record projection"
       $ let expr = [syn|let r = { five = 5, msg = "Hello" }
                          in r.five|]
-        in  infers ctx expr int
+        in  inf expr int
     -- fcalls have hardcoded types. putStrLn : String -> IO Unit
     -- Currently we are omitting the IO part as we figure out fcalls.
     -- This may change.
-    it "a foreign call" $ checks ctx [syn|$fcall putStrLn "Hello"|] [ty|()|]
+    it "a foreign call" $ checks tctx ctx [syn|$fcall putStrLn "Hello"|] [ty|()|]
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -202,10 +208,11 @@ test = do
                   (Fn (TRecord [("field", bool)]) (TCon "QQ.D" [UType a0]))
                 )
             ]
+          tctx' = [("QQ.D", ())]
           e = [syn|x (D d) -> x|]
           t = [ty|forall a. a -> D a -> a|]
         in
-          checks ctx' e t
+          checks tctx' ctx' e t
     it "polymorphic record extraction"
       -- This fails
       -- D : { field : a } -> D a
@@ -221,9 +228,10 @@ test = do
                     )
                   )
               ]
+            tctx' = [("QQ.D", ())]
             e = [syn|x (D d) -> x|]
             t = [ty|forall a. a -> D a -> a|]
-        in  checks ctx' e t
+        in  checks tctx' ctx' e t
     it "polymorphic function-typed record extraction"
         -- This ???
         -- type D a = D (a -> a)
@@ -241,10 +249,11 @@ test = do
                   (Fn (Fn (UType a0) (UType a0)) (TCon "QQ.D" [UType a0]))
                 )
             ]
+          tctx' = [("QQ.D", ())]
           t = [ty|forall a. D a -> (a -> a)|]
           e = [syn|(D f) -> f|]
         in
-          checks ctx' e t
+          checks tctx' ctx' e t
     it "higher kinded application" $ do
       -- type F t a = MkF (t a -> t a)
       -- f : T b c -> T b c
@@ -280,9 +289,10 @@ test = do
                 )
               )
             ]
+          tctx = [("QQ.T", ()), ("QQ.F", ())]
           e   = [syn|MkF f|]
           ty_ = [ty|forall b. F (T b)|]
-      checks ctx e ty_
+      checks tctx ctx e ty_
     it "higher kinded application (with ->)" $ do
       -- type F t a = MkF ((t -> a) -> (t -> a))
       -- f : (c -> T -> b) -> (c -> T -> b)
@@ -317,40 +327,41 @@ test = do
               )
             )
           ]
+        tctx = [("QQ.F", ()), ("QQ.T", ())]
         e = [syn|MkF f|]
         ty_ = [ty|forall a b. F a (T -> b)|]
-      checks ctx e ty_
+      checks tctx ctx e ty_
 
-infers :: Ctx -> Syn.Syn -> Type -> Expectation
-infers ctx expr t = do
-  case runInfer ctx expr of
+infers :: TypeCtx -> Ctx -> Syn.Syn -> Type -> Expectation
+infers tctx ctx expr t = do
+  case runInfer tctx ctx expr of
     Left  err      -> expectationFailure $ show (printLocatedError err)
     Right resultTy -> resultTy `shouldBe` t
 
-failsToInfer :: Ctx -> Syn.Syn -> (Error -> Bool) -> Expectation
-failsToInfer ctx expr matchesError = case runInfer ctx expr of
+failsToInfer :: TypeCtx -> Ctx -> Syn.Syn -> (Error -> Bool) -> Expectation
+failsToInfer tctx ctx expr matchesError = case runInfer tctx ctx expr of
   Right resultTy ->
     expectationFailure $ "Expected type error but inferred " <> show resultTy
   Left (LocatedError _ err) -> matchesError err `shouldBe` True
 
-runInfer :: Ctx -> Syn.Syn -> Either LocatedError Type
-runInfer ctx expr = do
+runInfer :: TypeCtx -> Ctx -> Syn.Syn -> Either LocatedError Type
+runInfer tctx ctx expr = do
   let moduleName    = "QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
         e <- fromSyn canonicalExpr
         putCtx ctx
+        putTypeCtx tctx
         ty <- infer e >>= subst
         ty' <- subst ty
         quantify (fv ty') ty'
-  let env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  runTypeM env r
+  runTypeM defaultTypeEnv r
 
 -- Like infers but takes a quasiquoted type expression.
 -- Currently unused because most of the time the type is Bool, which is easy to
 -- write in AST form.
-infers' :: Ctx -> Syn.Syn -> Syn.Type -> Expectation
-infers' ctx expr ty = do
+infers' :: TypeCtx -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
+infers' tctx ctx expr ty = do
   let moduleName    = "QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
       canonicalType = canonicaliseType (moduleName, mempty) ty
@@ -358,15 +369,15 @@ infers' ctx expr ty = do
         e <- fromSyn canonicalExpr
         t <- convertType mempty canonicalType
         putCtx ctx
+        putTypeCtx tctx
         t' <- infer e >>= subst
         pure (t, t')
-  let env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
+  case runTypeM defaultTypeEnv r of
     Left err -> expectationFailure $ show (printLocatedError err)
     Right (expectedType, actualType) -> actualType `shouldBe` expectedType
 
-checks :: Ctx -> Syn.Syn -> Syn.Type -> Expectation
-checks ctx expr ty = do
+checks :: TypeCtx -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
+checks tctx ctx expr ty = do
   let modul = canonicaliseModule Syn.Module
         { Syn.moduleName     = "QQ"
         , Syn.moduleImports  = mempty
@@ -379,8 +390,7 @@ checks ctx expr ty = do
                                ]
         , Syn.moduleMetadata = mempty
         }
-      r   = replicateM_ 10 (newU "dummy") >> checkModule (ctx, mempty) modul >> pure ()
-      env = defaultTypeEnv { envCtx = primCtx <> ctx }
-  case runTypeM env r of
+      r   = replicateM_ 10 (newU "dummy") >> checkModule (tctx, ctx, mempty) modul >> pure ()
+  case runTypeM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()
