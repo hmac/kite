@@ -3,7 +3,7 @@ module Syn.Parse where
 import           Data.Maybe                     ( isJust
                                                 , fromMaybe
                                                 )
-import           Data.Functor                   ( void )
+import           Data.Functor                   ( void, ($>) )
 import           Control.Monad                  ( guard )
 
 import           Text.Megaparsec
@@ -428,7 +428,11 @@ pCharLit :: Parser Syn
 pCharLit = CharLit <$> pChar
 
 pChar :: Parser Char
-pChar = head <$> between (string "'") (symbol "'") (takeP (Just "char") 1)
+pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap head (takeP (Just "char") 1)
+  -- Escaped special characters like \n
+  -- Currently we only support \n
+  -- TODO: what's the full list of escape sequences we should support here?
+    where escapedChar = try (char '\\' >> char 'n' $> '\n')
 
 -- String literals are quite complex. These are some of the variations we need
 -- to handle:

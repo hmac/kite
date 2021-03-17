@@ -310,6 +310,15 @@ test = parallel $ do
       -- Not currently supported
       -- parseExpr "{ a = a }.b"
       --   `shouldParse` (Project (Record [("a", Var "a")]) "b")
+  describe "parsing char literals" $ do
+    it "parses a simple char" $ do
+      parse pExpr "" "'a'" `shouldParse` CharLit 'a'
+    it "parses an escaped char" $ do
+      parse pExpr "" "'\\n'" `shouldParse` CharLit '\n'
+    it "rejects invalid escape sequences" $ do
+      parse pExpr "" `shouldFailOn` "'\\a'"
+    it "rejects single-quoted strings" $ do
+      parse pExpr "" `shouldFailOn` "'ab'"
   describe "parsing string literals" $ do
     it "parses a simple string" $ do
       parse pExpr "" "\"hello\"" `shouldParse` StringLit "hello"
