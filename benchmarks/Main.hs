@@ -77,7 +77,7 @@ typecheckModule m =
 parseFromPath :: String -> ModuleName -> IO Bool
 parseFromPath path modName = do
   contents <- readFile path
-  case parseKiteFile contents of
+  case parseKiteFile path contents of
     Left  err -> error $ path <> ": expected parse success but failed\n" <> err
     Right m   -> pure $ moduleName m == modName
 
