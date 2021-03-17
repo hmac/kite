@@ -1,4 +1,4 @@
-module Data.String
+module Data.String (chars, fromChars, consChar, unconsChar, reverseString)
 
 import Kite.Primitive ($chars, $consChar, $unconsChar)
 import Data.Monoid (concat)
@@ -23,3 +23,11 @@ unconsCharHelper = c s -> Just (c, s)
 
 unconsChar : String -> Maybe (Char, String)
 unconsChar = s -> $unconsChar s Nothing unconsCharHelper
+
+reverseHelper : String -> String -> String
+reverseHelper = acc str -> case unconsChar str of
+  Just (c, rest) -> reverseHelper (consChar c acc) rest
+  Nothing -> acc
+
+reverseString : String -> String
+reverseString = reverseHelper ""

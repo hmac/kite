@@ -12,6 +12,9 @@ module Data.List
   , functorList
   , applicativeList
   , monadList
+  , subsequences
+  , mapMaybe
+  , foldl
   )
 
 import Kite.Primitive (Bool, True, False)
@@ -21,7 +24,7 @@ import Data.Bool (and)
 import Data.Monoid (Monoid(..))
 import Kite.List (foldr)
 import Data.Functor (Functor(..))
-import Control.Applicative (Applicative(..))
+import Control.Applicative (Applicative(..), pure, liftA2)
 import Data.Monad (Monad(..))
 
 listAppend : [a] -> [a] -> [a]
@@ -57,6 +60,10 @@ bindList = [] f        -> []
 
 monadList : Monad []
 monadList = Monad { applicative = applicativeList, bind = bindList }
+
+traverse : forall f a b. Applicative f -> (a -> f b) -> [a] -> f [b]
+traverse = appl f []        -> pure appl []
+           appl f (x :: xs) -> liftA2 appl (\y ys -> y :: ys) (f x) (traverse appl f xs)
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.
@@ -112,7 +119,7 @@ all = p [] -> True
 
 -- Return the elements of the list in reverse order.
 reverse : [a] -> [a]
-reverse = xs -> reverseHelper [] xs
+reverse = xs -> reverseHelper xs []
 
 -- A helper function for reverse.
 -- TODO: inline when we support pattern matching lets
@@ -138,3 +145,18 @@ nonEmptySubsequences = [] -> []
 
 nonEmptySubsequencesHelper : a -> [a] -> [[a]] -> [[a]]
 nonEmptySubsequencesHelper = x ys r -> ys :: ((x :: ys) :: r)
+
+-- Map a Maybe-returning function over a list, keeping the Just values
+mapMaybe : (a -> Maybe b) -> [a] -> [b]
+mapMaybe = f []        -> []
+           f (x :: xs) -> case f x of
+             Just y -> y :: (mapMaybe f xs)
+             Nothing -> mapMaybe f xs
+
+foldlHelper : b -> (b -> a -> b) -> b -> [a] -> b
+foldlHelper =
+  acc f z []        -> acc
+  acc f z (x :: xs) -> foldlHelper (f acc x) f z xs
+
+foldl : (b -> a -> b) -> b -> [a] -> b
+foldl = f z xs -> foldlHelper z f z xs
