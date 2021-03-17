@@ -904,6 +904,9 @@ check expr ty = do
             let (as, b') = unfoldFn (Fn a b)
             in  (take (length pats) as, foldFn (drop (length pats) as) b')
       mapM_ (checkMCaseAlt argTys exprTy) alts
+    (Case scrut alts, _) -> do
+      scrutTy <- infer scrut
+      mapM_ (checkCaseAlt ty scrutTy) alts
     (e, b) -> do
       a  <- infer e >>= subst
       b' <- subst b
@@ -1067,6 +1070,12 @@ existentialiseOuterForalls (Forall u a) = do
   existentialiseOuterForalls (substEForU alpha u a)
 existentialiseOuterForalls t = pure t
 
+checkCaseAlt :: Type -> Type -> (Pattern, Exp) -> TypeM ()
+checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
+  trace' ["checkCaseAlt", debug scrutTy, debug expectedAltTy, debug pat, debug expr] $ do
+    checkPattern pat scrutTy
+    check expr expectedAltTy
+
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
 inferCaseAlt :: Type -> (Pattern, Exp) -> TypeM Type
@@ -1226,13 +1235,6 @@ foldFn (a : as) t = Fn a (foldFn as t)
 -- | foldApp A [b, c, d] = TApp (TApp (TApp A b) c) d
 foldApp :: Type -> [Type] -> Type
 foldApp = foldl (\f t -> TApp f [t])
-
-checkCaseAlt :: Type -> Type -> (Pattern, Exp) -> TypeM ()
-checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
-  trace' ["checkCaseAlt", debug scrutTy, debug pat, debug expr] $ do
-    inferredAltTy  <- inferCaseAlt scrutTy (pat, expr) >>= subst
-    expectedAltTy' <- subst expectedAltTy
-    subtype inferredAltTy expectedAltTy'
 
 -- Infer the type of the result when applying a function of type @ty@ to @e@
 inferApp :: Type -> Exp -> TypeM Type
