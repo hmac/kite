@@ -25,9 +25,10 @@ unconsChar : String -> Maybe (Char, String)
 unconsChar = s -> $unconsChar s Nothing unconsCharHelper
 
 reverseHelper : String -> String -> String
-reverseHelper = acc str -> case unconsChar str of
-  Just (c, rest) -> reverseHelper (consChar c acc) rest
-  Nothing -> acc
+reverseHelper = acc str ->
+                  case unconsChar str of
+                    Just (c, rest) -> reverseHelper (consChar c acc) rest
+                    Nothing -> acc
 
 reverseString : String -> String
 reverseString = reverseHelper ""

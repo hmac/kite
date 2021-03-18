@@ -1,0 +1,13 @@
+module Data.Traversable
+
+import Data.Functor (Functor)
+import Control.Applicative (Applicative)
+
+-- TODO: this also wants a Foldable superclass
+type Traversable t = Traversable { functor : Functor t, traverse : forall f a b. Applicative f -> (a -> f b) -> t a -> f (t b) }
+
+functor : Traversable t -> Functor t
+functor = (Traversable d) -> d.functor
+
+traverse : Traversable t -> Applicative f -> (a -> f b) -> t a -> f (t b)
+traverse = (Traversable d) -> d.traverse
