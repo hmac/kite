@@ -34,28 +34,36 @@ import           AST
   Indentation
   -----------
 
-  Indentation is currently not handled well in the parser. I would like to use
-  the `indentation` package but it hasn't been ported to megaparsec (and porting
-  it proved tricky).
+  Indentation is currently fairly robust, but stricter than Haskell.
 
-  Idris also uses Megaparsec for its parser, and they have developed their own
-  indentation handling which I think we can steal from.
+  Specifically, we require that lexemes following a 'case', 'mcase' or 'let' are aligned on a column
+  which is greater than the column of the last character of these keywords.
 
-  The core idea seems to be to keep track of a stack of indentation positions in
-  the parser state, pushing them on as we enter new syntactic structures and
-  pushing off afterwards. We then use these positions to parse the correct
-  amount of indentation after each new line.
+  For example, this is valid:
 
-  Links:
-    https://github.com/idris-lang/Idris-dev/blob/master/src/Idris/Parser/Helpers.hs
-    https://github.com/idris-lang/Idris-dev/blob/master/src/Idris/Parser/Stack.hs
-    https://github.com/idris-lang/Idris-dev/blob/master/src/Idris/Parser/Expr.hs
+      myFunction = x -> case x of
+                         Just y -> True
+                         Nothing -> False
 
+  But these are not valid:
+
+      myFunction = x -> case x of
+                     Just y -> True
+                     Nothing -> False
+
+      myFunction = x -> case x of
+        Just y -> True
+        Nothing -> False
+
+  In Haskell this is permitted[0].
+
+  I would like to relax this restriction, but it significantly complicates the parser so I'm leaving
+  it for now.
+
+
+  0: https://www.haskell.org/onlinereport/lexemes.html#sect2.7
 -}
 
--- Our parser type is a Reader wrapped around 'Parsec Error String'.
--- The reader holds our space consumer function, which we locally override to correctly parse line
--- folds.
 type Parser = Parsec Error String
 
 newtype Error = VarKeyword String
@@ -216,7 +224,6 @@ data TypeCtx = Neutral | Paren | AppL | AppR
 pType :: Parser Type
 pType = pType' Neutral
 
--- Note: currently broken
 pType' :: TypeCtx -> Parser Type
 pType' ctx = case ctx of
   Neutral ->
@@ -567,8 +574,6 @@ pLet :: Parser Syn
 pLet = do
   p0 <- indentLevel
   void (symbol "let")
-  -- Consume whitespace, requiring indentation to at least after the 'l' of let
-  -- Store the resulting position
   p1 <- indentGT p0
   first <- pAnnotatedBind <|> pBind
   rest <- many $ do
@@ -647,9 +652,6 @@ pCase = do
     pat <- pCasePattern
     void (symbol "->")
     expr <- pExpr
-    -- This shouldn't be necessary because pExpr should always consume trailing whitespace, but it
-    -- currently doesn't.
-    -- spaceConsumerN
     pure (pat, expr)
 
 -- A multi-case is a lambda-case expression which can scrutinise multiple things
@@ -679,9 +681,6 @@ pMultiCase = do
  where
   pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do
-    -- -- This shouldn't be necessary because pExpr should always consume trailing whitespace, but it
-    -- -- currently doesn't.
-    -- spaceConsumerN
     pos <- indentLevel
     pats <- some $ do
       indentGEQ_ pos
