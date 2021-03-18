@@ -1,0 +1,11 @@
+module P4
+
+-- Return the elements of the list in reverse order.
+reverse : [a] -> [a]
+reverse = xs -> go xs []
+ where
+  go : [a] -> [a] -> [a]
+  go = [] acc        -> acc
+       (x :: xs) acc -> go xs (x :: acc)
+  imNotUsed : Bool
+  imNotUsed = True

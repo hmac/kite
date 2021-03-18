@@ -198,14 +198,20 @@ pData = do
 pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
-  indentEQ_ pos1
+  p0 <- indentLevel
   name     <- lowercaseName <?> "function name"
   sig      <- symbol ":" >> pType
-  indentEQ_ pos1
+  indentGEQ_ p0
   _        <- lexeme lowercaseName >>= \n -> guard (name == n)
   void $ symbolN "="
-  indentGT_ pos1
+  indentGT_ p0
   expr <- pExpr
+  _whereClause <- optional $ do
+    indentGT_ p0
+    pos <- indentLevel
+    void $ symbolN "where"
+    many (indentGT_ pos >> pFun)
+
   pure Fun { funComments = comments
            , funName     = name
            , funType     = Just sig
