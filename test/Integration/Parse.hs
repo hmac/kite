@@ -1,4 +1,4 @@
-module Integration.Typecheck
+module Integration.Parse
   ( test
   )
 where
@@ -11,37 +11,32 @@ import           Test.Hspec
 
 import           ModuleGroup
 import           ModuleLoader
-import           ModuleGroupTypechecker
 
 test :: Spec
-test = describe "typechecking Kite modules" $ do
+test = describe "parsing Kite modules" $ do
   describe "expected passes"
-    $ testEachFile expectTypecheckPass "test/fixtures/typecheck/pass"
+    $ testEachFile expectParsePass "test/fixtures/parse/pass"
   describe "expected failures"
-    $ testEachFile expectTypecheckFail "test/fixtures/typecheck/fail"
+    $ testEachFile expectParseFail "test/fixtures/parse/fail"
 
 testEachFile :: (FilePath -> Expectation) -> FilePath -> Spec
 testEachFile testFn dirPath = do
   files <- runIO $ listDirectory dirPath
   mapM_ (\path -> it path (testFn (dirPath </> path))) files
 
-expectTypecheckPass :: FilePath -> Expectation
-expectTypecheckPass path = do
+expectParsePass :: FilePath -> Expectation
+expectParsePass path = do
   res <- parseFile path
   case res of
     Left  err -> expectationFailure err
-    Right g   -> case typecheckModuleGroup g of
-      Left  err -> expectationFailure (show err)
-      Right _   -> pure ()
+    Right _   -> pure ()
 
-expectTypecheckFail :: FilePath -> Expectation
-expectTypecheckFail path = do
+expectParseFail :: FilePath -> Expectation
+expectParseFail path = do
   res <- parseFile path
   case res of
-    Left  err -> expectationFailure err
-    Right g   -> case typecheckModuleGroup g of
-      Left  _ -> pure ()
-      Right _ -> expectationFailure "expected type error but succeeded"
+    Left  _ -> pure ()
+    Right _ -> expectationFailure "expected parse error but succeeded"
 
 parseFile :: FilePath -> IO (Either String UntypedModuleGroup)
 parseFile path = ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)

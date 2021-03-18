@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Syn.Parse where
 
 import           Data.Maybe                     ( isJust
@@ -10,8 +11,10 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import           Text.Megaparsec.Char.Lexer     ( indentGuard
                                                 , indentLevel
+                                                , nonIndented
                                                 )
 import qualified Text.Megaparsec.Char.Lexer    as L
+
 
 import qualified Syn
 import           Syn                     hiding ( Pattern )
@@ -50,6 +53,9 @@ import           AST
 
 -}
 
+-- Our parser type is a Reader wrapped around 'Parsec Error String'.
+-- The reader holds our space consumer function, which we locally override to correctly parse line
+-- folds.
 type Parser = Parsec Error String
 
 newtype Error = VarKeyword String
@@ -146,14 +152,15 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
 -- compiler we merge adjacent comment and function declarations.
 pDecl :: Parser (Decl Syn)
 pDecl =
-  Comment
-    <$> pComment
-    <|> AliasDecl
-    <$> pAlias
-    <|> DataDecl
-    <$> pData
-    <|> FunDecl
-    <$> pFun
+  nonIndented spaceConsumerN $
+    Comment
+      <$> pComment
+      <|> AliasDecl
+      <$> pAlias
+      <|> DataDecl
+      <$> pData
+      <|> FunDecl
+      <$> pFun
 
 pAlias :: Parser Alias
 pAlias = do
@@ -183,12 +190,13 @@ pData = do
 pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
+  indentEQ_ pos1
   name     <- lowercaseName <?> "function name"
   sig      <- symbol ":" >> pType
-  _        <- indentGuard spaceConsumerN EQ pos1
+  indentEQ_ pos1
   _        <- lexeme lowercaseName >>= \n -> guard (name == n)
-  void $ string "="
-  _    <- indentGuard spaceConsumerN GT (mkPos 2)
+  void $ symbolN "="
+  indentGT_ pos1
   expr <- pExpr
   pure Fun { funComments = comments
            , funName     = name
@@ -245,8 +253,9 @@ pType' ctx = case ctx of
   record      = TyRecord <$> braces (recordField `sepBy1` comma)
   recordField = do
     fName <- lowercaseName
-    void (symbol ":")
+    void (symbolN ":")
     ty <- pType' Neutral
+    spaceConsumerN
     pure (fName, ty)
   for_all = do
     void (symbol "forall")
@@ -353,6 +362,7 @@ pInt :: Parser Int
 pInt = do
   sign   <- optional (string "-")
   digits <- lexeme (some digitChar)
+  spaceConsumerN
   pure . read $ fromMaybe "" sign <> digits
 
 pExpr :: Parser Syn
@@ -362,7 +372,7 @@ pExpr' :: Parser Syn
 pExpr' =
   pUnitLit
     <|> try pTuple
-    <|> parens pExpr
+    <|> parensN pExpr
     <|> pRecord
     <|> pHole
     <|> pCharLit
@@ -379,7 +389,7 @@ pExpr' =
 
 pUnitLit :: Parser Syn
 pUnitLit = do
-  void $ symbol "()"
+  void $ symbolN "()"
   pure UnitLit
 
 -- Application of a binary operator
@@ -402,11 +412,9 @@ pBinApp = do
 
 pApp :: Parser Syn
 pApp = do
-  pos   <- indentLevel
+  pos <- indentLevel
   first <- pExpr'
-  skipNewlines
-  void $ indentGuard spaceConsumerN GT pos
-  rest <- some pExpr'
+  rest <- some (indentGT pos >> pExpr')
   pure $ foldl1 App (first : rest)
 
 -- foo.bar
@@ -417,15 +425,22 @@ pRecordProject :: Parser Syn
 pRecordProject = do
   record <- pVar
   void (string ".")
-  Project record <$> lowercaseString
+  field <- lowercaseString
+  spaceConsumerN
+  pure $ Project record field
 
 pHole :: Parser Syn
 pHole = do
   void (string "?")
-  Hole <$> pHoleName
+  name <- pHoleName
+  spaceConsumerN
+  pure $ Hole name
 
 pCharLit :: Parser Syn
-pCharLit = CharLit <$> pChar
+pCharLit = do
+  c <- pChar
+  spaceConsumerN
+  pure $ CharLit c
 
 pChar :: Parser Char
 pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap head (takeP (Just "char") 1)
@@ -454,7 +469,7 @@ pStringLit :: Parser Syn
 pStringLit = do
   void (char '"')
   parts <- pInner
-  void (symbol "\"")
+  void (symbolN "\"")
   let
     first :: [StrParse] -> (String, [StrParse])
     first (Str s    : rest) = let (s', rest') = first rest in (s <> s', rest')
@@ -511,13 +526,18 @@ pStringLit = do
         pure $ Str s : rest
 
 pVar :: Parser Syn
-pVar = Var <$> lowercaseName
+pVar = do
+  v <- Var <$> lowercaseName
+  spaceConsumerN
+  pure v
 
 pFCall :: Parser Syn
 pFCall = do
-  void (symbol "$fcall")
-  name <- lowercaseName
-  args <- many pExpr'
+  p0 <- indentLevel
+  void (symbolN "$fcall")
+  indentGT_ p0
+  name <- lexemeN lowercaseName
+  args <- many (indentGT p0 >> pExpr')
   pure $ FCall (unName name) args
 
 pAbs :: Parser Syn
@@ -545,50 +565,53 @@ pAbs = do
 --  in foo
 pLet :: Parser Syn
 pLet = do
-  void (symbolN "let")
-  pos   <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
-  binds <- some (pAnnotatedBind pos <|> pBind pos)
+  p0 <- indentLevel
+  void (symbol "let")
+  -- Consume whitespace, requiring indentation to at least after the 'l' of let
+  -- Store the resulting position
+  p1 <- indentGT p0
+  first <- pAnnotatedBind <|> pBind
+  rest <- many $ do
+    indentEQ_ p1
+    pAnnotatedBind <|> pBind
+  indentGT_ p0
   void (symbolN "in")
-  Let binds <$> pExpr
+  Let (first:rest) <$> pExpr
  where
-  pBind :: Pos -> Parser (RawName, Syn, Maybe Type)
-  pBind pos = do
-    void $ indentGuard spaceConsumerN GT pos
+  pBind :: Parser (RawName, Syn, Maybe Type)
+  pBind = do
     var <- lowercaseName
-    void (symbol "=")
+    void (symbolN "=")
     val <- lexemeN pExpr
     pure (var, val, Nothing)
-  pAnnotatedBind :: Pos -> Parser (RawName, Syn, Maybe Type)
-  pAnnotatedBind pos = do
-    (var, ty) <- try $ pAnnotation pos
-    void $ indentGuard spaceConsumerN GT pos
+  pAnnotatedBind :: Parser (RawName, Syn, Maybe Type)
+  pAnnotatedBind = do
+    (var, ty) <- try pAnnotation
     var' <- lowercaseName
     guard (var' == var)
-    void (symbol "=")
+    void (symbolN "=")
     val <- lexemeN pExpr
     pure (var, val, Just ty)
-  pAnnotation :: Pos -> Parser (RawName, Type)
-  pAnnotation pos = do
-    void $ indentGuard spaceConsumerN GT pos
+  pAnnotation :: Parser (RawName, Type)
+  pAnnotation = do
     var <- lowercaseName
-    void (symbol ":")
+    void (symbolN ":")
     ty <- lexemeN pType
     pure (var, ty)
 
-
-
 pTuple :: Parser Syn
 pTuple = do
-  _     <- symbol "("
-  pos   <- mkPos . makePositive . subtract 2 . unPos <$> indentLevel
+  pos <- indentLevel
+  _   <- symbol "("
+  indentGT_ pos
   expr1 <- pExpr
   exprs <- some $ do
-    _ <- indentGuard spaceConsumerN GT pos
+    indentGEQ_ pos
     _ <- comma
-    _ <- indentGuard spaceConsumerN GT pos
+    indentGT_ pos
     pExpr
   spaceConsumerN
-  _ <- symbol ")"
+  _ <- symbolN ")"
   pure $ TupleLit (expr1 : exprs)
 
 makePositive :: Int -> Int
@@ -597,11 +620,12 @@ makePositive n | n < 1     = 1
 
 pList :: Parser Syn
 pList = ListLit
-  <$> between (symbolN "[") (symbol "]") (lexemeN pExpr `sepBy` lexemeN comma)
+  <$> bracketsN (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
 pCons = do
   name <- uppercaseName
+  spaceConsumerN
   pure $ case name of
     "True"  -> BoolLit True
     "False" -> BoolLit False
@@ -609,20 +633,23 @@ pCons = do
 
 pCase :: Parser Syn
 pCase = do
+  pos <- indentLevel
   void (symbol "case")
   scrutinee <- pExpr
-  void (symbol "of")
-  void newline
-  indentation <- some (char ' ')
-  first       <- pAlt
-  rest        <- many $ try (newline >> string indentation >> pAlt)
-  pure $ Case scrutinee (first : rest)
+  void (symbolN "of")
+  alts <- some $ do
+    try $ indentGT_ pos
+    pAlt
+  pure $ Case scrutinee alts
  where
   pAlt :: Parser (Syn.Pattern, Syn)
   pAlt = do
     pat <- pCasePattern
     void (symbol "->")
     expr <- pExpr
+    -- This shouldn't be necessary because pExpr should always consume trailing whitespace, but it
+    -- currently doesn't.
+    -- spaceConsumerN
     pure (pat, expr)
 
 -- A multi-case is a lambda-case expression which can scrutinise multiple things
@@ -643,23 +670,31 @@ pCase = do
 -- pCasePattern.
 pMultiCase :: Parser Syn
 pMultiCase = do
-  pos   <- mkPos . makePositive . subtract 1 . unPos <$> indentLevel
-  first <- pAlt
-  rest  <- many $ try $ do
-    void $ indentGuard spaceConsumerN GT pos
+  pos <- indentLevel
+  alts <- some $ do
+    indentGEQ_ pos
     pAlt
-  pure $ MCase (first : rest)
+  spaceConsumerN
+  pure $ MCase alts
  where
   pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do
-    pats <- some pPattern
-    void (symbol "->")
+    -- -- This shouldn't be necessary because pExpr should always consume trailing whitespace, but it
+    -- -- currently doesn't.
+    -- spaceConsumerN
+    pos <- indentLevel
+    pats <- some $ do
+      indentGEQ_ pos
+      pPattern
+    indentGT_ pos
+    void (symbolN "->")
+    indentGT_ pos
     expr <- pExpr
     pure (pats, expr)
 
 
 pRecord :: Parser Syn
-pRecord = Record <$> braces (pField `sepBy1` comma)
+pRecord = Record <$> bracesN (pField `sepBy1` symbolN ",")
  where
   pField = do
     name <- lowercaseString
@@ -722,6 +757,33 @@ keywords =
   , "$fcall"
   ]
 
+-- | Consume whitespace and newlines, then check that the indentation level is equal to the given
+-- value. Returns the indentation level.
+indentEQ :: Pos -> Parser Pos
+indentEQ = indentGuard spaceConsumerN EQ
+
+-- | Consume whitespace and newlines, then check that the indentation level is greater than the
+-- given value. Returns the indentation level.
+indentGT :: Pos -> Parser Pos
+indentGT = indentGuard spaceConsumerN GT
+
+-- | Consume whitespace and newlines, then check that the indentation level is greater than or equal
+-- to the given value. Returns the indentation level.
+indentGEQ :: Pos -> Parser Pos
+indentGEQ pos = try (indentGT pos) <|> indentEQ pos
+
+-- | Like 'indentEQ' but returns @()@.
+indentEQ_ :: Pos -> Parser ()
+indentEQ_ = void . indentEQ
+
+-- | Like 'indentGT' but returns @()@.
+indentGT_ :: Pos -> Parser ()
+indentGT_ = void . indentGT
+
+-- | Like 'indentGEQ' but returns @()@.
+indentGEQ_ :: Pos -> Parser ()
+indentGEQ_ = void . indentGEQ
+
 -- Consumes spaces
 spaceConsumer :: Parser ()
 spaceConsumer = L.space (skipSome (char ' ')) empty empty
@@ -777,11 +839,20 @@ skipNewlines = skipMany newline
 parens :: Parser p -> Parser p
 parens = between (symbol "(") (symbol ")")
 
+parensN :: Parser p -> Parser p
+parensN = between (symbolN "(") (symbolN ")")
+
 braces :: Parser p -> Parser p
 braces = between (symbol "{") (symbol "}")
 
+bracesN :: Parser p -> Parser p
+bracesN = between (symbolN "{") (symbolN "}")
+
 brackets :: Parser p -> Parser p
 brackets = between (symbol "[") (symbol "]")
+
+bracketsN :: Parser p -> Parser p
+bracketsN = between (symbolN "[") (symbolN "]")
 
 comma :: Parser String
 comma = symbol ","

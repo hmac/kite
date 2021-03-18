@@ -1,18 +1,11 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.Type where
 
-import qualified Data.Set                      as Set
-
 import           Test.Hspec
 import           Type
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
 import           Control.Monad                  ( replicateM_ )
-import           Data.Name
-import           Control.Monad.Trans.State.Strict
-                                                ( put )
-import           Control.Monad.Trans.Class      ( lift )
-import           Util
 
 import           Test.QQ
 import           Canonicalise                   ( canonicaliseExp
@@ -48,7 +41,6 @@ test = do
           (U 0 "a")
           (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
         cons    = Free "Kite.Primitive.::"
-        nil     = Free "Kite.Primitive.[]"
         nothing = Free "Nothing"
         fun     = MCase
           [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat (Free "rest")]]
@@ -65,8 +57,6 @@ test = do
         `shouldBe` Right ()
   describe "Simple inference" $ do
     let nat    = TCon "Nat" []
-        int    = TCon "Kite.Primitive.Int" []
-        string = TCon "Kite.Primitive.String" []
         wrap a = TCon "Wrap" [a]
         pair a b = TCon "Pair" [a, b]
 
@@ -166,10 +156,10 @@ test = do
                          w -> MkWrap False|]
         in  inf expr (wrap bool)
     it "an expression hole (1)"
-      $ let expr = [syn|let x = ?foo in True|]
+      $ let _expr = [syn|let x = ?foo in True|]
         in  pendingWith "this results in a type error: cannot infer hole"
     it "an expression hole (2)"
-      $ let expr = [syn|let
+      $ let _expr = [syn|let
                             not = True -> False
                                   False -> True
                          in not ?foo|]
@@ -192,7 +182,7 @@ test = do
     -- fcalls have hardcoded types. putStrLn : String -> IO Unit
     -- Currently we are omitting the IO part as we figure out fcalls.
     -- This may change.
-    it "a foreign call" $ checks tctx ctx [syn|$fcall putStrLn "Hello"|] [ty|()|]
+    it "a foreign call" $ checks tctx ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -210,7 +200,7 @@ test = do
             ]
           tctx' = [("QQ.D", ())]
           e = [syn|x (D d) -> x|]
-          t = [ty|forall a. a -> D a -> a|]
+          t = [typ|forall a. a -> D a -> a|]
         in
           checks tctx' ctx' e t
     it "polymorphic record extraction"
@@ -230,7 +220,7 @@ test = do
               ]
             tctx' = [("QQ.D", ())]
             e = [syn|x (D d) -> x|]
-            t = [ty|forall a. a -> D a -> a|]
+            t = [typ|forall a. a -> D a -> a|]
         in  checks tctx' ctx' e t
     it "polymorphic function-typed record extraction"
         -- This ???
@@ -240,7 +230,6 @@ test = do
         -- f = (D f) -> f
       $ let
           a0 = U 0 "a"
-          a1 = U 1 "a"
           ctx' =
             [ V
                 (Free "QQ.D")
@@ -250,7 +239,7 @@ test = do
                 )
             ]
           tctx' = [("QQ.D", ())]
-          t = [ty|forall a. D a -> (a -> a)|]
+          t = [typ|forall a. D a -> (a -> a)|]
           e = [syn|(D f) -> f|]
         in
           checks tctx' ctx' e t
@@ -264,7 +253,7 @@ test = do
           b = U 1 "b"
           c = U 2 "c"
           t = U 3 "t"
-          ctx =
+          ctx' =
             [ V
               (Free "QQ.MkF")
               (Forall
@@ -289,10 +278,10 @@ test = do
                 )
               )
             ]
-          tctx = [("QQ.T", ()), ("QQ.F", ())]
+          tctx' = [("QQ.T", ()), ("QQ.F", ())]
           e   = [syn|MkF f|]
-          ty_ = [ty|forall b. F (T b)|]
-      checks tctx ctx e ty_
+          ty_ = [typ|forall b. F (T b)|]
+      checks tctx' ctx' e ty_
     it "higher kinded application (with ->)" $ do
       -- type F t a = MkF ((t -> a) -> (t -> a))
       -- f : (c -> T -> b) -> (c -> T -> b)
@@ -303,7 +292,7 @@ test = do
         b = U 1 "b"
         c = U 2 "c"
         t = U 3 "t"
-        ctx =
+        ctx' =
           [ V
             (Free "QQ.MkF")
             (Forall
@@ -327,10 +316,10 @@ test = do
               )
             )
           ]
-        tctx = [("QQ.F", ()), ("QQ.T", ())]
+        tctx' = [("QQ.F", ()), ("QQ.T", ())]
         e = [syn|MkF f|]
-        ty_ = [ty|forall a b. F a (T -> b)|]
-      checks tctx ctx e ty_
+        ty_ = [typ|forall a b. F a (T -> b)|]
+      checks tctx' ctx' e ty_
 
 infers :: TypeCtx -> Ctx -> Syn.Syn -> Type -> Expectation
 infers tctx ctx expr t = do

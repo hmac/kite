@@ -5,14 +5,16 @@ where
 
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
-import           Text.Megaparsec                ( parse
-                                                , eof
+import           Text.Megaparsec                ( eof
+                                                , ParseErrorBundle
+                                                , parse
                                                 )
 import           Syn.Parse                      ( pModule
                                                 , pDecl
                                                 , pExpr
                                                 , pType
                                                 , pPattern
+                                                , Error
                                                 )
 
 import           AST
@@ -20,6 +22,7 @@ import           Syn
 
 -- Parse the string as an expression
 -- TODO: roll out to this whole module
+parseExpr :: String -> Either (ParseErrorBundle String Error) Syn
 parseExpr = parse (pExpr <* eof) ""
 
 test :: Spec

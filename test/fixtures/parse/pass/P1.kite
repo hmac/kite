@@ -1,0 +1,13 @@
+module P1
+
+type R = R { a : Int
+           , b : Bool
+           }
+
+
+mkR : Int -> Bool -> R
+mkR = i b -> R {
+  a = i,
+  b = b
+  }
+

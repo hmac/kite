@@ -1,0 +1,29 @@
+module P2
+
+a : String
+a = case a of
+     a -> case a of
+           a -> a
+           a -> a
+     a -> a
+
+a : String
+a =
+  case a of
+    a -> a ?a
+    a -> a
+
+a : String
+a =
+  case a of
+    a      -> -5
+    (a, a) -> a
+
+a : String
+a =
+  case a of
+    a -> case a of
+           a -> a
+           a -> ()
+    a -> a
+

@@ -1,13 +1,11 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.Type.Module where
 
-import           Prelude                 hiding ( mod )
+import           Prelude                 hiding ( mod, either, maybe )
 import           Test.Hspec
 import           Type
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
-import           Data.Name
-import           Util
 
 import           Test.QQ
 import           Canonicalise                   ( canonicaliseModule )
@@ -102,8 +100,6 @@ const = x y -> y|]
 ctx :: (TypeCtx, Ctx)
 ctx =
   let nat    = TCon "QQ.Nat" []
-      int    = TCon "Kite.Primitive.Int" []
-      string = TCon "Kite.Primitive.String" []
       wrap a = TCon "QQ.Wrap" [a]
       pair a b = TCon "QQ.Pair" [a, b]
       either a b = TCon "QQ.Either" [a, b]

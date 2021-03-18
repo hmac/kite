@@ -6,6 +6,7 @@ type Maybe a = Nothing | Just a
 -- The typechecker doesn't seem to catch this.
 
 foo : (Int, Int) -> Maybe Bool
-foo = xy -> case xy of
-  _ -> Nothing
-  (x, y) -> Just 0
+foo = xy ->
+        case xy of
+          _ -> Nothing
+          (x, y) -> Just 0

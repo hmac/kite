@@ -183,26 +183,30 @@ printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts
 printExpr (MCase    alts  ) = printMCase alts
-printExpr (TupleLit es    ) = tupled (map printExpr es)
-printExpr (ListLit es) | any big es = printList es
-                       | otherwise  = list (map printExpr es)
+printExpr (TupleLit es    ) = align $ tupled (map printExpr es)
+printExpr (ListLit es) = printList es
 printExpr (IntLit i) = pretty i
 printExpr (StringInterp prefix interps) =
   printInterpolatedString prefix interps
 printExpr (StringLit s    ) = printInterpolatedString s []
-printExpr (CharLit   c    ) = squotes $ pretty c
+-- We use Haskell's encoding rules for characters like \NUL by just deferring to
+-- the Show instance for Char. This is mostly for convenience and we may want to define our own
+-- rules in the future.
+printExpr (CharLit   c    ) = pretty (show c)
 printExpr (BoolLit   True ) = data_ "True"
 printExpr (BoolLit   False) = data_ "False"
 printExpr UnitLit           = data_ "()"
 printExpr (FCall proc args) =
-  "$fcall" <+> pretty proc <+> hsep (map printExpr args)
+  "$fcall" <+> pretty proc <+> hsep (map printExpr' args)
 
 -- print an expression with unambiguous precendence
 printExpr' :: Syn -> Document
-printExpr' e@App{}  = parens (printExpr e)
-printExpr' e@Let{}  = parens (printExpr e)
-printExpr' e@Case{} = parens (printExpr e)
-printExpr' e        = printExpr e
+printExpr' e@App{}   = parens (printExpr e)
+printExpr' e@Let{}   = parens (printExpr e)
+printExpr' e@Case{}  = parens (printExpr e)
+printExpr' e@MCase{} = parens (printExpr e)
+printExpr' e@FCall{} = parens (printExpr e)
+printExpr' e         = printExpr e
 
 printInterpolatedString :: String -> [(Syn, String)] -> Document
 printInterpolatedString prefix interps = dquotes str
@@ -250,9 +254,8 @@ printApp a b         = printExpr a <+> printExpr b
 
 -- Used if the list is 'big'
 printList :: [Syn] -> Document
-printList es = nest
-  2
-  (encloseSep (lbracket <> line) (line <> rbracket) comma (map printExpr es))
+printList es =
+  hang 2 $ encloseSep lbracket rbracket comma (map printExpr es)
 
 -- let x = 1
 --     y = 2
@@ -266,23 +269,25 @@ printLet binds e = keyword "let" <+> hang
  where
   printLetBind (name, expr, Nothing) =
     printName name <+> "=" <+> printExpr expr
-  printLetBind (name, expr, Just ty) = vsep
-    [ printName name <+> ":" <+> printType ty
-    , printLetBind (name, expr, Nothing)
-    ]
+  printLetBind (name, expr, Just ty) =
+      (printName name <+> ":" <+> printType ty)
+    <> hardline
+    <> (printLetBind (name, expr, Nothing))
 
 -- case expr of
 --   pat1 x y -> e1
 --   pat2 z w -> e2
 printCase :: Syn -> [(Syn.Pattern, Syn)] -> Document
 printCase e alts = keyword "case"
-  <+> hang (-3) (vsep ((printExpr e <+> keyword "of") : map printAlt alts))
-  where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
+  <+> hang (-3) rest
+  where
+    rest = forceVSep ((printExpr e <+> keyword "of") : map printAlt alts)
+    printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
 -- pat1 pat2 -> e1
 -- pat3 pat4 -> e2
 printMCase :: [([Syn.Pattern], Syn)] -> Document
-printMCase alts = hang 0 $ vsep $ map printAlt alts
+printMCase alts = parens $ hang 0 $ forceVSep $ map printAlt alts
  where
   printAlt (pats, expr) =
     hsep (map printPattern pats) <+> "->" <+> printExpr expr
@@ -350,3 +355,7 @@ htupled elems = mconcat (zipWith (<>) (lparen : repeat comma) elems) <> rparen
 -- Like braces but will pad with a space on either side
 braces' :: Doc a -> Doc a
 braces' d = "{" <+> d <+> "}"
+
+-- Like vsep but uses hardline instead of line to prevent 'group' from removing the line breaks.
+forceVSep :: [Doc a] -> Doc a
+forceVSep = concatWith (\x y -> x <> hardline <> y)

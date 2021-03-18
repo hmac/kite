@@ -6,6 +6,7 @@ import           Test.Hspec
 import           Text.Megaparsec                ( parse
                                                 , eof
                                                 , errorBundlePretty
+                                                , Parsec
                                                 )
 
 import           AST
@@ -55,7 +56,7 @@ roundtripModule :: H.PropertyT IO ()
 roundtripModule = roundtrip genModule printModule pModule
 
 roundtrip
-  :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.PropertyT IO ()
+  :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parsec Error String a -> H.PropertyT IO ()
 roundtrip gen printer parser = hedgehog $ do
   e <- H.forAll gen
   let printed  = renderString (layoutSmart defaultLayoutOptions (printer e))
@@ -180,10 +181,12 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   , Hole <$> genHoleName
   , IntLit <$> genInt
   , BoolLit <$> Gen.bool
-  , CharLit <$> Gen.unicode
+  , CharLit <$> Gen.alphaNum
   , pure UnitLit
   ]
   [ genAbs
+  -- We don't parse arbitrary inline annotations (yet) so we don't generate them.
+  -- , Gen.subtermM (Gen.small genExpr) (\e -> Ann e <$> genType)
   , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
   , Gen.subtermM2 (Gen.small genExpr)
                   (Gen.small genExpr)
@@ -193,12 +196,19 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
                   (Gen.small genExpr)
                   (Gen.small genExpr)
                   (\e1 e2 e3 -> Case e1 <$> genCaseAlts e2 e3)
+  , genMCase
+  , Gen.subterm3 (Gen.small genExpr) (Gen.small genExpr) (Gen.small genExpr) $ \e1 e2 e3 ->
+      TupleLit [e1, e2, e3]
+  , Gen.subterm3 (Gen.small genExpr) (Gen.small genExpr) (Gen.small genExpr) $ \e1 e2 e3 ->
+      ListLit [e1, e2, e3]
   , StringInterp
   <$> genString (Range.linear 0 10)
   <*> Gen.list (Range.linear 1 2) genStringInterpPair
   , StringLit <$> genString (Range.linear 0 10)
   , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
   , genRecordProjection
+  , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) $ \e1 e2 ->
+      FCall  <$> (('$':) <$> genLowerString) <*> pure [e1, e2]
   ]
 
 -- Generate an expression which could be on the LHS of an application.
@@ -222,26 +232,38 @@ genLet = Gen.subtermM2 (Gen.small genExpr)
                        (Gen.small genExpr)
                        (\e1 e2 -> Let <$> genLetBinds e1 <*> pure e2)
 
+genMCase :: H.Gen Syn
+genMCase = do
+  -- For simplicity we current just generate two alts
+  p1 <- Gen.list (Range.linear 1 5) genPattern
+  p2 <- Gen.list (Range.linear 1 5) genPattern
+  Gen.subterm2 (Gen.small genExpr) (Gen.small genExpr) $ \e1 e2 ->
+    MCase [(p1, e1), (p2, e2)]
+
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
-  Var     _             -> []
-  Con     _             -> []
-  Hole    _             -> []
-  IntLit  _             -> []
-  BoolLit _             -> []
-  UnitLit               -> []
-  Abs  (v : vs)    e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
-  Abs  _           e    -> [e]
-  App  _           b    -> [b]
-  Let  []          body -> [body]
-  Let  (b : binds) body -> [Let binds body]
-  Case e           alts -> [e] <> map snd alts
-  TupleLit  es          -> (TupleLit <$> shrinkList1 es) <> es
-  ListLit   es          -> (ListLit <$> shrinkList es) <> es
-  StringLit s           -> []
-  StringInterp p _      -> [StringInterp p []]
-  Record fields         -> Record <$> shrinkList1 fields
-  Project r _           -> [r]
+  Var     _                 -> []
+  Con     _                 -> []
+  Hole    _                 -> []
+  IntLit  _                 -> []
+  BoolLit _                 -> []
+  UnitLit                   -> []
+  CharLit _                 -> []
+  Abs  (v : vs)           e -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
+  Abs  _                  e -> [e]
+  App  _                  b -> [b]
+  Let  binds body           -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
+  Case e               alts -> [e] <> map snd alts
+  TupleLit  es              -> (TupleLit <$> shrinkList2 es) <> es
+  ListLit   es              -> (ListLit <$> shrinkList es) <> es
+  StringLit _               -> []
+  StringInterp p _          -> [StringInterp p []]
+  Record fields             -> Record <$> shrinkList1 fields
+  Project r _               -> [r]
+  Ann e _                   -> [e]
+  -- We never want to generate empty mcases
+  MCase alts                -> MCase <$> shrinkList2 alts
+  FCall _ args              -> args
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits
@@ -295,6 +317,8 @@ shrinkPattern = \case
   ListPat  pats  -> ListPat <$> shrinkList pats
   ConsPat c meta pats -> ConsPat c meta <$> shrinkList pats
   StringPat _    -> []
+  CharPat _      -> []
+  BoolPat _      -> []
 
 genInt :: H.Gen Int
 genInt = Gen.int (Range.linear (-5) 5)

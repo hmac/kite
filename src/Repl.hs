@@ -19,6 +19,7 @@ import           Text.Megaparsec                ( parse
                                                 )
 import           Text.Megaparsec.Char           ( string )
 
+
 import           Syn
 import           Data.Name
 import qualified Canonical                     as Can
