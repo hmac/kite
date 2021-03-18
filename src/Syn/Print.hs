@@ -84,9 +84,12 @@ printDecl (DataDecl  d) = printData d
 printDecl (AliasDecl a) = printAlias a
 
 printFun :: Fun Syn -> Document
-printFun Fun { funComments = comments, funName = name, funExpr = defs, funType = ty }
-  = vsep $ printComments comments ++ sig ++ [printDef name defs]
+printFun Fun { funComments = comments, funName = name, funExpr = defs, funType = ty, funWheres = wheres }
+  = vsep $ printComments comments ++ sig ++ [printDef name defs] ++ whereClause
  where
+  whereClause = case wheres of
+                  [] -> []
+                  ws -> [hang 2 $ forceVSep $ " where" : map printFun ws]
   sig = case ty of
     Just t  -> [func (printName name) <> align (space <> colon <+> printType t)]
     Nothing -> []

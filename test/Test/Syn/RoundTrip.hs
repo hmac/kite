@@ -143,8 +143,17 @@ genData =
 genDataCon :: H.Gen DataCon
 genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
+-- We want to generate where clauses containing functions but we don't want Hedgehog to recurse
+-- infinitely, generating where clauses in where clauses in where clauses in...
+-- So we make sure that any functions generated in a where clause don't themselves have where
+-- clauses.
 genFun :: H.Gen (Fun Syn)
-genFun = Fun [] <$> genLowerName <*> (Just <$> genType) <*> genExpr <*> Gen.list (Range.linear 0 3) genFun
+genFun = genFun' True
+
+genFun' :: Bool -> H.Gen (Fun Syn)
+genFun' withWhere =
+  let whereClause = if withWhere then Gen.list (Range.linear 0 3) (genFun' False) else pure []
+   in Fun [] <$> genLowerName <*> (Just <$> genType) <*> genExpr <*> whereClause
 
 genType :: H.Gen Type
 genType = Gen.recursive
