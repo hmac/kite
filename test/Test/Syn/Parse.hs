@@ -34,6 +34,7 @@ test = parallel $ do
         , funName     = "id"
         , funType     = Just (TyVar "a" `fn` TyVar "a")
         , funExpr     = MCase [([VarPat "x"], Var "x")]
+        , funWheres   = []
         }
     it "requires a line fold to be indented" $ do
       parse pDecl "" `shouldFailOn` "id : a -> a\nid x =\nx"
@@ -46,6 +47,7 @@ test = parallel $ do
                         , funType = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar
                                       "a"
                         , funExpr = MCase [([VarPat "x", VarPat "y"], Var "x")]
+                        , funWheres = []
                         }
     it "parses a higher kinded type definition" $ do
       parse pDecl "" "map : (a -> b) -> f a -> f b\nmap = f m -> undefined"
@@ -58,6 +60,7 @@ test = parallel $ do
                                         `fn` TyApp (TyVar "f") (TyVar "b")
                         , funExpr     = MCase
                           [([VarPat "f", VarPat "m"], Var "undefined")]
+                        , funWheres = []
                         }
     it "parses a multiline function definition" $ do
       parse
@@ -77,6 +80,7 @@ test = parallel $ do
                             , Var "x"
                             )
                           ]
+                        , funWheres = []
                         }
     it "parses a function with a multi param argument type" $ do
       parse
@@ -99,6 +103,7 @@ test = parallel $ do
                                             , Con "Nothing"
                                             )
                                           ]
+                         , funWheres = []
                         }
     it "parses a case expression inside an mcase" $ do
       let str ="functor : Alternative f -> Functor f\nfunctor = f -> case applicative f of\n                 (Applicative g) -> g.functor"
@@ -115,6 +120,7 @@ test = parallel $ do
                                                              , Case (App (Var "applicative") (Var "f")) [(ConsPat "Applicative" Nothing [VarPat "g"], Project (Var "g") "functor")]
                                                              )
                                                            ]
+                                         , funWheres = []
                                          }
 
     it "parses a simple type definition" $ do
@@ -181,6 +187,7 @@ test = parallel $ do
                                                          , funComments = []
                                                          , funType = Just TyInt
                                                          , funExpr = IntLit 1
+                                                         , funWheres = []
                                                          }
                                            ]
                         , moduleMetadata = [("key", "val")]

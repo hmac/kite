@@ -206,7 +206,7 @@ pFun = do
   void $ symbolN "="
   indentGT_ p0
   expr <- pExpr
-  _whereClause <- optional $ do
+  whereClause <- optional $ do
     indentGT_ p0
     pos <- indentLevel
     void $ symbolN "where"
@@ -216,6 +216,7 @@ pFun = do
            , funName     = name
            , funType     = Just sig
            , funExpr     = expr
+           , funWheres   = fromMaybe [] whereClause
            }
 
 -- The context for parsing a type

@@ -144,7 +144,7 @@ genDataCon :: H.Gen DataCon
 genDataCon = DataCon <$> genUpperName <*> Gen.list (Range.linear 0 3) genType
 
 genFun :: H.Gen (Fun Syn)
-genFun = Fun [] <$> genLowerName <*> (Just <$> genType) <*> genExpr
+genFun = Fun [] <$> genLowerName <*> (Just <$> genType) <*> genExpr <*> Gen.list (Range.linear 0 3) genFun
 
 genType :: H.Gen Type
 genType = Gen.recursive

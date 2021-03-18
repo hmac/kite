@@ -82,6 +82,7 @@ processExpr decls e =
                          , funName     = "$main"
                          , funType     = Nothing
                          , funExpr     = e
+                         , funWheres   = []
                          }
       g = ModuleGroup (buildModule (decls ++ [main])) []
   in  case ModuleGroupTypechecker.typecheckModuleGroup g of

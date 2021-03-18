@@ -97,6 +97,7 @@ data Fun_ name exp ty = Fun { funComments :: [String]
                             , funName :: name
                             , funType :: Maybe ty
                             , funExpr :: exp
+                            , funWheres :: [Fun_ name exp ty]
                             }
                             deriving (Eq, Show, Typeable, Data.Data)
 

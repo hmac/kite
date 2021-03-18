@@ -375,6 +375,7 @@ checks tctx ctx expr ty = do
                                                      , Syn.funType     = Just ty
                                                      , Syn.funExpr     = expr
                                                      , Syn.funComments = mempty
+                                                     , Syn.funWheres   = []
                                                      }
                                ]
         , Syn.moduleMetadata = mempty
