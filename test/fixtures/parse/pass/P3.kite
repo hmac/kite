@@ -1,0 +1,9 @@
+module P3
+
+-- Map a Maybe-returning function over a list, keeping the Just values
+mapMaybe : (a -> Maybe b) -> [a] -> [b]
+mapMaybe = f []        -> []
+           f (x :: xs) ->
+             case f x of
+               Just y -> y :: (mapMaybe f xs)
+               Nothing -> mapMaybe f xs
