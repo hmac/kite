@@ -91,6 +91,7 @@ exampleModule = Module
     [ FunDecl
       (Fun
         { funComments = []
+        , funWheres   = []
         , funName     = "intersperse"
         , funType     =
           Just
@@ -114,6 +115,7 @@ exampleModule = Module
     , FunDecl
       (Fun
         { funComments = []
+        , funWheres   = []
         , funName     = "intersperseHelper"
         , funType     =
           Just
