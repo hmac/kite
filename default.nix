@@ -1,6 +1,6 @@
 let
   name = "kite";
-  compiler = "ghc8102";
+  compiler = "ghc8104";
 
   sources = import ./nix/sources.nix { };
   nixpkgs = import sources.nixpkgs { };
@@ -15,7 +15,7 @@ let
 
   shell = haskellPackages.shellFor {
     packages = p: [ p."${name}" ];
-    buildInputs = with nixpkgs.haskellPackages; [
+    buildInputs = with nixpkgs.pkgs.haskell.packages.${compiler}; [
       haskellPackages.cabal-install
       ghcid
       brittany
