@@ -133,7 +133,7 @@ ctx =
         , V (Free "QQ.Just")
             (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
         ]
-      typeCtx = map (,()) $ ["QQ.Nat", "QQ.Wrap", "QQ.Pair", "QQ.Either", "QQ.Maybe"]
+      typeCtx = map (,()) ["QQ.Nat", "QQ.Wrap", "QQ.Pair", "QQ.Either", "QQ.Maybe"]
    in (typeCtx, termCtx)
 
 checks :: Syn.Fun Syn.Syn -> Expectation

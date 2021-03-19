@@ -4,7 +4,7 @@ import           Text.Megaparsec
 
 import Syn.Parse.Common
 import Syn (RawName(Name))
-import qualified Syn as Syn
+import qualified Syn
 import AST (Pat(..))
 
 

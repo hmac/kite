@@ -60,7 +60,7 @@ test = do
         wrap a = TCon "Wrap" [a]
         pair a b = TCon "Pair" [a, b]
 
-        tctx = map (,()) $ ["Nat", "Wrap", "Pair"]
+        tctx = map (,()) ["Nat", "Wrap", "Pair"]
 
         ctx =
           [ V (Free "QQ.Zero") nat

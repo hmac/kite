@@ -3,7 +3,6 @@ module LC.Eval where
 
 import qualified Data.Map.Strict               as Map
 import           Data.Name
-import           Data.Functor                   ( (<&>) )
 import           ELC                            ( Con(..)
                                                 , Constant(..)
                                                 , Primitive(..)
@@ -15,7 +14,7 @@ import           LC
 -- import           Util
 import           Control.Monad.Reader           ( MonadReader
                                                 , runReader
-                                                , ask
+                                                , asks
                                                 )
 
 evalMain :: ModuleName -> Env -> Exp
@@ -31,7 +30,7 @@ eval env = flip runReader env . go
   go :: MonadReader Env m => Exp -> m Exp
   go expr = case expr of
     Const c es -> pure $ evalConst c es
-    Var n      -> (ask <&> lookup n) >>= \case
+    Var n      -> asks (lookup n) >>= \case
       Just e  -> go e
       Nothing -> error $ "unknown variable: " <> show n
     Cons c         es -> pure $ Cons c es

@@ -275,7 +275,7 @@ printLet binds e = keyword "let" <+> hang
   printLetBind (name, expr, Just ty) =
       (printName name <+> ":" <+> printType ty)
     <> hardline
-    <> (printLetBind (name, expr, Nothing))
+    <> printLetBind (name, expr, Nothing)
 
 -- case expr of
 --   pat1 x y -> e1
