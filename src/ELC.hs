@@ -3,8 +3,8 @@ module ELC where
 -- The Enriched Lambda Calculus
 -- Taken from The Implementation of Functional Programming Languages, Chapter 3
 
-import           Data.Name                      ( Name(..) )
 import           Data.Map.Strict                ( Map )
+import           Data.Name                      ( Name(..) )
 
 data Exp = Const Constant [Exp]
          | Var Name
@@ -32,7 +32,7 @@ buildApp :: Exp -> [Exp] -> Exp
 buildApp = foldl App
 
 data Clause = Clause Con [Name] Exp
-            deriving (Eq, Show)
+  deriving (Eq, Show)
 
 data Constant = Int Int
               | String String

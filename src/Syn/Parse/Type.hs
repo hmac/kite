@@ -1,12 +1,15 @@
-module Syn.Parse.Type (pType, pConType) where
+module Syn.Parse.Type
+  ( pType
+  , pConType
+  ) where
 
-import           Data.Functor                   ( void  )
+import           Data.Functor                   ( void )
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 
-import Syn.Parse.Common
-import Syn
+import           Syn
+import           Syn.Parse.Common
 
 -- The context for parsing a type
 -- Paren means that compound types have to be in parens

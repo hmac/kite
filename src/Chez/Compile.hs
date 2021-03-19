@@ -3,31 +3,30 @@ module Chez.Compile
   ( Env
   , compileModule
   , builtins
-  )
-where
+  ) where
 
-import           Util
-import           Prelude                 hiding ( null )
+import           Chez                           ( Def(..)
+                                                , Lit(..)
+                                                , SExpr(..)
+                                                , begin
+                                                , false
+                                                , null
+                                                , true
+                                                )
+import           Data.List.Extra                ( concatUnzip )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
                                                 )
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           Chez                           ( SExpr(..)
-                                                , Lit(..)
-                                                , Def(..)
-                                                , null
-                                                , true
-                                                , false
-                                                , begin
-                                                )
-import qualified Syn.Typed                     as T
-import           Data.List.Extra                ( concatUnzip )
 import qualified NameGen
 import           NameGen                        ( NameGen
                                                 , freshM
                                                 )
+import           Prelude                 hiding ( null )
+import qualified Syn.Typed                     as T
+import           Util
 
 -- Compile Kite to Chez Scheme
 
@@ -255,9 +254,9 @@ compilePat pattern scrut = case pattern of
     ([App (Var "null?") [scrut]], [])
   T.ConsPat c _ [headPat, tailPat] | c == "Kite.Primitive.::" ->
     let (headTests, headBindings) =
-            compilePat headPat (App (Var "car") [scrut])
+          compilePat headPat (App (Var "car") [scrut])
         (tailTests, tailBindings) =
-            compilePat tailPat (App (Var "cdr") [scrut])
+          compilePat tailPat (App (Var "cdr") [scrut])
         notNullTest = App (Var "not") [App (Var "null?") [scrut]]
     in  (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
 
@@ -305,9 +304,12 @@ builtins =
         ["m"]
         (App (App (Var (prim "IO" <> "-_0")) [Var "m"]) [Abs ["r"] (Var "r")])
       )
-    , Def (prim "appendString") (Abs ["x"] (Abs ["y"] (App (Var "string-append") [Var "x", Var "y"])))
+    , Def
+      (prim "appendString")
+      (Abs ["x"] (Abs ["y"] (App (Var "string-append") [Var "x", Var "y"])))
     , Def (prim "$showInt") (Var "number->string")
-    , Def (prim "$eqInt") (Abs ["x"] (Abs ["y"] (App (Var "eq?") [Var "x", Var "y"])))
+    , Def (prim "$eqInt")
+          (Abs ["x"] (Abs ["y"] (App (Var "eq?") [Var "x", Var "y"])))
     , Def (prim "*") (Abs ["x"] (Abs ["y"] (App (Var "*") [Var "x", Var "y"])))
     , Def (prim "+") (Abs ["x"] (Abs ["y"] (App (Var "+") [Var "x", Var "y"])))
     , Def (prim "::")
@@ -326,7 +328,8 @@ builtins =
           )
         )
       )
-    , Def (prim "$showChar") (Abs ["c"] (App (Var "list->string") [App (Var "list") [Var "c"]]))
+    , Def (prim "$showChar")
+          (Abs ["c"] (App (Var "list->string") [App (Var "list") [Var "c"]]))
     , Def (prim "$chars") (Abs ["s"] (App (Var "string->list") [Var "s"]))
     , Def
       (prim "$unconsChar")
@@ -362,12 +365,12 @@ builtins =
           (Abs
             ["f"]
             (Let
-              [ ("result", App (Var "string->number") [Var "s"])
-              , ("result-is-fixnum"  , App (Var "fixnum?") [Var "result"])
+              [ ("result"          , App (Var "string->number") [Var "s"])
+              , ("result-is-fixnum", App (Var "fixnum?") [Var "result"])
               ]
               (Cond
                 [ (Var "result-is-fixnum", App (Var "f") [Var "result"])
-                , (true, Var "def")
+                , (true                  , Var "def")
                 ]
               )
             )

@@ -1,7 +1,6 @@
 module Integration.Typecheck
   ( test
-  )
-where
+  ) where
 
 import           System.Directory               ( listDirectory )
 import           System.FilePath.Posix          ( (</>)
@@ -10,8 +9,8 @@ import           System.FilePath.Posix          ( (</>)
 import           Test.Hspec
 
 import           ModuleGroup
-import           ModuleLoader
 import           ModuleGroupTypechecker
+import           ModuleLoader
 
 test :: Spec
 test = describe "typechecking Kite modules" $ do
@@ -44,4 +43,5 @@ expectTypecheckFail path = do
       Right _ -> expectationFailure "expected type error but succeeded"
 
 parseFile :: FilePath -> IO (Either String UntypedModuleGroup)
-parseFile path = ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)
+parseFile path =
+  ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)

@@ -1,11 +1,14 @@
-module Syn.Parse.Pattern (pPattern, pCasePattern) where
+module Syn.Parse.Pattern
+  ( pPattern
+  , pCasePattern
+  ) where
 
 import           Text.Megaparsec
 
-import Syn.Parse.Common
-import Syn (RawName(Name))
+import           AST                            ( Pat(..) )
+import           Syn                            ( RawName(Name) )
 import qualified Syn
-import AST (Pat(..))
+import           Syn.Parse.Common
 
 
 pPattern :: Parser Syn.Pattern
@@ -41,8 +44,7 @@ pCasePattern =
     <|> pWildPat
     <|> pListPat
     <|> pVarPat
- where
-  tuplePattern = TuplePat <$> pPattern `sepBy2` comma
+  where tuplePattern = TuplePat <$> pPattern `sepBy2` comma
 
 pIntPat :: Parser Syn.Pattern
 pIntPat = IntPat <$> pInt
@@ -71,8 +73,8 @@ pVarPat = VarPat <$> lowercaseName
 -- We don't need these in case expressions, but we do in multi-case expressions.
 pConPat :: Bool -> Parser Syn.Pattern
 pConPat needParens = if needParens
-                      then try nullaryCon <|> parens (try infixBinaryCon <|> con)
-                      else try infixBinaryCon <|> con <|> parens (pConPat False)
+  then try nullaryCon <|> parens (try infixBinaryCon <|> con)
+  else try infixBinaryCon <|> con <|> parens (pConPat False)
  where
   tyCon      = uppercaseName
   nullaryCon = do
@@ -92,7 +94,7 @@ pConPat needParens = if needParens
     tyCon >>= \case
       "True"  -> pure $ BoolPat True
       "False" -> pure $ BoolPat False
-      c -> do
-            args <- many pPattern
-            pure $ ConsPat c Nothing args
+      c       -> do
+        args <- many pPattern
+        pure $ ConsPat c Nothing args
 

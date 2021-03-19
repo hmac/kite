@@ -39,65 +39,66 @@ module Type
   , putTypeCtx
   , fv
   , quantify
-  )
-where
+  ) where
 
-import           Util
-import           Control.Monad                  ( (>=>), void )
-import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
-import           System.Environment             ( lookupEnv )
+import           AST                            ( ConMeta(..)
+                                                , Expr(..)
+                                                , Pat(..)
+                                                )
+import           Control.Monad                  ( (>=>)
+                                                , void
+                                                )
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
-import           Data.String                    ( fromString )
-import           Data.Name                      ( Name(..)
+import           Data.Name                      ( ModuleName(..)
+                                                , Name(..)
                                                 , RawName(..)
-                                                , ModuleName(..)
                                                 )
-import           AST                            ( Expr(..)
-                                                , Pat(..)
-                                                , ConMeta(..)
-                                                )
+import           Data.String                    ( fromString )
+import           System.Environment             ( lookupEnv )
+import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
+import           Util
 
 import           Prelude                 hiding ( splitAt )
 
 import           Data.Maybe                     ( listToMaybe )
 
-import           Control.Monad.Trans.State.Strict
-                                                ( State
-                                                , evalState
-                                                , gets
-                                                , modify'
-                                                , get
-                                                , put
-                                                )
 import qualified Control.Monad.Except
 import           Control.Monad.Except           ( ExceptT(..)
-                                                , runExceptT
                                                 , catchError
+                                                , runExceptT
                                                 )
 import           Control.Monad.Trans.Class      ( lift )
 import           Control.Monad.Trans.Reader     ( ReaderT
-                                                , runReaderT
                                                 , ask
                                                 , asks
                                                 , local
+                                                , runReaderT
+                                                )
+import           Control.Monad.Trans.State.Strict
+                                                ( State
+                                                , evalState
+                                                , get
+                                                , gets
+                                                , modify'
+                                                , put
                                                 )
 
-import qualified Hedgehog.Gen                  as G
-import qualified Hedgehog.Range                as R
-import           Hedgehog                       ( Property
-                                                , property
+import           Hedgehog                       ( (===)
                                                 , Gen
-                                                , (===)
+                                                , Property
                                                 , forAll
+                                                , property
                                                 )
 import qualified Hedgehog
+import qualified Hedgehog.Gen                  as G
+import qualified Hedgehog.Range                as R
 
-import           Type.Reflection                ( Typeable )
-import           Type.Primitive                 ( listNilMeta
-                                                , listConsMeta
-                                                )
 import           Data.Data                      ( Data )
+import           Type.Primitive                 ( listConsMeta
+                                                , listNilMeta
+                                                )
+import           Type.Reflection                ( Typeable )
 
 -- Bidirectional typechecker
 -- Following:
@@ -126,22 +127,23 @@ io :: Type -> Type
 io a = TCon "Kite.Primitive.IO" [a]
 
 primTypeCtx :: TypeCtx
-primTypeCtx =
-  map (,()) ["Kite.Primitive.String"
-            , "Kite.Primitive.Int"
-            , "Kite.Primitive.Char"
-            , "Kite.Primitive.Bool"
-            , "Kite.Primitive.Unit"
-            , "Kite.Primitive.List"
-            , "Kite.Primitive.IO"
-            , "Kite.Primitive.Tuple2"
-            , "Kite.Primitive.Tuple3"
-            , "Kite.Primitive.Tuple4"
-            , "Kite.Primitive.Tuple5"
-            , "Kite.Primitive.Tuple6"
-            , "Kite.Primitive.Tuple7"
-            , "Kite.Primitive.Tuple8"
-            ]
+primTypeCtx = map
+  (, ())
+  [ "Kite.Primitive.String"
+  , "Kite.Primitive.Int"
+  , "Kite.Primitive.Char"
+  , "Kite.Primitive.Bool"
+  , "Kite.Primitive.Unit"
+  , "Kite.Primitive.List"
+  , "Kite.Primitive.IO"
+  , "Kite.Primitive.Tuple2"
+  , "Kite.Primitive.Tuple3"
+  , "Kite.Primitive.Tuple4"
+  , "Kite.Primitive.Tuple5"
+  , "Kite.Primitive.Tuple6"
+  , "Kite.Primitive.Tuple7"
+  , "Kite.Primitive.Tuple8"
+  ]
 
 -- Primitive constructors
 -- TODO: move all primitive stuff to Type.Primitive
@@ -204,16 +206,11 @@ primitiveFns =
   , V (Free "Kite.Primitive.$eqChar")   (Fn char (Fn char bool))
   -- readInt : String -> a -> (Int -> a) -> a
   , let a = U 0 "a"
-    in
-      V
-        (Free "Kite.Primitive.$readInt")
+    in  V
+          (Free "Kite.Primitive.$readInt")
 
-        (Forall
-          a
-          (Fn string
-              (Fn (UType a) (Fn (Fn int (UType a)) (UType a)))
+          (Forall a (Fn string (Fn (UType a) (Fn (Fn int (UType a)) (UType a))))
           )
-        )
   ]
 
 primCtx :: Ctx
@@ -417,7 +414,7 @@ quantify vars t = do
   -- Construct a context mapping each E to its replacement UType
   let ctx = map (\(e, u) -> ESolved e (UType u)) uMap
   -- Apply the substitution to the type
-  let t' = subst' ctx t
+  let t'  = subst' ctx t
   -- Wrap the result in foralls to bind each UType
   pure $ foldr (Forall . snd) t' uMap
 
@@ -559,10 +556,10 @@ lookupV v = do
 -- If it's not in the local context, we check the global context.
 lookupType :: Name -> TypeM ()
 lookupType name = do
-  tctx <- getTypeCtx
+  tctx                               <- getTypeCtx
   TypeEnv { envTypeCtx = globalCtx } <- ask
   case lookup name (tctx <> globalCtx) of
-    Just _ -> pure ()
+    Just _  -> pure ()
     Nothing -> throwError (UnknownType name)
 
 -- Context construction
@@ -660,32 +657,39 @@ wellFormedType ty = do
     TApp f b       -> wellFormedType f >> mapM_ wellFormedType b
 
 -- Typechecking monad
-data TypeEnv =
-  TypeEnv { envCtx :: Ctx    -- The global type context
-          , envTypeCtx :: TypeCtx -- Global type info (primitive types)
-          , envDepth :: Int  -- The recursion depth, used for debugging
-          , envDebug :: Bool -- Whether to output debug messages
-          } deriving (Eq, Show)
+data TypeEnv = TypeEnv
+  { envCtx     :: Ctx    -- The global type context
+  , envTypeCtx :: TypeCtx -- Global type info (primitive types)
+  , envDepth   :: Int  -- The recursion depth, used for debugging
+  , envDebug   :: Bool -- Whether to output debug messages
+  }
+  deriving (Eq, Show)
 
 defaultTypeEnv :: TypeEnv
 defaultTypeEnv =
   let debugOn =
-          case unsafePerformIO (fmap (== "true") <$> lookupEnv "KITE_DEBUG") of
-            Just True -> True
-            _         -> False
-   in  TypeEnv { envCtx = primCtx, envTypeCtx = primTypeCtx, envDepth = 0, envDebug = debugOn }
+        case unsafePerformIO (fmap (== "true") <$> lookupEnv "KITE_DEBUG") of
+          Just True -> True
+          _         -> False
+  in  TypeEnv { envCtx     = primCtx
+              , envTypeCtx = primTypeCtx
+              , envDepth   = 0
+              , envDebug   = debugOn
+              }
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
 
-data TypeState = TypeState { varCounter :: Int -- A counter for generating fresh names
-                           , context :: Ctx    -- The local type context
-                           , typeContext :: TypeCtx -- In-scope types
-                           }
+data TypeState = TypeState
+  { varCounter  :: Int -- A counter for generating fresh names
+  , context     :: Ctx    -- The local type context
+  , typeContext :: TypeCtx -- In-scope types
+  }
 
 runTypeM :: TypeEnv -> TypeM a -> Either LocatedError a
 runTypeM env m =
-  let defaultState = TypeState { varCounter = 0, context = mempty, typeContext = mempty }
+  let defaultState =
+        TypeState { varCounter = 0, context = mempty, typeContext = mempty }
   in  evalState (runExceptT (runReaderT m env)) defaultState
 
 -- Increment the recursion depth
@@ -1116,9 +1120,16 @@ existentialiseOuterForalls t = pure t
 
 checkCaseAlt :: Type -> Type -> (Pattern, Exp) -> TypeM ()
 checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
-  trace' ["checkCaseAlt", debug scrutTy, debug expectedAltTy, debug pat, debug expr] $ do
-    checkPattern pat scrutTy
-    check expr expectedAltTy
+  trace'
+      [ "checkCaseAlt"
+      , debug scrutTy
+      , debug expectedAltTy
+      , debug pat
+      , debug expr
+      ]
+    $ do
+        checkPattern pat scrutTy
+        check expr expectedAltTy
 
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.

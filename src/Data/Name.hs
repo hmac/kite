@@ -1,7 +1,7 @@
 module Data.Name where
 
-import           Type.Reflection                ( Typeable )
 import           Data.Data                      ( Data )
+import           Type.Reflection                ( Typeable )
 
 import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )

@@ -1,18 +1,18 @@
 module ModuleGroupTypechecker where
 
 import           Data.Name                      ( Name )
+import           ModuleGroup
+import qualified Type                           ( CtorInfo
+                                                , Ctx
+                                                , Exp
+                                                , LocatedError
+                                                , Type
+                                                , defaultTypeEnv
+                                                , runTypeM
+                                                )
 import           Type.Module                    ( checkModule
                                                 , translateModule
                                                 )
-import qualified Type                           ( LocatedError
-                                                , runTypeM
-                                                , defaultTypeEnv
-                                                , Ctx
-                                                , CtorInfo
-                                                , Type
-                                                , Exp
-                                                )
-import           ModuleGroup
 import           Util
 
 -- This module takes a list of modules from the loader and attempts to typecheck

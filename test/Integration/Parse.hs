@@ -1,7 +1,6 @@
 module Integration.Parse
   ( test
-  )
-where
+  ) where
 
 import           System.Directory               ( listDirectory )
 import           System.FilePath.Posix          ( (</>)
@@ -39,4 +38,5 @@ expectParseFail path = do
     Right _ -> expectationFailure "expected parse error but succeeded"
 
 parseFile :: FilePath -> IO (Either String UntypedModuleGroup)
-parseFile path = ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)
+parseFile path =
+  ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)

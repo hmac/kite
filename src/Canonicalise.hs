@@ -4,15 +4,15 @@ import           Prelude                 hiding ( mod )
 
 import qualified Data.Map.Strict               as Map
 
-import           Data.List                      ( mapAccumL )
-import           Util
-import           Syn
 import           AST                            ( Expr(..)
                                                 , Pat(..)
                                                 )
-import           Data.Name                      ( Name(..) )
 import qualified Canonical                     as Can
 import qualified Canonical.Primitive
+import           Data.List                      ( mapAccumL )
+import           Data.Name                      ( Name(..) )
+import           Syn
+import           Util
 
 -- Converts raw names to canonical names.
 
@@ -39,11 +39,11 @@ type Env = (ModuleName, Imports)
 buildImports :: Syn.Module -> Imports
 buildImports m =
   let imports =
-          [ (subitem, importName imp)
-          | imp     <- moduleImports m
-          , item    <- importItems imp
-          , subitem <- flattenImportItem m item
-          ]
+        [ (subitem, importName imp)
+        | imp     <- moduleImports m
+        , item    <- importItems imp
+        , subitem <- flattenImportItem m item
+        ]
   in  Map.fromList (imports <> Canonical.Primitive.primitives)
 
 -- Given an ImportItem which may contain nested names (e.g. Either(Left, Right))
@@ -71,9 +71,9 @@ canonicaliseModule m =
   let imports = buildImports m
       env     = (moduleName m, imports)
       exports =
-          [ (Local export, map Local subexports)
-          | (export, subexports) <- moduleExports m
-          ]
+        [ (Local export, map Local subexports)
+        | (export, subexports) <- moduleExports m
+        ]
   in  m { moduleExports = exports
         , moduleDecls   = map (canonicaliseDecl env) (moduleDecls m)
         }
@@ -87,9 +87,9 @@ canonicaliseDecl env = \case
 
 canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
 canonicaliseFun env@(mod, _) f = f
-  { funName = TopLevel mod (funName f)
-  , funExpr = canonicaliseExp env mempty (funExpr f)
-  , funType = canonicaliseType env <$> funType f
+  { funName   = TopLevel mod (funName f)
+  , funExpr   = canonicaliseExp env mempty (funExpr f)
+  , funType   = canonicaliseType env <$> funType f
   , funWheres = map (canonicaliseFun env) (funWheres f)
   }
 

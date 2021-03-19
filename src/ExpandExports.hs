@@ -1,7 +1,6 @@
 module ExpandExports
   ( expandExports
-  )
-where
+  ) where
 
 -- Given a module, makes all exports explicit by enumerating the top level decls
 -- (unless the module already specifies an export list).

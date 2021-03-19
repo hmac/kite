@@ -8,12 +8,12 @@ module LC.Execute where
 
 import           Data.Functor                   ( ($>) )
 
+import           Data.Name
 import           ELC                            ( Con(..)
                                                 , Constant(..)
                                                 )
 import           LC
 import           LC.Eval                        ( eval )
-import           Data.Name
 
 executeMain :: ModuleName -> Env -> IO Exp
 executeMain mn = executeVar (TopLevel mn "main")

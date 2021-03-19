@@ -1,17 +1,21 @@
-module Syn.Parse.Expr (pExpr) where
+module Syn.Parse.Expr
+  ( pExpr
+  ) where
 
-import           Data.Functor                   ( void  )
 import           Control.Monad                  ( guard )
+import           Data.Functor                   ( void )
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
-import           Text.Megaparsec.Char.Lexer     ( indentLevel)
+import           Text.Megaparsec.Char.Lexer     ( indentLevel )
 
-import Syn.Parse.Common
-import Syn.Parse.Pattern (pPattern, pCasePattern)
-import Syn.Parse.Type (pType)
-import Syn
-import AST
+import           AST
+import           Syn
+import           Syn.Parse.Common
+import           Syn.Parse.Pattern              ( pCasePattern
+                                                , pPattern
+                                                )
+import           Syn.Parse.Type                 ( pType )
 
 pExpr :: Parser Syn
 pExpr = try pMultiCase <|> try pBinApp <|> try pApp <|> pExpr'
@@ -60,9 +64,9 @@ pBinApp = do
 
 pApp :: Parser Syn
 pApp = do
-  pos <- indentLevel
+  pos   <- indentLevel
   first <- pExpr'
-  rest <- some (indentGT pos >> pExpr')
+  rest  <- some (indentGT pos >> pExpr')
   pure $ foldl1 App (first : rest)
 
 -- foo.bar
@@ -208,14 +212,14 @@ pLet :: Parser Syn
 pLet = do
   p0 <- indentLevel
   void (symbol "let")
-  p1 <- indentGT p0
+  p1    <- indentGT p0
   first <- pAnnotatedBind <|> pBind
-  rest <- many $ do
+  rest  <- many $ do
     indentEQ_ p1
     pAnnotatedBind <|> pBind
   indentGT_ p0
   void (symbolN "in")
-  Let (first:rest) <$> pExpr
+  Let (first : rest) <$> pExpr
  where
   pBind :: Parser (RawName, Syn, Maybe Type)
   pBind = do
@@ -226,7 +230,7 @@ pLet = do
   pAnnotatedBind :: Parser (RawName, Syn, Maybe Type)
   pAnnotatedBind = do
     (var, ty) <- try pAnnotation
-    var' <- lowercaseName
+    var'      <- lowercaseName
     guard (var' == var)
     void (symbolN "=")
     val <- lexemeN pExpr
@@ -254,8 +258,7 @@ pTuple = do
   pure $ TupleLit (expr1 : exprs)
 
 pList :: Parser Syn
-pList = ListLit
-  <$> bracketsN (lexemeN pExpr `sepBy` lexemeN comma)
+pList = ListLit <$> bracketsN (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
 pCons = do
@@ -302,7 +305,7 @@ pCase = do
 -- pCasePattern.
 pMultiCase :: Parser Syn
 pMultiCase = do
-  pos <- indentLevel
+  pos  <- indentLevel
   alts <- some $ do
     indentGEQ_ pos
     pAlt
@@ -311,7 +314,7 @@ pMultiCase = do
  where
   pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do
-    pos <- indentLevel
+    pos  <- indentLevel
     pats <- some $ do
       indentGEQ_ pos
       pPattern

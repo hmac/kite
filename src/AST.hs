@@ -3,13 +3,12 @@ module AST
   , ExprT(..)
   , Pat(..)
   , ConMeta(..)
-  )
-where
+  ) where
 
-import           Data.Name                      ( Name )
 import           Data.Data                      ( Data )
-import           Util                           ( Debug(debug) )
 import           Data.List                      ( intercalate )
+import           Data.Name                      ( Name )
+import           Util                           ( Debug(debug) )
 
 -- TODO: patterns in let bindings
 -- TODO: type sigs in let bindings
@@ -62,7 +61,7 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
   debug (StringLit s) = "\"" <> s <> "\""
   debug (StringInterp s comps) =
     let compStr =
-            concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
+          concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
     in  "\"" <> s <> compStr <> "\""
   debug (CharLit c)       = "'" <> [c] <> "'"
   debug (IntLit  i)       = show i
@@ -127,7 +126,7 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (StringLitT s) = "\"" <> s <> "\""
   debug (StringInterpT s comps) =
     let compStr =
-            concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
+          concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
     in  "\"" <> s <> compStr <> "\""
   debug (CharLitT c)         = "'" <> [c] <> "'"
   debug (IntLitT  i)         = show i
@@ -140,7 +139,11 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (ProjectT r f    _) = debug r <> "." <> debug f
   debug (FCallT   f args _) = "$fcall" <+> f <+> sepBy " " (map debug args)
 
-data ConMeta = ConMeta { conMetaTag :: Int, conMetaArity :: Int, conMetaTypeName :: Name }
+data ConMeta = ConMeta
+  { conMetaTag      :: Int
+  , conMetaArity    :: Int
+  , conMetaTypeName :: Name
+  }
   deriving (Eq, Show, Data)
 
 instance Debug ConMeta where

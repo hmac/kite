@@ -1,7 +1,6 @@
 module Type.ToTyped
   ( convertModule
-  )
-where
+  ) where
 
 -- Convert Can.Module to T.Module
 -- Right now we do this just so we can plug the output of the typechecking
@@ -10,18 +9,18 @@ where
 -- informative than the untyped version. In future the typechecker should
 -- actually construct T.Exp as it goes, inserting the correct type annotations.
 
-import qualified Canonical                     as Can
-import           Type                           ( Type(..)
-                                                , U(..)
-                                                , CtorInfo
-                                                )
 import           AST
+import qualified Canonical                     as Can
+import           Data.Name
 import           Syn                     hiding ( Name
                                                 , Type
                                                 )
 import qualified Syn.Typed                     as T
+import           Type                           ( CtorInfo
+                                                , Type(..)
+                                                , U(..)
+                                                )
 import           Type.Primitive                 ( primitiveCtorInfo )
-import           Data.Name
 import           Util
 
 convertModule :: CtorInfo -> Can.Module -> T.Module

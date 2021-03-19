@@ -1,22 +1,22 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.Type where
 
+import           Control.Monad                  ( replicateM_ )
 import           Test.Hspec
 import           Type
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
-import           Control.Monad                  ( replicateM_ )
 
-import           Test.QQ
+import           AST
 import           Canonicalise                   ( canonicaliseExp
-                                                , canonicaliseType
                                                 , canonicaliseModule
-                                                )
-import           Type.FromSyn                   ( fromSyn
-                                                , convertType
+                                                , canonicaliseType
                                                 )
 import qualified Syn
-import           AST
+import           Test.QQ
+import           Type.FromSyn                   ( convertType
+                                                , fromSyn
+                                                )
 
 test :: Spec
 test = do
@@ -43,7 +43,10 @@ test = do
         cons    = Free "Kite.Primitive.::"
         nothing = Free "Nothing"
         fun     = MCase
-          [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat (Free "rest")]]
+          [ ( [ ConsPat cons
+                        Nothing
+                        [ConsPat nothing Nothing [], VarPat (Free "rest")]
+              ]
             , App (Var (Free "foo")) (Var (Free "rest"))
             )
           ]
@@ -56,11 +59,11 @@ test = do
       runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
         `shouldBe` Right ()
   describe "Simple inference" $ do
-    let nat    = TCon "Nat" []
+    let nat = TCon "Nat" []
         wrap a = TCon "Wrap" [a]
         pair a b = TCon "Pair" [a, b]
 
-        tctx = map (,()) ["Nat", "Wrap", "Pair"]
+        tctx = map (, ()) ["Nat", "Wrap", "Pair"]
 
         ctx =
           [ V (Free "QQ.Zero") nat
@@ -168,8 +171,7 @@ test = do
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
         in  inf expr (TCon "Kite.Primitive.Tuple3" [bool, bool, nat])
-    it "a list"
-      $ let expr = [syn|[True, False]|] in inf expr (list bool)
+    it "a list" $ let expr = [syn|[True, False]|] in inf expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in inf expr int
     it "a string literal" $ let expr = [syn|"Hello"|] in inf expr string
     it "a record"
@@ -182,7 +184,8 @@ test = do
     -- fcalls have hardcoded types. putStrLn : String -> IO Unit
     -- Currently we are omitting the IO part as we figure out fcalls.
     -- This may change.
-    it "a foreign call" $ checks tctx ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
+    it "a foreign call"
+      $ checks tctx ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -199,8 +202,8 @@ test = do
                 )
             ]
           tctx' = [("QQ.D", ())]
-          e = [syn|x (D d) -> x|]
-          t = [typ|forall a. a -> D a -> a|]
+          e     = [syn|x (D d) -> x|]
+          t     = [typ|forall a. a -> D a -> a|]
         in
           checks tctx' ctx' e t
     it "polymorphic record extraction"
@@ -219,8 +222,8 @@ test = do
                   )
               ]
             tctx' = [("QQ.D", ())]
-            e = [syn|x (D d) -> x|]
-            t = [typ|forall a. a -> D a -> a|]
+            e     = [syn|x (D d) -> x|]
+            t     = [typ|forall a. a -> D a -> a|]
         in  checks tctx' ctx' e t
     it "polymorphic function-typed record extraction"
         -- This ???
@@ -239,8 +242,8 @@ test = do
                 )
             ]
           tctx' = [("QQ.D", ())]
-          t = [typ|forall a. D a -> (a -> a)|]
-          e = [syn|(D f) -> f|]
+          t     = [typ|forall a. D a -> (a -> a)|]
+          e     = [syn|(D f) -> f|]
         in
           checks tctx' ctx' e t
     it "higher kinded application" $ do
@@ -279,46 +282,45 @@ test = do
               )
             ]
           tctx' = [("QQ.T", ()), ("QQ.F", ())]
-          e   = [syn|MkF f|]
-          ty_ = [typ|forall b. F (T b)|]
+          e     = [syn|MkF f|]
+          ty_   = [typ|forall b. F (T b)|]
       checks tctx' ctx' e ty_
     it "higher kinded application (with ->)" $ do
       -- type F t a = MkF ((t -> a) -> (t -> a))
       -- f : (c -> T -> b) -> (c -> T -> b)
       --
       -- e = MkF f
-      let
-        a = U 0 "a"
-        b = U 1 "b"
-        c = U 2 "c"
-        t = U 3 "t"
-        ctx' =
-          [ V
-            (Free "QQ.MkF")
-            (Forall
-              t
+      let a = U 0 "a"
+          b = U 1 "b"
+          c = U 2 "c"
+          t = U 3 "t"
+          ctx' =
+            [ V
+              (Free "QQ.MkF")
               (Forall
-                a
-                (Fn (Fn (Fn (UType t) (UType a)) (Fn (UType t) (UType a)))
-                    (TCon "QQ.F" [UType t, UType a])
+                t
+                (Forall
+                  a
+                  (Fn (Fn (Fn (UType t) (UType a)) (Fn (UType t) (UType a)))
+                      (TCon "QQ.F" [UType t, UType a])
+                  )
                 )
               )
-            )
-          , V
-            (Free "QQ.f")
-            (Forall
-              b
+            , V
+              (Free "QQ.f")
               (Forall
-                c
-                (Fn (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
-                    (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
+                b
+                (Forall
+                  c
+                  (Fn (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
+                      (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
+                  )
                 )
               )
-            )
-          ]
-        tctx' = [("QQ.F", ()), ("QQ.T", ())]
-        e = [syn|MkF f|]
-        ty_ = [typ|forall a b. F a (T -> b)|]
+            ]
+          tctx' = [("QQ.F", ()), ("QQ.T", ())]
+          e     = [syn|MkF f|]
+          ty_   = [typ|forall a b. F a (T -> b)|]
       checks tctx' ctx' e ty_
 
 infers :: TypeCtx -> Ctx -> Syn.Syn -> Type -> Expectation
@@ -341,7 +343,7 @@ runInfer tctx ctx expr = do
         e <- fromSyn canonicalExpr
         putCtx ctx
         putTypeCtx tctx
-        ty <- infer e >>= subst
+        ty  <- infer e >>= subst
         ty' <- subst ty
         quantify (fv ty') ty'
   runTypeM defaultTypeEnv r
@@ -380,7 +382,10 @@ checks tctx ctx expr ty = do
                                ]
         , Syn.moduleMetadata = mempty
         }
-      r   = replicateM_ 10 (newU "dummy") >> checkModule (tctx, ctx, mempty) modul >> pure ()
+      r =
+        replicateM_ 10 (newU "dummy")
+          >> checkModule (tctx, ctx, mempty) modul
+          >> pure ()
   case runTypeM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()

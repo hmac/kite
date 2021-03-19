@@ -4,25 +4,24 @@ module ModuleLoader
   -- , UntypedModuleGroup
   -- , loadFromPath
   -- , loadFromPathAndRootDirectory
-  )
-where
+  ) where
 
 import           System.Directory               ( getCurrentDirectory )
 
-import           Data.Name                      ( showModuleName )
-import           Syn.Parse                      ( parseKiteFile )
-import           Syn
 import           AST                            ( Expr )
-import           Data.List                      ( intercalate )
 import           Canonicalise                   ( canonicaliseModule )
-import           ModuleGroup
+import           Data.Graph                     ( SCC(..)
+                                                , flattenSCCs
+                                                , stronglyConnCompR
+                                                )
+import           Data.List                      ( intercalate )
+import           Data.Name                      ( showModuleName )
+import           ExpandExports                  ( expandExports )
 import           ExpandImports                  ( expandImports )
 import qualified ExpandImports
-import           ExpandExports                  ( expandExports )
-import           Data.Graph                     ( stronglyConnCompR
-                                                , flattenSCCs
-                                                , SCC(..)
-                                                )
+import           ModuleGroup
+import           Syn
+import           Syn.Parse                      ( parseKiteFile )
 import           Util
 
 -- This module is responsible for loading Kite modules. It should attempt to
@@ -86,8 +85,8 @@ loadAll root name = do
           pure $ Right $ m' : concat deps'
 
 load :: FilePath -> ModuleName -> IO (Either String Module)
-load root name = let path = filePath root name
-                  in parseKiteFile path <$> readFile path
+load root name =
+  let path = filePath root name in parseKiteFile path <$> readFile path
 
 -- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
@@ -106,7 +105,7 @@ filePath root (ModuleName components) =
 sortModules :: [Module_ n e ty] -> Either String [Module_ n e ty]
 sortModules ms =
   let adjList =
-          map (\m -> (m, moduleName m, map importName (moduleImports m))) ms
+        map (\m -> (m, moduleName m, map importName (moduleImports m))) ms
       graph          = stronglyConnCompR adjList
       cycles         = flattenSCCs (filter isCyclic graph)
       orderedModules = map fst3 (flattenSCCs graph)

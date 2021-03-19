@@ -2,12 +2,12 @@ module Chez.Print where
 
 -- Print a Chez Scheme AST as source code
 
-import           Prelude                 hiding ( print )
 import           Data.Text.Prettyprint.Doc
+import           Prelude                 hiding ( print )
 
-import           Chez                           ( SExpr(..)
+import           Chez                           ( Def(..)
                                                 , Lit(..)
-                                                , Def(..)
+                                                , SExpr(..)
                                                 )
 
 printDef :: Def -> Doc a

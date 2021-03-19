@@ -3,20 +3,19 @@ module ELC.Compile
   , Env
   , defaultEnv
   , translateModule
-  )
-where
+  ) where
 
 -- Compile T.Module to ELC.Exp
 
+import           Data.Foldable                  ( foldrM )
+import           Data.List.Extra                ( groupOn )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Util
-import           Data.List.Extra                ( groupOn )
-import           Data.Foldable                  ( foldrM )
 
+import           Data.Name
 import           ELC
 import           ELC.Primitive
-import           Data.Name
 import           NameGen                        ( NameGen
                                                 , freshM
                                                 )

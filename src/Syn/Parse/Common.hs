@@ -1,19 +1,19 @@
 -- Shared types and functions for parsing the surface syntax
 module Syn.Parse.Common where
 
-import           Data.Maybe                     ( fromMaybe )
-import           Data.Functor                   ( void, ($>) )
 import           Control.Monad                  ( guard )
+import           Data.Functor                   ( ($>)
+                                                , void
+                                                )
+import           Data.Maybe                     ( fromMaybe )
 
+import           Syn                            ( ModuleName(ModuleName)
+                                                , RawName(Name)
+                                                )
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
-import           Text.Megaparsec.Char.Lexer     ( indentGuard
-                                                )
+import           Text.Megaparsec.Char.Lexer     ( indentGuard )
 import qualified Text.Megaparsec.Char.Lexer    as L
-import           Syn                            (
-                                                  RawName(Name)
-                                                , ModuleName(ModuleName)
-                                                )
 
 
 type Parser = Parsec Error String
@@ -26,11 +26,13 @@ instance ShowErrorComponent Error where
     show v <> " is a reserved keyword and cannot be used as a variable name."
 
 pChar :: Parser Char
-pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap head (takeP (Just "char") 1)
+pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap
+  head
+  (takeP (Just "char") 1)
   -- Escaped special characters like \n
   -- Currently we only support \n
   -- TODO: what's the full list of escape sequences we should support here?
-    where escapedChar = char '\\' >> char 'n' $> '\n'
+  where escapedChar = char '\\' >> char 'n' $> '\n'
 
 pInt :: Parser Int
 pInt = do

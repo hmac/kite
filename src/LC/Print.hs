@@ -1,13 +1,13 @@
 module LC.Print where
 
-import           Prelude                 hiding ( print )
 import           Data.Text.Prettyprint.Doc
+import           Prelude                 hiding ( print )
 
-import           LC
 import           Data.Name
-import           ELC                            ( Constant(..)
-                                                , Con(..)
+import           ELC                            ( Con(..)
+                                                , Constant(..)
                                                 )
+import           LC
 
 
 -- A simple function to print LC expressions.

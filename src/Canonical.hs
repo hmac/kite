@@ -1,18 +1,17 @@
 module Canonical
   ( module Canonical
   , Syn.Import(..)
-  )
-where
+  ) where
 
 -- A canonical representation of a module.
 -- This means all names are resolved to a specific scope, i.e. local or from a
 -- particular named module.
 
-import           Data.Name
-import           Syn                     hiding ( Name )
 import qualified AST                            ( Expr
                                                 , Pat
                                                 )
+import           Data.Name
+import           Syn                     hiding ( Name )
 
 type Exp = AST.Expr Name (Type_ Name)
 type Type = Type_ Name

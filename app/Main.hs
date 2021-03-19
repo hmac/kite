@@ -3,34 +3,34 @@ module Main where
 
 import           Syn.Print
 
-import           Text.Pretty.Simple             ( pPrint )
-import           Data.Text.Prettyprint.Doc.Render.Terminal
-import           Data.Text.Prettyprint.Doc
-import           System.IO                      ( stdout )
-import           System.Environment             ( lookupEnv )
-import           System.Directory               ( getCurrentDirectory )
 import           Control.Monad                  ( void )
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           System.Directory               ( getCurrentDirectory )
+import           System.Environment             ( lookupEnv )
+import           System.IO                      ( stdout )
+import           Text.Pretty.Simple             ( pPrint )
 
 import           ModuleGroup
 import           ModuleGroupCompiler            ( CompiledModule(..) )
-import qualified ModuleLoader
-import qualified ModuleGroupTypechecker
 import qualified ModuleGroupCompiler
+import qualified ModuleGroupTypechecker
+import qualified ModuleLoader
 
-import qualified Repl                           ( run )
 import           LC.Execute                     ( executeMain )
 import           Options.Generic
+import qualified Repl                           ( run )
 
 import           Syn.Parse                      ( parseKiteFile )
 
+import qualified Chez.Print
+import           Interpret                      ( interpretAndRunMain
+                                                , printValue
+                                                )
 import           Print                          ( Document
                                                 , Style(..)
                                                 )
 import           Type.Print
-import           Interpret                      ( interpretAndRunMain
-                                                , printValue
-                                                )
-import qualified Chez.Print
 
 data Config =
       Repl
@@ -133,7 +133,8 @@ run homeDir = withParsedFile homeDir $ \g ->
       let cm = ModuleGroupCompiler.compileToLC g'
       in  void $ executeMain (cModuleName cm) (cModuleEnv cm)
 
-withParsedFile :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
+withParsedFile
+  :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile homeDir cb path = do
   mgroup <- ModuleLoader.loadFromPathAndRootDirectory path homeDir
   case mgroup of

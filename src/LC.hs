@@ -4,8 +4,8 @@ module LC where
 
 import           Data.Map.Strict                ( Map )
 import           Data.Name                      ( Name(..) )
-import           ELC                            ( Constant(..)
-                                                , Con(..)
+import           ELC                            ( Con(..)
+                                                , Constant(..)
                                                 )
 
 

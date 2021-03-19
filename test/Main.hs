@@ -7,8 +7,8 @@ import qualified Test.Syn.RoundTrip
 import qualified Test.Type
 import qualified Test.Type.Module
 
-import qualified Integration.Typecheck
 import qualified Integration.Parse
+import qualified Integration.Typecheck
 
 import           Hedgehog
 import qualified Type                           ( tests )

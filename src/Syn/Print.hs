@@ -1,22 +1,22 @@
 module Syn.Print where
 
 import           Data.Bifunctor                 ( bimap )
-import           Data.Maybe                     ( catMaybes )
 import           Data.List                      ( intersperse )
+import           Data.Maybe                     ( catMaybes )
 import           Prelude                 hiding ( mod )
 
 import           Data.Text.Prettyprint.Doc
 
-import qualified Syn
-import           Syn                     hiding ( Pattern )
 import           AST
 import           Print                          ( Document
-                                                , keyword
-                                                , func
-                                                , type_
                                                 , data_
+                                                , func
                                                 , hole
+                                                , keyword
+                                                , type_
                                                 )
+import qualified Syn
+import           Syn                     hiding ( Pattern )
 
 printModule :: Module -> Document
 printModule mod = vsep $ catMaybes
@@ -88,8 +88,8 @@ printFun Fun { funComments = comments, funName = name, funExpr = defs, funType =
   = vsep $ printComments comments ++ sig ++ [printDef name defs] ++ whereClause
  where
   whereClause = case wheres of
-                  [] -> []
-                  ws -> [hang 2 $ forceVSep $ " where" : map printFun ws]
+    [] -> []
+    ws -> [hang 2 $ forceVSep $ " where" : map printFun ws]
   sig = case ty of
     Just t  -> [func (printName name) <> align (space <> colon <+> printType t)]
     Nothing -> []
@@ -187,8 +187,8 @@ printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts
 printExpr (MCase    alts  ) = printMCase alts
 printExpr (TupleLit es    ) = align $ tupled (map printExpr es)
-printExpr (ListLit es) = printList es
-printExpr (IntLit i) = pretty i
+printExpr (ListLit  es    ) = printList es
+printExpr (IntLit   i     ) = pretty i
 printExpr (StringInterp prefix interps) =
   printInterpolatedString prefix interps
 printExpr (StringLit s    ) = printInterpolatedString s []
@@ -257,8 +257,7 @@ printApp a b         = printExpr a <+> printExpr b
 
 -- Used if the list is 'big'
 printList :: [Syn] -> Document
-printList es =
-  hang 2 $ encloseSep lbracket rbracket comma (map printExpr es)
+printList es = hang 2 $ encloseSep lbracket rbracket comma (map printExpr es)
 
 -- let x = 1
 --     y = 2
@@ -273,19 +272,17 @@ printLet binds e = keyword "let" <+> hang
   printLetBind (name, expr, Nothing) =
     printName name <+> "=" <+> printExpr expr
   printLetBind (name, expr, Just ty) =
-      (printName name <+> ":" <+> printType ty)
-    <> hardline
-    <> printLetBind (name, expr, Nothing)
+    (printName name <+> ":" <+> printType ty) <> hardline <> printLetBind
+      (name, expr, Nothing)
 
 -- case expr of
 --   pat1 x y -> e1
 --   pat2 z w -> e2
 printCase :: Syn -> [(Syn.Pattern, Syn)] -> Document
-printCase e alts = keyword "case"
-  <+> hang (-3) rest
-  where
-    rest = forceVSep ((printExpr e <+> keyword "of") : map printAlt alts)
-    printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
+printCase e alts = keyword "case" <+> hang (-3) rest
+ where
+  rest = forceVSep ((printExpr e <+> keyword "of") : map printAlt alts)
+  printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
 -- pat1 pat2 -> e1
 -- pat3 pat4 -> e2

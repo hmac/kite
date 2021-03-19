@@ -1,11 +1,24 @@
 {-# LANGUAGE FlexibleContexts #-}
-module Syn.Parse (pModule, pFun, pExpr, parseKiteFile, pDecl, pType, pData, pImport, keywords, spaceConsumerN, Error, Parser) where
+module Syn.Parse
+  ( pModule
+  , pFun
+  , pExpr
+  , parseKiteFile
+  , pDecl
+  , pType
+  , pData
+  , pImport
+  , keywords
+  , spaceConsumerN
+  , Error
+  , Parser
+  ) where
 
-import           Data.Maybe                     ( isJust
-                                                , fromMaybe
-                                                )
-import           Data.Functor                   ( void  )
 import           Control.Monad                  ( guard )
+import           Data.Functor                   ( void )
+import           Data.Maybe                     ( fromMaybe
+                                                , isJust
+                                                )
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -17,8 +30,10 @@ import           Text.Megaparsec.Char.Lexer     ( indentLevel
 import           Syn                     hiding ( Pattern )
 
 import           Syn.Parse.Common
-import           Syn.Parse.Expr (pExpr)
-import           Syn.Parse.Type (pType, pConType)
+import           Syn.Parse.Expr                 ( pExpr )
+import           Syn.Parse.Type                 ( pConType
+                                                , pType
+                                                )
 
 -- TODO: markdown in comments & doctests
 -- TODO: heredocs
@@ -151,15 +166,15 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
 -- compiler we merge adjacent comment and function declarations.
 pDecl :: Parser (Decl Syn)
 pDecl =
-  nonIndented spaceConsumerN $
-    Comment
-      <$> pComment
-      <|> AliasDecl
-      <$> pAlias
-      <|> DataDecl
-      <$> pData
-      <|> FunDecl
-      <$> pFun
+  nonIndented spaceConsumerN
+    $   Comment
+    <$> pComment
+    <|> AliasDecl
+    <$> pAlias
+    <|> DataDecl
+    <$> pData
+    <|> FunDecl
+    <$> pFun
 
 pAlias :: Parser Alias
 pAlias = do
@@ -189,14 +204,14 @@ pData = do
 pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
-  p0 <- indentLevel
+  p0       <- indentLevel
   name     <- lowercaseName <?> "function name"
   sig      <- symbol ":" >> pType
   indentGEQ_ p0
-  _        <- lexeme lowercaseName >>= \n -> guard (name == n)
+  _ <- lexeme lowercaseName >>= \n -> guard (name == n)
   void $ symbolN "="
   indentGT_ p0
-  expr <- pExpr
+  expr        <- pExpr
   whereClause <- optional $ do
     indentGT_ p0
     pos <- indentLevel

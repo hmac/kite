@@ -2,8 +2,7 @@ module NameGen
   ( NameGen
   , freshM
   , run
-  )
-where
+  ) where
 
 import           Control.Monad.State.Strict
 

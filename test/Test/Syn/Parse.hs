@@ -1,21 +1,20 @@
 module Test.Syn.Parse
   ( test
-  )
-where
+  ) where
 
-import           Test.Hspec
-import           Test.Hspec.Megaparsec
-import           Text.Megaparsec                ( eof
-                                                , ParseErrorBundle
-                                                , parse
-                                                )
-import           Syn.Parse                      ( pModule
+import           Syn.Parse                      ( Error
                                                 , pDecl
                                                 , pExpr
+                                                , pModule
                                                 , pType
-                                                , Error
                                                 )
-import Syn.Parse.Pattern (pPattern)
+import           Syn.Parse.Pattern              ( pPattern )
+import           Test.Hspec
+import           Test.Hspec.Megaparsec
+import           Text.Megaparsec                ( ParseErrorBundle
+                                                , eof
+                                                , parse
+                                                )
 
 import           AST
 import           Syn
@@ -60,7 +59,7 @@ test = parallel $ do
                                         `fn` TyApp (TyVar "f") (TyVar "b")
                         , funExpr     = MCase
                           [([VarPat "f", VarPat "m"], Var "undefined")]
-                        , funWheres = []
+                        , funWheres   = []
                         }
     it "parses a multiline function definition" $ do
       parse
@@ -80,7 +79,7 @@ test = parallel $ do
                             , Var "x"
                             )
                           ]
-                        , funWheres = []
+                        , funWheres   = []
                         }
     it "parses a function with a multi param argument type" $ do
       parse
@@ -103,25 +102,30 @@ test = parallel $ do
                                             , Con "Nothing"
                                             )
                                           ]
-                         , funWheres = []
+                        , funWheres   = []
                         }
     it "parses a case expression inside an mcase" $ do
-      let str ="functor : Alternative f -> Functor f\nfunctor = f -> case applicative f of\n                 (Applicative g) -> g.functor"
+      let
+        str
+          = "functor : Alternative f -> Functor f\nfunctor = f -> case applicative f of\n                 (Applicative g) -> g.functor"
       parse pDecl "" str `shouldParse` FunDecl Fun
-                                         { funComments = []
-                                         , funName     = "functor"
-                                         , funType     =
-                                           Just
-                                           $    TyApp (TyCon "Alternative") (TyVar "f")
-                                            `fn`
-                                                TyApp (TyCon "Functor") (TyVar "f")
-                                         , funExpr     = MCase
-                                                           [ ( [VarPat "f" ]
-                                                             , Case (App (Var "applicative") (Var "f")) [(ConsPat "Applicative" Nothing [VarPat "g"], Project (Var "g") "functor")]
-                                                             )
-                                                           ]
-                                         , funWheres = []
-                                         }
+        { funComments = []
+        , funName     = "functor"
+        , funType = Just $ TyApp (TyCon "Alternative") (TyVar "f") `fn` TyApp
+                      (TyCon "Functor")
+                      (TyVar "f")
+        , funExpr     = MCase
+                          [ ( [VarPat "f"]
+                            , Case
+                              (App (Var "applicative") (Var "f"))
+                              [ ( ConsPat "Applicative" Nothing [VarPat "g"]
+                                , Project (Var "g") "functor"
+                                )
+                              ]
+                            )
+                          ]
+        , funWheres   = []
+        }
 
     it "parses a simple type definition" $ do
       parse pDecl "" "type Unit = Unit" `shouldParse` DataDecl Data

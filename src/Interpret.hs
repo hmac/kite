@@ -5,28 +5,27 @@ module Interpret
   , interpretAndRun
   , interpretAndRunMain
   , printValue
-  )
-where
+  ) where
 
 
-import Text.Read (readMaybe)
-import           Util
 import           Data.Map.Lazy                  ( Map )
 import qualified Data.Map.Lazy                 as Map
-import           Syn.Typed
+import           Data.Name                      ( Name(..)
+                                                , RawName
+                                                )
+import           Data.Text.Prettyprint.Doc
 import           ELC                            ( Constant(..)
                                                 , Primitive(..)
                                                 )
 import           ELC.Primitive                  ( modPrim )
-import           Data.Name                      ( Name(..)
-                                                , RawName
-                                                )
-import           ModuleGroup                    ( TypedModuleGroup(..) )
-import           Data.Text.Prettyprint.Doc
 import           LC.Print                       ( printConstant
                                                 , printName
                                                 )
+import           ModuleGroup                    ( TypedModuleGroup(..) )
 import           Syn.Print                      ( printRecordSyntax )
+import           Syn.Typed
+import           Text.Read                      ( readMaybe )
+import           Util
 
 data Value = Const Constant
            | Cons Name [Value]
@@ -211,8 +210,8 @@ applyPrim PrimShowInt [Const (Int x)] = Const $ String $ show x
 applyPrim PrimShowChar [Const (Char c)]                 = Const $ String $ [c]
 applyPrim PrimEqInt    [Const (Int  x), Const (Int y) ] = Const $ Bool $ x == y
 applyPrim PrimEqChar   [Const (Char x), Const (Char y)] = Const $ Bool $ x == y
-applyPrim PrimReadInt [Const (String s), def, Abs f] = case readMaybe s of
-  Just i -> f (Const (Int i))
+applyPrim PrimReadInt  [Const (String s), def, Abs f]   = case readMaybe s of
+  Just i  -> f (Const (Int i))
   Nothing -> def
 applyPrim p _ =
   error $ "Interpret.applyPrim: bad application of primitive " <> show p
@@ -267,7 +266,10 @@ applyPattern env val pattern = case (pattern, val) of
       (zip args pats)
     | otherwise -> Nothing
   (ListPat pats, List args)
-    | length pats == length args -> foldM (\env_ (arg, pat) -> applyPattern env_ arg pat) env (zip args pats)
+    | length pats == length args -> foldM
+      (\env_ (arg, pat) -> applyPattern env_ arg pat)
+      env
+      (zip args pats)
     | otherwise -> Nothing
   (ConsPat c _meta pats, Cons c' args)
     | c == c' -> foldM (\env_ (arg, pat) -> applyPattern env_ arg pat)

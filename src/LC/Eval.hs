@@ -1,21 +1,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 module LC.Eval where
 
+-- import           Util
+import           Control.Monad.Reader           ( MonadReader
+                                                , asks
+                                                , runReader
+                                                )
 import qualified Data.Map.Strict               as Map
 import           Data.Name
 import           ELC                            ( Con(..)
                                                 , Constant(..)
                                                 , Primitive(..)
                                                 )
-import           ELC.Primitive                  ( listNil
-                                                , listCons
+import           ELC.Primitive                  ( listCons
+                                                , listNil
                                                 )
 import           LC
--- import           Util
-import           Control.Monad.Reader           ( MonadReader
-                                                , runReader
-                                                , asks
-                                                )
 
 evalMain :: ModuleName -> Env -> Exp
 evalMain mn = evalVar (TopLevel mn "main")

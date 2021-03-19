@@ -27,30 +27,30 @@ module Syn
   , Type
   , Type_(..)
   , module Data.Name
-  )
-where
+  ) where
 
-import qualified Data.Set                      as Set
 import           Data.Name                      ( ModuleName(..)
                                                 , RawName(..)
                                                 )
+import qualified Data.Set                      as Set
 import           Util
 
-import           Type.Reflection                ( Typeable )
-import qualified Data.Data                     as Data
 import qualified AST                            ( Expr
                                                 , Pat
                                                 )
+import qualified Data.Data                     as Data
+import           Type.Reflection                ( Typeable )
 
 -- module Foo
 type Module = Module_ RawName Syn Type
-data Module_ name a ty = Module { moduleName :: ModuleName
-                                , moduleImports :: [Import]
-                                , moduleExports :: [(name, [name])]
-                                , moduleDecls :: [Decl_ name a ty]
-                                , moduleMetadata :: [(String, String)]
-                                }
-                                deriving (Eq, Show, Typeable, Data.Data)
+data Module_ name a ty = Module
+  { moduleName     :: ModuleName
+  , moduleImports  :: [Import]
+  , moduleExports  :: [(name, [name])]
+  , moduleDecls    :: [Decl_ name a ty]
+  , moduleMetadata :: [(String, String)]
+  }
+  deriving (Eq, Show, Typeable, Data.Data)
 
 dataDecls :: Module_ n a ty -> [Data_ n]
 dataDecls = extractDecl $ \case
@@ -67,12 +67,13 @@ extractDecl f Module { moduleDecls = decls } = mapMaybe f decls
 
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
-data Import = Import { importQualified :: Bool
-                     , importName :: ModuleName
-                     , importAlias :: Maybe RawName
-                     , importItems :: [ImportItem_ RawName]
-                     }
-                     deriving (Eq, Show, Typeable, Data.Data)
+data Import = Import
+  { importQualified :: Bool
+  , importName      :: ModuleName
+  , importAlias     :: Maybe RawName
+  , importItems     :: [ImportItem_ RawName]
+  }
+  deriving (Eq, Show, Typeable, Data.Data)
 
 type ImportItem = ImportItem_ RawName
 data ImportItem_ name = ImportSingle { importItemName :: name }
@@ -93,38 +94,42 @@ data Decl_ name exp ty = FunDecl (Fun_ name exp ty)
                        deriving (Eq, Show, Typeable, Data.Data)
 
 type Fun exp = Fun_ RawName exp (Type_ RawName)
-data Fun_ name exp ty = Fun { funComments :: [String]
-                            , funName :: name
-                            , funType :: Maybe ty
-                            , funExpr :: exp
-                            , funWheres :: [Fun_ name exp ty]
-                            }
-                            deriving (Eq, Show, Typeable, Data.Data)
+data Fun_ name exp ty = Fun
+  { funComments :: [String]
+  , funName     :: name
+  , funType     :: Maybe ty
+  , funExpr     :: exp
+  , funWheres   :: [Fun_ name exp ty]
+  }
+  deriving (Eq, Show, Typeable, Data.Data)
 
 type Data = Data_ RawName
-data Data_ name = Data { dataName :: name
-                       , dataTyVars :: [RawName]
-                       , dataCons :: [DataCon_ name]
-                       }
-                       deriving (Eq, Show, Typeable, Data.Data)
+data Data_ name = Data
+  { dataName   :: name
+  , dataTyVars :: [RawName]
+  , dataCons   :: [DataCon_ name]
+  }
+  deriving (Eq, Show, Typeable, Data.Data)
 
 -- A type alias in its raw form. The variables in aliasTyVars are free in the
 -- type. This is later converted into a Scheme, so they get quantified over
 -- properly.
 type Alias = Alias_ RawName
-data Alias_ name = Alias { aliasName :: name
-                         , aliasTyVars :: [RawName]
-                         , aliasType :: Type_ name
-                         }
-                         deriving (Eq, Show, Typeable, Data.Data)
+data Alias_ name = Alias
+  { aliasName   :: name
+  , aliasTyVars :: [RawName]
+  , aliasType   :: Type_ name
+  }
+  deriving (Eq, Show, Typeable, Data.Data)
 
 type DataCon = DataCon_ RawName
 -- Left a
 -- Foo { unFoo : a, label : String }
-data DataCon_ name = DataCon { conName :: name
-                             , conArgs :: [Type_ name]
-                             }
-                             deriving (Eq, Show, Typeable, Data.Data)
+data DataCon_ name = DataCon
+  { conName :: name
+  , conArgs :: [Type_ name]
+  }
+  deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
 type Pattern = AST.Pat RawName

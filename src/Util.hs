@@ -27,23 +27,22 @@ module Util
   , Debug.Trace.trace
   , Debug.Trace.traceShow
   , Debug.Trace.traceShowId
-  )
-where
+  ) where
 
-import qualified Debug.Trace
 import qualified Control.Monad
 import qualified Control.Monad.Extra
-import qualified Data.List.Extra
-import qualified Data.List
-import qualified Data.Either
-import qualified Data.Maybe
-import           Data.Text.Lazy                 ( unpack )
-import qualified Text.Pretty.Simple
 import qualified Data.Bifunctor
 import qualified Data.Bitraversable
+import qualified Data.Either
+import qualified Data.List
+import qualified Data.List.Extra
 import           Data.List.Extra                ( concatUnzip
                                                 , concatUnzip3
                                                 )
+import qualified Data.Maybe
+import           Data.Text.Lazy                 ( unpack )
+import qualified Debug.Trace
+import qualified Text.Pretty.Simple
 -- Misc useful functions
 
 first :: Data.Bifunctor.Bifunctor p => (a -> b) -> p a c -> p b c

@@ -3,24 +3,24 @@ module Main where
 
 import           Criterion.Main
 
-import           Syn.Parse                      ( parseKiteFile )
 import           AST
-import           Syn
 import           Canonicalise                   ( canonicaliseModule )
+import           Syn
+import           Syn.Parse                      ( parseKiteFile )
 
-import           ModuleGroup                    ( TypedModuleGroup(..) )
-import           ModuleLoader                   ( loadFromPathAndRootDirectory )
-import           ModuleGroupTypechecker         ( typecheckModuleGroup )
-import           ModuleGroupCompiler            ( compileToLC
-                                                , CompiledModule(..)
-                                                )
-import           LC.Eval                        ( evalMain )
 import qualified LC
-
-import           Type.Module                    ( checkModule )
-import           Type                           ( runTypeM
-                                                , defaultTypeEnv
+import           LC.Eval                        ( evalMain )
+import           ModuleGroup                    ( TypedModuleGroup(..) )
+import           ModuleGroupCompiler            ( CompiledModule(..)
+                                                , compileToLC
                                                 )
+import           ModuleGroupTypechecker         ( typecheckModuleGroup )
+import           ModuleLoader                   ( loadFromPathAndRootDirectory )
+
+import           Type                           ( defaultTypeEnv
+                                                , runTypeM
+                                                )
+import           Type.Module                    ( checkModule )
 
 
 -- We benchmark parsing and typechecking performance by parsing and typechecking
@@ -102,7 +102,9 @@ exampleModule = Module
           `tyapp` TyVar "a"
         , funExpr     = MCase
                           [ ([WildPat, ListPat []], ListLit [])
-                          , ( [VarPat "e", ConsPat "::" Nothing [VarPat "x", VarPat "xs"]]
+                          , ( [ VarPat "e"
+                              , ConsPat "::" Nothing [VarPat "x", VarPat "xs"]
+                              ]
                             , App
                               (App (Con "::") (Var "x"))
                               (App (App (Var "intersperseHelper") (Var "e"))
@@ -126,7 +128,9 @@ exampleModule = Module
           `tyapp` TyVar "a"
         , funExpr     = MCase
                           [ ([WildPat, ListPat []], ListLit [])
-                          , ( [VarPat "e", ConsPat "::" Nothing [VarPat "x", VarPat "xs"]]
+                          , ( [ VarPat "e"
+                              , ConsPat "::" Nothing [VarPat "x", VarPat "xs"]
+                              ]
                             , App
                               (App (Con "::") (Var "e"))
                               (App

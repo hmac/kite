@@ -56,4 +56,11 @@ begin = App (Var "begin")
 -- Raise a non-continuable exception with the given message.
 -- This will (or should) halt the program.
 panic :: Text -> SExpr
-panic msg = App (Var "raise") [App (Var "condition") [App (Var "make-violation") [], App (Var "make-message-condition") [Lit (String msg)]]]
+panic msg = App
+  (Var "raise")
+  [ App
+      (Var "condition")
+      [ App (Var "make-violation")         []
+      , App (Var "make-message-condition") [Lit (String msg)]
+      ]
+  ]

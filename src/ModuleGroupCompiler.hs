@@ -4,12 +4,12 @@ module ModuleGroupCompiler where
 -- This module takes a ModuleGroup, compiles each module in it, and somehow
 -- merges it all together.
 
-import           ModuleGroup
+import qualified Chez.Compile                  as Chez
+import           Data.Name
 import qualified ELC.Compile                   as ELC
 import qualified LC.Compile                    as LC
-import qualified Chez.Compile                  as Chez
+import           ModuleGroup
 import           Syn.Typed
-import           Data.Name
 
 
 -- We'll attempt this as follows:
@@ -27,12 +27,13 @@ import           Data.Name
 -- b = B.b                  c = C.c                   a = ...
 --                          a = C.a
 
-data CompiledModule a = CompiledModule { cModuleName :: ModuleName
-                                       , cModuleImports :: [Import]
-                                       , cModuleExports :: [Name]
-                                       , cModuleEnv :: a
-                                       , cModuleDeps :: [CompiledModule a]
-                                       }
+data CompiledModule a = CompiledModule
+  { cModuleName    :: ModuleName
+  , cModuleImports :: [Import]
+  , cModuleExports :: [Name]
+  , cModuleEnv     :: a
+  , cModuleDeps    :: [CompiledModule a]
+  }
   deriving Show
 
 compileToLC :: TypedModuleGroup -> CompiledModule LC.Env

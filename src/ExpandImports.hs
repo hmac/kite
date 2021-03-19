@@ -8,7 +8,7 @@ import           Syn
 import           Util
 
 data Error = CannotFindModule ModuleName -- ^ importing module
-                              ModuleName -- ^ module we can't find
+                                         ModuleName -- ^ module we can't find
   deriving (Eq, Show)
 
 expandImports :: Module -> [Module] -> Either Error (Module, [Module])

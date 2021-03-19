@@ -8,42 +8,42 @@ module Type.Module where
 import qualified Data.Set                      as Set
 import           Util
 
-import qualified Syn                           as S
-import           Syn                            ( Decl_(..)
-                                                , Data_(..)
-                                                , Module_(..)
-                                                , DataCon_(..)
-                                                , Fun_(..)
-                                                )
-import           Data.Name
+import           AST                            ( ConMeta(..) )
 import qualified Canonical                     as Can
-import           Type                           ( TypeM
-                                                , Type(..)
-                                                , CtorInfo
+import           Control.Monad                  ( void )
+import qualified Control.Monad.Except          as Except
+                                                ( catchError
+                                                , throwError
+                                                )
+import           Data.List.Extra                ( concatUnzip3 )
+import           Data.Name
+import qualified Syn                           as S
+import           Syn                            ( DataCon_(..)
+                                                , Data_(..)
+                                                , Decl_(..)
+                                                , Fun_(..)
+                                                , Module_(..)
+                                                )
+import qualified Syn.Typed                     as T
+import           Type                           ( CtorInfo
                                                 , Ctx
-                                                , TypeCtx
                                                 , CtxElem(V)
-                                                , V(..)
                                                 , Exp
+                                                , LocatedError(..)
+                                                , Type(..)
+                                                , TypeCtx
+                                                , TypeM
+                                                , V(..)
                                                 , check
                                                 , infer
-                                                , wellFormedType
-                                                , LocatedError(..)
                                                 , putCtx
                                                 , putTypeCtx
+                                                , wellFormedType
                                                 )
 import           Type.FromSyn                   ( fromSyn
                                                 , quantify
                                                 )
-import           AST                            ( ConMeta(..) )
-import           Control.Monad                  ( void )
-import qualified Control.Monad.Except          as Except
-                                                ( throwError
-                                                , catchError
-                                                )
-import qualified Syn.Typed                     as T
 import qualified Type.ToTyped                   ( convertModule )
-import           Data.List.Extra                ( concatUnzip3 )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
@@ -58,7 +58,9 @@ translateModule modul = do
 -- TODO: return a type-annotated module
 -- TODO: check that data type definitions are well-formed
 checkModule
-  :: (TypeCtx, Ctx, CtorInfo) -> Can.Module -> TypeM ((TypeCtx, Ctx, CtorInfo), T.Module)
+  :: (TypeCtx, Ctx, CtorInfo)
+  -> Can.Module
+  -> TypeM ((TypeCtx, Ctx, CtorInfo), T.Module)
 checkModule (typeCtx, ctx, ctorInfo) modul = do
   -- Extract type signatures from all datatype definitions in the module
   (typeNames, dataTypeCtx, dataTypeInfo) <- concatUnzip3
@@ -82,7 +84,7 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
 
   let ctx'       = ctx <> dataTypeCtx <> funTypeCtx
   let ctorInfo'  = ctorInfo <> dataTypeInfo
-  let typeCtx' = map (,()) typeNames <> typeCtx
+  let typeCtx'   = map (, ()) typeNames <> typeCtx
 
   -- Typecheck each function definition
   -- For functions with type signatures, just check them against their signature

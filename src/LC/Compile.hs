@@ -2,22 +2,21 @@ module LC.Compile
   ( runConvert
   , convertEnv
   , Env
-  )
-where
+  ) where
 
-import           Data.List                      ( nub )
 import           Data.Foldable                  ( foldrM )
+import           Data.List                      ( nub )
 
-import           LC
-import           ELC                            ( Con(..)
+import           Data.Name
+import           ELC                            ( Clause(..)
+                                                , Con(..)
                                                 , Pattern(..)
-                                                , Clause(..)
                                                 )
 import qualified ELC
 import qualified ELC.Compile                    ( Env
                                                 , collapseEnv
                                                 )
-import           Data.Name
+import           LC
 import           NameGen                        ( NameGen
                                                 , freshM
                                                 , run

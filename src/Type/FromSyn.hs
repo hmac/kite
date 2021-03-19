@@ -4,18 +4,18 @@ module Type.FromSyn where
 
 import           Util
 
-import           Data.Traversable               ( for )
-import qualified Data.Set                      as Set
-import           Data.String                    ( fromString )
 import           Data.Name                      ( Name
                                                 , toString
                                                 )
+import qualified Data.Set                      as Set
+import           Data.String                    ( fromString )
+import           Data.Traversable               ( for )
 import           Type                           ( Exp )
 import qualified Type                          as T
 
+import           AST
 import qualified Canonical                     as Can
 import qualified Syn                           as S
-import           AST
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case

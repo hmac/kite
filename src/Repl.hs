@@ -1,34 +1,34 @@
 module Repl where
 
-import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.Functor                   ( ($>) )
 import           Data.Text.Prettyprint.Doc
-import           System.IO                      ( stdout
-                                                , hSetBuffering
-                                                , BufferMode(..)
-                                                )
-import           Syn.Parse                      ( pExpr
-                                                , pDecl
+import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Syn.Parse                      ( pDecl
+                                                , pExpr
                                                 , spaceConsumerN
                                                 )
-import           Text.Megaparsec                ( parse
-                                                , errorBundlePretty
-                                                , (<|>)
+import           System.IO                      ( BufferMode(..)
+                                                , hSetBuffering
+                                                , stdout
+                                                )
+import           Text.Megaparsec                ( (<|>)
                                                 , eof
+                                                , errorBundlePretty
+                                                , parse
                                                 , try
                                                 )
 import           Text.Megaparsec.Char           ( string )
 
 
-import           Syn
-import           Data.Name
 import qualified Canonical                     as Can
 import           Canonicalise                   ( canonicaliseModule )
+import           Data.Name
+import           Interpret                      ( interpretAndRun
+                                                , printValue
+                                                )
 import qualified ModuleGroupTypechecker
 import           ModuleLoader                   ( ModuleGroup(..) )
-import           Interpret                      ( printValue
-                                                , interpretAndRun
-                                                )
+import           Syn
 
 run :: IO ()
 run = do
