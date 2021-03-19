@@ -13,9 +13,9 @@ import           Syn.Parse                      ( pModule
                                                 , pDecl
                                                 , pExpr
                                                 , pType
-                                                , pPattern
                                                 , Error
                                                 )
+import Syn.Parse.Pattern (pPattern)
 
 import           AST
 import           Syn

@@ -1,7 +1,8 @@
 -- Shared types and functions for parsing the surface syntax
 module Syn.Parse.Common where
 
-import           Data.Functor                   ( void )
+import           Data.Maybe                     ( fromMaybe )
+import           Data.Functor                   ( void, ($>) )
 import           Control.Monad                  ( guard )
 
 import           Text.Megaparsec
@@ -23,6 +24,20 @@ newtype Error = VarKeyword String
 instance ShowErrorComponent Error where
   showErrorComponent (VarKeyword v) =
     show v <> " is a reserved keyword and cannot be used as a variable name."
+
+pChar :: Parser Char
+pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap head (takeP (Just "char") 1)
+  -- Escaped special characters like \n
+  -- Currently we only support \n
+  -- TODO: what's the full list of escape sequences we should support here?
+    where escapedChar = char '\\' >> char 'n' $> '\n'
+
+pInt :: Parser Int
+pInt = do
+  sign   <- optional (string "-")
+  digits <- lexeme (some digitChar)
+  spaceConsumerN
+  pure . read $ fromMaybe "" sign <> digits
 
 pName :: Parser RawName
 pName = uppercaseName <|> lowercaseName

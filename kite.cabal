@@ -54,6 +54,9 @@ library
       Syn
       Syn.Parse
       Syn.Parse.Common
+      Syn.Parse.Pattern
+      Syn.Parse.Expr
+      Syn.Parse.Type
       Syn.Print
       Syn.Typed
       Type
