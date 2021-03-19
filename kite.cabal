@@ -53,6 +53,7 @@ library
       Repl
       Syn
       Syn.Parse
+      Syn.Parse.Common
       Syn.Print
       Syn.Typed
       Type
