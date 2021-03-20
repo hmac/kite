@@ -39,6 +39,7 @@ module Type
   , putTypeCtx
   , fv
   , quantify
+  , withGlobalCtx
   ) where
 
 import           AST                            ( ConMeta(..)
@@ -679,6 +680,11 @@ defaultTypeEnv =
 
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
 
+-- Functions for modifying the global type context
+-- These are used by other modules, which control the global context.
+-- The local context should be managed only by this module.
+withGlobalCtx :: (Ctx -> Ctx) -> TypeM a -> TypeM a
+withGlobalCtx f m = local (\e -> e { envCtx = f (envCtx e) }) m
 
 data TypeState = TypeState
   { varCounter  :: Int -- A counter for generating fresh names

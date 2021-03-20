@@ -6,7 +6,6 @@ module Type.Module where
 -- type annotations.
 
 import qualified Data.Set                      as Set
-import           Util
 
 import           AST                            ( ConMeta(..) )
 import qualified Canonical                     as Can
@@ -39,6 +38,7 @@ import           Type                           ( CtorInfo
                                                 , putCtx
                                                 , putTypeCtx
                                                 , wellFormedType
+                                                , withGlobalCtx
                                                 )
 import           Type.FromSyn                   ( fromSyn
                                                 , quantify
@@ -67,59 +67,65 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
     <$> mapM translateData (getDataDecls (moduleDecls modul))
 
   -- Get all the functions defined in the module
-  funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
+  let funs     = getFunDecls (moduleDecls modul)
 
-  -- Split the functions into those with type signatures and those without
-  let (funsWithSig, funsWithoutSig) = flip partitionWith funs $ \case
-        (name, Just ty, expr) -> Left (name, ty, expr)
-        (name, Nothing, expr) -> Right (name, expr)
-
-
-  -- Extend the context with type signatures for each function
-  -- This allows us to typecheck them in any order, and to typecheck any
-  -- recursive calls.
-  -- If the function has no type signature (should only happen when we're
-  -- invoking this function via the REPL), skip it.
-  let funTypeCtx = map (\(name, ty, _exp) -> V (Free name) ty) funsWithSig
-
-  let ctx'       = ctx <> dataTypeCtx <> funTypeCtx
-  let ctorInfo'  = ctorInfo <> dataTypeInfo
-  let typeCtx'   = map (, ()) typeNames <> typeCtx
+  let typeCtx' = map (, ()) typeNames <> typeCtx
 
   -- Typecheck each function definition
   -- For functions with type signatures, just check them against their signature
   -- For functions without type signatures, infer their type
   putTypeCtx typeCtx'
-  putCtx ctx'
-  mapM_ (checkFun ctx') funsWithSig
-  mapM_ inferFun        funsWithoutSig
+
+  funCtx <- withGlobalCtx (<> (ctx <> dataTypeCtx)) $ typecheckFuns funs
+  let ctx'        = ctx <> dataTypeCtx <> funCtx
 
   -- Construct a typed module by converting every data & fun decl into the typed
   -- form, with empty type annotations. In the future this should be done during
   -- typechecking itself.
+  let ctorInfo'   = ctorInfo <> dataTypeInfo
   let typedModule = Type.ToTyped.convertModule ctorInfo' modul
 
   -- Done
   pure ((typeCtx', ctx', ctorInfo'), typedModule)
 
-checkFun :: Ctx -> (Name, Type, Exp) -> TypeM ()
-checkFun ctx (name, ty, body) =
-  flip Except.catchError
-       (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
-    $ do
-  -- check the type is well-formed
-        putCtx ctx
-        void $ wellFormedType ty
-        -- check the body of the function
-        void $ check body ty
+-- | Typecheck a group of functions which may refer to each other.
+typecheckFuns :: [Can.Fun Can.Exp] -> TypeM Ctx
+typecheckFuns funs = do
+  funs' <- mapM (\f -> (f, ) <$> funToBind f) funs
 
-inferFun :: (Name, Exp) -> TypeM ()
-inferFun (name, body) =
+  -- Extend the context with type signatures for each function
+  -- This allows us to typecheck them in any order, and to typecheck any
+  -- recursive calls.
+  -- If the function has no type signature, skip it.
+  let funCtx = flip concatMap funs' $ \(_, (name, ty, _)) -> case ty of
+        Just t  -> [V (Free name) t]
+        Nothing -> []
+
+  withGlobalCtx (<> funCtx) $ mapM_ typecheckFun funs'
+
+  pure funCtx
+
+typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypeM ()
+typecheckFun (fun, (name, mtype, expr)) =
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
     $ do
-        -- infer the body of the function
-        void $ infer body
+        -- Clear the local context
+        putCtx mempty
+        case mtype of
+          Just ty -> do
+            -- check the type is well-formed
+            void $ wellFormedType ty
+          Nothing -> pure ()
+        -- check or infer each function in the where clause
+        whereCtx <- typecheckFuns (funWheres fun)
+        case mtype of
+          Just ty -> do
+            -- check the body of the function
+            withGlobalCtx (<> whereCtx) $ void $ check expr ty
+          Nothing ->
+            -- infer the body of the function
+            withGlobalCtx (<> whereCtx) $ void $ infer expr
 
 funToBind :: Can.Fun Can.Exp -> TypeM (Name, Maybe Type, Exp)
 funToBind fun = do
