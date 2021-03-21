@@ -29,9 +29,10 @@ test = do
         expr = App
           (App (Var (Free "Kite.Primitive.::")) (Var (Free "Nothing")))
           (Var (Free "Kite.Primitive.[]"))
-        r = putCtx ctx >> check expr ty
+        r = check expr ty
     it "typechecks successfully" $ do
-      runTypeM defaultTypeEnv r `shouldBe` Right ()
+      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
+        `shouldBe` Right ()
   describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
@@ -55,8 +56,8 @@ test = do
           , V (Free "foo") funType
           ]
     it "typechecks successfully" $ do
-      let r = putCtx ctx >> check fun funType
-      runTypeM (defaultTypeEnv { envCtx = primCtx <> ctx }) r
+      let r = check fun funType
+      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
         `shouldBe` Right ()
   describe "Simple inference" $ do
     let nat = TCon "Nat" []
@@ -340,13 +341,14 @@ runInfer tctx ctx expr = do
   let moduleName    = "QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
-        e <- fromSyn canonicalExpr
-        putCtx ctx
-        putTypeCtx tctx
+        e   <- fromSyn canonicalExpr
         ty  <- infer e >>= subst
         ty' <- subst ty
         quantify (fv ty') ty'
-  runTypeM defaultTypeEnv r
+  runTypecheckM defaultTypeEnv
+    $ withGlobalTypeCtx (<> tctx)
+    $ withGlobalCtx (<> ctx)
+    $ runTypeM r
 
 -- Like infers but takes a quasiquoted type expression.
 -- Currently unused because most of the time the type is Bool, which is easy to
@@ -357,13 +359,16 @@ infers' tctx ctx expr ty = do
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
       canonicalType = canonicaliseType (moduleName, mempty) ty
   let r = do
-        e <- fromSyn canonicalExpr
-        t <- convertType mempty canonicalType
-        putCtx ctx
-        putTypeCtx tctx
+        e  <- fromSyn canonicalExpr
+        t  <- convertType mempty canonicalType
         t' <- infer e >>= subst
         pure (t, t')
-  case runTypeM defaultTypeEnv r of
+  let result =
+        runTypecheckM defaultTypeEnv
+          $ withGlobalTypeCtx (<> tctx)
+          $ withGlobalCtx (<> ctx)
+          $ runTypeM r
+  case result of
     Left err -> expectationFailure $ show (printLocatedError err)
     Right (expectedType, actualType) -> actualType `shouldBe` expectedType
 
@@ -383,9 +388,9 @@ checks tctx ctx expr ty = do
         , Syn.moduleMetadata = mempty
         }
       r =
-        replicateM_ 10 (newU "dummy")
+        runTypeM (replicateM_ 10 (newU "dummy"))
           >> checkModule (tctx, ctx, mempty) modul
           >> pure ()
-  case runTypeM defaultTypeEnv r of
+  case runTypecheckM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()

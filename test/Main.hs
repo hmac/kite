@@ -11,7 +11,7 @@ import qualified Integration.Parse
 import qualified Integration.Typecheck
 
 import           Hedgehog
-import qualified Type                           ( tests )
+import qualified Type                           ( test )
 
 main :: IO ()
 main = do
@@ -24,5 +24,5 @@ main = do
     Integration.Parse.test
     Test.Syn.RoundTrip.test
     describe "Type" $ it "passes all Hedgehog tests" $ do
-      succeeded <- checkParallel Type.tests
+      succeeded <- checkParallel Type.test
       succeeded `shouldBe` True

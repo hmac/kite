@@ -1,9 +1,8 @@
-module Type.Module where
-
 -- Typecheck a Kite module
 -- Currently we just return unit (and an updated type env) if the module
 -- typechecked. In future we will need to return a copy of the module with full
 -- type annotations.
+module Type.Module where
 
 import qualified Data.Set                      as Set
 
@@ -31,14 +30,14 @@ import           Type                           ( CtorInfo
                                                 , LocatedError(..)
                                                 , Type(..)
                                                 , TypeCtx
-                                                , TypeM
+                                                , TypecheckM
                                                 , V(..)
                                                 , check
                                                 , infer
-                                                , putCtx
-                                                , putTypeCtx
+                                                , runTypeM
                                                 , wellFormedType
                                                 , withGlobalCtx
+                                                , withGlobalTypeCtx
                                                 )
 import           Type.FromSyn                   ( fromSyn
                                                 , quantify
@@ -48,7 +47,7 @@ import qualified Type.ToTyped                   ( convertModule )
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
 translateModule
-  :: Can.Module -> TypeM (Ctx, CtorInfo, [(Name, Maybe Type, Exp)])
+  :: Can.Module -> TypecheckM (Ctx, CtorInfo, [(Name, Maybe Type, Exp)])
 translateModule modul = do
   (_, dataTypeCtx, dataTypeInfo) <- concatUnzip3
     <$> mapM translateData (getDataDecls (moduleDecls modul))
@@ -60,7 +59,7 @@ translateModule modul = do
 checkModule
   :: (TypeCtx, Ctx, CtorInfo)
   -> Can.Module
-  -> TypeM ((TypeCtx, Ctx, CtorInfo), T.Module)
+  -> TypecheckM ((TypeCtx, Ctx, CtorInfo), T.Module)
 checkModule (typeCtx, ctx, ctorInfo) modul = do
   -- Extract type signatures from all datatype definitions in the module
   (typeNames, dataTypeCtx, dataTypeInfo) <- concatUnzip3
@@ -72,11 +71,10 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
   let typeCtx' = map (, ()) typeNames <> typeCtx
 
   -- Typecheck each function definition
-  -- For functions with type signatures, just check them against their signature
-  -- For functions without type signatures, infer their type
-  putTypeCtx typeCtx'
-
-  funCtx <- withGlobalCtx (<> (ctx <> dataTypeCtx)) $ typecheckFuns funs
+  funCtx <-
+    withGlobalTypeCtx (<> typeCtx')
+    $ withGlobalCtx (<> (ctx <> dataTypeCtx))
+    $ typecheckFuns funs
   let ctx'        = ctx <> dataTypeCtx <> funCtx
 
   -- Construct a typed module by converting every data & fun decl into the typed
@@ -89,7 +87,7 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
   pure ((typeCtx', ctx', ctorInfo'), typedModule)
 
 -- | Typecheck a group of functions which may refer to each other.
-typecheckFuns :: [Can.Fun Can.Exp] -> TypeM Ctx
+typecheckFuns :: [Can.Fun Can.Exp] -> TypecheckM Ctx
 typecheckFuns funs = do
   funs' <- mapM (\f -> (f, ) <$> funToBind f) funs
 
@@ -105,33 +103,29 @@ typecheckFuns funs = do
 
   pure funCtx
 
-typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypeM ()
+typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM ()
 typecheckFun (fun, (name, mtype, expr)) =
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
     $ do
-        -- Clear the local context
-        putCtx mempty
         case mtype of
           Just ty -> do
             -- check the type is well-formed
-            void $ wellFormedType ty
+            void $ runTypeM $ wellFormedType ty
           Nothing -> pure ()
         -- check or infer each function in the where clause
         whereCtx <- typecheckFuns (funWheres fun)
-        case mtype of
-          Just ty -> do
-            -- check the body of the function
-            withGlobalCtx (<> whereCtx) $ void $ check expr ty
-          Nothing ->
-            -- infer the body of the function
-            withGlobalCtx (<> whereCtx) $ void $ infer expr
+        withGlobalCtx (<> whereCtx) $ runTypeM $ case mtype of
+          -- check the body of the function
+          Just ty -> check expr ty
+          -- infer the body of the function
+          Nothing -> void $ infer expr
 
-funToBind :: Can.Fun Can.Exp -> TypeM (Name, Maybe Type, Exp)
+funToBind :: Can.Fun Can.Exp -> TypecheckM (Name, Maybe Type, Exp)
 funToBind fun = do
-  rhs <- fromSyn (funExpr fun)
+  rhs <- runTypeM $ fromSyn (funExpr fun)
   sch <- case funType fun of
-    Just t  -> Just <$> quantify (Set.toList (S.ftv t)) t
+    Just t  -> Just <$> runTypeM (quantify (Set.toList (S.ftv t)) t)
     Nothing -> pure Nothing
   pure (funName fun, sch, rhs)
 
@@ -146,7 +140,7 @@ funToBind fun = do
 -- becomes
 --   V (Free "Functor") (Forall f. { map : Forall a b. (a -> b) -> f a -> f b })
 --
-translateData :: Can.Data -> TypeM ([Name], Ctx, CtorInfo)
+translateData :: Can.Data -> TypecheckM ([Name], Ctx, CtorInfo)
 translateData d = do
   let tyvars = map Local (dataTyVars d)
       info   = zipWith
@@ -156,11 +150,13 @@ translateData d = do
   ctx <- mapM (buildCtx (dataName d) tyvars) (dataCons d)
   pure ([dataName d], ctx, info)
  where
-  buildCtx :: Name -> [Name] -> Can.DataCon -> TypeM CtxElem
+  buildCtx :: Name -> [Name] -> Can.DataCon -> TypecheckM CtxElem
   buildCtx dataTypeName tyvars datacon = do
     -- Construct a (Syn) Scheme for this constructor
     let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
-    ty <- quantify tyvars $ foldr S.TyFun resultType (conArgs datacon)
+    ty <- runTypeM $ quantify tyvars $ foldr S.TyFun
+                                             resultType
+                                             (conArgs datacon)
     pure $ V (Free (conName datacon)) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]

@@ -161,7 +161,7 @@ checksModule modul = do
   let (typeCtx, termCtx) = ctx
       r = checkModule (typeCtx, termCtx, mempty) (canonicaliseModule modul)
         >> pure ()
-  case runTypeM defaultTypeEnv r of
+  case runTypecheckM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()
 
@@ -170,7 +170,7 @@ failsModule modul = do
   let (typeCtx, termCtx) = ctx
       r = checkModule (typeCtx, termCtx, mempty) (canonicaliseModule modul)
         >> pure ()
-  case runTypeM defaultTypeEnv r of
+  case runTypecheckM defaultTypeEnv r of
     Left _ -> pure ()
     Right () ->
       expectationFailure "expected typechecking to fail, but it succeeded"

@@ -8,7 +8,7 @@ import qualified Type                           ( CtorInfo
                                                 , LocatedError
                                                 , Type
                                                 , defaultTypeEnv
-                                                , runTypeM
+                                                , runTypecheckM
                                                 )
 import           Type.Module                    ( checkModule
                                                 , translateModule
@@ -28,14 +28,13 @@ import           Util
 -- ModuleLoader).
 typecheckModuleGroup
   :: UntypedModuleGroup -> Either Type.LocatedError TypedModuleGroup
-typecheckModuleGroup (ModuleGroup m deps) = do
-  let ms = deps ++ [m]
-  (_, typedModules) <- Type.runTypeM Type.defaultTypeEnv
-    $ mapAccumLM checkModule mempty ms
-  case reverse typedModules of
-    (typedModule : typedDeps) ->
-      pure $ TypedModuleGroup typedModule (reverse typedDeps)
-    [] -> error "ModuleGroupTypechecker: empty list found"
+typecheckModuleGroup (ModuleGroup m deps) =
+  Type.runTypecheckM Type.defaultTypeEnv $ do
+    -- First typecheck the dependent modules
+    (ctx, typedDeps  ) <- mapAccumLM checkModule mempty deps
+    -- Then typecheck the main module
+    (_  , typedModule) <- checkModule ctx m
+    pure $ TypedModuleGroup typedModule typedDeps
 
 dumpEnv
   :: UntypedModuleGroup
@@ -43,4 +42,5 @@ dumpEnv
        Type.LocatedError
        (Type.Ctx, Type.CtorInfo, [(Name, Maybe Type.Type, Type.Exp)])
 dumpEnv (ModuleGroup m deps) =
-  Type.runTypeM Type.defaultTypeEnv $ mconcatMapM translateModule (deps <> [m])
+  Type.runTypecheckM Type.defaultTypeEnv
+    $ mconcatMapM translateModule (deps <> [m])

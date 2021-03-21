@@ -76,7 +76,14 @@ library
 
   hs-source-dirs:
       src
-  default-extensions: OverloadedStrings LambdaCase TupleSections DeriveDataTypeable Rank2Types TemplateHaskell
+  default-extensions:
+    OverloadedStrings
+    LambdaCase
+    TupleSections
+    DeriveDataTypeable
+    Rank2Types
+    TemplateHaskell
+    FlexibleContexts
   ghc-options:
     -Wall
     -Werror

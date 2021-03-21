@@ -1,9 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Type
-  ( tests
-  , CtorInfo
+  ( CtorInfo
   , Ctx
   , TypeCtx
+  , test
+  , TypecheckM
+  , TypeState
+  , infer'
   , CtxElem(..)
   , Type(..)
   , Exp
@@ -35,11 +38,14 @@ module Type
   , defaultTypeEnv
   , TypeEnv(..)
   , subst
+  , subst'
   , putCtx
   , putTypeCtx
   , fv
   , quantify
   , withGlobalCtx
+  , withGlobalTypeCtx
+  , runTypecheckM
   ) where
 
 import           AST                            ( ConMeta(..)
@@ -48,6 +54,11 @@ import           AST                            ( ConMeta(..)
                                                 )
 import           Control.Monad                  ( (>=>)
                                                 , void
+                                                )
+import           Control.Monad.Reader           ( MonadReader
+                                                , ask
+                                                , asks
+                                                , local
                                                 )
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
@@ -67,13 +78,11 @@ import           Data.Maybe                     ( listToMaybe )
 import qualified Control.Monad.Except
 import           Control.Monad.Except           ( ExceptT(..)
                                                 , catchError
+                                                , liftEither
                                                 , runExceptT
                                                 )
 import           Control.Monad.Trans.Class      ( lift )
 import           Control.Monad.Trans.Reader     ( ReaderT
-                                                , ask
-                                                , asks
-                                                , local
                                                 , runReaderT
                                                 )
 import           Control.Monad.Trans.State.Strict
@@ -83,6 +92,7 @@ import           Control.Monad.Trans.State.Strict
                                                 , gets
                                                 , modify'
                                                 , put
+                                                , runState
                                                 )
 
 import           Hedgehog                       ( (===)
@@ -293,16 +303,6 @@ instance Debug Type where
       AppR    -> "(" <> debug' Neutral (TApp ty args) <> ")"
       _       -> debug' Neutral (TApp ty args)
 
-
-genType :: Gen Type
-genType = G.recursive
-  G.choice
-  [EType <$> genE, UType <$> genU]
-  [ G.subterm2 genType genType Fn
-  , G.subtermM genType (\t -> Forall <$> genU <*> pure t)
-  , TCon <$> genName <*> G.list (R.linear 0 3) genType
-  ]
-
 -- | Variables
 -- Universal type variable
 -- Contains a name hint
@@ -315,18 +315,12 @@ instance Eq U where
 instance Debug U where
   debug (U n v) = debug v <> show n
 
-genU :: Gen U
-genU = U <$> G.int (R.linear 0 100) <*> genName
-
 -- Existential type variable
 newtype E = E Int
   deriving (Eq, Show, Typeable, Data)
 
 instance Debug E where
   debug (E e) = "e" <> show e
-
-genE :: Gen E
-genE = E <$> G.int (R.linear 0 100)
 
 -- Free or bound variable
 -- Guaranteed to be unique.
@@ -338,9 +332,6 @@ data V = Free Name
 instance Debug V where
   debug (Free  n) = debug n
   debug (Bound i) = "v" <> show i
-
-genV :: Gen V
-genV = G.choice [Free <$> genName, Bound <$> G.int (R.linear 0 100)]
 
 type Exp = Expr V Type
 
@@ -358,9 +349,6 @@ type TypeCtx = [(Name, ())]
 
 -- | A local context, holding top level definitions and local variables
 type Ctx = [CtxElem]
-
-genCtx :: Gen Ctx
-genCtx = G.list (R.linear 1 10) genCtxElem
 
 data CtxElem =
   -- Bound variable
@@ -386,15 +374,6 @@ debugCtx :: Ctx -> String
 debugCtx ctx = "[" <> sepBy ", " (map debug ctx) <> "]"
 
 
-genCtxElem :: Gen CtxElem
-genCtxElem = G.choice
-  [ V <$> genV <*> genType
-  , UVar <$> genU
-  , EVar <$> genE
-  , ESolved <$> genE <*> genType
-  , Marker <$> genE
-  ]
-
 -- | The free (existential) variables of the type
 fv :: Type -> [E]
 fv = \case
@@ -418,12 +397,6 @@ quantify vars t = do
   let t'  = subst' ctx t
   -- Wrap the result in foralls to bind each UType
   pure $ foldr (Forall . snd) t' uMap
-
-prop_fv_commutes :: Property
-prop_fv_commutes = property $ do
-  a <- forAll genType
-  b <- forAll genType
-  fv (Fn a b) === (fv a <> fv b)
 
 -- | Apply the current context, as a substitution, to a type
 subst :: Type -> TypeM Type
@@ -453,13 +426,6 @@ subst' ctx = \case
       (EVar e' : _) | e == e'         -> EType e
       (_ : c)                         -> substE c
 
-prop_subst_commutes :: Property
-prop_subst_commutes = property $ do
-  ctx <- forAll genCtx
-  a   <- forAll genType
-  b   <- forAll genType
-  subst' ctx (Fn a b) === Fn (subst' ctx a) (subst' ctx b)
-
 -- | Substitute an existential variable for a universal variable
 substEForU :: E -> U -> Type -> Type
 substEForU e u = go
@@ -474,14 +440,6 @@ substEForU e u = go
     TCon c as      -> TCon c (map go as)
     TRecord fields -> TRecord (mapSnd go fields)
     TApp f as      -> TApp (go f) (map go as)
-
-prop_substEForU_commutes :: Property
-prop_substEForU_commutes = property $ do
-  e <- forAll genE
-  u <- forAll genU
-  a <- forAll genType
-  b <- forAll genType
-  substEForU e u (Fn a b) === Fn (substEForU e u a) (substEForU e u b)
 
 -- | The bound variables in a context
 domV :: Ctx -> [V]
@@ -564,9 +522,6 @@ lookupType name = do
     Nothing -> throwError (UnknownType name)
 
 -- Context construction
-
-emptyCtx :: Ctx
-emptyCtx = []
 
 -- | Save the current state, run an action that returns a result,
 -- then restore the original state
@@ -678,25 +633,48 @@ defaultTypeEnv =
               , envDebug   = debugOn
               }
 
+-- This type is used outside of this module, to raise errors and set the global context.
+-- It also holds a counter for fresh variable names.
+type TypecheckM = ReaderT TypeEnv (ExceptT LocatedError (State Int))
+
+runTypecheckM :: TypeEnv -> TypecheckM a -> Either LocatedError a
+runTypecheckM env m = evalState (runExceptT (runReaderT m env)) 0
+
+-- This type is used only inside this module. It is like TypecheckM but it can also manipulate the
+-- local context.
 type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
+
+-- | Convert a TypeM action into a TypecheckM action.
+-- We do this by supplying a default state value, but threading through the variable counter which
+-- is present in TypecheckM. This ensures that we can generate fresh variables in both TypeM and
+-- TypecheckM and they won't clash.
+runTypeM :: TypeM a -> TypecheckM a
+runTypeM m = do
+  c <- lift $ lift get
+  let defaultState =
+        TypeState { varCounter = c, context = mempty, typeContext = mempty }
+  env <- ask
+  let m'            = runReaderT m env
+  let m''           = runExceptT m'
+  let (m''', state) = runState m'' defaultState
+  lift $ lift $ put (varCounter state)
+  liftEither m'''
 
 -- Functions for modifying the global type context
 -- These are used by other modules, which control the global context.
 -- The local context should be managed only by this module.
-withGlobalCtx :: (Ctx -> Ctx) -> TypeM a -> TypeM a
-withGlobalCtx f m = local (\e -> e { envCtx = f (envCtx e) }) m
+withGlobalCtx :: MonadReader TypeEnv m => (Ctx -> Ctx) -> m a -> m a
+withGlobalCtx f = local (\e -> e { envCtx = f (envCtx e) })
+
+withGlobalTypeCtx
+  :: MonadReader TypeEnv m => (TypeCtx -> TypeCtx) -> m a -> m a
+withGlobalTypeCtx f = local (\e -> e { envTypeCtx = f (envTypeCtx e) })
 
 data TypeState = TypeState
   { varCounter  :: Int -- A counter for generating fresh names
   , context     :: Ctx    -- The local type context
   , typeContext :: TypeCtx -- In-scope types
   }
-
-runTypeM :: TypeEnv -> TypeM a -> Either LocatedError a
-runTypeM env m =
-  let defaultState =
-        TypeState { varCounter = 0, context = mempty, typeContext = mempty }
-  in  evalState (runExceptT (runReaderT m env)) defaultState
 
 -- Increment the recursion depth
 incDepth :: TypeEnv -> TypeEnv
@@ -740,10 +718,6 @@ putTypeCtx tctx = lift $ lift $ modify' $ \st -> st { typeContext = tctx }
 -- | Lift a 'Maybe' value into the 'MaybeT' monad transformer.
 liftMaybe :: TypeM a -> Maybe a -> TypeM a
 liftMaybe err = maybe err pure
-
--- Lift a function returning Maybe into TypeM
-liftMaybe1 :: TypeM b -> (a -> Maybe b) -> a -> TypeM b
-liftMaybe1 err m x = maybe err pure (m x)
 
 -- Subtyping
 -- | Under this input context, the first type is a subtype of the second type,
@@ -1316,28 +1290,6 @@ inferApp ty e = do
       pure b
     _ -> throwError $ InfAppFailure ty e
 
--- Like inferApp but we pass the type of the argument, not the argument itself.
--- We use this when inferring the types of patterns.
-inferApp' :: Type -> Type -> TypeM Type
-inferApp' fnTy argTy = do
-  trace' ["inferApp'", debug fnTy, debug argTy] $ case fnTy of
-    Forall u a -> do
-      alpha <- newE
-      extendE alpha
-      inferApp' (substEForU alpha u a) argTy
-    EType alpha -> do
-      a1 <- newE
-      a2 <- newE
-      void $ extendE a2
-      void $ extendE a1
-      void $ extendSolved alpha (Fn (EType a1) (EType a2))
-      subtype argTy (EType a1)
-      pure $ EType a2
-    Fn a b -> do
-      subtype argTy a
-      pure b
-    _ -> throwError $ InfAppFailure' fnTy argTy
-
 -- A type error, optionally with the name of the function definition that caused
 -- it.
 data LocatedError = LocatedError (Maybe Name) Error
@@ -1370,128 +1322,61 @@ todoError = throwError . TodoError
 throwError :: Error -> TypeM a
 throwError err = Control.Monad.Except.throwError (LocatedError Nothing err)
 
--- Tests
 
-prop_uval_infers_unit :: Property
-prop_uval_infers_unit = property $ do
-  ctx <- (primCtx <>) <$> forAll genCtx
-  let expr = Con (Free "Kite.Primitive.Unit")
-      ty   = TCon "Kite.Primitive.Unit" []
-  runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right ty
-
-prop_checks_bad_unit_annotation :: Property
-prop_checks_bad_unit_annotation = property $ do
-  ctx <- (primCtx <>) <$> forAll genCtx
-  let expr = Con (Free "Kite.Primitive.Unit")
-      ty   = Fn unit unit
-  runTypeM defaultTypeEnv (putCtx ctx >> check expr ty)
-    === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
-
-prop_infers_simple_app :: Property
-prop_infers_simple_app = property $ do
-  let ctx = primCtx
-  v <- forAll genV
-  let uval = Con (Free "Kite.Primitive.Unit")
-  let expr = App (Ann (Abs [v] uval) (Fn unit unit)) uval
-  runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right unit
-
-prop_infers_app_with_context :: Property
-prop_infers_app_with_context = property $ do
-  -- The context contains id : Unit -> Unit
-  let uval = Con (Free "Kite.Primitive.Unit")
-      ctx  = [V (Free "id") (Fn unit unit)] <> primCtx
-  -- The expression is id Unit
-  let expr = App (Var (Free "id")) uval
-  -- The inferred type should be Unit
-  runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right unit
-
-prop_infers_polymorphic_app :: Property
-prop_infers_polymorphic_app = property $ do
-  -- The context contains id     : forall a. a -> a
-  --                      idUnit : Unit -> Unit
-  let uval = Con (Free "Kite.Primitive.Unit")
-      a    = U 0 "a"
-      ctx =
-        [ V (Free "id")     (Forall a (Fn (UType a) (UType a)))
-          , V (Free "idUnit") (Fn unit unit)
-          ]
-          <> primCtx
-  -- The expression is idUnit (id Unit)
-  let expr = App (Var (Free "idUnit")) (App (Var (Free "id")) uval)
-  -- The inferred type should be Unit
-  runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right unit
-
-prop_infers_list_app :: Property
-prop_infers_list_app = property $ do
-  let a    = U 0 "a"
-      ty   = Forall a (list (UType a))
-      -- [] : forall a. List a
-      ctx  = [V (Free "[]") ty]
-      expr = Var (Free "[]")
-  runTypeM defaultTypeEnv (putCtx ctx >> infer expr) === Right ty
-
-prop_infers_bool_case :: Property
-prop_infers_bool_case = property $ do
-  let
-      -- case True of
-      --   True -> ()
-      --   False -> ()
-      expr1 = Case
-        (Con (Free "Kite.Primitive.True"))
-        [ (BoolPat True , Con (Free "Kite.Primitive.Unit"))
-        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
-        ]
-      -- case True of
-      --   True -> True
-      --   False -> ()
-      expr2 = Case
-        (Con (Free "Kite.Primitive.True"))
-        [ (BoolPat True , Con (Free "Kite.Primitive.True"))
-        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
-        ]
-  runTypeM defaultTypeEnv (infer expr1) === Right unit
-  runTypeM defaultTypeEnv (infer expr2)
-    === Left (LocatedError Nothing (SubtypingFailure unit bool))
-
-prop_checks_higher_kinded_application :: Property
-prop_checks_higher_kinded_application = property $ do
-  -- (\x -> x) : f a -> f a should check
-  let
-    f     = U 1 "f"
-    a     = U 2 "a"
-    expr1 = Abs [Bound 0] (Var (Bound 0))
-    type1 = Forall
-      f
-      (Forall a (Fn (TApp (UType f) [UType a]) (TApp (UType f) [UType a])))
-  void (runTypeM defaultTypeEnv (check expr1 type1)) === Right ()
-  -- ((\x -> x) : f a -> f a) [1] : [Int] should check
-  -- ((\x -> x) : f a -> f a) [1]         should infer [Int]
-  let expr2 = App
-        (Ann expr1 type1)
-        (App (App (Var (Free "Kite.Primitive.::")) (IntLit 1))
-             (Var (Free "Kite.Primitive.[]"))
-        )
-      type2 = list int
-  void (runTypeM defaultTypeEnv (check expr2 type2)) === Right ()
-  runTypeM defaultTypeEnv (infer' expr2) === Right (list int)
-  -- ((\x -> x) : f a -> f a) True : [Int] should fail to check
-  -- ((\x -> x) : f a -> f a) True         should infer some unknown unification variables
-  let expr3 = App (Ann expr1 type1) (Var (Free "Kite.Primitive.True"))
-      type3 = list int
-  void (runTypeM defaultTypeEnv (check expr3 type3)) === Left
-    (LocatedError
-      Nothing
-      (SubtypingFailure (TCon "Kite.Primitive.Bool" [EType (E 1)]) (list int))
-    )
-  runTypeM defaultTypeEnv (infer expr3)
-    === Right (TApp (EType (E 0)) [EType (E 1)])
-
-tests :: Hedgehog.Group
-tests = $$(Hedgehog.discover)
 
 -- Util functions
 firstJust :: (a -> Maybe b) -> [a] -> Maybe b
 firstJust f = listToMaybe . mapMaybe f
+
+-- Like trace, but specifically for recursive calls in TypeM
+-- If debugging is enabled, prints the given args, indented by the recursion
+-- depth (which it increments), and the context.
+trace' :: [String] -> TypeM a -> TypeM a
+trace' args m = do
+  ctx       <- getCtx
+  i         <- asks envDepth
+  debugging <- asks envDebug
+  let indent = replicate i '|'
+      msg    = indent <+> debugCtx ctx <+> sepBy " " args
+  if debugging then trace msg (local incDepth m) else local incDepth m
+
+(<+>) :: String -> String -> String
+a <+> b = a <> " " <> b
+
+sepBy :: String -> [String] -> String
+sepBy = intercalate
+
+-- Property tests
+
+genType :: Gen Type
+genType = G.recursive
+  G.choice
+  [EType <$> genE, UType <$> genU]
+  [ G.subterm2 genType genType Fn
+  , G.subtermM genType (\t -> Forall <$> genU <*> pure t)
+  , TCon <$> genName <*> G.list (R.linear 0 3) genType
+  ]
+
+genCtxElem :: Gen CtxElem
+genCtxElem = G.choice
+  [ V <$> genV <*> genType
+  , UVar <$> genU
+  , EVar <$> genE
+  , ESolved <$> genE <*> genType
+  , Marker <$> genE
+  ]
+
+genCtx :: Gen Ctx
+genCtx = G.list (R.linear 1 10) genCtxElem
+
+genU :: Gen U
+genU = U <$> G.int (R.linear 0 100) <*> genName
+
+genE :: Gen E
+genE = E <$> G.int (R.linear 0 100)
+
+genV :: Gen V
+genV = G.choice [Free <$> genName, Bound <$> G.int (R.linear 0 100)]
 
 genName :: Gen Name
 genName = G.choice
@@ -1522,20 +1407,143 @@ genLowerString = do
   cs <- G.list (R.linear 0 5) G.alphaNum
   pure (c : cs)
 
--- Like trace, but specifically for recursive calls in TypeM
--- If debugging is enabled, prints the given args, indented by the recursion
--- depth (which it increments), and the context.
-trace' :: [String] -> TypeM a -> TypeM a
-trace' args m = do
-  ctx       <- getCtx
-  i         <- asks envDepth
-  debugging <- asks envDebug
-  let indent = replicate i '|'
-      msg    = indent <+> debugCtx ctx <+> sepBy " " args
-  if debugging then trace msg (local incDepth m) else local incDepth m
 
-(<+>) :: String -> String -> String
-a <+> b = a <> " " <> b
+test :: Hedgehog.Group
+test = $$(Hedgehog.discover)
 
-sepBy :: String -> [String] -> String
-sepBy = intercalate
+prop_fv_commutes :: Property
+prop_fv_commutes = property $ do
+  a <- forAll genType
+  b <- forAll genType
+  fv (Fn a b) === (fv a <> fv b)
+
+prop_subst_commutes :: Property
+prop_subst_commutes = property $ do
+  ctx <- forAll genCtx
+  a   <- forAll genType
+  b   <- forAll genType
+  subst' ctx (Fn a b) === Fn (subst' ctx a) (subst' ctx b)
+
+prop_substEForU_commutes :: Property
+prop_substEForU_commutes = property $ do
+  e <- forAll genE
+  u <- forAll genU
+  a <- forAll genType
+  b <- forAll genType
+  substEForU e u (Fn a b) === Fn (substEForU e u a) (substEForU e u b)
+
+typecheckTest :: Ctx -> TypeM a -> Either LocatedError a
+typecheckTest ctx =
+  runTypecheckM defaultTypeEnv . withGlobalCtx (<> ctx) . runTypeM
+
+prop_uval_infers_unit :: Property
+prop_uval_infers_unit = property $ do
+  ctx <- forAll genCtx
+  let expr = Con (Free "Kite.Primitive.Unit")
+      ty   = TCon "Kite.Primitive.Unit" []
+  typecheckTest ctx (infer expr) === Right ty
+
+prop_checks_bad_unit_annotation :: Property
+prop_checks_bad_unit_annotation = property $ do
+  ctx <- forAll genCtx
+  let expr = Con (Free "Kite.Primitive.Unit")
+      ty   = Fn unit unit
+  typecheckTest ctx (check expr ty)
+    === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
+
+prop_infers_simple_app :: Property
+prop_infers_simple_app = property $ do
+  v <- forAll genV
+  let uval = Con (Free "Kite.Primitive.Unit")
+  let expr = App (Ann (Abs [v] uval) (Fn unit unit)) uval
+  typecheckTest mempty (infer expr) === Right unit
+
+prop_infers_app_with_context :: Property
+prop_infers_app_with_context = property $ do
+  -- The context contains id : Unit -> Unit
+  let uval = Con (Free "Kite.Primitive.Unit")
+      ctx  = [V (Free "id") (Fn unit unit)]
+  -- The expression is id Unit
+  let expr = App (Var (Free "id")) uval
+  -- The inferred type should be Unit
+  typecheckTest ctx (infer expr) === Right unit
+
+prop_infers_polymorphic_app :: Property
+prop_infers_polymorphic_app = property $ do
+  -- The context contains id     : forall a. a -> a
+  --                      idUnit : Unit -> Unit
+  let uval = Con (Free "Kite.Primitive.Unit")
+      a    = U 0 "a"
+      ctx =
+        [ V (Free "id")     (Forall a (Fn (UType a) (UType a)))
+        , V (Free "idUnit") (Fn unit unit)
+        ]
+  -- The expression is idUnit (id Unit)
+  let expr = App (Var (Free "idUnit")) (App (Var (Free "id")) uval)
+  -- The inferred type should be Unit
+  typecheckTest ctx (infer expr) === Right unit
+
+prop_infers_list_app :: Property
+prop_infers_list_app = property $ do
+  let a    = U 0 "a"
+      ty   = Forall a (list (UType a))
+      -- [] : forall a. List a
+      ctx  = [V (Free "[]") ty]
+      expr = Var (Free "[]")
+  typecheckTest ctx (infer expr) === Right ty
+
+prop_infers_bool_case :: Property
+prop_infers_bool_case = property $ do
+  let
+      -- case True of
+      --   True -> ()
+      --   False -> ()
+      expr1 = Case
+        (Con (Free "Kite.Primitive.True"))
+        [ (BoolPat True , Con (Free "Kite.Primitive.Unit"))
+        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
+        ]
+      -- case True of
+      --   True -> True
+      --   False -> ()
+      expr2 = Case
+        (Con (Free "Kite.Primitive.True"))
+        [ (BoolPat True , Con (Free "Kite.Primitive.True"))
+        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
+        ]
+  typecheckTest mempty (infer expr1) === Right unit
+  typecheckTest mempty (infer expr2)
+    === Left (LocatedError Nothing (SubtypingFailure unit bool))
+
+prop_checks_higher_kinded_application :: Property
+prop_checks_higher_kinded_application = property $ do
+  -- (\x -> x) : f a -> f a should check
+  let
+    f     = U 1 "f"
+    a     = U 2 "a"
+    expr1 = Abs [Bound 0] (Var (Bound 0))
+    type1 = Forall
+      f
+      (Forall a (Fn (TApp (UType f) [UType a]) (TApp (UType f) [UType a])))
+  typecheckTest mempty (check expr1 type1) === Right ()
+  -- ((\x -> x) : f a -> f a) [1] : [Int] should check
+  -- ((\x -> x) : f a -> f a) [1]         should infer [Int]
+  let expr2 = App
+        (Ann expr1 type1)
+        (App (App (Var (Free "Kite.Primitive.::")) (IntLit 1))
+             (Var (Free "Kite.Primitive.[]"))
+        )
+      type2 = list int
+  typecheckTest mempty (check expr2 type2) === Right ()
+  typecheckTest mempty (infer' expr2) === Right (list int)
+  -- ((\x -> x) : f a -> f a) True : [Int] should fail to check
+  -- ((\x -> x) : f a -> f a) True         should infer some unknown unification variables
+  let expr3 = App (Ann expr1 type1) (Var (Free "Kite.Primitive.True"))
+      type3 = list int
+  typecheckTest mempty (check expr3 type3) === Left
+    (LocatedError
+      Nothing
+      (SubtypingFailure (TCon "Kite.Primitive.Bool" [EType (E 1)]) (list int))
+    )
+  typecheckTest mempty (infer expr3)
+    === Right (TApp (EType (E 0)) [EType (E 1)])
