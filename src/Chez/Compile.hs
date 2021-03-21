@@ -98,9 +98,16 @@ compileModule defs m =
 compileDecl :: T.Decl -> [Def]
 compileDecl = \case
   T.FunDecl fun ->
-    let expr = NameGen.run $ compileExpr $ T.funExpr fun
-    in  [Def (name2Text (T.funName fun)) expr]
+    let (name, expr) = NameGen.run (compileFun fun) in [Def name expr]
   T.DataDecl d -> compileData d
+
+-- | Compile a function into a pair of binding name and expression
+compileFun :: T.Fun -> NameGen (Text, SExpr)
+compileFun fun = do
+  expr   <- compileExpr $ T.funExpr fun
+  wheres <- mapM compileFun $ T.funWheres fun
+  pure $ (name2Text (T.funName fun), Let wheres expr)
+
 
 compileData :: T.Data -> [Def]
 compileData dat =

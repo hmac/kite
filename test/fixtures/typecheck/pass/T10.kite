@@ -9,3 +9,6 @@ reverse = xs -> go xs []
        (x :: xs) acc -> go xs (x :: acc)
   imNotUsed : Bool
   imNotUsed = True
+
+main : [Int]
+main = reverse [1,2,3,4]

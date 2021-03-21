@@ -34,9 +34,10 @@ convertModule ctorInfo modul = T.Module
 
 convertFun :: CtorInfo -> Can.Fun Can.Exp -> T.Fun
 convertFun ctorInfo fun = T.Fun
-  { T.funName = funName fun
-  , T.funType = unknown
-  , T.funExpr = convertExpr ctorInfo (funExpr fun)
+  { T.funName   = funName fun
+  , T.funType   = unknown
+  , T.funExpr   = convertExpr ctorInfo (funExpr fun)
+  , T.funWheres = map (convertFun ctorInfo) (funWheres fun)
   }
 
 convertData :: Can.Data -> T.Data

@@ -31,7 +31,7 @@ printSExpr = \case
     parens $ "lambda" <+> parens (sepMap pretty vars) <+> printSExpr body
   Let binds body ->
     parens
-      $   "let*"
+      $   "letrec*"
       <+> parens
             (sepMap (\(v, e) -> parens (sep [pretty v, printSExpr e])) binds)
       <+> printSExpr body

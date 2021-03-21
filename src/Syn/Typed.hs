@@ -36,9 +36,10 @@ data Decl = FunDecl Fun
             deriving (Eq, Show)
 
 data Fun = Fun
-  { funName :: Name
-  , funType :: Type
-  , funExpr :: Exp
+  { funName   :: Name
+  , funType   :: Type
+  , funExpr   :: Exp
+  , funWheres :: [Fun]
   }
   deriving (Eq, Show)
 
