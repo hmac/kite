@@ -38,7 +38,6 @@ import           Syn.Parse.Type                 ( pConType
 -- TODO: markdown in comments & doctests
 -- TODO: heredocs
 -- TODO: do notation
--- TODO: where clause
 -- TODO: record patterns
 -- TODO: infix constructors (like List ::)
 -- TODO: empty data types (e.g. Void)
