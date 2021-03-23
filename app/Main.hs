@@ -3,12 +3,20 @@ module Main where
 
 import           Syn.Print
 
-import           Control.Monad                  ( void )
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Data.UUID.V4                   ( nextRandom )
 import           System.Directory               ( getCurrentDirectory )
 import           System.Environment             ( lookupEnv )
-import           System.IO                      ( stdout )
+import           System.Exit                    ( exitWith )
+import           System.IO                      ( IOMode(WriteMode)
+                                                , hPutStrLn
+                                                , stdout
+                                                , withFile
+                                                )
+import           System.Process.Typed           ( proc
+                                                , runProcess
+                                                )
 import           Text.Pretty.Simple             ( pPrint )
 
 import           ModuleGroup
@@ -17,10 +25,11 @@ import qualified ModuleGroupCompiler
 import qualified ModuleGroupTypechecker
 import qualified ModuleLoader
 
-import           LC.Execute                     ( executeMain )
+import           Data.Name                      ( Name(TopLevel) )
 import           Options.Generic
 import qualified Repl                           ( run )
 
+import qualified Syn
 import           Syn.Parse                      ( parseKiteFile )
 
 import qualified Chez.Print
@@ -39,6 +48,7 @@ data Config =
     | Run FilePath
     | Typecheck FilePath
     | Dump DumpPhase FilePath
+    | Compile FilePath FilePath
     deriving (Generic, Show)
 
 instance ParseRecord Config
@@ -64,12 +74,13 @@ main = do
     Just d  -> pure d
   cfg <- getRecord "kite"
   case cfg of
-    Repl         -> Repl.run
-    Format    f  -> format f
-    Eval      f  -> eval homeDir f
-    Run       f  -> run homeDir f
-    Typecheck f  -> typecheck homeDir f
-    Dump phase f -> case phase of
+    Repl                   -> Repl.run
+    Format    f            -> format f
+    Eval      f            -> eval homeDir f
+    Run       f            -> run homeDir f
+    Typecheck f            -> typecheck homeDir f
+    Compile inFile outFile -> compile homeDir inFile outFile
+    Dump    phase  f       -> case phase of
       AfterParse      -> parse homeDir f
       BeforeTypecheck -> dumpTypeEnv homeDir f
       AfterTypecheck  -> dumpTypeEnv homeDir f -- TODO: currently this is before typechecking
@@ -97,9 +108,10 @@ dumpChez homeDir = withParsedFile homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> printNicely (printLocatedError err)
     Right g' ->
-      let cg   = ModuleGroupCompiler.compileToChez g'
-          defs = cModuleEnv cg
-      in  mapM_ (printNicely . Chez.Print.printDef) defs
+      let cg      = ModuleGroupCompiler.compileToChez g'
+          defs    = cModuleEnv cg
+          program = Chez.Print.printProgram defs
+      in  printNicely program
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()
 dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
@@ -126,12 +138,39 @@ eval homeDir = withParsedFile homeDir $ \g ->
       let answer = interpretAndRunMain g' in printNicely (printValue answer)
 
 run :: FilePath -> FilePath -> IO ()
-run homeDir = withParsedFile homeDir $ \g ->
+run homeDir inFile = flip (withParsedFile homeDir) inFile $ \g -> do
+  let modName  = let ModuleGroup m _ = g in Syn.moduleName m
+  let mainName = TopLevel modName "main"
+  uuid1 <- nextRandom
+  -- Compile the program to /tmp/<module name>-<random uuid>.ss
+  let outFile = "/tmp/" <> show modName <> "-" <> show uuid1 <> ".ss"
+  compileModuleGroup outFile g
+
+  -- Write a scheme script to load and run the program
+  uuid2 <- nextRandom
+  let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
+  withFile scriptFile WriteMode $ \h -> do
+    hPutStrLn h $ "(load " <> show outFile <> ")"
+    hPutStrLn h $ "(Kite.Primitive.runIO " <> show mainName <> ")"
+  -- Run the script
+  exitcode <- runProcess
+    (proc "/usr/bin/env" ["scheme", "--script", scriptFile])
+  exitWith exitcode
+
+compile :: FilePath -> FilePath -> FilePath -> IO ()
+compile homeDir inFile outFile =
+  withParsedFile homeDir (compileModuleGroup outFile) inFile
+
+compileModuleGroup :: FilePath -> UntypedModuleGroup -> IO ()
+compileModuleGroup outFile g =
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left err -> print (printLocatedError err)
+    Left err -> printNicely (printLocatedError err)
     Right g' ->
-      let cm = ModuleGroupCompiler.compileToLC g'
-      in  void $ executeMain (cModuleName cm) (cModuleEnv cm)
+      let cg       = ModuleGroupCompiler.compileToChez g'
+          defs     = cModuleEnv cg
+          chezCode = layout $ Chez.Print.printProgram defs
+      in  withFile outFile WriteMode
+            $ \handle -> renderIO handle chezCode >> hPutStrLn handle ""
 
 withParsedFile
   :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()

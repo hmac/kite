@@ -141,6 +141,8 @@ executable kite
     , semigroupoids
     , text
     , transformers
+    , typed-process
+    , uuid
   default-language: Haskell2010
 
 executable kite-bench

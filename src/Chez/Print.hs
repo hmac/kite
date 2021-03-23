@@ -1,4 +1,6 @@
-module Chez.Print where
+module Chez.Print
+  ( printProgram
+  ) where
 
 -- Print a Chez Scheme AST as source code
 
@@ -9,6 +11,10 @@ import           Chez                           ( Def(..)
                                                 , Lit(..)
                                                 , SExpr(..)
                                                 )
+
+-- | Print a whole scheme program from a list of definitions.
+printProgram :: [Def] -> Doc a
+printProgram defs = vsep (map printDef defs)
 
 printDef :: Def -> Doc a
 printDef (Def name body) =
