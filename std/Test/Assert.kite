@@ -1,0 +1,35 @@
+module Test.Assert
+
+import Data.Eq (Eq, eq)
+import Data.Show (Show, show, showInt)
+import Data.List (length)
+import IO (putLine, bindIO)
+
+type Assertion = Assertion { value : Bool, message : String }
+
+type TestResult = Pass | Fail Assertion
+
+runAssertion : Assertion -> Bool
+runAssertion = (Assertion a) -> a.value
+
+runTest : [Assertion] -> TestResult ()
+runTest = [] -> Pass
+          (a :: rest) ->
+            case runAssertion a of
+              True -> runTest rest
+              False -> Fail a
+
+testMain : [Assertion] -> IO ()
+testMain = asserts -> let result = runTest asserts
+                          numResults = length asserts
+                       in case result of
+                            Pass -> putLine "#{show showInt numResults} tests passed."
+                            Fail (Assertion a) -> bindIO (putLine "FAIL") (\unused -> putLine a.message)
+
+assert : String -> Bool -> Assertion
+assert = msg b -> Assertion { value = b, message = msg }
+
+assertEq : Eq a -> Show a -> a -> a -> Assertion
+assertEq = eqd showd x y -> Assertion { value = eq eqd x y
+                                      , message = "#{show showd x} == #{show showd y}"
+                                      }

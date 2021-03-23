@@ -19,9 +19,10 @@ module Data.List
 
 import Kite.Primitive (Bool, True, False)
 import Data.Semigroup (Semigroup(..))
+import Data.Eq (Eq, eq)
 import Data.Maybe (Maybe(..))
-import Data.Bool (and)
-import Data.Monoid (Monoid(..))
+import Data.Bool (and, monoidAll)
+import Data.Monoid (Monoid(..), concat)
 import Kite.List (foldr)
 import Data.Functor (Functor(..))
 import Control.Applicative (Applicative(..), pure, liftA2)
@@ -61,6 +62,14 @@ bindList = [] f        -> []
 monadList : Monad []
 monadList = Monad { applicative = applicativeList, bind = bindList }
 
+eqList : Eq a -> Eq [a]
+eqList = eqa -> Eq { eq = \xs ys -> concat monoidAll (zipWith (eq eqa) xs ys) }
+
+zipWith : (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith = _ [] _  -> []
+          _ _  [] -> []
+          f (x::xs) (y::ys) -> (f x y) :: (zipWith f xs ys)
+
 traverse : forall f a b. Applicative f -> (a -> f b) -> [a] -> f [b]
 traverse = appl f []        -> pure appl []
            appl f (x :: xs) -> liftA2 appl (\y ys -> y :: ys) (f x) (traverse appl f xs)
@@ -90,11 +99,11 @@ last = [] -> Nothing
 -- pattern matching definitions in let bindings
 init : [a] -> Maybe [a]
 init = [] -> Nothing
-       xs -> Just (initHelper xs)
-
-initHelper : [a] -> [a]
-initHelper = [x] -> []
-             (x :: xs) -> x :: (initHelper xs)
+       xs -> Just (go xs)
+ where
+  go : [a] -> [a]
+  go = [x]       -> []
+       (x :: xs) -> x :: (go xs)
 
 -- Decompose a list into its head and tail.
 -- Returns Nothing if the list is empty.

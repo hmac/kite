@@ -1,6 +1,33 @@
 module ListTest
 
-import Data.List (subsequences)
+import Test.Assert (assert, assertEq, testMain, TestResult)
+import Data.Eq (eq)
+import Data.Int (eqInt)
+import Data.Maybe (Maybe(..), eqMaybe)
+import Data.List (head, subsequences, eqList, tail, last, init, uncons)
+import Data.Tuple (eqTuple2)
 
-main : [[Int]]
-main = subsequences [1,2,3]
+main : IO ()
+main = testMain [
+  assert "head [1] == Just 1" (eq (eqMaybe eqInt) (head [1]) (Just 1)),
+  assert "head [] == Nothing" (eq (eqMaybe eqInt) (head []) Nothing),
+
+  assert "tail [] == Nothing" (eq (eqMaybe (eqList eqInt)) (tail []) Nothing),
+  assert "tail [1] == Just []" (eq (eqMaybe (eqList eqInt)) (tail [1]) (Just [])),
+  assert "tail [1, 2] == Just [2]" (eq (eqMaybe (eqList eqInt)) (tail [1, 2]) (Just [2])),
+
+  assert "last [] == Nothing" (eq (eqMaybe eqInt) (last []) Nothing),
+  assert "last [1] == Just 1" (eq (eqMaybe eqInt) (last [1]) (Just 1)),
+  assert "last [1, 2] == Just 2" (eq (eqMaybe eqInt) (last [1, 2]) (Just 2)),
+
+  assert "init [] == Nothing" (eq (eqMaybe (eqList eqInt)) (init []) Nothing),
+  assert "init [1] == Just []" (eq (eqMaybe (eqList eqInt)) (init [1]) (Just [])),
+  assert "init [1, 2] == Just [1]" (eq (eqMaybe (eqList eqInt)) (init [1, 2]) (Just [1])),
+
+  assert "uncons [] == Nothing"
+    (eq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (uncons []) Nothing),
+  assert "uncons [1] == Just (1, [])"
+    (eq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (uncons [1]) (Just (1, []))),
+  assert "uncons [1, 2] == Just (1, [2])"
+    (eq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (uncons [1, 2]) (Just (1, [2])))
+  ]
