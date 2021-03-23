@@ -18,7 +18,7 @@ import           Syn.Parse.Pattern              ( pCasePattern
 import           Syn.Parse.Type                 ( pType )
 
 pExpr :: Parser Syn
-pExpr = try pMultiCase <|> try pBinApp <|> try pApp <|> pExpr'
+pExpr = try pMultiCase <|> try pBinApp <|> pApp
 
 pExpr' :: Parser Syn
 pExpr' =
@@ -62,12 +62,14 @@ pBinApp = do
     string "&&" <|> string "||" <|> string ">=" <|> string "<=" <|> string "<>"
   oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
 
+-- | Parse one or more expressions, forming an application.
+-- If we can only parse one expression then we just return that, with no application.
 pApp :: Parser Syn
 pApp = do
   pos   <- indentLevel
   first <- pExpr'
-  rest  <- some (indentGT pos >> pExpr')
-  pure $ foldl1 App (first : rest)
+  rest  <- many (indentGT pos >> pExpr')
+  pure $ foldl App first rest
 
 -- foo.bar
 -- For ease of implementation we currently only support using projection on
@@ -185,6 +187,7 @@ pFCall = do
   args <- many (indentGT p0 >> pExpr')
   pure $ FCall (unName name) args
 
+-- TODO: patterns in lambda bindings
 pAbs :: Parser Syn
 pAbs = do
   void (string "\\")
@@ -211,14 +214,16 @@ pAbs = do
 pLet :: Parser Syn
 pLet = do
   p0 <- indentLevel
-  void (symbol "let")
+  void (string "let")
   p1    <- indentGT p0
   first <- pAnnotatedBind <|> pBind
   rest  <- many $ do
     indentEQ_ p1
     pAnnotatedBind <|> pBind
   indentGT_ p0
-  void (symbolN "in")
+  void (string "in")
+  p2 <- indentLevel
+  indentGT_ p2
   Let (first : rest) <$> pExpr
  where
   pBind :: Parser (RawName, Syn, Maybe Type)
@@ -333,4 +338,3 @@ pRecord = Record <$> bracesN (pField `sepBy1` symbolN ",")
     void (symbol "=")
     expr <- pExpr
     pure (name, expr)
-

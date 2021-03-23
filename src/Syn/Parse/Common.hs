@@ -71,6 +71,7 @@ lowercaseString = lexeme . try $ do
   guard (t `notElem` keywords)
   pure t
 
+-- TODO: some of these can be used in expressions, e.g. from, qualified, as, module, import
 keywords :: [String]
 keywords =
   [ "type"

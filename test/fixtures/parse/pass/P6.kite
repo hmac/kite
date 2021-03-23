@@ -1,0 +1,8 @@
+module P6
+
+testMain : [Assertion] -> IO ()
+testMain = \asserts -> let result = runTest asserts
+                           numResults = length results
+                        in case result of
+                             Pass -> putLine "${show showInt numResults} tests passed."
+                             Fail (Assertion a) -> bindIO (putLine "FAIL") (\x -> putLine a.message)

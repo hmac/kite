@@ -1,0 +1,11 @@
+module P5
+
+runTest : Test -> TestResult
+runTest = (Test t) -> runAssertions t.assertions
+ where
+  runAssertions : [Assertion] -> TestResult
+  runAssertions = [] -> Pass
+                  (a :: rest) ->
+                    case runAssertion a of
+                      True -> runAssertions rest
+                      False -> Fail a
