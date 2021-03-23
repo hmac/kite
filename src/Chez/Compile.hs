@@ -301,15 +301,17 @@ builtins :: [Def]
 builtins =
   let prim s = "Kite.Primitive." <> s
   in
-    [ DefRecord (prim "IO") ["_tag", "_0"]
+    [ DefRecord "$Kite.Primitive.IO" ["_tag", "_0"]
     , Def
       (prim "MkIO")
-      (Abs ["f"] (App (Var ("make-" <> prim "IO")) [Lit (Int 0), Var "f"]))
+      (Abs ["f"] (App (Var ("make-$Kite.Primitive.IO")) [Lit (Int 0), Var "f"]))
     , Def
       (prim "runIO")
       (Abs
         ["m"]
-        (App (App (Var (prim "IO" <> "-_0")) [Var "m"]) [Abs ["r"] (Var "r")])
+        (App (App (Var ("$Kite.Primitive.IO-_0")) [Var "m"])
+             [Abs ["r"] (Var "r")]
+        )
       )
     , Def
       (prim "appendString")
