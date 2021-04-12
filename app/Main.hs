@@ -3,6 +3,7 @@ module Main where
 
 import           Syn.Print
 
+import           Control.Monad                  ( void )
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.UUID.V4                   ( nextRandom )
@@ -144,33 +145,38 @@ run homeDir inFile = flip (withParsedFile homeDir) inFile $ \g -> do
   uuid1 <- nextRandom
   -- Compile the program to /tmp/<module name>-<random uuid>.ss
   let outFile = "/tmp/" <> show modName <> "-" <> show uuid1 <> ".ss"
-  compileModuleGroup outFile g
+  compileSuccess <- compileModuleGroup outFile g
 
-  -- Write a scheme script to load and run the program
-  uuid2 <- nextRandom
-  let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
-  withFile scriptFile WriteMode $ \h -> do
-    hPutStrLn h $ "(load " <> show outFile <> ")"
-    hPutStrLn h $ "(Kite.Primitive.runIO " <> show mainName <> ")"
-  -- Run the script
-  exitcode <- runProcess
-    (proc "/usr/bin/env" ["scheme", "--script", scriptFile])
-  exitWith exitcode
+  if compileSuccess
+    then do
+    -- Write a scheme script to load and run the program
+      uuid2 <- nextRandom
+      let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
+      withFile scriptFile WriteMode $ \h -> do
+        hPutStrLn h $ "(load " <> show outFile <> ")"
+        hPutStrLn h $ "(Kite.Primitive.runIO " <> show mainName <> ")"
+      -- Run the script
+      exitcode <- runProcess
+        (proc "/usr/bin/env" ["scheme", "--script", scriptFile])
+      exitWith exitcode
+    else pure ()
 
 compile :: FilePath -> FilePath -> FilePath -> IO ()
 compile homeDir inFile outFile =
-  withParsedFile homeDir (compileModuleGroup outFile) inFile
+  withParsedFile homeDir (void . compileModuleGroup outFile) inFile
 
-compileModuleGroup :: FilePath -> UntypedModuleGroup -> IO ()
+compileModuleGroup :: FilePath -> UntypedModuleGroup -> IO Bool
 compileModuleGroup outFile g =
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left err -> printNicely (printLocatedError err)
+    Left err -> printNicely (printLocatedError err) >> pure False
     Right g' ->
       let cg       = ModuleGroupCompiler.compileToChez g'
           defs     = cModuleEnv cg
           chezCode = layout $ Chez.Print.printProgram defs
-      in  withFile outFile WriteMode
-            $ \handle -> renderIO handle chezCode >> hPutStrLn handle ""
+      in  withFile outFile WriteMode $ \handle -> do
+            renderIO handle chezCode
+            hPutStrLn handle ""
+            pure True
 
 withParsedFile
   :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()

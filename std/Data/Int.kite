@@ -1,12 +1,16 @@
 module Data.Int
 
-import Kite.Primitive ($eqInt, $readInt)
+import Kite.Primitive ($eqInt, $readInt, $showInt)
 import Data.Eq (Eq(..))
 import Data.Read (Read(..))
 import Data.Maybe (Maybe(..))
+import Data.Show (Show(..))
 
 eqInt : Eq Int
 eqInt = Eq { eq = $eqInt }
+
+showInt : Show Int
+showInt = Show { show = $showInt }
 
 readInt : Read Int
 readInt = Read { read = s -> $readInt s Nothing Just }

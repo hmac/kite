@@ -1,6 +1,5 @@
-module Data.Ord
+module Data.Ord (Ordering, LT, GT, EQ, eqOrdering, Ord, compare, lt, gt, lte, gte)
 
-import Kite.Bool (not)
 import Data.Eq (Eq, eq)
 
 type Ordering = LT | GT | EQ
@@ -30,3 +29,9 @@ lte = ord x y -> not (eq eqOrdering (compare ord x y) GT)
 
 gte : Ord a -> a -> a -> Bool
 gte = ord x y -> not (eq eqOrdering (compare ord x y) LT)
+
+-- Data.Bool imports this module, so we can't import Data.Bool.not.
+-- Instead we define it again here.
+not : Bool -> Bool
+not = True -> False
+      False -> True

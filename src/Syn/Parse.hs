@@ -98,6 +98,7 @@ pModule = do
                 , moduleMetadata = fromMaybe [] metadata
                 }
 
+-- TODO: Constructor(..)
 pExport :: Parser (RawName, [RawName])
 pExport = do
   export     <- pName

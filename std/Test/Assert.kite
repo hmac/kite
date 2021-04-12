@@ -31,5 +31,5 @@ assert = msg b -> Assertion { value = b, message = msg }
 
 assertEq : Eq a -> Show a -> a -> a -> Assertion
 assertEq = eqd showd x y -> Assertion { value = eq eqd x y
-                                      , message = "#{show showd x} == #{show showd y}"
+                                      , message = "#{show showd x} != #{show showd y}"
                                       }

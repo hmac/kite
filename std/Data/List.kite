@@ -24,9 +24,17 @@ import Data.Maybe (Maybe(..))
 import Data.Bool (and, monoidAll)
 import Data.Monoid (Monoid(..), concat)
 import Kite.List (foldr)
-import Data.Functor (Functor(..))
+import Data.Functor (Functor(..), map)
 import Control.Applicative (Applicative(..), pure, liftA2)
 import Data.Monad (Monad(..))
+import Data.Show (Show(..), show)
+import Kite.String (monoidString)
+
+showList : Show a -> Show [a]
+showList =
+  showa -> Show { show = xs -> let elems = intersperse ", " (map functorList (show showa) xs)
+                                in concat monoidString elems
+                }
 
 listAppend : [a] -> [a] -> [a]
 listAppend = [] ys -> ys

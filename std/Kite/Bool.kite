@@ -1,6 +1,0 @@
-module Kite.Bool
-
-not : Bool -> Bool
-not =
-  False -> True
-  True -> False

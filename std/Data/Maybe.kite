@@ -8,6 +8,7 @@ import Control.Monad.State (State, monadState, applicativeState)
 import Data.Monad (Monad, bind)
 import Data.Function (compose, flip)
 import Control.Alternative (Alternative)
+import Data.Show (Show(..), show)
 
 type Maybe a = Just a | Nothing
 
@@ -16,6 +17,9 @@ eqMaybe = eqa -> Eq { eq = Nothing Nothing -> True
                            (Just x) (Just y) -> eq eqa x y
                            _        _       -> False
                     }
+
+showMaybe : Show a -> Show (Maybe a)
+showMaybe = showa -> Show { show = mx -> maybe "Nothing" (x -> "Just #{show showa x}") mx }
 
 mapMaybe : (a -> b) -> Maybe a -> Maybe b
 mapMaybe = _ Nothing -> Nothing

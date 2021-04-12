@@ -1,10 +1,15 @@
 module Data.Bool
 
-import Kite.Bool (not)
 import Data.Monoid (Monoid(..))
 import Data.Semigroup (Semigroup(..))
 import Data.Eq (Eq(..))
-import Data.Ord (Ord(..), Ordering(..))
+import Data.Ord (Ord(..), Ordering(LT, GT, EQ))
+import Data.Show (Show(..), show)
+
+not : Bool -> Bool
+not =
+  False -> True
+  True -> False
 
 and : Bool -> Bool -> Bool
 and = False _ -> False
@@ -41,6 +46,10 @@ monoidAny = Monoid { empty = False, semigroup = semigroupAny }
 
 eqBool : Eq Bool
 eqBool = Eq { eq = xnor }
+
+showBool : Show Bool
+showBool = Show { show = True -> "True"
+                         False -> "False" }
 
 compareBool : Bool -> Bool -> Ordering
 compareBool =

@@ -1,7 +1,5 @@
 module Data.Eq
 
-import Kite.Bool (not)
-
 type Eq a = Eq { eq : a -> a -> Bool }
 
 eq : Eq a -> a -> a -> Bool
@@ -9,3 +7,9 @@ eq = (Eq d) -> d.eq
 
 notEq : Eq a -> a -> a -> Bool
 notEq = e x y -> not (eq e x y)
+
+-- Data.Bool imports this module, so we can't import Data.Bool.not.
+-- Instead we define it again here.
+not : Bool -> Bool
+not = True -> False
+      False -> True
