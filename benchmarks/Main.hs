@@ -18,7 +18,7 @@ import           ModuleGroupTypechecker         ( typecheckModuleGroup )
 import           ModuleLoader                   ( loadFromPathAndRootDirectory )
 
 import           Type                           ( defaultTypeEnv
-                                                , runTypeM
+                                                , runTypecheckM
                                                 )
 import           Type.Module                    ( checkModule )
 
@@ -69,7 +69,8 @@ typecheckFromPathAndRoot path root = do
 
 typecheckModule :: Module -> IO Bool
 typecheckModule m =
-  let res = runTypeM defaultTypeEnv $ checkModule mempty (canonicaliseModule m)
+  let res = runTypecheckM defaultTypeEnv
+        $ checkModule mempty (canonicaliseModule m)
   in  case res of
         Left  err -> error $ show (moduleName m) <> ":\n" <> show err
         Right _   -> pure True
