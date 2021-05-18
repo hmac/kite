@@ -1,0 +1,10 @@
+module P7
+
+from vector import Vector (Vector
+                          , transpose
+                          , diagonal
+                          , dotProduct
+                          , crossProduct )
+
+identity : Vector -> Vector
+identity = compose transpose transpose

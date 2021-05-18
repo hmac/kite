@@ -3,13 +3,11 @@ module Integration.Parse
   ) where
 
 import           System.Directory               ( listDirectory )
-import           System.FilePath.Posix          ( (</>)
-                                                , takeDirectory
-                                                )
+import           System.FilePath.Posix          ( (</>) )
 import           Test.Hspec
 
-import           ModuleGroup
-import           ModuleLoader
+import           Syn                            ( Module )
+import           Syn.Parse                      ( parseKiteFile )
 
 test :: Spec
 test = describe "parsing Kite modules" $ do
@@ -37,6 +35,5 @@ expectParseFail path = do
     Left  _ -> pure ()
     Right _ -> expectationFailure "expected parse error but succeeded"
 
-parseFile :: FilePath -> IO (Either String UntypedModuleGroup)
-parseFile path =
-  ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)
+parseFile :: FilePath -> IO (Either String Module)
+parseFile path = parseKiteFile path <$> readFile path

@@ -17,6 +17,7 @@ import           Text.Megaparsec                ( ParseErrorBundle
                                                 )
 
 import           AST
+import           Data.Name                      ( mkPackageName )
 import           Syn
 
 -- Parse the string as an expression
@@ -200,17 +201,19 @@ test = parallel $ do
       parse
           pModule
           ""
-          "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4, Foo(..), Bar(BarA, BarB))"
+          "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4, Foo(..), Bar(BarA, BarB))\nfrom somepkg import Http"
         `shouldParse` Module
                         { moduleName     = "Foo"
                         , moduleImports  =
                           [ Import { importQualified = False
+                                   , importPackage   = Nothing
                                    , importName      = ModuleName ["Bar"]
                                    , importAlias     = Nothing
                                    , importItems     = []
                                    }
                           , Import
                             { importQualified = True
+                            , importPackage   = Nothing
                             , importName      = ModuleName ["Bar", "Baz"]
                             , importAlias     = Just "B"
                             , importItems = [ ImportSingle "fun3"
@@ -219,6 +222,12 @@ test = parallel $ do
                                             , ImportSome "Bar" ["BarA", "BarB"]
                                             ]
                             }
+                          , Import { importQualified = False
+                                   , importName      = ModuleName ["Http"]
+                                   , importPackage   = mkPackageName "somepkg"
+                                   , importAlias     = Nothing
+                                   , importItems     = []
+                                   }
                           ]
                         , moduleExports  = [("fun1", []), ("fun2", [])]
                         , moduleDecls    = []

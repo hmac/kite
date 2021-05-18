@@ -74,16 +74,19 @@ test = parallel $ do
       let mod = Module { moduleName = "Data.Text"
                        , moduleExports = [("Text", [])]
                        , moduleImports = [Import { importName = "Data.Text.Internal.Text"
+                                                 , importPackage = Nothing
                                                  , importAlias = Just "Internal"
                                                  , importQualified = True
                                                  , importItems = [ImportSingle "Text"]
                                                  }
                                          , Import { importName = "Data.Maybe"
-                                                 , importAlias = Nothing
-                                                 , importQualified = False
-                                                 , importItems = []
-                                                 }]
+                                                  , importPackage = Nothing
+                                                  , importAlias = Nothing
+                                                  , importQualified = False
+                                                  , importItems = []
+                                                  }
+                                        ]
                        , moduleMetadata = [("package", "text")]
                        , moduleDecls = []
                        }
-      show (printModule mod) `shouldBe` "---\npackage: text\n---\nmodule Data.Text\n  (Text)\n\nimport qualified Data.Text.Internal.Text as Internal (Text)\nimport           Data.Maybe  ()"
+      show (printModule mod) `shouldBe` "---\npackage: text\n---\nmodule Data.Text\n  (Text)\n\nimport qualified Data.Text.Internal.Text as Internal (Text)\nimport           Data.Maybe"

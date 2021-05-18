@@ -30,6 +30,7 @@ module Syn
   ) where
 
 import           Data.Name                      ( ModuleName(..)
+                                                , PackageName
                                                 , RawName(..)
                                                 )
 import qualified Data.Set                      as Set
@@ -69,6 +70,8 @@ extractDecl f Module { moduleDecls = decls } = mapMaybe f decls
 -- import qualified Baz as Boo (fun1, fun2)
 data Import = Import
   { importQualified :: Bool
+  -- | If 'Nothing', this import refers to a module in the current package.
+  , importPackage   :: Maybe PackageName
   , importName      :: ModuleName
   , importAlias     :: Maybe RawName
   , importItems     :: [ImportItem_ RawName]

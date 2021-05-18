@@ -127,16 +127,17 @@ pMetadata = do
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
 -- import Foo (SomeType(..), OtherType(AConstructor), SomeClass)
---
--- When we have packaging: from some_pkg import ...
+-- from some_pkg import Foo
 pImport :: Parser Import
 pImport = do
+  pkg <- optional $ string "from " >> pPackageName
   void $ symbol "import"
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
   alias     <- optional (symbol "as" >> uppercaseName)
-  items     <- optional $ parens (pImportItem `sepBy` comma)
+  items     <- optional $ parens (lexemeN pImportItem `sepBy` comma)
   pure Import { importQualified = qualified
+              , importPackage   = pkg
               , importName      = name
               , importAlias     = alias
               , importItems     = fromMaybe [] items

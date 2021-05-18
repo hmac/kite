@@ -59,13 +59,25 @@ printImports []      = Nothing
 printImports imports = Just $ vsep (map printImport imports)
 
 printImport :: Import -> Document
-printImport i = hsep
-  [ keyword "import"
-  , if importQualified i then keyword "qualified" else "         "
-  , prettyModuleName (importName i)
-  , maybe mempty (\n -> keyword "as" <+> printName n) (importAlias i)
-  , tupled (map printImportItem (importItems i))
-  ]
+printImport i =
+  let
+    pkg = maybe mempty
+                (\n -> keyword "from" <+> printPackageName n <> " ")
+                (importPackage i)
+    qual  = if importQualified i then keyword " qualified " else "           "
+    alias = maybe mempty (\n -> keyword " as" <+> printName n) (importAlias i)
+    items = if null (importItems i)
+      then mempty
+      else " " <> hang 0 (tupled (map printImportItem (importItems i)))
+  in
+    hcat
+      [ pkg
+      , keyword "import"
+      , qual
+      , prettyModuleName (importName i)
+      , alias
+      , items
+      ]
 
 printImportItem :: ImportItem -> Document
 printImportItem i = printName (importItemName i) <> case i of
@@ -317,6 +329,9 @@ printComment c = "--" <+> pretty c
 
 printName :: RawName -> Document
 printName (Name n) = pretty n
+
+printPackageName :: PackageName -> Document
+printPackageName n = pretty (show n)
 
 prettyModuleName :: ModuleName -> Document
 prettyModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))

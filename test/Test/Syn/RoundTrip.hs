@@ -10,6 +10,7 @@ import           Text.Megaparsec                ( Parsec
                                                 )
 
 import           AST
+import           Data.Name                      ( mkPackageName )
 import           Syn
 import           Syn.Parse
 import           Syn.Print
@@ -105,12 +106,18 @@ genMetadata = Gen.list (Range.linear 0 5) genKV
     (,) <$> genLowerString <*> Gen.string (Range.linear 1 100) Gen.alphaNum
 
 genImport :: H.Gen Import
-genImport =
-  Import
-    <$> Gen.bool
-    <*> genModuleName
-    <*> Gen.maybe genUpperName
-    <*> Gen.list (Range.linear 0 3) genImportItem
+genImport = do
+  qualified <- Gen.bool
+  package   <- Gen.maybe genPackageName
+  name      <- genModuleName
+  alias     <- Gen.maybe genUpperName
+  items     <- Gen.list (Range.linear 0 3) genImportItem
+  pure $ Import { importQualified = qualified
+                , importPackage   = package
+                , importName      = name
+                , importAlias     = alias
+                , importItems     = items
+                }
 
 genExport :: H.Gen (RawName, [RawName])
 genExport = Gen.choice [genFunExport, genDataExport]
@@ -136,6 +143,14 @@ genDecl =
 
 genModuleName :: H.Gen ModuleName
 genModuleName = ModuleName <$> Gen.list (Range.linear 1 3) genUpperString
+
+-- The use of 'fromJust' here is safe because we trust Hedgehog to only generate lowercase ascii
+-- strings, which is what 'mkPackageName' accepts.
+genPackageName :: H.Gen PackageName
+genPackageName = do
+  s <- Gen.filter (`notElem` keywords)
+    $ Gen.string (Range.linear 1 10) Gen.lower
+  pure $ fromJust $ mkPackageName s
 
 genData :: H.Gen Data
 genData =

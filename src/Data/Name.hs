@@ -1,8 +1,20 @@
-module Data.Name where
+module Data.Name
+  ( RawName(..)
+  , ModuleName(..)
+  , showModuleName
+  , PackageName
+  , mkPackageName
+  , Name(..)
+  , fromLocal
+  , toRaw
+  , toString
+  , localise
+  ) where
 
 import           Data.Data                      ( Data )
 import           Type.Reflection                ( Typeable )
 
+import           Data.Char                      ( isAsciiLower )
 import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )
 import           Util
@@ -29,6 +41,16 @@ showModuleName (ModuleName names) = mconcat (intersperse "." names)
 
 instance IsString ModuleName where
   fromString s = ModuleName $ splitOn '.' s
+
+newtype PackageName = PackageName String
+  deriving (Eq, Ord, Typeable, Data)
+
+instance Show PackageName where
+  show (PackageName n) = n
+
+mkPackageName :: String -> Maybe PackageName
+mkPackageName s | all isAsciiLower s = Just $ PackageName s
+                | otherwise          = Nothing
 
 -- TODO: change these RawNames to Text/String?
 data Name

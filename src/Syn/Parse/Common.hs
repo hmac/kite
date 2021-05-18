@@ -7,6 +7,9 @@ import           Data.Functor                   ( ($>)
                                                 )
 import           Data.Maybe                     ( fromMaybe )
 
+import           Data.Name                      ( PackageName
+                                                , mkPackageName
+                                                )
 import           Syn                            ( ModuleName(ModuleName)
                                                 , RawName(Name)
                                                 )
@@ -18,12 +21,16 @@ import qualified Text.Megaparsec.Char.Lexer    as L
 
 type Parser = Parsec Error String
 
-newtype Error = VarKeyword String
+data Error
+  = VarKeyword String
+  | InvalidPackageName String
   deriving (Eq, Ord, Show)
 
 instance ShowErrorComponent Error where
-  showErrorComponent (VarKeyword v) =
-    show v <> " is a reserved keyword and cannot be used as a variable name."
+  showErrorComponent = \case
+    VarKeyword v ->
+      show v <> " is a reserved keyword and cannot be used as a variable name."
+    InvalidPackageName n -> show n <> " is not a valid package name."
 
 pChar :: Parser Char
 pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap
@@ -50,6 +57,14 @@ pModuleName = ModuleName <$> lexeme (uppercaseString' `sepBy` string ".")
   -- like uppercaseString but doesn't consume trailing space
   uppercaseString' :: Parser String
   uppercaseString' = (:) <$> upperChar <*> many alphaNumChar
+
+pPackageName :: Parser PackageName
+pPackageName = try $ do
+  s <- lowercaseString
+  case mkPackageName s of
+    Just n  -> pure n
+    Nothing -> customFailure (InvalidPackageName s)
+
 
 pHoleName :: Parser RawName
 pHoleName = lexeme $ Name <$> do

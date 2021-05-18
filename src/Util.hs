@@ -5,6 +5,7 @@ module Util
   , Data.Maybe.fromMaybe
   , Data.Maybe.catMaybes
   , Data.Maybe.isJust
+  , Data.Maybe.fromJust
   , Data.List.nub
   , Data.List.sort
   , Data.List.sortOn
