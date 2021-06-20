@@ -193,10 +193,10 @@ ftv = \case
 -- a Canonical.Exp which is another name for Syn (Canonical.Name).
 --
 -- For typechecking we convert Syn to Type.Exp and typecheck that,
--- producing Syn.Typed. This is then converted to ELC and then to LC for
--- evaluation.
+-- producing Syn.Typed. This is then compiled to Chez.SExpr and printed
+-- as scheme code.
 --
--- [Syn] -> [Can.Exp] -> [Type.Exp] -> [Syn.Typed] -> [ELC] -> [LC]
+-- [Syn] -> [Can.Exp] -> [Type.Exp] -> [Syn.Typed] -> [Chez.SExpr]
 type Syn = AST.Expr RawName Type
 
 -- Supported binary operators

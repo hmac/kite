@@ -8,12 +8,7 @@ import           Canonicalise                   ( canonicaliseModule )
 import           Syn
 import           Syn.Parse                      ( parseKiteFile )
 
-import qualified LC
-import           LC.Eval                        ( evalMain )
 import           ModuleGroup                    ( TypedModuleGroup(..) )
-import           ModuleGroupCompiler            ( CompiledModule(..)
-                                                , compileToLC
-                                                )
 import           ModuleGroupTypechecker         ( typecheckModuleGroup )
 import           ModuleLoader                   ( loadFromPathAndRootDirectory )
 
@@ -38,25 +33,9 @@ main = defaultMain
                                                           "std"
     , bench "Data.List.Intersperse" $ nfIO $ typecheckModule exampleModule
     ]
-  , bgroup
-    "eval"
-    [ bench "Data.ListTest" $ nfIO $ runFromPathAndRoot "std/ListTest.kite"
-                                                        "std"
-    ]
+  , bgroup "eval" []
   ]
 
-runFromPathAndRoot :: FilePath -> FilePath -> IO Bool
-runFromPathAndRoot path root = do
-  group <- loadFromPathAndRootDirectory path root
-  case group of
-    Left  err -> error $ path <> ":\n" <> err
-    Right g   -> case typecheckModuleGroup g of
-      Left err -> error $ path <> ":\n" <> show err
-      Right typedGroup ->
-        let compiled = compileToLC typedGroup
-        in  case evalMain (cModuleName compiled) (cModuleEnv compiled) of
-              LC.Var "notARealVariable" -> pure True
-              _                         -> pure False
 
 typecheckFromPathAndRoot :: String -> String -> IO Bool
 typecheckFromPathAndRoot path root = do

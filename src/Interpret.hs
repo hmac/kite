@@ -8,19 +8,14 @@ module Interpret
   ) where
 
 
+import           Canonical.Primitive            ( modPrim )
 import           Data.Map.Lazy                  ( Map )
 import qualified Data.Map.Lazy                 as Map
 import           Data.Name                      ( Name(..)
                                                 , RawName
                                                 )
+import           Data.Name.Print                ( printName )
 import           Data.Text.Prettyprint.Doc
-import           ELC                            ( Constant(..)
-                                                , Primitive(..)
-                                                )
-import           ELC.Primitive                  ( modPrim )
-import           LC.Print                       ( printConstant
-                                                , printName
-                                                )
 import           ModuleGroup                    ( TypedModuleGroup(..) )
 import           Syn.Print                      ( printRecordSyntax )
 import           Syn.Typed
@@ -38,6 +33,39 @@ data Value = Const Constant
 
 instance Show Value where
   show = show . printValue
+
+data Constant = Int Int
+              | String String
+              | Char Char
+              | Bool Bool
+              | Unit
+              | Prim Primitive
+         deriving (Show, Eq)
+
+printConstant :: Constant -> Doc a
+printConstant = \case
+  Int    i -> pretty i
+  String s -> "\"" <> pretty s <> "\""
+  Char   c -> squotes (pretty c)
+  Bool   b -> pretty b
+  Prim   _ -> "<builtin>"
+  Unit     -> "()"
+
+-- TODO: add PrimShowInt etc.
+data Primitive = PrimStringAppend
+               | PrimStringChars
+               | PrimStringConsChar
+               | PrimStringUnconsChar
+               | PrimAdd
+               | PrimSub
+               | PrimMult
+               | PrimShow -- TODO: this becomes PrimShowInt etc when we have a show typeclass
+               | PrimShowInt
+               | PrimShowChar
+               | PrimEqInt
+               | PrimEqChar
+               | PrimReadInt
+         deriving (Show, Eq)
 
 printValue :: Value -> Doc a
 printValue = \case

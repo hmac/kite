@@ -1,9 +1,9 @@
 module Type.Print where
 
+import           Canonical.Primitive            ( modPrim )
 import           Data.List                      ( intersperse )
 import           Data.Name
 import           Data.Text.Prettyprint.Doc
-import           ELC.Primitive                  ( modPrim )
 import           Type
 
 printModuleName :: ModuleName -> Doc a

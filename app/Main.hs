@@ -58,8 +58,6 @@ data DumpPhase =
     AfterParse
   | BeforeTypecheck
   | AfterTypecheck
-  | LC
-  | ELC
   | Chez
   deriving (Read, Eq, Generic, Show)
 
@@ -85,24 +83,10 @@ main = do
       AfterParse      -> parse homeDir f
       BeforeTypecheck -> dumpTypeEnv homeDir f
       AfterTypecheck  -> dumpTypeEnv homeDir f -- TODO: currently this is before typechecking
-      LC              -> dumpLC homeDir f
-      ELC             -> dumpELC homeDir f
       Chez            -> dumpChez homeDir f
 
 parse :: FilePath -> FilePath -> IO ()
 parse homeDir = withParsedFile homeDir pPrint
-
-dumpLC :: FilePath -> FilePath -> IO ()
-dumpLC homeDir = withParsedFile homeDir $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printLocatedError err)
-    Right g'  -> pPrint (ModuleGroupCompiler.compileToLC g')
-
-dumpELC :: FilePath -> FilePath -> IO ()
-dumpELC homeDir = withParsedFile homeDir $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left  err -> printNicely (printLocatedError err)
-    Right g'  -> pPrint (ModuleGroupCompiler.compileToELC g')
 
 dumpChez :: FilePath -> FilePath -> IO ()
 dumpChez homeDir = withParsedFile homeDir $ \g ->
@@ -140,6 +124,7 @@ eval homeDir = withParsedFile homeDir $ \g ->
 
 run :: FilePath -> FilePath -> IO ()
 run homeDir inFile = flip (withParsedFile homeDir) inFile $ \g -> do
+  -- TODO: are we typechecking here? we should be!
   let modName  = let ModuleGroup m _ = g in Syn.moduleName m
   let mainName = TopLevel modName "main"
   uuid1 <- nextRandom

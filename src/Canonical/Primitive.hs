@@ -1,7 +1,9 @@
 module Canonical.Primitive where
 
-import           ELC.Primitive                  ( modPrim )
 import           Syn
+
+modPrim :: ModuleName
+modPrim = ModuleName ["Kite", "Primitive"]
 
 primitives :: [(RawName, ModuleName)]
 primitives = map (, modPrim) $ miscFunctions <> numFunctions <> list <> io

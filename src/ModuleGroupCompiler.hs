@@ -6,8 +6,6 @@ module ModuleGroupCompiler where
 
 import qualified Chez.Compile                  as Chez
 import           Data.Name
-import qualified ELC.Compile                   as ELC
-import qualified LC.Compile                    as LC
 import           ModuleGroup
 import           Syn.Typed
 
@@ -36,25 +34,6 @@ data CompiledModule a = CompiledModule
   }
   deriving Show
 
-compileToLC :: TypedModuleGroup -> CompiledModule LC.Env
-compileToLC group =
-  let c = compileToELC group
-  in  CompiledModule { cModuleName    = cModuleName c
-                     , cModuleImports = cModuleImports c
-                     , cModuleEnv     = compileModuleToLC (cModuleEnv c)
-                     , cModuleDeps    = []
-                     , cModuleExports = cModuleExports c
-                     }
-
-compileToELC :: TypedModuleGroup -> CompiledModule ELC.Env
-compileToELC (TypedModuleGroup m deps) = CompiledModule
-  { cModuleName    = moduleName m
-  , cModuleImports = moduleImports m
-  , cModuleExports = moduleExports m
-  , cModuleEnv     = env
-  , cModuleDeps    = []
-  }
-  where env = foldl compileModuleToELC ELC.defaultEnv (deps ++ [m])
 
 compileToChez :: TypedModuleGroup -> CompiledModule Chez.Env
 compileToChez (TypedModuleGroup m deps) = CompiledModule
@@ -65,9 +44,3 @@ compileToChez (TypedModuleGroup m deps) = CompiledModule
   , cModuleDeps    = []
   }
   where env = foldl Chez.compileModule mempty (deps ++ [m])
-
-compileModuleToELC :: ELC.Env -> Module -> ELC.Env
-compileModuleToELC env m = LC.runConvert (ELC.translateModule env m)
-
-compileModuleToLC :: ELC.Env -> LC.Env
-compileModuleToLC = LC.runConvert . LC.convertEnv

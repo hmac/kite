@@ -34,16 +34,9 @@ library
       Canonical.Primitive
       Canonicalise
       Data.Name
-      ELC
-      ELC.Compile
-      ELC.Primitive
+      Data.Name.Print
       ExpandExports
       ExpandImports
-      LC
-      LC.Compile
-      LC.Eval
-      LC.Execute
-      LC.Print
       Print
       ModuleGroup
       ModuleGroupCompiler
