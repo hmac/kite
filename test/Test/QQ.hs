@@ -1,6 +1,8 @@
 module Test.QQ where
 
-import           Language.Haskell.TH
+import           Data.Name                      ( Name )
+import           Data.String                    ( fromString )
+import           Language.Haskell.TH     hiding ( Name )
 import           Language.Haskell.TH.Quote
 import           Syn.Parse                      ( pExpr
                                                 , pFun
@@ -12,6 +14,11 @@ import           Text.Megaparsec                ( eof
                                                 , errorBundlePretty
                                                 , parse
                                                 )
+
+-- Construct a name in the module qq.QQ
+-- This is the module that the quasiquoters create
+qq :: String -> Name
+qq n = fromString $ "qq.QQ." <> n
 
 -- A QuasiQuoter for Kite surface syntax
 -- [syn|x -> x] ==> MCase [([VarPat x], Var x)]
@@ -65,6 +72,6 @@ mod = QuasiQuoter { quoteExp  = f
                   }
  where
   f :: String -> Q Exp
-  f s = case parse (spaceConsumerN *> pModule <* eof) "" s of
+  f s = case parse (spaceConsumerN *> pModule "qq" <* eof) "" s of
     Left  err -> error (errorBundlePretty err)
     Right t   -> dataToExpQ (const Nothing) t

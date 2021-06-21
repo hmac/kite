@@ -31,6 +31,7 @@ module Syn
 
 import           Data.Name                      ( ModuleName(..)
                                                 , PackageName
+                                                , PkgModuleName
                                                 , RawName(..)
                                                 )
 import qualified Data.Set                      as Set
@@ -45,7 +46,7 @@ import           Type.Reflection                ( Typeable )
 -- module Foo
 type Module = Module_ RawName Syn Type
 data Module_ name a ty = Module
-  { moduleName     :: ModuleName
+  { moduleName     :: PkgModuleName
   , moduleImports  :: [Import]
   , moduleExports  :: [(name, [name])]
   , moduleDecls    :: [Decl_ name a ty]
@@ -68,11 +69,10 @@ extractDecl f Module { moduleDecls = decls } = mapMaybe f decls
 
 -- import Bar
 -- import qualified Baz as Boo (fun1, fun2)
+-- from http import Server (serve)
 data Import = Import
   { importQualified :: Bool
-  -- | If 'Nothing', this import refers to a module in the current package.
-  , importPackage   :: Maybe PackageName
-  , importName      :: ModuleName
+  , importName      :: PkgModuleName
   , importAlias     :: Maybe RawName
   , importItems     :: [ImportItem_ RawName]
   }

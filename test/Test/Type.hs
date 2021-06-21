@@ -12,6 +12,7 @@ import           Canonicalise                   ( canonicaliseExp
                                                 , canonicaliseModule
                                                 , canonicaliseType
                                                 )
+import           Data.Name                      ( prim )
 import qualified Syn
 import           Test.QQ
 import           Type.FromSyn                   ( convertType
@@ -26,9 +27,8 @@ test = do
         maybeType arg = TCon "Maybe" [arg]
         ctx  = [V (Free "Nothing") (Forall a0 (maybeType (UType a0)))]
         ty   = Forall a1 (list (maybeType (UType a1)))
-        expr = App
-          (App (Var (Free "Kite.Primitive.::")) (Var (Free "Nothing")))
-          (Var (Free "Kite.Primitive.[]"))
+        expr = App (App (Var (Free (prim "::"))) (Var (Free "Nothing")))
+                   (Var (Free (prim "[]")))
         r = check expr ty
     it "typechecks successfully" $ do
       runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
@@ -41,7 +41,7 @@ test = do
         funType = Forall
           (U 0 "a")
           (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
-        cons    = Free "Kite.Primitive.::"
+        cons    = Free $ prim "::"
         nothing = Free "Nothing"
         fun     = MCase
           [ ( [ ConsPat cons
@@ -67,12 +67,12 @@ test = do
         tctx = map (, ()) ["Nat", "Wrap", "Pair"]
 
         ctx =
-          [ V (Free "QQ.Zero") nat
-          , V (Free "QQ.Suc")  (Fn nat nat)
-          , V (Free "QQ.MkWrap")
+          [ V (Free (qq "Zero")) nat
+          , V (Free (qq "Suc"))  (Fn nat nat)
+          , V (Free (qq "MkWrap"))
               (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
           , V
-            (Free "QQ.MkPair")
+            (Free (qq "MkPair"))
             (let a = U 1 "a"
                  b = U 2 "b"
              in  Forall a $ Forall b $ Fn
@@ -171,7 +171,7 @@ test = do
     it "a tuple"
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
-        in  inf expr (TCon "Kite.Primitive.Tuple3" [bool, bool, nat])
+        in  inf expr (TCon (prim "Tuple3") [bool, bool, nat])
     it "a list" $ let expr = [syn|[True, False]|] in inf expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in inf expr int
     it "a string literal" $ let expr = [syn|"Hello"|] in inf expr string
@@ -196,13 +196,13 @@ test = do
           a0 = U 0 "a"
           ctx' =
             [ V
-                (Free "QQ.D")
+                (Free (qq "D"))
                 (Forall
                   a0
-                  (Fn (TRecord [("field", bool)]) (TCon "QQ.D" [UType a0]))
+                  (Fn (TRecord [("field", bool)]) (TCon (qq "D") [UType a0]))
                 )
             ]
-          tctx' = [("QQ.D", ())]
+          tctx' = [(qq "D", ())]
           e     = [syn|x (D d) -> x|]
           t     = [typ|forall a. a -> D a -> a|]
         in
@@ -214,15 +214,15 @@ test = do
       -- f = x (D d) -> x
       $ let ctx' =
               [ V
-                  (Free "QQ.D")
+                  (Free (qq "D"))
                   (Forall
                     (U 0 "a")
                     (Fn (TRecord [("field", UType (U 0 "a"))])
-                        (TCon "QQ.D" [UType (U 0 "a")])
+                        (TCon (qq "D") [UType (U 0 "a")])
                     )
                   )
               ]
-            tctx' = [("QQ.D", ())]
+            tctx' = [(qq "D", ())]
             e     = [syn|x (D d) -> x|]
             t     = [typ|forall a. a -> D a -> a|]
         in  checks tctx' ctx' e t
@@ -236,13 +236,13 @@ test = do
           a0 = U 0 "a"
           ctx' =
             [ V
-                (Free "QQ.D")
+                (Free (qq "D"))
                 (Forall
                   a0
-                  (Fn (Fn (UType a0) (UType a0)) (TCon "QQ.D" [UType a0]))
+                  (Fn (Fn (UType a0) (UType a0)) (TCon (qq "D") [UType a0]))
                 )
             ]
-          tctx' = [("QQ.D", ())]
+          tctx' = [(qq "D", ())]
           t     = [typ|forall a. D a -> (a -> a)|]
           e     = [syn|(D f) -> f|]
         in
@@ -259,30 +259,30 @@ test = do
           t = U 3 "t"
           ctx' =
             [ V
-              (Free "QQ.MkF")
+              (Free (qq "MkF"))
               (Forall
                 t
                 (Forall
                   a
                   (Fn
                     (Fn (TApp (UType t) [UType a]) (TApp (UType t) [UType a]))
-                    (TCon "QQ.F" [UType t])
+                    (TCon (qq "F") [UType t])
                   )
                 )
               )
             , V
-              (Free "QQ.f")
+              (Free (qq "f"))
               (Forall
                 b
                 (Forall
                   c
-                  (Fn (TCon "QQ.T" [UType b, UType c])
-                      (TCon "QQ.T" [UType b, UType c])
+                  (Fn (TCon (qq "T") [UType b, UType c])
+                      (TCon (qq "T") [UType b, UType c])
                   )
                 )
               )
             ]
-          tctx' = [("QQ.T", ()), ("QQ.F", ())]
+          tctx' = [(qq "T", ()), (qq "F", ())]
           e     = [syn|MkF f|]
           ty_   = [typ|forall b. F (T b)|]
       checks tctx' ctx' e ty_
@@ -297,29 +297,29 @@ test = do
           t = U 3 "t"
           ctx' =
             [ V
-              (Free "QQ.MkF")
+              (Free (qq "MkF"))
               (Forall
                 t
                 (Forall
                   a
                   (Fn (Fn (Fn (UType t) (UType a)) (Fn (UType t) (UType a)))
-                      (TCon "QQ.F" [UType t, UType a])
+                      (TCon (qq "F") [UType t, UType a])
                   )
                 )
               )
             , V
-              (Free "QQ.f")
+              (Free (qq "f"))
               (Forall
                 b
                 (Forall
                   c
-                  (Fn (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
-                      (Fn (UType c) (Fn (TCon "QQ.T" []) (UType b)))
+                  (Fn (Fn (UType c) (Fn (TCon (qq "T") []) (UType b)))
+                      (Fn (UType c) (Fn (TCon (qq "T") []) (UType b)))
                   )
                 )
               )
             ]
-          tctx' = [("QQ.F", ()), ("QQ.T", ())]
+          tctx' = [(qq "F", ()), (qq "T", ())]
           e     = [syn|MkF f|]
           ty_   = [typ|forall a b. F a (T -> b)|]
       checks tctx' ctx' e ty_
@@ -338,7 +338,7 @@ failsToInfer tctx ctx expr matchesError = case runInfer tctx ctx expr of
 
 runInfer :: TypeCtx -> Ctx -> Syn.Syn -> Either LocatedError Type
 runInfer tctx ctx expr = do
-  let moduleName    = "QQ"
+  let moduleName    = "qq.QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
         e   <- fromSyn canonicalExpr
@@ -355,7 +355,7 @@ runInfer tctx ctx expr = do
 -- write in AST form.
 infers' :: TypeCtx -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
 infers' tctx ctx expr ty = do
-  let moduleName    = "QQ"
+  let moduleName    = "qq.QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
       canonicalType = canonicaliseType (moduleName, mempty) ty
   let r = do
@@ -375,7 +375,7 @@ infers' tctx ctx expr ty = do
 checks :: TypeCtx -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
 checks tctx ctx expr ty = do
   let modul = canonicaliseModule Syn.Module
-        { Syn.moduleName     = "QQ"
+        { Syn.moduleName     = "qq.QQ"
         , Syn.moduleImports  = mempty
         , Syn.moduleExports  = mempty
         , Syn.moduleDecls    = [ Syn.FunDecl Syn.Fun { Syn.funName     = "f"

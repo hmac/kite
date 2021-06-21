@@ -26,7 +26,9 @@ import qualified ModuleGroupCompiler
 import qualified ModuleGroupTypechecker
 import qualified ModuleLoader
 
-import           Data.Name                      ( Name(TopLevel) )
+import           Data.Name                      ( Name(TopLevel)
+                                                , PackageName
+                                                )
 import           Options.Generic
 import qualified Repl                           ( run )
 
@@ -86,10 +88,10 @@ main = do
       Chez            -> dumpChez homeDir f
 
 parse :: FilePath -> FilePath -> IO ()
-parse homeDir = withParsedFile homeDir pPrint
+parse homeDir = withParsedFile "fake-pkg" homeDir pPrint
 
 dumpChez :: FilePath -> FilePath -> IO ()
-dumpChez homeDir = withParsedFile homeDir $ \g ->
+dumpChez homeDir = withParsedFile "fake-pkg" homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> printNicely (printLocatedError err)
     Right g' ->
@@ -99,31 +101,31 @@ dumpChez homeDir = withParsedFile homeDir $ \g ->
       in  printNicely program
 
 dumpTypeEnv :: FilePath -> FilePath -> IO ()
-dumpTypeEnv homeDir = withParsedFile homeDir $ \g ->
+dumpTypeEnv homeDir = withParsedFile "fake-pkg" homeDir $ \g ->
   case ModuleGroupTypechecker.dumpEnv g of
     Left  err -> pPrint err
     Right g'  -> pPrint g'
 
 typecheck :: FilePath -> FilePath -> IO ()
-typecheck homeDir = withParsedFile homeDir $ \g ->
+typecheck homeDir = withParsedFile "fake-pkg" homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left  err -> printNicely $ printLocatedError err
     Right _   -> printNicely "Success."
 
 format :: FilePath -> IO ()
-format path = (parseKiteFile path <$> readFile path) >>= \case
+format path = (parseKiteFile path "fake-pkg" <$> readFile path) >>= \case
   Right m   -> printNicely (printModule m)
   Left  err -> putStrLn err
 
 eval :: FilePath -> FilePath -> IO ()
-eval homeDir = withParsedFile homeDir $ \g ->
+eval homeDir = withParsedFile "fake-pkg" homeDir $ \g ->
   case ModuleGroupTypechecker.typecheckModuleGroup g of
     Left err -> print (printLocatedError err)
     Right g' ->
       let answer = interpretAndRunMain g' in printNicely (printValue answer)
 
 run :: FilePath -> FilePath -> IO ()
-run homeDir inFile = flip (withParsedFile homeDir) inFile $ \g -> do
+run homeDir inFile = flip (withParsedFile "fake-pkg" homeDir) inFile $ \g -> do
   -- TODO: are we typechecking here? we should be!
   let modName  = let ModuleGroup m _ = g in Syn.moduleName m
   let mainName = TopLevel modName "main"
@@ -148,7 +150,7 @@ run homeDir inFile = flip (withParsedFile homeDir) inFile $ \g -> do
 
 compile :: FilePath -> FilePath -> FilePath -> IO ()
 compile homeDir inFile outFile =
-  withParsedFile homeDir (void . compileModuleGroup outFile) inFile
+  withParsedFile "fake-pkg" homeDir (void . compileModuleGroup outFile) inFile
 
 compileModuleGroup :: FilePath -> UntypedModuleGroup -> IO Bool
 compileModuleGroup outFile g =
@@ -164,9 +166,13 @@ compileModuleGroup outFile g =
             pure True
 
 withParsedFile
-  :: FilePath -> (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
-withParsedFile homeDir cb path = do
-  mgroup <- ModuleLoader.loadFromPathAndRootDirectory path homeDir
+  :: PackageName
+  -> FilePath
+  -> (UntypedModuleGroup -> IO ())
+  -> FilePath
+  -> IO ()
+withParsedFile pkgName homeDir cb path = do
+  mgroup <- ModuleLoader.loadFromPathAndRootDirectory path homeDir pkgName
   case mgroup of
     Left  e -> putStrLn e
     Right g -> cb g

@@ -1,6 +1,7 @@
 module ModuleLoader
   ( ModuleGroup(..)
   , module ModuleLoader
+  -- TODO: fix this
   -- , UntypedModuleGroup
   -- , loadFromPath
   -- , loadFromPathAndRootDirectory
@@ -16,13 +17,14 @@ import qualified Data.Map.Strict               as Map
 import           System.Directory               ( getCurrentDirectory )
 
 import           AST                            ( Expr )
+import           Canonical.Primitive            ( modPrim )
 import           Canonicalise                   ( canonicaliseModule )
 import           Data.Graph                     ( SCC(..)
                                                 , flattenSCCs
                                                 , stronglyConnCompR
                                                 )
 import           Data.List                      ( intercalate )
-import           Data.Name                      ( showModuleName )
+import           Data.Name                      ( PkgModuleName(..) )
 import           ExpandExports                  ( expandExports )
 import           ExpandImports                  ( expandImports )
 import qualified ExpandImports
@@ -51,15 +53,19 @@ import           Util
 type ModuleCache = IORef (Map String (Either String Module))
 
 -- TODO: structured errors
-loadFromPath :: FilePath -> IO (Either String UntypedModuleGroup)
-loadFromPath path = do
+loadFromPath
+  :: FilePath -> PackageName -> IO (Either String UntypedModuleGroup)
+loadFromPath path pkgName = do
   root <- getCurrentDirectory
-  loadFromPathAndRootDirectory path root
+  loadFromPathAndRootDirectory path root pkgName
 
 loadFromPathAndRootDirectory
-  :: FilePath -> FilePath -> IO (Either String UntypedModuleGroup)
-loadFromPathAndRootDirectory path root = do
-  modul <- parseKiteFile path <$> readFile path
+  :: FilePath
+  -> FilePath
+  -> PackageName
+  -> IO (Either String UntypedModuleGroup)
+loadFromPathAndRootDirectory path root pkgName = do
+  modul <- parseKiteFile path pkgName <$> readFile path
 
   case modul of
     Left  err -> pure (Left err)
@@ -82,13 +88,14 @@ loadFromPathAndRootDirectory path root = do
                 -> pure
                   $  Left
                   $  "In "
-                  <> showModuleName importingModule
+                  <> show importingModule
                   <> ", cannot find module "
-                  <> showModuleName missingModule
+                  <> show missingModule
 
-loadAll :: FilePath -> ModuleCache -> ModuleName -> IO (Either String [Module])
-loadAll root cache name = do
-  modul <- load root cache name
+loadAll
+  :: FilePath -> ModuleCache -> PkgModuleName -> IO (Either String [Module])
+loadAll root cache pkgModuleName = do
+  modul <- load root cache pkgModuleName
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
@@ -99,21 +106,21 @@ loadAll root cache name = do
           let m' = expandExports m
           pure $ Right $ m' : concat deps'
 
-load :: FilePath -> ModuleCache -> ModuleName -> IO (Either String Module)
-load root cache name = do
-  let path = filePath root name
+load :: FilePath -> ModuleCache -> PkgModuleName -> IO (Either String Module)
+load root cache (PkgModuleName pkgName modName) = do
+  let path = filePath root modName
   Map.lookup path <$> readIORef cache >>= \case
     Just m -> pure m
     _      -> do
-      m <- parseKiteFile path <$> readFile path
+      m <- parseKiteFile path pkgName <$> readFile path
       atomicModifyIORef' cache $ \c -> (Map.insert path m c, m)
 
 -- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
 -- anyway.
-dependencies :: Module_ n (Expr n ty) ty -> [ModuleName]
+dependencies :: Module_ n (Expr n ty) ty -> [PkgModuleName]
 dependencies Module { moduleImports = imports } =
-  filter (/= ModuleName ["Kite", "Primitive"]) $ nub $ map importName imports
+  filter (/= modPrim) $ nub $ map importName imports
 
 filePath :: FilePath -> ModuleName -> FilePath
 filePath root (ModuleName components) =

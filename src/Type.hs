@@ -65,7 +65,9 @@ import           Data.List                      ( intercalate )
 import           Data.Name                      ( ModuleName(..)
                                                 , Name(..)
                                                 , RawName(..)
+                                                , prim
                                                 )
+import           Data.Name.Gen                  ( genName )
 import           Data.String                    ( fromString )
 import           System.Environment             ( lookupEnv )
 import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
@@ -117,43 +119,43 @@ import           Type.Reflection                ( Typeable )
 
 -- Primitive types
 string :: Type
-string = TCon "Kite.Primitive.String" []
+string = TCon (prim "String") []
 
 int :: Type
-int = TCon "Kite.Primitive.Int" []
+int = TCon (prim "Int") []
 
 char :: Type
-char = TCon "Kite.Primitive.Char" []
+char = TCon (prim "Char") []
 
 bool :: Type
-bool = TCon "Kite.Primitive.Bool" []
+bool = TCon (prim "Bool") []
 
 unit :: Type
-unit = TCon "Kite.Primitive.Unit" []
+unit = TCon (prim "Unit") []
 
 list :: Type -> Type
-list a = TCon "Kite.Primitive.List" [a]
+list a = TCon (prim "List") [a]
 
 io :: Type -> Type
-io a = TCon "Kite.Primitive.IO" [a]
+io a = TCon (prim "IO") [a]
 
 primTypeCtx :: TypeCtx
 primTypeCtx = map
-  (, ())
-  [ "Kite.Primitive.String"
-  , "Kite.Primitive.Int"
-  , "Kite.Primitive.Char"
-  , "Kite.Primitive.Bool"
-  , "Kite.Primitive.Unit"
-  , "Kite.Primitive.List"
-  , "Kite.Primitive.IO"
-  , "Kite.Primitive.Tuple2"
-  , "Kite.Primitive.Tuple3"
-  , "Kite.Primitive.Tuple4"
-  , "Kite.Primitive.Tuple5"
-  , "Kite.Primitive.Tuple6"
-  , "Kite.Primitive.Tuple7"
-  , "Kite.Primitive.Tuple8"
+  (\n -> (prim n, ()))
+  [ "String"
+  , "Int"
+  , "Char"
+  , "Bool"
+  , "Unit"
+  , "List"
+  , "IO"
+  , "Tuple2"
+  , "Tuple3"
+  , "Tuple4"
+  , "Tuple5"
+  , "Tuple6"
+  , "Tuple7"
+  , "Tuple8"
   ]
 
 -- Primitive constructors
@@ -161,27 +163,27 @@ primTypeCtx = map
 
 primitiveConstructors :: Ctx
 primitiveConstructors =
-  [ V (Free "Kite.Primitive.Unit")  unit
-  , V (Free "Kite.Primitive.True")  bool
-  , V (Free "Kite.Primitive.False") bool
-  , V (Free "Kite.Primitive.[]") (Forall (U 0 "a") (list (UType (U 0 "a"))))
+  [ V (Free (prim "Unit"))  unit
+  , V (Free (prim "True"))  bool
+  , V (Free (prim "False")) bool
+  , V (Free (prim "[]")) (Forall (U 0 "a") (list (UType (U 0 "a"))))
   , V
-    (Free "Kite.Primitive.::")
+    (Free (prim "::"))
     (Forall
       (U 0 "a")
       (Fn (UType (U 0 "a"))
           (Fn (list (UType (U 0 "a"))) (list (UType (U 0 "a"))))
       )
     )
-  , V (Free "Kite.Primitive.Tuple2") (mkTupleCon 2 "Kite.Primitive.Tuple2")
-  , V (Free "Kite.Primitive.Tuple3") (mkTupleCon 3 "Kite.Primitive.Tuple3")
-  , V (Free "Kite.Primitive.Tuple4") (mkTupleCon 4 "Kite.Primitive.Tuple4")
-  , V (Free "Kite.Primitive.Tuple5") (mkTupleCon 5 "Kite.Primitive.Tuple5")
-  , V (Free "Kite.Primitive.Tuple6") (mkTupleCon 6 "Kite.Primitive.Tuple6")
-  , V (Free "Kite.Primitive.Tuple7") (mkTupleCon 7 "Kite.Primitive.Tuple7")
-  , V (Free "Kite.Primitive.Tuple8") (mkTupleCon 8 "Kite.Primitive.Tuple8")
+  , V (Free (prim "Tuple2")) (mkTupleCon 2 (prim "Tuple2"))
+  , V (Free (prim "Tuple3")) (mkTupleCon 3 (prim "Tuple3"))
+  , V (Free (prim "Tuple4")) (mkTupleCon 4 (prim "Tuple4"))
+  , V (Free (prim "Tuple5")) (mkTupleCon 5 (prim "Tuple5"))
+  , V (Free (prim "Tuple6")) (mkTupleCon 6 (prim "Tuple6"))
+  , V (Free (prim "Tuple7")) (mkTupleCon 7 (prim "Tuple7"))
+  , V (Free (prim "Tuple8")) (mkTupleCon 8 (prim "Tuple8"))
   , V
-    (Free "Kite.Primitive.MkIO")
+    (Free (prim "MkIO"))
     (Forall (U 0 "a")
             (Fn (Fn (Fn (UType (U 0 "a")) unit) unit) (io (UType (U 0 "a"))))
     )
@@ -193,14 +195,14 @@ primitiveConstructors =
 -- or Maybe, since that may change in the future.
 primitiveFns :: Ctx
 primitiveFns =
-  [ V (Free "Kite.Primitive.appendString") (Fn string (Fn string string))
-  , V (Free "Kite.Primitive.$chars")       (Fn string (list char))
-  , V (Free "Kite.Primitive.$consChar")    (Fn char (Fn string string))
+  [ V (Free (prim "appendString")) (Fn string (Fn string string))
+  , V (Free (prim "$chars"))       (Fn string (list char))
+  , V (Free (prim "$consChar"))    (Fn char (Fn string string))
   -- unconsChar : String -> a -> (Char -> String -> a) -> a
   , let a = U 0 "a"
     in
       V
-        (Free "Kite.Primitive.$unconsChar")
+        (Free (prim "$unconsChar"))
 
         (Forall
           a
@@ -208,17 +210,17 @@ primitiveFns =
               (Fn (UType a) (Fn (Fn char (Fn string (UType a))) (UType a)))
           )
         )
-  , V (Free "Kite.Primitive.+")         (Fn int (Fn int int))
-  , V (Free "Kite.Primitive.-")         (Fn int (Fn int int))
-  , V (Free "Kite.Primitive.*")         (Fn int (Fn int int))
-  , V (Free "Kite.Primitive.$showInt")  (Fn int string)
-  , V (Free "Kite.Primitive.$showChar") (Fn char string)
-  , V (Free "Kite.Primitive.$eqInt")    (Fn int (Fn int bool))
-  , V (Free "Kite.Primitive.$eqChar")   (Fn char (Fn char bool))
+  , V (Free (prim "+"))         (Fn int (Fn int int))
+  , V (Free (prim "-"))         (Fn int (Fn int int))
+  , V (Free (prim "*"))         (Fn int (Fn int int))
+  , V (Free (prim "$showInt"))  (Fn int string)
+  , V (Free (prim "$showChar")) (Fn char string)
+  , V (Free (prim "$eqInt"))    (Fn int (Fn int bool))
+  , V (Free (prim "$eqChar"))   (Fn char (Fn char bool))
   -- readInt : String -> a -> (Int -> a) -> a
   , let a = U 0 "a"
     in  V
-          (Free "Kite.Primitive.$readInt")
+          (Free (prim "$readInt"))
 
           (Forall a (Fn string (Fn (UType a) (Fn (Fn int (UType a)) (UType a))))
           )
@@ -1043,7 +1045,7 @@ infer expr_ = do
       pure ty'
     StringInterp prefix comps -> do
       -- Construct a nested application of appendString and infer the type of that
-      let append = Var (Free "Kite.Primitive.appendString")
+      let append = Var (Free (prim "appendString"))
           expr   = foldl
             (\acc (c, s) -> App (App append acc) (App (App append c) s))
             (StringLit prefix)
@@ -1056,14 +1058,14 @@ infer expr_ = do
     UnitLit       -> pure unit
     ListLit elems -> do
       -- Construct a nested application of (::) and [] and infer the type of that
-      let expr = foldr (App . App (Con (Free "Kite.Primitive.::")))
-                       (Con (Free "Kite.Primitive.[]"))
+      let expr = foldr (App . App (Con (Free (prim "::"))))
+                       (Con (Free (prim "[]")))
                        elems
       infer expr
     TupleLit elems -> do
       -- Construct an application of TupleN and infer the type of that
       let n    = length elems
-          con  = Con (Free (fromString ("Kite.Primitive.Tuple" <> show n)))
+          con  = Con $ Free $ prim $ fromString $ "Tuple" <> show n
           expr = foldl App con elems
       infer expr
     Record fields -> do
@@ -1161,26 +1163,23 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
     let con = case subpats of
           []                       -> error "Type.inferPattern: empty tuple"
           [_] -> error "Type.inferPattern: single-element tuple"
-          [_, _]                   -> Free "Kite.Primitive.Tuple2"
-          [_, _, _]                -> Free "Kite.Primitive.Tuple3"
-          [_, _, _, _]             -> Free "Kite.Primitive.Tuple4"
-          [_, _, _, _, _]          -> Free "Kite.Primitive.Tuple5"
-          [_, _, _, _, _, _]       -> Free "Kite.Primitive.Tuple6"
-          [_, _, _, _, _, _, _]    -> Free "Kite.Primitive.Tuple7"
-          [_, _, _, _, _, _, _, _] -> Free "Kite.Primitive.Tuple8"
+          [_, _]                   -> Free (prim "Tuple2")
+          [_, _, _]                -> Free (prim "Tuple3")
+          [_, _, _, _]             -> Free (prim "Tuple4")
+          [_, _, _, _, _]          -> Free (prim "Tuple5")
+          [_, _, _, _, _, _]       -> Free (prim "Tuple6")
+          [_, _, _, _, _, _, _]    -> Free (prim "Tuple7")
+          [_, _, _, _, _, _, _, _] -> Free (prim "Tuple8")
           _ ->
             error
               $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
     in  inferPattern (ConsPat con Nothing subpats)
-  ListPat [] ->
-    inferPattern (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
+  ListPat [] -> inferPattern (ConsPat (Free (prim "[]")) (Just listNilMeta) [])
   ListPat subpats -> inferPattern
-    (foldr
-      (\s acc -> ConsPat (Free "Kite.Primitive.::") (Just listConsMeta) [s, acc]
-      )
-      (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
-      subpats
+    (foldr (\s acc -> ConsPat (Free (prim "::")) (Just listConsMeta) [s, acc])
+           (ConsPat (Free (prim "[]")) (Just listNilMeta) [])
+           subpats
     )
 
 checkPattern :: Pattern -> Type -> TypeM ()
@@ -1221,15 +1220,12 @@ checkPattern pat ty = do
           ty'    <- subst ty
           subtype tcon'' ty'
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
-    ListPat [] -> checkPattern
-      (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
-      ty
+    ListPat [] ->
+      checkPattern (ConsPat (Free (prim "[]")) (Just listNilMeta) []) ty
     ListPat subpats -> checkPattern
       (foldr
-        (\s acc ->
-          ConsPat (Free "Kite.Primitive.::") (Just listConsMeta) [s, acc]
-        )
-        (ConsPat (Free "Kite.Primitive.[]") (Just listNilMeta) [])
+        (\s acc -> ConsPat (Free (prim "::")) (Just listConsMeta) [s, acc])
+        (ConsPat (Free (prim "[]")) (Just listNilMeta) [])
         subpats
       )
       ty
@@ -1238,13 +1234,13 @@ checkPattern pat ty = do
         con = case subpats of
           []                       -> error "Type.checkPattern: empty tuple"
           [_] -> error "Type.checkPattern: single-element tuple"
-          [_, _]                   -> Free "Kite.Primitive.Tuple2"
-          [_, _, _]                -> Free "Kite.Primitive.Tuple3"
-          [_, _, _, _]             -> Free "Kite.Primitive.Tuple4"
-          [_, _, _, _, _]          -> Free "Kite.Primitive.Tuple5"
-          [_, _, _, _, _, _]       -> Free "Kite.Primitive.Tuple6"
-          [_, _, _, _, _, _, _]    -> Free "Kite.Primitive.Tuple7"
-          [_, _, _, _, _, _, _, _] -> Free "Kite.Primitive.Tuple8"
+          [_, _]                   -> Free (prim "Tuple2")
+          [_, _, _]                -> Free (prim "Tuple3")
+          [_, _, _, _]             -> Free (prim "Tuple4")
+          [_, _, _, _, _]          -> Free (prim "Tuple5")
+          [_, _, _, _, _, _]       -> Free (prim "Tuple6")
+          [_, _, _, _, _, _, _]    -> Free (prim "Tuple7")
+          [_, _, _, _, _, _, _, _] -> Free (prim "Tuple8")
           _ ->
             error
               $  "Type.checkPattern: cannot (yet) handle tuples of length > 8: "
@@ -1378,14 +1374,6 @@ genE = E <$> G.int (R.linear 0 100)
 genV :: Gen V
 genV = G.choice [Free <$> genName, Bound <$> G.int (R.linear 0 100)]
 
-genName :: Gen Name
-genName = G.choice
-  [Local <$> genLowerRawName, TopLevel <$> genModuleName <*> genLowerRawName]
-
--- Uppercase names are data constructors, so are always qualified
-genUpperName :: Gen Name
-genUpperName = G.choice [TopLevel <$> genModuleName <*> genUpperRawName]
-
 genModuleName :: Gen ModuleName
 genModuleName = ModuleName <$> G.list (R.linear 1 3) genUpperString
 
@@ -1395,18 +1383,8 @@ genUpperString = do
   cs <- G.list (R.linear 0 10) G.alphaNum
   pure (c : cs)
 
-genLowerRawName :: Gen RawName
-genLowerRawName = Name <$> genLowerString
-
 genUpperRawName :: Gen RawName
 genUpperRawName = Name <$> genUpperString
-
-genLowerString :: Gen String
-genLowerString = do
-  c  <- G.lower
-  cs <- G.list (R.linear 0 5) G.alphaNum
-  pure (c : cs)
-
 
 test :: Hedgehog.Group
 test = $$(Hedgehog.discover)
@@ -1439,14 +1417,14 @@ typecheckTest ctx =
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
   ctx <- forAll genCtx
-  let expr = Con (Free "Kite.Primitive.Unit")
-      ty   = TCon "Kite.Primitive.Unit" []
+  let expr = Con (Free (prim "Unit"))
+      ty   = TCon (prim "Unit") []
   typecheckTest ctx (infer expr) === Right ty
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
   ctx <- forAll genCtx
-  let expr = Con (Free "Kite.Primitive.Unit")
+  let expr = Con (Free (prim "Unit"))
       ty   = Fn unit unit
   typecheckTest ctx (check expr ty)
     === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
@@ -1454,14 +1432,14 @@ prop_checks_bad_unit_annotation = property $ do
 prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- forAll genV
-  let uval = Con (Free "Kite.Primitive.Unit")
+  let uval = Con (Free (prim "Unit"))
   let expr = App (Ann (Abs [v] uval) (Fn unit unit)) uval
   typecheckTest mempty (infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
-  let uval = Con (Free "Kite.Primitive.Unit")
+  let uval = Con (Free (prim "Unit"))
       ctx  = [V (Free "id") (Fn unit unit)]
   -- The expression is id Unit
   let expr = App (Var (Free "id")) uval
@@ -1472,7 +1450,7 @@ prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
-  let uval = Con (Free "Kite.Primitive.Unit")
+  let uval = Con (Free (prim "Unit"))
       a    = U 0 "a"
       ctx =
         [ V (Free "id")     (Forall a (Fn (UType a) (UType a)))
@@ -1499,17 +1477,17 @@ prop_infers_bool_case = property $ do
       --   True -> ()
       --   False -> ()
       expr1 = Case
-        (Con (Free "Kite.Primitive.True"))
-        [ (BoolPat True , Con (Free "Kite.Primitive.Unit"))
-        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
+        (Con (Free (prim "True")))
+        [ (BoolPat True , Con (Free (prim "Unit")))
+        , (BoolPat False, Con (Free (prim "Unit")))
         ]
       -- case True of
       --   True -> True
       --   False -> ()
       expr2 = Case
-        (Con (Free "Kite.Primitive.True"))
-        [ (BoolPat True , Con (Free "Kite.Primitive.True"))
-        , (BoolPat False, Con (Free "Kite.Primitive.Unit"))
+        (Con (Free (prim "True")))
+        [ (BoolPat True , Con (Free (prim "True")))
+        , (BoolPat False, Con (Free (prim "Unit")))
         ]
   typecheckTest mempty (infer expr1) === Right unit
   typecheckTest mempty (infer expr2)
@@ -1530,20 +1508,18 @@ prop_checks_higher_kinded_application = property $ do
   -- ((\x -> x) : f a -> f a) [1]         should infer [Int]
   let expr2 = App
         (Ann expr1 type1)
-        (App (App (Var (Free "Kite.Primitive.::")) (IntLit 1))
-             (Var (Free "Kite.Primitive.[]"))
-        )
+        (App (App (Var (Free (prim "::"))) (IntLit 1)) (Var (Free (prim "[]"))))
       type2 = list int
   typecheckTest mempty (check expr2 type2) === Right ()
   typecheckTest mempty (infer' expr2) === Right (list int)
   -- ((\x -> x) : f a -> f a) True : [Int] should fail to check
   -- ((\x -> x) : f a -> f a) True         should infer some unknown unification variables
-  let expr3 = App (Ann expr1 type1) (Var (Free "Kite.Primitive.True"))
+  let expr3 = App (Ann expr1 type1) (Var (Free (prim "True")))
       type3 = list int
   typecheckTest mempty (check expr3 type3) === Left
     (LocatedError
       Nothing
-      (SubtypingFailure (TCon "Kite.Primitive.Bool" [EType (E 1)]) (list int))
+      (SubtypingFailure (TCon (prim "Bool") [EType (E 1)]) (list int))
     )
   typecheckTest mempty (infer expr3)
     === Right (TApp (EType (E 0)) [EType (E 1)])

@@ -22,7 +22,7 @@ type Exp = ExprT Name Type
 type Pattern = AST.Pat Name
 
 data Module = Module
-  { moduleName    :: ModuleName
+  { moduleName    :: PkgModuleName
   , moduleImports :: [S.Import]
   , moduleExports :: [Name]
   , moduleDecls   :: [Decl]

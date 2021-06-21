@@ -26,7 +26,7 @@ import           Syn.Typed
 --                          a = C.a
 
 data CompiledModule a = CompiledModule
-  { cModuleName    :: ModuleName
+  { cModuleName    :: PkgModuleName
   , cModuleImports :: [Import]
   , cModuleExports :: [Name]
   , cModuleEnv     :: a

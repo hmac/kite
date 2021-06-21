@@ -103,18 +103,18 @@ const = x y -> y|]
 ctx :: (TypeCtx, Ctx)
 ctx =
   let
-    nat = TCon "QQ.Nat" []
-    wrap a = TCon "QQ.Wrap" [a]
-    pair a b = TCon "QQ.Pair" [a, b]
-    either a b = TCon "QQ.Either" [a, b]
-    maybe a = TCon "QQ.Maybe" [a]
+    nat = TCon (qq "Nat") []
+    wrap a = TCon (qq "Wrap") [a]
+    pair a b = TCon (qq "Pair") [a, b]
+    either a b = TCon (qq "Either") [a, b]
+    maybe a = TCon (qq "Maybe") [a]
     termCtx =
-      [ V (Free "QQ.Zero") nat
-      , V (Free "QQ.Suc")  (Fn nat nat)
-      , V (Free "QQ.MkWrap")
+      [ V (Free (qq "Zero")) nat
+      , V (Free (qq "Suc"))  (Fn nat nat)
+      , V (Free (qq "MkWrap"))
           (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
       , V
-        (Free "QQ.MkPair")
+        (Free (qq "MkPair"))
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn
@@ -122,23 +122,23 @@ ctx =
                (Fn (UType b) (pair (UType a) (UType b)))
         )
       , V
-        (Free "QQ.Left")
+        (Free (qq "Left"))
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn (UType a) (either (UType a) (UType b))
         )
       , V
-        (Free "QQ.Right")
+        (Free (qq "Right"))
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn (UType b) (either (UType a) (UType b))
         )
-      , V (Free "QQ.Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
-      , V (Free "QQ.Just")
+      , V (Free (qq "Nothing")) (let a = U 1 "a" in Forall a (maybe (UType a)))
+      , V (Free (qq "Just"))
           (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
       ]
     typeCtx =
-      map (, ()) ["QQ.Nat", "QQ.Wrap", "QQ.Pair", "QQ.Either", "QQ.Maybe"]
+      map (, ()) [qq "Nat", qq "Wrap", qq "Pair", qq "Either", qq "Maybe"]
   in
     (typeCtx, termCtx)
 
@@ -149,7 +149,7 @@ fails :: Syn.Fun Syn.Syn -> Expectation
 fails = failsModule . mkModule
 
 mkModule :: Syn.Fun Syn.Syn -> Syn.Module
-mkModule fun = Syn.Module { Syn.moduleName     = "QQ"
+mkModule fun = Syn.Module { Syn.moduleName     = "qq.QQ"
                           , Syn.moduleImports  = mempty
                           , Syn.moduleExports  = mempty
                           , Syn.moduleDecls    = [Syn.FunDecl fun]

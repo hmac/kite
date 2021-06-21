@@ -17,7 +17,6 @@ import           Text.Megaparsec                ( ParseErrorBundle
                                                 )
 
 import           AST
-import           Data.Name                      ( mkPackageName )
 import           Syn
 
 -- Parse the string as an expression
@@ -183,9 +182,11 @@ test = parallel $ do
         }
   describe "parsing modules" $ do
     it "parses a basic module with metadata" $ do
-      parse pModule "" "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"
+      parse (pModule "test")
+            ""
+            "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"
         `shouldParse` Module
-                        { moduleName     = "Foo"
+                        { moduleName     = "test.Foo"
                         , moduleImports  = []
                         , moduleExports  = []
                         , moduleDecls    = [ FunDecl Fun { funName = "one"
@@ -199,22 +200,20 @@ test = parallel $ do
                         }
     it "parses a module with imports and exports" $ do
       parse
-          pModule
+          (pModule "test")
           ""
           "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4, Foo(..), Bar(BarA, BarB))\nfrom somepkg import Http"
         `shouldParse` Module
-                        { moduleName     = "Foo"
+                        { moduleName     = "test.Foo"
                         , moduleImports  =
                           [ Import { importQualified = False
-                                   , importPackage   = Nothing
-                                   , importName      = ModuleName ["Bar"]
+                                   , importName      = "test.Bar"
                                    , importAlias     = Nothing
                                    , importItems     = []
                                    }
                           , Import
                             { importQualified = True
-                            , importPackage   = Nothing
-                            , importName      = ModuleName ["Bar", "Baz"]
+                            , importName      = "test.Bar.Baz"
                             , importAlias     = Just "B"
                             , importItems = [ ImportSingle "fun3"
                                             , ImportSingle "fun4"
@@ -223,8 +222,7 @@ test = parallel $ do
                                             ]
                             }
                           , Import { importQualified = False
-                                   , importName      = ModuleName ["Http"]
-                                   , importPackage   = mkPackageName "somepkg"
+                                   , importName      = "somepkg.Http"
                                    , importAlias     = Nothing
                                    , importItems     = []
                                    }

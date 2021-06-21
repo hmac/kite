@@ -43,5 +43,7 @@ expectTypecheckFail path = do
       Right _ -> expectationFailure "expected type error but succeeded"
 
 parseFile :: FilePath -> IO (Either String UntypedModuleGroup)
-parseFile path =
-  ModuleLoader.loadFromPathAndRootDirectory path (takeDirectory path)
+parseFile path = ModuleLoader.loadFromPathAndRootDirectory
+  path
+  (takeDirectory path)
+  "kite-integration-tests"

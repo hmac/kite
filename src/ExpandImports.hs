@@ -4,11 +4,12 @@ module ExpandImports where
 -- explicit ImportSome items by finding all the matching constructors for each
 -- type.
 
+import           Canonical.Primitive
 import           Syn
 import           Util
 
-data Error = CannotFindModule ModuleName -- ^ importing module
-                                         ModuleName -- ^ module we can't find
+data Error = CannotFindModule PkgModuleName -- ^ importing module
+                                            PkgModuleName -- ^ module we can't find
   deriving (Eq, Show)
 
 expandImports :: Module -> [Module] -> Either Error (Module, [Module])
@@ -32,8 +33,8 @@ expandAllImports modul deps = do
 
 -- We don't support expanding imports for Kite.Primitive, since it's not a "real"
 -- module.
-expand :: ModuleName -> [Module] -> Import -> Either Error Import
-expand _ _ imp | importName imp == "Kite.Primitive" = Right imp
+expand :: PkgModuleName -> [Module] -> Import -> Either Error Import
+expand _ _ imp | importName imp == modPrim = Right imp
 expand modulName deps imp =
   let matchingModule = find ((== importName imp) . moduleName) deps
   in  case matchingModule of

@@ -10,7 +10,10 @@ import           Text.Megaparsec                ( Parsec
                                                 )
 
 import           AST
-import           Data.Name                      ( mkPackageName )
+import           Data.Name                      ( PkgModuleName(..) )
+import           Data.Name.Gen                  ( genModuleName
+                                                , genPkgModuleName
+                                                )
 import           Syn
 import           Syn.Parse
 import           Syn.Print
@@ -51,10 +54,14 @@ roundtripData :: H.PropertyT IO ()
 roundtripData = roundtrip genData printData pData
 
 roundtripImport :: H.PropertyT IO ()
-roundtripImport = roundtrip genImport printImport pImport
+roundtripImport = roundtrip genImport
+                            (printImport "kite-roundtrip-tests")
+                            (pImport "kite-roundtrip-tests")
 
 roundtripModule :: H.PropertyT IO ()
-roundtripModule = roundtrip genModule printModule pModule
+roundtripModule = roundtrip (genModule "kite-roundtrip-tests")
+                            printModule
+                            (pModule "kite-roundtrip-tests")
 
 roundtrip
   :: (Show a, Eq a)
@@ -78,10 +85,10 @@ roundtrip gen printer parser = hedgehog $ do
 
 -- Hedgehog generators
 
-genModule :: H.Gen Module
-genModule =
+genModule :: PackageName -> H.Gen Module
+genModule pkg =
   Module
-    <$> genModuleName
+    <$> (PkgModuleName pkg <$> genModuleName)
     <*> Gen.list (Range.linear 0 5) genImport
     <*> Gen.list (Range.linear 0 5) genExport
     <*> (uniqueFunNames <$> Gen.list (Range.linear 0 10) genDecl)
@@ -108,12 +115,10 @@ genMetadata = Gen.list (Range.linear 0 5) genKV
 genImport :: H.Gen Import
 genImport = do
   qualified <- Gen.bool
-  package   <- Gen.maybe genPackageName
-  name      <- genModuleName
+  name      <- genPkgModuleName
   alias     <- Gen.maybe genUpperName
   items     <- Gen.list (Range.linear 0 3) genImportItem
   pure $ Import { importQualified = qualified
-                , importPackage   = package
                 , importName      = name
                 , importAlias     = alias
                 , importItems     = items
@@ -140,17 +145,6 @@ genImportItem = Gen.choice [genImportSingle, genImportSome, genImportAll]
 genDecl :: H.Gen (Decl Syn)
 genDecl =
   Gen.choice [FunDecl <$> genFun, DataDecl <$> genData, Comment <$> genComment]
-
-genModuleName :: H.Gen ModuleName
-genModuleName = ModuleName <$> Gen.list (Range.linear 1 3) genUpperString
-
--- The use of 'fromJust' here is safe because we trust Hedgehog to only generate lowercase ascii
--- strings, which is what 'mkPackageName' accepts.
-genPackageName :: H.Gen PackageName
-genPackageName = do
-  s <- Gen.filter (`notElem` keywords)
-    $ Gen.string (Range.linear 1 10) Gen.lower
-  pure $ fromJust $ mkPackageName s
 
 genData :: H.Gen Data
 genData =

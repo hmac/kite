@@ -29,6 +29,7 @@ import           Text.Megaparsec.Char.Lexer     ( indentLevel
 
 import           Syn                     hiding ( Pattern )
 
+import           Data.Name                      ( PkgModuleName(..) )
 import           Syn.Parse.Common
 import           Syn.Parse.Expr                 ( pExpr )
 import           Syn.Parse.Type                 ( pConType
@@ -78,20 +79,21 @@ import           Syn.Parse.Type                 ( pConType
   0: https://www.haskell.org/onlinereport/lexemes.html#sect2.7
 -}
 
-parseKiteFile :: FilePath -> String -> Either String Module
-parseKiteFile path input = case parse (pModule <* eof) path input of
-  Left  e -> Left (errorBundlePretty e)
-  Right e -> Right e
+parseKiteFile :: FilePath -> PackageName -> String -> Either String Module
+parseKiteFile path pkgName input =
+  case parse (pModule pkgName <* eof) path input of
+    Left  e -> Left (errorBundlePretty e)
+    Right e -> Right e
 
-pModule :: Parser Module
-pModule = do
+pModule :: PackageName -> Parser Module
+pModule pkgName = do
   metadata <- optional pMetadata
   void $ symbol "module"
   name    <- lexemeN pModuleName
   exports <- optional . lexemeN . parens $ lexemeN pExport `sepBy` comma
-  imports <- many (lexemeN pImport)
+  imports <- many (lexemeN (pImport pkgName))
   decls   <- many (lexemeN pDecl)
-  pure $ Module { moduleName     = name
+  pure $ Module { moduleName     = PkgModuleName pkgName name
                 , moduleImports  = imports
                 , moduleExports  = fromMaybe [] exports
                 , moduleDecls    = decls
@@ -128,8 +130,8 @@ pMetadata = do
 -- import qualified Baz as Boo (fun1, fun2)
 -- import Foo (SomeType(..), OtherType(AConstructor), SomeClass)
 -- from some_pkg import Foo
-pImport :: Parser Import
-pImport = do
+pImport :: PackageName -> Parser Import
+pImport selfPkg = do
   pkg <- optional $ string "from " >> pPackageName
   void $ symbol "import"
   qualified <- isJust <$> optional (symbol "qualified")
@@ -137,8 +139,7 @@ pImport = do
   alias     <- optional (symbol "as" >> uppercaseName)
   items     <- optional $ parens (lexemeN pImportItem `sepBy` comma)
   pure Import { importQualified = qualified
-              , importPackage   = pkg
-              , importName      = name
+              , importName      = PkgModuleName (fromMaybe selfPkg pkg) name
               , importAlias     = alias
               , importItems     = fromMaybe [] items
               }

@@ -16,6 +16,7 @@ import           Chez                           ( Def(..)
 import           Data.List.Extra                ( concatUnzip )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
+                                                , prim
                                                 )
 import           Data.Text                      ( Text
                                                 , pack
@@ -257,9 +258,8 @@ compilePat pattern scrut = case pattern of
   -- https://scheme.com/tspl4/records.html#./records:h1
   T.ConsPat c Nothing _ ->
     error $ "Chez.Compile.compilePat: no metadata for constructor " <> show c
-  T.ConsPat c _ [] | c == "Kite.Primitive.[]" ->
-    ([App (Var "null?") [scrut]], [])
-  T.ConsPat c _ [headPat, tailPat] | c == "Kite.Primitive.::" ->
+  T.ConsPat c _ [] | c == prim "[]" -> ([App (Var "null?") [scrut]], [])
+  T.ConsPat c _ [headPat, tailPat] | c == prim "::" ->
     let (headTests, headBindings) =
           compilePat headPat (App (Var "car") [scrut])
         (tailTests, tailBindings) =
@@ -299,14 +299,14 @@ compileFCall = \case
 -- Implementations for compiler built-in functions like showInt
 builtins :: [Def]
 builtins =
-  let prim s = "Kite.Primitive." <> s
+  let primString s = "Kite.Primitive." <> s
   in
     [ DefRecord "$Kite.Primitive.IO" ["_tag", "_0"]
     , Def
-      (prim "MkIO")
+      (primString "MkIO")
       (Abs ["f"] (App (Var ("make-$Kite.Primitive.IO")) [Lit (Int 0), Var "f"]))
     , Def
-      (prim "runIO")
+      (primString "runIO")
       (Abs
         ["m"]
         (App (App (Var ("$Kite.Primitive.IO-_0")) [Var "m"])
@@ -314,19 +314,21 @@ builtins =
         )
       )
     , Def
-      (prim "appendString")
+      (primString "appendString")
       (Abs ["x"] (Abs ["y"] (App (Var "string-append") [Var "x", Var "y"])))
-    , Def (prim "$showInt") (Var "number->string")
-    , Def (prim "$eqInt")
+    , Def (primString "$showInt") (Var "number->string")
+    , Def (primString "$eqInt")
           (Abs ["x"] (Abs ["y"] (App (Var "eq?") [Var "x", Var "y"])))
-    , Def (prim "*") (Abs ["x"] (Abs ["y"] (App (Var "*") [Var "x", Var "y"])))
-    , Def (prim "+") (Abs ["x"] (Abs ["y"] (App (Var "+") [Var "x", Var "y"])))
-    , Def (prim "::")
+    , Def (primString "*")
+          (Abs ["x"] (Abs ["y"] (App (Var "*") [Var "x", Var "y"])))
+    , Def (primString "+")
+          (Abs ["x"] (Abs ["y"] (App (Var "+") [Var "x", Var "y"])))
+    , Def (primString "::")
           (Abs ["x"] (Abs ["xs"] (App (Var "cons") [Var "x", Var "xs"])))
-    , Def (prim "$eqChar")
+    , Def (primString "$eqChar")
           (Abs ["c1"] (Abs ["c2"] (App (Var "eq?") [Var "c1", Var "c2"])))
     , Def
-      (prim "$consChar")
+      (primString "$consChar")
       (Abs
         ["c"]
         (Abs
@@ -337,11 +339,11 @@ builtins =
           )
         )
       )
-    , Def (prim "$showChar")
+    , Def (primString "$showChar")
           (Abs ["c"] (App (Var "list->string") [App (Var "list") [Var "c"]]))
-    , Def (prim "$chars") (Abs ["s"] (App (Var "string->list") [Var "s"]))
+    , Def (primString "$chars") (Abs ["s"] (App (Var "string->list") [Var "s"]))
     , Def
-      (prim "$unconsChar")
+      (primString "$unconsChar")
       (Abs
         ["s"]
         (Abs
@@ -366,7 +368,7 @@ builtins =
         )
       )
     , Def
-      (prim "$readInt")
+      (primString "$readInt")
       (Abs
         ["s"]
         (Abs

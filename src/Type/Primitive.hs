@@ -1,29 +1,22 @@
 module Type.Primitive where
 
 import           AST                            ( ConMeta(..) )
-import           Data.Name                      ( Name )
+import           Data.Name                      ( Name
+                                                , prim
+                                                )
 
 primitiveCtorInfo :: [(Name, ConMeta)]
 primitiveCtorInfo =
-  [ ("Kite.Primitive.[]"  , listNilMeta)
-  , ("Kite.Primitive.::"  , listConsMeta)
-  , ("Kite.Primitive.MkIO", mkIO)
-  ]
+  [(prim "[]", listNilMeta), (prim "::", listConsMeta), (prim "MkIO", mkIO)]
 
 listNilMeta :: ConMeta
-listNilMeta = ConMeta { conMetaTag      = 0
-                      , conMetaArity    = 0
-                      , conMetaTypeName = "Kite.Primitive.List"
-                      }
+listNilMeta =
+  ConMeta { conMetaTag = 0, conMetaArity = 0, conMetaTypeName = prim "List" }
 
 listConsMeta :: ConMeta
-listConsMeta = ConMeta { conMetaTag      = 1
-                       , conMetaArity    = 2
-                       , conMetaTypeName = "Kite.Primitive.List"
-                       }
+listConsMeta =
+  ConMeta { conMetaTag = 1, conMetaArity = 2, conMetaTypeName = prim "List" }
 
 mkIO :: ConMeta
-mkIO = ConMeta { conMetaTag      = 0
-               , conMetaArity    = 1
-               , conMetaTypeName = "Kite.Primitive.IO"
-               }
+mkIO =
+  ConMeta { conMetaTag = 0, conMetaArity = 1, conMetaTypeName = prim "IO" }

@@ -88,19 +88,18 @@ processExpr decls e =
   in  case ModuleGroupTypechecker.typecheckModuleGroup g of
         Left  err -> putStrLn $ "Type error: " <> show err
         Right g'  -> do
-          let modName = let (ModuleGroup m _) = g in moduleName m
-          let answer  = interpretAndRun (TopLevel modName "$main") g'
+          let modul  = let (ModuleGroup m _) = g in m
+          let answer = interpretAndRun (TopLevel (moduleName modul) "$main") g'
           renderIO stdout (layoutSmart defaultLayoutOptions (printValue answer))
           putStrLn ""
 
 buildModule :: [Decl Syn] -> Can.Module
-buildModule decls = canonicaliseModule Module
-  { moduleName     = ModuleName ["Repl"]
-  , moduleImports  = []
-  , moduleExports  = []
-  , moduleDecls    = decls
-  , moduleMetadata = []
-  }
+buildModule decls = canonicaliseModule Module { moduleName = "kite-repl.Repl"
+                                              , moduleImports  = []
+                                              , moduleExports  = []
+                                              , moduleDecls    = decls
+                                              , moduleMetadata = []
+                                              }
 
 data Input = Command Command | Expression Syn | Definition (Decl Syn)
   deriving (Eq, Show)

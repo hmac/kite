@@ -35,6 +35,7 @@ library
       Canonicalise
       Data.Name
       Data.Name.Print
+      Data.Name.Gen
       ExpandExports
       ExpandImports
       Print

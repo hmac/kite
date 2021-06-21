@@ -8,6 +8,7 @@ import           Prelude                 hiding ( mod )
 import           Data.Text.Prettyprint.Doc
 
 import           AST
+import           Data.Name                      ( PkgModuleName(..) )
 import           Print                          ( Document
                                                 , data_
                                                 , func
@@ -21,11 +22,12 @@ import           Syn                     hiding ( Pattern )
 printModule :: Module -> Document
 printModule mod = vsep $ catMaybes
   [ printMetadata (moduleMetadata mod)
-  , Just $ printModName (moduleName mod)
+  , Just $ printModName modName
   , indent 2 <$> printModExports (moduleExports mod)
-  , (line <>) <$> printImports (moduleImports mod)
+  , (line <>) <$> printImports pkgName (moduleImports mod)
   , (line <>) <$> printModDecls (moduleDecls mod)
   ]
+  where PkgModuleName pkgName modName = moduleName mod
 
 -- ---
 -- key1: val1
@@ -54,30 +56,24 @@ printModExports exports = Just $ tupled (map printExport exports)
 
 -- import Data.Text
 -- import qualified Data.Text.Encoding as E (encodeUtf8)
-printImports :: [Import] -> Maybe Document
-printImports []      = Nothing
-printImports imports = Just $ vsep (map printImport imports)
+printImports :: PackageName -> [Import] -> Maybe Document
+printImports _       []      = Nothing
+printImports selfPkg imports = Just $ vsep (map (printImport selfPkg) imports)
 
-printImport :: Import -> Document
-printImport i =
+printImport :: PackageName -> Import -> Document
+printImport selfPkg i =
   let
-    pkg = maybe mempty
-                (\n -> keyword "from" <+> printPackageName n <> " ")
-                (importPackage i)
+    PkgModuleName pkgName modName = importName i
+    pkg                           = if pkgName == selfPkg
+      then mempty
+      else keyword "from" <+> printPackageName pkgName <> " "
     qual  = if importQualified i then keyword " qualified " else "           "
     alias = maybe mempty (\n -> keyword " as" <+> printName n) (importAlias i)
     items = if null (importItems i)
       then mempty
       else " " <> hang 0 (tupled (map printImportItem (importItems i)))
   in
-    hcat
-      [ pkg
-      , keyword "import"
-      , qual
-      , prettyModuleName (importName i)
-      , alias
-      , items
-      ]
+    hcat [pkg, keyword "import", qual, prettyModuleName modName, alias, items]
 
 printImportItem :: ImportItem -> Document
 printImportItem i = printName (importItemName i) <> case i of

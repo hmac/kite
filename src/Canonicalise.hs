@@ -33,8 +33,8 @@ import           Util
 
 -}
 
-type Imports = Map.Map RawName Syn.ModuleName
-type Env = (ModuleName, Imports)
+type Imports = Map.Map RawName PkgModuleName
+type Env = (PkgModuleName, Imports)
 
 buildImports :: Syn.Module -> Imports
 buildImports m =

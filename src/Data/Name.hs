@@ -1,14 +1,16 @@
 module Data.Name
   ( RawName(..)
   , ModuleName(..)
+  , PkgModuleName(..)
   , showModuleName
-  , PackageName
+  , PackageName(..)
   , mkPackageName
   , Name(..)
   , fromLocal
   , toRaw
   , toString
   , localise
+  , prim
   ) where
 
 import           Data.Data                      ( Data )
@@ -48,14 +50,34 @@ newtype PackageName = PackageName String
 instance Show PackageName where
   show (PackageName n) = n
 
+instance IsString PackageName where
+  fromString s = case mkPackageName s of
+    Just p  -> p
+    Nothing -> error $ "Invalid package name: " <> show s
+
+-- A valid package name consists of characters in the regex range [a-z-]
 mkPackageName :: String -> Maybe PackageName
-mkPackageName s | all isAsciiLower s = Just $ PackageName s
-                | otherwise          = Nothing
+mkPackageName s
+  | all (\c -> isAsciiLower c || c == '-') s = Just $ PackageName s
+  | otherwise = Nothing
+
+data PkgModuleName = PkgModuleName PackageName ModuleName
+  deriving (Eq, Ord, Typeable, Data)
+
+instance Show PkgModuleName where
+  show (PkgModuleName pkgName modName) = show pkgName <> "." <> show modName
+
+instance IsString PkgModuleName where
+  fromString (c : s) | isAsciiLower c = case splitOn '.' (c : s) of
+    pkg : ms -> PkgModuleName (PackageName pkg) (ModuleName ms)
+    _ -> error $ "PkgModuleName: invalid package/module name: " <> show (c : s)
+  fromString s =
+    error $ "PkgModuleName: invalid package/module name: " <> show s
 
 -- TODO: change these RawNames to Text/String?
 data Name
   = Local RawName
-  | TopLevel ModuleName RawName
+  | TopLevel PkgModuleName RawName
   deriving (Eq, Ord, Typeable, Data)
 
 instance Show Name where
@@ -74,7 +96,7 @@ toString :: Name -> String
 toString = show . toRaw
 
 -- If the name belongs to the module given, drop the module prefix.
-localise :: ModuleName -> Name -> Name
+localise :: PkgModuleName -> Name -> Name
 localise modName (TopLevel modName' n) | modName == modName' = Local n
 localise _ n = n
 
@@ -84,7 +106,14 @@ localise _ n = n
 instance IsString Name where
   fromString s = case splitOn '.' s of
     [n] -> Local (Name n)
-    ns  -> TopLevel (ModuleName (init ns)) (Name (last ns))
+    ns  -> case init ns of
+      (p : pkg) : mods | isAsciiLower p -> TopLevel
+        (PkgModuleName (PackageName (p : pkg)) (ModuleName mods))
+        (Name (last ns))
+      _ -> error $ "Invalid Name: " <> show s
 
 instance Debug Name where
   debug = toString
+
+prim :: RawName -> Name
+prim n = TopLevel (PkgModuleName "kite" (ModuleName ["Kite", "Primitive"])) n

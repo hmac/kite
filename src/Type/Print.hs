@@ -9,10 +9,17 @@ import           Type
 printModuleName :: ModuleName -> Doc a
 printModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
 
+printPkgModuleName :: PkgModuleName -> Doc a
+printPkgModuleName (PkgModuleName pkgName modName) =
+  hcat [printPackageName pkgName, ".", printModuleName modName]
+
+printPackageName :: PackageName -> Doc a
+printPackageName (PackageName n) = pretty n
+
 printName :: Name -> Doc a
 printName (Local (Name n)) = pretty n
-printName (TopLevel moduleName (Name n)) =
-  printModuleName moduleName <> "." <> pretty n
+printName (TopLevel pkgModName (Name n)) =
+  printPkgModuleName pkgModName <> "." <> pretty n
 
 printLocatedError :: LocatedError -> Doc a
 printLocatedError (LocatedError Nothing err) = vsep
@@ -59,8 +66,8 @@ printType = go P0
                 | otherwise  -> go P0 f <+> hsep (map (go P2) args)
     Fn a b | prec >= P1 -> parens $ go P0 (Fn a b)
            | otherwise  -> go P1 a <+> "->" <+> go P0 b
-    TCon "Kite.Primitive.List" [arg] -> brackets $ go P0 arg
-    TCon "Kite.Primitive.Tuple2" args ->
+    TCon c [arg] | c == prim "List" -> brackets $ go P0 arg
+    TCon c args | c == prim "Tuple2" ->
       parens $ concatWith (surround ", ") $ map (go P0) args
     TCon con [] -> printConName con
     TCon con args | prec >= P2 -> parens $ go P0 (TCon con args)
@@ -87,7 +94,7 @@ printU (U n v) = printName v <> pretty n
 printE :: E -> Doc a
 printE (E n) = pretty $ "ê" <> show n
 
-printError :: Maybe ModuleName -> Error -> Doc a
+printError :: Maybe PkgModuleName -> Error -> Doc a
 printError modName = \case
   SubtypingFailure a b ->
     vsep

@@ -36,4 +36,4 @@ expectParseFail path = do
     Right _ -> expectationFailure "expected parse error but succeeded"
 
 parseFile :: FilePath -> IO (Either String Module)
-parseFile path = parseKiteFile path <$> readFile path
+parseFile path = parseKiteFile path "kite-integration-tests" <$> readFile path

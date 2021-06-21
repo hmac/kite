@@ -1,11 +1,11 @@
 module Canonical.Primitive where
 
-import           Syn
+import           Data.Name
 
-modPrim :: ModuleName
-modPrim = ModuleName ["Kite", "Primitive"]
+modPrim :: PkgModuleName
+modPrim = "kite.Kite.Primitive"
 
-primitives :: [(RawName, ModuleName)]
+primitives :: [(RawName, PkgModuleName)]
 primitives = map (, modPrim) $ miscFunctions <> numFunctions <> list <> io
 
 miscFunctions :: [RawName]
