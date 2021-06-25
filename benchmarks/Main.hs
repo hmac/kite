@@ -5,6 +5,7 @@ import           Criterion.Main
 
 import           AST
 import           Canonicalise                   ( canonicaliseModule )
+import           Data.Name                      ( PkgModuleName(..) )
 import           Syn
 import           Syn.Parse                      ( parseKiteFile )
 
@@ -39,7 +40,7 @@ main = defaultMain
 
 typecheckFromPathAndRoot :: String -> String -> IO Bool
 typecheckFromPathAndRoot path root = do
-  group <- loadFromPathAndRootDirectory path root
+  group <- loadFromPathAndRootDirectory path root "kite-benchmarks"
   case group of
     Left  err -> error $ path <> ":\n" <> err
     Right g   -> case typecheckModuleGroup g of
@@ -57,9 +58,10 @@ typecheckModule m =
 parseFromPath :: String -> ModuleName -> IO Bool
 parseFromPath path modName = do
   contents <- readFile path
-  case parseKiteFile path contents of
-    Left  err -> error $ path <> ": expected parse success but failed\n" <> err
-    Right m   -> pure $ moduleName m == modName
+  case parseKiteFile path "kite-benchmarks" contents of
+    Left err -> error $ path <> ": expected parse success but failed\n" <> err
+    Right m ->
+      pure $ let (PkgModuleName _ mName) = moduleName m in mName == modName
 
 exampleModule :: Module
 exampleModule = Module
