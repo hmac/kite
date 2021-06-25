@@ -14,7 +14,9 @@ import           Data.IORef                     ( IORef
                                                 )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
-import           System.Directory               ( getCurrentDirectory )
+import           System.Directory               ( doesFileExist
+                                                , getCurrentDirectory
+                                                )
 
 import           AST                            ( Expr )
 import           Canonical.Primitive            ( modPrim )
@@ -59,13 +61,22 @@ loadFromPath path pkgName = do
   root <- getCurrentDirectory
   loadFromPathAndRootDirectory path root pkgName
 
+-- Like 'readFile', but checks to see if the file exists before reading it
+-- If it doesn't exist, returns a string error in 'Left'
+readFile' :: FilePath -> IO (Either String String)
+readFile' path = doesFileExist path >>= \case
+  True  -> Right <$> readFile path
+  False -> pure $ Left $ "File not found: " <> path
+
 loadFromPathAndRootDirectory
   :: FilePath
   -> FilePath
   -> PackageName
   -> IO (Either String UntypedModuleGroup)
 loadFromPathAndRootDirectory path root pkgName = do
-  modul <- parseKiteFile path pkgName <$> readFile path
+  modul <- do
+    f <- readFile' path
+    pure (f >>= parseKiteFile path pkgName)
 
   case modul of
     Left  err -> pure (Left err)
@@ -112,8 +123,13 @@ load root cache (PkgModuleName pkgName modName) = do
   Map.lookup path <$> readIORef cache >>= \case
     Just m -> pure m
     _      -> do
-      m <- parseKiteFile path pkgName <$> readFile path
-      atomicModifyIORef' cache $ \c -> (Map.insert path m c, m)
+      file <- readFile' path
+      case file of
+        Left err ->
+          pure $ Left $ show (PkgModuleName pkgName modName) <> ": " <> err
+        Right f -> do
+          let m = parseKiteFile path pkgName f
+          atomicModifyIORef' cache $ \c -> (Map.insert path m c, m)
 
 -- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope

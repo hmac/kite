@@ -299,17 +299,19 @@ compileFCall = \case
 -- Implementations for compiler built-in functions like showInt
 builtins :: [Def]
 builtins =
-  let primString s = "Kite.Primitive." <> s
+  let primString s = "kite.Kite.Primitive." <> s
   in
-    [ DefRecord "$Kite.Primitive.IO" ["_tag", "_0"]
+    [ DefRecord "$kite.Kite.Primitive.IO" ["_tag", "_0"]
     , Def
       (primString "MkIO")
-      (Abs ["f"] (App (Var ("make-$Kite.Primitive.IO")) [Lit (Int 0), Var "f"]))
+      (Abs ["f"]
+           (App (Var ("make-$kite.Kite.Primitive.IO")) [Lit (Int 0), Var "f"])
+      )
     , Def
       (primString "runIO")
       (Abs
         ["m"]
-        (App (App (Var ("$Kite.Primitive.IO-_0")) [Var "m"])
+        (App (App (Var ("$kite.Kite.Primitive.IO-_0")) [Var "m"])
              [Abs ["r"] (Var "r")]
         )
       )

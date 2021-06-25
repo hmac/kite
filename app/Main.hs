@@ -141,7 +141,7 @@ run homeDir inFile = flip (withParsedFile "fake-pkg" homeDir) inFile $ \g -> do
       let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
       withFile scriptFile WriteMode $ \h -> do
         hPutStrLn h $ "(load " <> show outFile <> ")"
-        hPutStrLn h $ "(Kite.Primitive.runIO " <> show mainName <> ")"
+        hPutStrLn h $ "(kite.Kite.Primitive.runIO " <> show mainName <> ")"
       -- Run the script
       exitcode <- runProcess
         (proc "/usr/bin/env" ["scheme", "--script", scriptFile])
