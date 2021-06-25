@@ -17,7 +17,7 @@ module Data.List
   , foldl
   )
 
-import Kite.Primitive (Bool, True, False)
+from kite import Kite.Primitive (Bool, True, False)
 import Data.Semigroup (Semigroup(..))
 import Data.Eq (Eq, eq)
 import Data.Maybe (Maybe(..))
