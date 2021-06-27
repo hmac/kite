@@ -31,6 +31,7 @@ import           ExpandExports                  ( expandExports )
 import           ExpandImports                  ( expandImports )
 import qualified ExpandImports
 import           ModuleGroup
+import           Package                        ( PackageInfo(..) )
 import           Syn
 import           Syn.Parse                      ( parseKiteFile )
 import           Util
@@ -68,15 +69,12 @@ readFile' path = doesFileExist path >>= \case
   True  -> Right <$> readFile path
   False -> pure $ Left $ "File not found: " <> path
 
-loadFromPathAndRootDirectory
-  :: FilePath
-  -> FilePath
-  -> PackageName
-  -> IO (Either String UntypedModuleGroup)
-loadFromPathAndRootDirectory path root pkgName = do
+loadFromPackageInfo
+  :: PackageInfo -> FilePath -> IO (Either String UntypedModuleGroup)
+loadFromPackageInfo info path = do
   modul <- do
     f <- readFile' path
-    pure (f >>= parseKiteFile path pkgName)
+    pure (f >>= parseKiteFile path (packageName info))
 
   case modul of
     Left  err -> pure (Left err)
@@ -85,7 +83,7 @@ loadFromPathAndRootDirectory path root pkgName = do
       -- This stops us parsing the same module multiple times.
       cache <- newIORef (Map.singleton path modul)
 
-      deps  <- mapM (loadAll root cache) (dependencies m)
+      deps  <- mapM (loadAll info cache) (dependencies m)
       case sequence deps of
         Left  err   -> pure (Left err)
         Right deps' -> case sortModules (nub (concat deps')) of
@@ -103,33 +101,47 @@ loadFromPathAndRootDirectory path root pkgName = do
                   <> ", cannot find module "
                   <> show missingModule
 
+-- TODO: deprecate and remove in favour of 'loadFromPackageInfo'
+loadFromPathAndRootDirectory
+  :: FilePath
+  -> FilePath
+  -> PackageName
+  -> IO (Either String UntypedModuleGroup)
+loadFromPathAndRootDirectory path root pkgName = do
+  let info = PackageInfo { packageDeps    = mempty
+                         , packageRootDir = root
+                         , packageName    = pkgName
+                         }
+  loadFromPackageInfo info path
+
 loadAll
-  :: FilePath -> ModuleCache -> PkgModuleName -> IO (Either String [Module])
-loadAll root cache pkgModuleName = do
-  modul <- load root cache pkgModuleName
+  :: PackageInfo -> ModuleCache -> PkgModuleName -> IO (Either String [Module])
+loadAll info cache pkgModuleName = do
+  modul <- load info cache pkgModuleName
   case modul of
     Left  err -> pure (Left err)
     Right m   -> do
-      deps <- mapM (loadAll root cache) (dependencies m)
+      deps <- mapM (loadAll info cache) (dependencies m)
       case sequence deps of
         Left  err   -> pure (Left err)
         Right deps' -> do
           let m' = expandExports m
           pure $ Right $ m' : concat deps'
 
-load :: FilePath -> ModuleCache -> PkgModuleName -> IO (Either String Module)
-load root cache (PkgModuleName pkgName modName) = do
-  let path = filePath root modName
-  Map.lookup path <$> readIORef cache >>= \case
-    Just m -> pure m
-    _      -> do
-      file <- readFile' path
-      case file of
-        Left err ->
-          pure $ Left $ show (PkgModuleName pkgName modName) <> ": " <> err
-        Right f -> do
-          let m = parseKiteFile path pkgName f
-          atomicModifyIORef' cache $ \c -> (Map.insert path m c, m)
+load
+  :: PackageInfo -> ModuleCache -> PkgModuleName -> IO (Either String Module)
+load info cache name@(PkgModuleName pkgName _) = do
+  case filePath info name of
+    Left  err  -> pure $ Left err
+    Right path -> Map.lookup path <$> readIORef cache >>= \case
+      Just m -> pure m
+      _      -> do
+        file <- readFile' path
+        case file of
+          Left  err -> pure $ Left $ show name <> ": " <> err
+          Right f   -> do
+            let m = parseKiteFile path pkgName f
+            atomicModifyIORef' cache $ \c -> (Map.insert path m c, m)
 
 -- We skip any references to Kite.Primitive because it's not a normal module.
 -- It has no corresponding file and its definitions are automatically in scope
@@ -138,9 +150,17 @@ dependencies :: Module_ n (Expr n ty) ty -> [PkgModuleName]
 dependencies Module { moduleImports = imports } =
   filter (/= modPrim) $ nub $ map importName imports
 
-filePath :: FilePath -> ModuleName -> FilePath
-filePath root (ModuleName components) =
-  root <> "/" <> intercalate "/" components <> ".kite"
+-- | Attempt to construct a file path to the given module.
+-- If the module is in our own package, use the root package directory.
+-- Otherwise, look up the path in the 'PackageInfo'.
+filePath :: PackageInfo -> PkgModuleName -> Either String FilePath
+filePath info (PkgModuleName pkgName (ModuleName components)) = do
+  dir <- if pkgName == packageName info
+    then Right $ packageRootDir info
+    else case Map.lookup pkgName (packageDeps info) of
+      Just p  -> Right p
+      Nothing -> Left $ "Unknown package: " <> show pkgName
+  pure $ dir <> "/" <> intercalate "/" components <> ".kite"
 
 -- Sorts a set of modules in dependency order. Each module will only depend on
 -- modules before it in the list. Returns an error if there are cyclic

@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Package
-  ( loadPackageConfigFile
-  , buildPackageInfo
+  ( loadAndBuildPackageInfo
   , PackageInfo(..)
   ) where
 
@@ -59,6 +58,15 @@ import           Util
 -- 4. Namespace the imported module by its package so it doesn't clash with identically named
 --    modules in other packages.
 -- 5. Carry on as usual.
+
+-- | A combination of 'loadPackageConfigFile' followed by 'buildPackageInfo'
+loadAndBuildPackageInfo :: IO (Either String PackageInfo)
+loadAndBuildPackageInfo = do
+  specOrError <- loadPackageConfigFile
+  case specOrError of
+    Left  err  -> pure $ Left err
+    Right spec -> buildPackageInfo spec
+
 
 loadPackageConfigFile :: IO (Either String Spec)
 loadPackageConfigFile = do
