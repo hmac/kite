@@ -1,0 +1,13 @@
+name = "kite-test"
+
+[[dependencies]]
+  name = "std"
+
+  [dependencies.version]
+    major = 1
+    minor = 2
+    patch = 3
+
+[[dependencies]]
+  name = "other"
+  path = "./other"
