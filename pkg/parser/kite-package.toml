@@ -1,0 +1,5 @@
+name = "parser"
+
+[[dependencies]]
+  name = "std"
+  path = "../std"
