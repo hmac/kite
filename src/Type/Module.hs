@@ -27,6 +27,7 @@ import           Type                           ( CtorInfo
                                                 , Ctx
                                                 , CtxElem(V)
                                                 , Exp
+                                                , ExpT
                                                 , LocatedError(..)
                                                 , Type(..)
                                                 , TypeCtx
@@ -103,7 +104,7 @@ typecheckFuns funs = do
 
   pure funCtx
 
-typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM ()
+typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM ExpT
 typecheckFun (fun, (name, mtype, expr)) =
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
@@ -116,10 +117,10 @@ typecheckFun (fun, (name, mtype, expr)) =
         -- check or infer each function in the where clause
         whereCtx <- typecheckFuns (funWheres fun)
         withGlobalCtx (<> whereCtx) $ runTypeM $ case mtype of
-          -- check the body of the function
+          -- if we have a type annotation, check the body of the function
           Just ty -> check expr ty
-          -- infer the body of the function
-          Nothing -> void $ infer expr
+          -- otherwise, infer the body of the function
+          Nothing -> snd <$> infer expr
 
 funToBind :: Can.Fun Can.Exp -> TypecheckM (Name, Maybe Type, Exp)
 funToBind fun = do

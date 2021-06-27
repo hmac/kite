@@ -19,6 +19,11 @@ import qualified Syn.Typed                     as T
 import           Type                           ( CtorInfo
                                                 , Type(..)
                                                 , U(..)
+                                                , bool
+                                                , char
+                                                , int
+                                                , string
+                                                , unit
                                                 )
 import           Type.Primitive                 ( primitiveCtorInfo )
 import           Util
@@ -92,14 +97,14 @@ convertExpr ctorInfo = go
       in  T.CaseT (go s) (map convertAlt alts) unknown
     MCase alts ->
       T.MCaseT (map (bimap (map (convertPattern ctorInfo)) go) alts) unknown
-    UnitLit              -> T.UnitLitT
+    UnitLit              -> T.UnitLitT unit
     TupleLit es          -> T.TupleLitT (map go es) unknown
     ListLit  es          -> T.ListLitT (map go es) unknown
-    StringInterp s comps -> T.StringInterpT s (mapFst go comps)
-    StringLit s          -> T.StringLitT s
-    CharLit   c          -> T.CharLitT c
-    IntLit    i          -> T.IntLitT i
-    BoolLit   b          -> T.BoolLitT b
+    StringInterp s comps -> T.StringInterpT s (mapFst go comps) string
+    StringLit s          -> T.StringLitT s string
+    CharLit   c          -> T.CharLitT c char
+    IntLit    i          -> T.IntLitT i int
+    BoolLit   b          -> T.BoolLitT b bool
     Record    fields     -> T.RecordT (mapSnd go fields) unknown
     Project r f          -> T.ProjectT (go r) f unknown
     FCall   f args       -> T.FCallT f (map go args) unknown

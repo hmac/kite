@@ -3,6 +3,7 @@ module AST
   , ExprT(..)
   , Pat(..)
   , ConMeta(..)
+  , getCache
   ) where
 
 import           Data.Data                      ( Data )
@@ -76,6 +77,8 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
 
 -- Like Expr, but with type annotations on everything
 -- This is the output from the typechecker (or will be, eventually)
+-- We cache types even on obvious things like 'UnitLitT' so that functions
+-- like 'getCache' work for any 't'.
 data ExprT n t =
     VarT n t
   | AnnT (ExprT n t) t
@@ -87,14 +90,14 @@ data ExprT n t =
   | LetT [(n, ExprT n t, Maybe t)] (ExprT n t) t
   | CaseT (ExprT n t) [(Pat n, ExprT n t)] t
   | MCaseT [([Pat n], ExprT n t)] t
-  | UnitLitT
+  | UnitLitT t
   | TupleLitT [ExprT n t] t
   | ListLitT [ExprT n t] t
-  | StringInterpT String [(ExprT n t, String)]
-  | StringLitT String
-  | CharLitT Char
-  | IntLitT Int
-  | BoolLitT Bool
+  | StringInterpT String [(ExprT n t, String)] t
+  | StringLitT String t
+  | CharLitT Char t
+  | IntLitT Int t
+  | BoolLitT Bool t
   | RecordT [(String, ExprT n t)] t
   | ProjectT (ExprT n t) String t
   | FCallT String [ExprT n t] t
@@ -123,21 +126,48 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
             )
             ("in" <+> debug e)
             binds
-  debug (StringLitT s) = "\"" <> s <> "\""
-  debug (StringInterpT s comps) =
+  debug (StringLitT s _) = "\"" <> s <> "\""
+  debug (StringInterpT s comps _) =
     let compStr =
           concatMap (\(e, s_) -> "#{" <> debug e <> "}" <> debug s_) comps
     in  "\"" <> s <> compStr <> "\""
-  debug (CharLitT c)         = "'" <> [c] <> "'"
-  debug (IntLitT  i)         = show i
-  debug (BoolLitT b)         = show b
-  debug UnitLitT             = "()"
+  debug (CharLitT c _      ) = "'" <> [c] <> "'"
+  debug (IntLitT  i _      ) = show i
+  debug (BoolLitT b _      ) = show b
+  debug (UnitLitT _        ) = "()"
   debug (ListLitT  elems  _) = "[" <+> sepBy ", " (map debug elems) <+> "]"
   debug (TupleLitT elems  _) = "(" <+> sepBy ", " (map debug elems) <+> ")"
   debug (RecordT   fields _) = "{" <+> sepBy ", " (map go fields) <+> "}"
     where go (name, expr) = debug name <+> "=" <+> debug expr
   debug (ProjectT r f    _) = debug r <> "." <> debug f
   debug (FCallT   f args _) = "$fcall" <+> f <+> sepBy " " (map debug args)
+
+-- Extract the cached type of an 'ExprT'
+getCache :: ExprT n t -> t
+getCache = \case
+  VarT _ t            -> t
+  -- We don't cache types on annotations, since they already have annotations.
+  -- But we don't really want to mess with user-written annotations, so if you get the cached type
+  -- of an annotation we just give you the cached type of its inner expression.
+  AnnT e _            -> getCache e
+  ConT _ _ t          -> t
+  HoleT _ t           -> t
+  AbsT  _ _ t         -> t
+  AppT  _ _ t         -> t
+  LetT  _ _ t         -> t
+  CaseT _ _ t         -> t
+  MCaseT _ t          -> t
+  UnitLitT t          -> t
+  TupleLitT _ t       -> t
+  ListLitT  _ t       -> t
+  StringInterpT _ _ t -> t
+  StringLitT _ t      -> t
+  CharLitT   _ t      -> t
+  IntLitT    _ t      -> t
+  BoolLitT   _ t      -> t
+  RecordT    _ t      -> t
+  ProjectT _ _ t      -> t
+  FCallT   _ _ t      -> t
 
 data ConMeta = ConMeta
   { conMetaTag      :: Int

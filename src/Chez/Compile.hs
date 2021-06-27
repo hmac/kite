@@ -138,16 +138,16 @@ compileData dat =
 
 compileExpr :: T.Exp -> NameGen SExpr
 compileExpr = \case
-  T.IntLitT  n        -> pure $ Lit (Int n)
-  T.BoolLitT b        -> pure $ Lit (Bool b)
-  T.CharLitT c        -> pure $ Lit (Char c)
-  T.UnitLitT          -> pure $ Lit Unit
-  T.StringLitT s      -> pure $ Lit (String (pack s))
-  T.TupleLitT elems _ -> App (Var "vector") <$> mapM compileExpr elems
-  T.ListLitT  elems _ -> App (Var "list") <$> mapM compileExpr elems
-  T.AnnT      e     _ -> compileExpr e
-  T.VarT      v     _ -> pure $ Var $ name2Text v
-  T.ConT c _ _        -> pure $ Var $ name2Text c
+  T.IntLitT  n _       -> pure $ Lit (Int n)
+  T.BoolLitT b _       -> pure $ Lit (Bool b)
+  T.CharLitT c _       -> pure $ Lit (Char c)
+  T.UnitLitT _         -> pure $ Lit Unit
+  T.StringLitT s     _ -> pure $ Lit (String (pack s))
+  T.TupleLitT  elems _ -> App (Var "vector") <$> mapM compileExpr elems
+  T.ListLitT   elems _ -> App (Var "list") <$> mapM compileExpr elems
+  T.AnnT       e     _ -> compileExpr e
+  T.VarT       v     _ -> pure $ Var $ name2Text v
+  T.ConT c _ _         -> pure $ Var $ name2Text c
   T.AbsT vars body _ ->
     foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
   T.AppT f arg _ -> do
@@ -204,7 +204,7 @@ compileExpr = \case
   T.ProjectT r k _ -> do
     rExpr <- compileExpr r
     pure $ App (Var "symbol-hashtable-ref") [rExpr, Quote (Var (pack k)), false]
-  T.StringInterpT prefix comps -> do
+  T.StringInterpT prefix comps _ -> do
     args <- mconcatMapM
       (\(e, s) -> compileExpr e >>= \e' -> pure [e', Lit (String (pack s))])
       comps

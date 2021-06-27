@@ -175,20 +175,20 @@ interpretExpr env expr_ = case expr_ of
           env
           binds
     in  interpretExpr env' expr
-  CaseT scrut alts _         -> interpretCase env (interpretExpr env scrut) alts
+  CaseT scrut alts _ -> interpretCase env (interpretExpr env scrut) alts
   MCaseT alts _ -> interpretMCase (map (\(pats, rhs) -> (pats, env, rhs)) alts)
-  AnnT   e    _              -> interpretExpr env e
+  AnnT    e    _               -> interpretExpr env e
   HoleT n t -> Error $ "Found hole " <> show n <> " : " <> show t
-  IntLitT i                  -> Const (Int i)
-  UnitLitT                   -> Const Unit
-  TupleLitT     args   _     -> Tuple $ map (interpretExpr env) args
-  ListLitT      args   _     -> List $ map (interpretExpr env) args
-  StringInterpT prefix comps -> interpretStringInterp env prefix comps
-  StringLitT s               -> Const (String s)
-  CharLitT   c               -> Const (Char c)
-  BoolLitT   b               -> Const (Bool b)
+  IntLitT i    _               -> Const (Int i)
+  UnitLitT _                   -> Const Unit
+  TupleLitT args _             -> Tuple $ map (interpretExpr env) args
+  ListLitT  args _             -> List $ map (interpretExpr env) args
+  StringInterpT prefix comps _ -> interpretStringInterp env prefix comps
+  StringLitT s      _          -> Const (String s)
+  CharLitT   c      _          -> Const (Char c)
+  BoolLitT   b      _          -> Const (Bool b)
   RecordT fields _ -> Record $ Map.fromList $ mapSnd (interpretExpr env) fields
-  ProjectT e field _         -> case interpretExpr env e of
+  ProjectT e field _           -> case interpretExpr env e of
     Record fields -> case Map.lookup field fields of
       Just val -> val
       Nothing ->
