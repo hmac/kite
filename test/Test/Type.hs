@@ -29,10 +29,15 @@ test = do
         ty   = Forall a1 (list (maybeType (UType a1)))
         expr = App (App (Var (Free (prim "::"))) (Var (Free "Nothing")))
                    (Var (Free (prim "[]")))
+        expected = AppT
+          (AppT (VarT (Free (prim "::")) unit) (VarT (Free "Nothing") unit) unit
+          )
+          (VarT (Free (prim "[]")) unit)
+          unit
         r = check expr ty
     it "typechecks successfully" $ do
       runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
-        `shouldBe` Right ()
+        `shouldBe` Right expected
   describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
@@ -58,7 +63,7 @@ test = do
     it "typechecks successfully" $ do
       let r = check fun funType
       runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
-        `shouldBe` Right ()
+        `shouldBe` Right (VarT (Free "nope") unit)
   describe "Simple inference" $ do
     let nat = TCon "Nat" []
         wrap a = TCon "Wrap" [a]
@@ -341,9 +346,9 @@ runInfer tctx ctx expr = do
   let moduleName    = "qq.QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
-        e   <- fromSyn canonicalExpr
-        ty  <- infer e >>= subst
-        ty' <- subst ty
+        e       <- fromSyn canonicalExpr
+        (ty, _) <- infer e
+        ty'     <- subst ty
         quantify (fv ty') ty'
   runTypecheckM defaultTypeEnv
     $ withGlobalTypeCtx (<> tctx)
@@ -359,10 +364,11 @@ infers' tctx ctx expr ty = do
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
       canonicalType = canonicaliseType (moduleName, mempty) ty
   let r = do
-        e  <- fromSyn canonicalExpr
-        t  <- convertType mempty canonicalType
-        t' <- infer e >>= subst
-        pure (t, t')
+        e       <- fromSyn canonicalExpr
+        t       <- convertType mempty canonicalType
+        (t', _) <- infer e
+        t''     <- subst t'
+        pure (t, t'')
   let result =
         runTypecheckM defaultTypeEnv
           $ withGlobalTypeCtx (<> tctx)

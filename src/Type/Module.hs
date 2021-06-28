@@ -37,6 +37,7 @@ import           Type                           ( CtorInfo
                                                 , infer
                                                 , runTypeM
                                                 , wellFormedType
+                                                , withCtorInfo
                                                 , withGlobalCtx
                                                 , withGlobalTypeCtx
                                                 )
@@ -75,6 +76,7 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
   funCtx <-
     withGlobalTypeCtx (<> typeCtx')
     $ withGlobalCtx (<> (ctx <> dataTypeCtx))
+    $ withCtorInfo (<> dataTypeInfo)
     $ typecheckFuns funs
   let ctx'        = ctx <> dataTypeCtx <> funCtx
 

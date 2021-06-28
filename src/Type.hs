@@ -46,6 +46,7 @@ module Type
   , quantify
   , withGlobalCtx
   , withGlobalTypeCtx
+  , withCtorInfo
   , runTypecheckM
   ) where
 
@@ -112,6 +113,7 @@ import qualified Hedgehog.Range                as R
 import           Data.Data                      ( Data )
 import           Type.Primitive                 ( listConsMeta
                                                 , listNilMeta
+                                                , primitiveCtorInfo
                                                 )
 import           Type.Reflection                ( Typeable )
 
@@ -622,10 +624,11 @@ wellFormedType ty = do
 
 -- Typechecking monad
 data TypeEnv = TypeEnv
-  { envCtx     :: Ctx    -- The global type context
-  , envTypeCtx :: TypeCtx -- Global type info (primitive types)
-  , envDepth   :: Int  -- The recursion depth, used for debugging
-  , envDebug   :: Bool -- Whether to output debug messages
+  { envCtx      :: Ctx    -- The global type context
+  , envTypeCtx  :: TypeCtx -- Global type info (primitive types)
+  , envCtorInfo :: CtorInfo -- Info about constructors
+  , envDepth    :: Int  -- The recursion depth, used for debugging
+  , envDebug    :: Bool -- Whether to output debug messages
   }
   deriving (Eq, Show)
 
@@ -635,10 +638,11 @@ defaultTypeEnv =
         case unsafePerformIO (fmap (== "true") <$> lookupEnv "KITE_DEBUG") of
           Just True -> True
           _         -> False
-  in  TypeEnv { envCtx     = primCtx
-              , envTypeCtx = primTypeCtx
-              , envDepth   = 0
-              , envDebug   = debugOn
+  in  TypeEnv { envCtx      = primCtx
+              , envTypeCtx  = primTypeCtx
+              , envCtorInfo = primitiveCtorInfo
+              , envDepth    = 0
+              , envDebug    = debugOn
               }
 
 -- This type is used outside of this module, to raise errors and set the global context.
@@ -677,6 +681,9 @@ withGlobalCtx f = local (\e -> e { envCtx = f (envCtx e) })
 withGlobalTypeCtx
   :: MonadReader TypeEnv m => (TypeCtx -> TypeCtx) -> m a -> m a
 withGlobalTypeCtx f = local (\e -> e { envTypeCtx = f (envTypeCtx e) })
+
+withCtorInfo :: MonadReader TypeEnv m => (CtorInfo -> CtorInfo) -> m a -> m a
+withCtorInfo f = local (\e -> e { envCtorInfo = f (envCtorInfo e) })
 
 data TypeState = TypeState
   { varCounter  :: Int -- A counter for generating fresh names
@@ -726,6 +733,17 @@ putTypeCtx tctx = lift $ lift $ modify' $ \st -> st { typeContext = tctx }
 -- | Lift a 'Maybe' value into the 'MaybeT' monad transformer.
 liftMaybe :: TypeM a -> Maybe a -> TypeM a
 liftMaybe err = maybe err pure
+
+-- | Look up a constructor in the environment by its name
+-- If it isn't present, throw a type error.
+lookupCtor :: V -> TypeM ConMeta
+lookupCtor v@(Bound _) =
+  throwError $ TodoError $ "Not a valid constructor: " <> show v
+lookupCtor (Free n) = do
+  env <- ask
+  case lookup n (envCtorInfo env) of
+    Just c  -> pure c
+    Nothing -> throwError $ TodoError $ "Unknown constructor: " <> show n
 
 -- Subtyping
 -- | Under this input context, the first type is a subtype of the second type,
@@ -1033,11 +1051,8 @@ infer expr_ = do
           $ TodoError "abstraction checked and produced a non-abstraction"
     Hole n -> throwError $ CannotInferHole (Hole n)
     Con  x -> do
-      t <- lookupV x
-      -- TODO: populate this
-      let
-        meta =
-          ConMeta { conMetaTag = 0, conMetaArity = 0, conMetaTypeName = "todo" }
+      t    <- lookupV x
+      meta <- lookupCtor x
       pure (t, ConT x meta t)
     c@(  Case _ [])            -> throwError $ EmptyCase c
     Case scrut    (alt : alts) -> do
@@ -1470,9 +1485,9 @@ typecheckTest ctx =
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
   ctx <- forAll genCtx
-  let expr     = Con (Free (prim "Unit"))
+  let expr     = UnitLit
       ty       = TCon (prim "Unit") []
-      expected = ConT (Free (prim "Unit")) (ConMeta 0 0 "fixme") ty
+      expected = UnitLitT ty
   typecheckTest ctx (infer expr) === Right (ty, expected)
 
 prop_checks_bad_unit_annotation :: Property
