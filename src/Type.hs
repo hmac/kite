@@ -915,15 +915,27 @@ instantiate dir e ty = do
 check :: Exp -> Type -> TypeM ExpT
 check expr ty = do
   trace' ["check", debug expr, ":", debug ty] $ case (expr, ty) of
-    (Abs []       e, a     ) -> check e a
+    -- TODO: are we duplicating work here?
+    -- At the moment we always check e in \x. e, and then repeatedly check it against each
+    -- surrounding binding.
+    -- We also should not be constructing abstractions with no bindings, since these make no
+    -- semantic sense.
+    (Abs [] e, a) -> do
+      e' <- check e a
+      pure $ AbsT [] e' a
     (Abs (x : xs) e, Fn a b) -> do
       void $ extendV x a
       check (Abs xs e) b >>= \case
         AbsT xs' e' b' -> do
           dropAfter (V x a)
-          pure $ AbsT ((x, a) : xs') e' (Fn a b')
-        _ -> throwError
-          $ TodoError "abstraction annotated with non-function type"
+          xT <- subst a
+          t  <- subst $ Fn a b'
+          pure $ AbsT ((x, xT) : xs') e' t
+        r ->
+          throwError
+            $  TodoError
+            $  "abstraction annotated with non-function type: "
+            <> show r
     (e, Forall u a) -> do
       extendU u
       e' <- check e a
@@ -1045,8 +1057,9 @@ infer expr_ = do
       check (Abs xs e) (EType beta) >>= \case
         AbsT xs' e' beta' -> do
           dropAfter (V x (EType alpha))
-          let t = Fn (EType alpha) beta'
-          pure (t, AbsT ((x, EType alpha) : xs') e' t)
+          t  <- subst $ Fn (EType alpha) beta'
+          xT <- subst $ EType alpha
+          pure (t, AbsT ((x, xT) : xs') e' t)
         _ -> throwError
           $ TodoError "abstraction checked and produced a non-abstraction"
     Hole n -> throwError $ CannotInferHole (Hole n)
@@ -1493,7 +1506,7 @@ prop_uval_infers_unit = property $ do
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
   ctx <- forAll genCtx
-  let expr = Con (Free (prim "Unit"))
+  let expr = UnitLit
       ty   = Fn unit unit
   typecheckTest ctx (check expr ty)
     === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
@@ -1502,9 +1515,9 @@ prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- forAll genV
   let
-    uval     = Con (Free (prim "Unit"))
+    uval     = UnitLit
     expr     = App (Ann (Abs [v] uval) (Fn unit unit)) uval
-    uvalT    = ConT (Free (prim "Unit")) (ConMeta 0 0 "fixme") unit
+    uvalT    = UnitLitT unit
     expected = AppT
       (AnnT (AbsT [(v, unit)] uvalT (Fn unit unit)) (Fn unit unit))
       uvalT
@@ -1514,9 +1527,9 @@ prop_infers_simple_app = property $ do
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
-  let uval     = Con (Free (prim "Unit"))
+  let uval     = UnitLit
       ctx      = [V (Free "id") (Fn unit unit)]
-      uvalT    = ConT (Free (prim "Unit")) (ConMeta 0 0 "fixme") unit
+      uvalT    = UnitLitT unit
       -- The expression is id Unit
       expr     = App (Var (Free "id")) uval
       -- The inferred type should be Unit
@@ -1527,11 +1540,11 @@ prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
-  let uval     = Con (Free (prim "Unit"))
+  let uval     = UnitLit
       a        = U 0 "a"
       idType   = Forall a (Fn (UType a) (UType a))
       ctx      = [V (Free "id") idType, V (Free "idUnit") (Fn unit unit)]
-      uvalT    = ConT (Free (prim "Unit")) (ConMeta 0 0 "fixme") unit
+      uvalT    = UnitLitT unit
       -- The expression is idUnit (id Unit)
       expr     = App (Var (Free "idUnit")) (App (Var (Free "id")) uval)
       -- The inferred type should be Unit

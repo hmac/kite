@@ -19,6 +19,7 @@ copyright:      2019 Harry Maclean
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
+optimization: False
 extra-source-files:
     README.md
     ChangeLog.md
