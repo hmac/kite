@@ -13,12 +13,16 @@ module Data.Name
   , prim
   ) where
 
-import           Data.Data                      ( Data )
-import           Type.Reflection                ( Typeable )
-
 import           Data.Char                      ( isAsciiLower )
+import           Data.Data                      ( Data )
 import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )
+import           Data.Text.Prettyprint.Doc      ( Pretty
+                                                , hcat
+                                                , pretty
+                                                , punctuate
+                                                )
+import           Type.Reflection                ( Typeable )
 import           Util
 
 -- Shared types of name
@@ -44,11 +48,17 @@ showModuleName (ModuleName names) = mconcat (intersperse "." names)
 instance IsString ModuleName where
   fromString s = ModuleName $ splitOn '.' s
 
+instance Pretty ModuleName where
+  pretty (ModuleName names) = hcat $ punctuate "." $ map pretty names
+
 newtype PackageName = PackageName String
   deriving (Eq, Ord, Typeable, Data)
 
 instance Show PackageName where
   show (PackageName n) = n
+
+instance Pretty PackageName where
+  pretty (PackageName n) = pretty n
 
 instance IsString PackageName where
   fromString s = case mkPackageName s of
@@ -67,6 +77,10 @@ data PkgModuleName = PkgModuleName PackageName ModuleName
 instance Show PkgModuleName where
   show (PkgModuleName pkgName modName) = show pkgName <> "." <> show modName
 
+instance Pretty PkgModuleName where
+  pretty (PkgModuleName pkgName modName) =
+    pretty pkgName <> "." <> pretty modName
+
 instance IsString PkgModuleName where
   fromString (c : s) | isAsciiLower c = case splitOn '.' (c : s) of
     pkg : ms -> PkgModuleName (PackageName pkg) (ModuleName ms)
@@ -83,6 +97,11 @@ data Name
 instance Show Name where
   show (Local (Name name)              ) = "Local " ++ name
   show (TopLevel moduleName (Name name)) = show moduleName ++ "." ++ name
+
+instance Pretty Name where
+  pretty (Local (Name n)) = pretty n
+  pretty (TopLevel pkgModName (Name n)) =
+    hcat $ punctuate "." [pretty (show pkgModName), pretty n]
 
 fromLocal :: Name -> RawName
 fromLocal (Local n) = n

@@ -1,10 +1,20 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
 import           Syn.Print
 
-import           Control.Monad                  ( void )
+import           Control.Monad.Except           ( ExceptT
+                                                , MonadError
+                                                , liftEither
+                                                , runExceptT
+                                                , throwError
+                                                )
+import           Control.Monad.IO.Class         ( MonadIO
+                                                , liftIO
+                                                )
 import           Data.Text.Prettyprint.Doc
+                                         hiding ( group )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.UUID.V4                   ( nextRandom )
 import           System.Exit                    ( exitWith )
@@ -16,7 +26,8 @@ import           System.IO                      ( IOMode(WriteMode)
 import           System.Process.Typed           ( proc
                                                 , runProcess
                                                 )
-import           Text.Pretty.Simple             ( pPrint )
+-- import           Text.Pretty.Simple             ( pPrint )
+import           Util
 
 import           ModuleGroup
 import           ModuleGroupCompiler            ( CompiledModule(..) )
@@ -32,6 +43,7 @@ import qualified Syn
 import           Syn.Parse                      ( parseKiteFile )
 
 import qualified Chez.Print
+import           Error                          ( Error(..) )
 import           Interpret                      ( interpretAndRunMain
                                                 , printValue
                                                 )
@@ -68,8 +80,8 @@ instance ParseFields DumpPhase
 main :: IO ()
 main = do
   cfg <- getRecord "kite"
-  case cfg of
-    Repl                   -> Repl.run
+  runApp $ case cfg of
+    Repl                   -> liftIO Repl.run
     Format    f            -> format f
     Eval      f            -> eval f
     Run       f            -> run f
@@ -81,92 +93,113 @@ main = do
       AfterTypecheck  -> dumpTypeEnv f -- TODO: currently this is before typechecking
       Chez            -> dumpChez f
 
-parse :: FilePath -> IO ()
-parse = withParsedFile pPrint
+runApp :: ExceptT Error IO a -> IO ()
+runApp m = runExceptT m >>= \case
+  Left  err -> pPrint err
+  Right _   -> pure ()
 
-dumpChez :: FilePath -> IO ()
-dumpChez = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left err -> printNicely (printLocatedError err)
-    Right g' ->
-      let cg      = ModuleGroupCompiler.compileToChez g'
+parse :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+parse path = loadFile path >>= pPrint
+
+dumpChez :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+dumpChez path = do
+  group <- loadFile path
+  case ModuleGroupTypechecker.typecheckModuleGroup group of
+    Left err -> liftIO $ printNicely (printLocatedError err)
+    Right group' ->
+      let cg      = ModuleGroupCompiler.compileToChez group'
           defs    = cModuleEnv cg
           program = Chez.Print.printProgram defs
-      in  printNicely program
+      in  liftIO $ printNicely program
 
-dumpTypeEnv :: FilePath -> IO ()
-dumpTypeEnv = withParsedFile $ \g -> case ModuleGroupTypechecker.dumpEnv g of
-  Left  err -> pPrint err
-  Right g'  -> pPrint g'
+dumpTypeEnv :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+dumpTypeEnv path = do
+  group <- loadFile path
+  case ModuleGroupTypechecker.dumpEnv group of
+    Left  err -> pPrint err
+    Right g'  -> pPrint g'
 
-typecheck :: FilePath -> IO ()
-typecheck = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
+typecheck :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+typecheck path = do
+  group <- loadFile path
+  liftIO $ case ModuleGroupTypechecker.typecheckModuleGroup group of
     Left  err -> printNicely $ printLocatedError err
     Right _   -> printNicely "Success."
 
-format :: FilePath -> IO ()
-format path = (parseKiteFile path "fake-pkg" <$> readFile path) >>= \case
-  Right m   -> printNicely (printModule m)
-  Left  err -> putStrLn err
+format :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+format path = do
+  fileContents <-
+    runExceptT (ModuleLoader.readFile' path) >>= (liftEither . first LoadError)
+  liftIO $ case parseKiteFile path "fake-pkg" fileContents of
+    Right m   -> printNicely (printModule m)
+    Left  err -> putStrLn err
 
-eval :: FilePath -> IO ()
-eval = withParsedFile $ \g ->
-  case ModuleGroupTypechecker.typecheckModuleGroup g of
+eval :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+eval path = do
+  group <- loadFile path
+  liftIO $ case ModuleGroupTypechecker.typecheckModuleGroup group of
     Left err -> print (printLocatedError err)
     Right g' ->
       let answer = interpretAndRunMain g' in printNicely (printValue answer)
 
-run :: FilePath -> IO ()
-run = withParsedFile $ \g -> do
-  let modName  = let ModuleGroup m _ = g in Syn.moduleName m
+run :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+run path = do
+  g@(ModuleGroup m _) <- loadFile path
+  let modName  = Syn.moduleName m
   let mainName = TopLevel modName "main"
-  uuid1 <- nextRandom
+  uuid1 <- liftIO nextRandom
   -- Compile the program to /tmp/<module name>-<random uuid>.ss
   let outFile = "/tmp/" <> show modName <> "-" <> show uuid1 <> ".ss"
-  compileSuccess <- compileModuleGroup outFile g
+  compileModuleGroup outFile g
 
-  if compileSuccess
-    then do
-    -- Write a scheme script to load and run the program
-      uuid2 <- nextRandom
-      let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
-      withFile scriptFile WriteMode $ \h -> do
-        hPutStrLn h $ "(load " <> show outFile <> ")"
-        hPutStrLn h $ "(kite.Kite.Primitive.runIO " <> show mainName <> ")"
-      -- Run the script
-      exitcode <- runProcess
-        (proc "/usr/bin/env" ["scheme", "--script", scriptFile])
-      exitWith exitcode
-    else pure ()
+  -- Write a scheme script to load and run the program
+  uuid2 <- liftIO nextRandom
+  let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
+  liftIO $ withFile scriptFile WriteMode $ \h -> do
+    hPutStrLn h $ "(load " <> show outFile <> ")"
+    hPutStrLn h $ "(kite.Kite.Primitive.runIO " <> show mainName <> ")"
+  -- Run the script
+  exitcode <- runProcess
+    (proc "/usr/bin/env" ["scheme", "--script", scriptFile])
+  liftIO $ exitWith exitcode
 
-compile :: FilePath -> FilePath -> IO ()
-compile inFile outFile =
-  withParsedFile (void . compileModuleGroup outFile) inFile
+compile :: (MonadIO m, MonadError Error m) => FilePath -> FilePath -> m ()
+compile inFile outFile = do
+  group <- loadFile inFile
+  _     <- compileModuleGroup outFile group
+  pure ()
 
-compileModuleGroup :: FilePath -> UntypedModuleGroup -> IO Bool
+compileModuleGroup
+  :: (MonadIO m, MonadError Error m) => FilePath -> UntypedModuleGroup -> m ()
 compileModuleGroup outFile g =
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left err -> printNicely (printLocatedError err) >> pure False
+    Left err -> throwError $ TypeError err
     Right g' ->
       let cg       = ModuleGroupCompiler.compileToChez g'
           defs     = cModuleEnv cg
           chezCode = layout $ Chez.Print.printProgram defs
-      in  withFile outFile WriteMode $ \handle -> do
+      in  liftIO $ withFile outFile WriteMode $ \handle -> do
             renderIO handle chezCode
             hPutStrLn handle ""
-            pure True
 
 withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do
-  pkgInfoOrError <- Package.loadAndBuildPackageInfo
+  pkgInfoOrError <- runExceptT Package.loadAndBuildPackageInfo
   case pkgInfoOrError of
     Left  err     -> printNicely $ pretty err
     Right pkgInfo -> do
-      mgroup <- ModuleLoader.loadFromPackageInfo pkgInfo path
+      mgroup <- runExceptT $ ModuleLoader.loadFromPackageInfo pkgInfo path
       case mgroup of
         Left  err -> printNicely $ pretty err
         Right g   -> cb g
+
+loadFile :: (MonadError Error m, MonadIO m) => FilePath -> m UntypedModuleGroup
+loadFile path = do
+  pkgInfo <-
+    runExceptT (Package.loadAndBuildPackageInfo)
+      >>= (liftEither . first PackageError)
+  runExceptT (ModuleLoader.loadFromPackageInfo pkgInfo path)
+    >>= (liftEither . first LoadError)
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutSmart defaultLayoutOptions doc)

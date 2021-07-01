@@ -14,7 +14,6 @@ import qualified Data.Map.Lazy                 as Map
 import           Data.Name                      ( Name(..)
                                                 , RawName
                                                 )
-import           Data.Name.Print                ( printName )
 import           Data.Text.Prettyprint.Doc
 import           ModuleGroup                    ( TypedModuleGroup(..) )
 import           Syn.Print                      ( printRecordSyntax )
@@ -70,7 +69,7 @@ data Primitive = PrimStringAppend
 printValue :: Value -> Doc a
 printValue = \case
   Const c     -> printConstant c
-  Cons c args -> printName c <+> hsep (map printValue args)
+  Cons c args -> pretty c <+> hsep (map printValue args)
   Record r ->
     printRecordSyntax equals $ map (bimap pretty printValue) $ Map.toList r
   Tuple es     -> parens $ hsep $ punctuate comma $ map printValue es

@@ -2,12 +2,23 @@
 module Package
   ( loadAndBuildPackageInfo
   , PackageInfo(..)
+  , Error(..)
   ) where
 
+import           Control.Monad.Except           ( MonadError
+                                                , throwError
+                                                )
+import           Control.Monad.IO.Class         ( MonadIO
+                                                , liftIO
+                                                )
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( Map )
 import           Data.Text                      ( pack
                                                 , unpack
+                                                )
+import           Data.Text.Prettyprint.Doc      ( (<+>)
+                                                , Pretty
+                                                , pretty
                                                 )
 import           GHC.Generics                   ( Generic )
 import           Package.Spec                   ( Spec
@@ -23,7 +34,6 @@ import           Data.Name                      ( PackageName
 import           Package.Spec                   ( DepSpec(..)
                                                 , Spec(..)
                                                 )
-import           Util
 
 
 -- Kite packages are named collections of modules.
@@ -59,48 +69,61 @@ import           Util
 --    modules in other packages.
 -- 5. Carry on as usual.
 
+data Error = NoKitePackageToml
+           | KitePackageTomlParseError String
+           | InvalidPackageName String
+           | RemoteDepsNotSupported
+  deriving (Eq, Generic, Show)
+
+instance Pretty Error where
+  pretty = \case
+    NoKitePackageToml              -> "No kite-package.toml found"
+    KitePackageTomlParseError e    -> pretty e
+    InvalidPackageName        name -> "Invalid package name:" <+> pretty name
+    RemoteDepsNotSupported -> "Remote dependencies are not yet supported"
+
 -- | A combination of 'loadPackageConfigFile' followed by 'buildPackageInfo'
-loadAndBuildPackageInfo :: IO (Either String PackageInfo)
+loadAndBuildPackageInfo :: (MonadError Error m, MonadIO m) => m PackageInfo
 loadAndBuildPackageInfo = do
-  specOrError <- loadPackageConfigFile
-  case specOrError of
-    Left  err  -> pure $ Left err
-    Right spec -> buildPackageInfo spec
+  spec <- loadPackageConfigFile
+  buildPackageInfo spec
 
-
-loadPackageConfigFile :: IO (Either String Spec)
+loadPackageConfigFile :: (MonadError Error m, MonadIO m) => m Spec
 loadPackageConfigFile = do
   -- We assume that the file is in the current working directory
-  dir <- getCurrentDirectory
+  dir <- liftIO getCurrentDirectory
   let path = dir <> "/kite-package.toml"
-  doesFileExist path >>= \case
-    False -> pure $ Left "No kite-package.toml found."
-    True  -> first unpack . parseSpec . pack <$> readFile path
+  kitePackageTomlExists <- liftIO $ doesFileExist path
+  if kitePackageTomlExists
+    then do
+      file <- liftIO $ readFile path
+      case parseSpec (pack file) of
+        Left  err  -> throwError $ KitePackageTomlParseError $ unpack err
+        Right spec -> pure spec
+    else throwError NoKitePackageToml
 
 -- Convert a 'PackageSpec' to a 'PackageInfo'.
 -- For now this is a dumb translation, but in the future we will need to e.g. fetch package contents
 -- from the package repository in order to do determine the path for each dependency.
-buildPackageInfo :: Spec -> IO (Either String PackageInfo)
+buildPackageInfo :: (MonadError Error m, MonadIO m) => Spec -> m PackageInfo
 buildPackageInfo spec = do
-  dir <- getCurrentDirectory
-  pure $ case mapM validateDep (specDependencies spec) of
-    Left  err  -> Left err
-    Right deps -> do
-      name <- maybe (Left ("Invalid package name " <> show (specName spec)))
-                    Right
-                    (mkPackageName (specName spec))
-      pure PackageInfo { packageRootDir = dir
-                       , packageDeps    = Map.fromList deps
-                       , packageName    = name
-                       }
+  dir  <- liftIO getCurrentDirectory
+  deps <- mapM validateDep (specDependencies spec)
+  name <- case mkPackageName (specName spec) of
+    Just n  -> pure n
+    Nothing -> throwError $ InvalidPackageName $ show $ specName spec
+  pure PackageInfo { packageRootDir = dir
+                   , packageDeps    = Map.fromList deps
+                   , packageName    = name
+                   }
  where
   -- We currently only support local packages, and the package name must obey our rules for package
   -- names.
   validateDep LocalDep { depSpecName = n, depSpecPath = p } =
     case mkPackageName n of
-      Just pname -> Right (pname, p)
-      Nothing    -> Left $ "Invalid package name " <> n
-  validateDep _ = Left "Remote dependencies are not supported yet."
+      Just pname -> pure (pname, p)
+      Nothing    -> throwError $ InvalidPackageName n
+  validateDep _ = throwError RemoteDepsNotSupported
 
 -- Information about the package we are building.
 -- For now, this just contains a map from dependency package names to their path on disk.

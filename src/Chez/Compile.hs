@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Chez.Compile
   ( Env
+  , Error(..)
   , compileModule
   , builtins
   ) where
@@ -21,6 +22,10 @@ import           Data.Name                      ( Name(..)
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
+import           Data.Text.Prettyprint.Doc      ( Pretty
+                                                , pretty
+                                                )
+import           GHC.Generics                   ( Generic )
 import qualified NameGen
 import           NameGen                        ( NameGen
                                                 , freshM
@@ -83,6 +88,14 @@ import           Util
 -- we want to minimise the number of tests we do. The pattern match compiler from ELC shows how to
 -- do this, so we should be able to port that logic here.
 --
+
+data Error = EmptyMCase
+  deriving (Eq, Generic, Show)
+
+instance Pretty Error where
+  pretty = \case
+    EmptyMCase -> "Cannot compile empty mcase"
+
 freshName :: NameGen Text
 freshName = freshM (\i -> ("$" <> pack (show i)))
 

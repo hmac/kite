@@ -5,6 +5,7 @@ import           Criterion.Main
 
 import           AST
 import           Canonicalise                   ( canonicaliseModule )
+import           Control.Monad.Except           ( runExceptT )
 import           Data.Name                      ( PkgModuleName(..) )
 import           Syn
 import           Syn.Parse                      ( parseKiteFile )
@@ -40,9 +41,9 @@ main = defaultMain
 
 typecheckFromPathAndRoot :: String -> String -> IO Bool
 typecheckFromPathAndRoot path root = do
-  group <- loadFromPathAndRootDirectory path root "kite-benchmarks"
+  group <- runExceptT $ loadFromPathAndRootDirectory path root "kite-benchmarks"
   case group of
-    Left  err -> error $ path <> ":\n" <> err
+    Left  err -> error $ path <> ":\n" <> show err
     Right g   -> case typecheckModuleGroup g of
       Left  err                    -> error $ path <> ":\n" <> show err
       Right (TypedModuleGroup _ _) -> pure True
