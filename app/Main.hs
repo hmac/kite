@@ -6,7 +6,6 @@ import           Syn.Print
 
 import           Control.Monad.Except           ( ExceptT
                                                 , MonadError
-                                                , liftEither
                                                 , runExceptT
                                                 , throwError
                                                 )
@@ -26,7 +25,6 @@ import           System.IO                      ( IOMode(WriteMode)
 import           System.Process.Typed           ( proc
                                                 , runProcess
                                                 )
--- import           Text.Pretty.Simple             ( pPrint )
 import           Util
 
 import           ModuleGroup
@@ -128,8 +126,7 @@ typecheck path = do
 
 format :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 format path = do
-  fileContents <-
-    runExceptT (ModuleLoader.readFile' path) >>= (liftEither . first LoadError)
+  fileContents <- wrapError LoadError $ ModuleLoader.readFile' path
   liftIO $ case parseKiteFile path "fake-pkg" fileContents of
     Right m   -> printNicely (printModule m)
     Left  err -> putStrLn err
@@ -195,11 +192,8 @@ withParsedFile cb path = do
 
 loadFile :: (MonadError Error m, MonadIO m) => FilePath -> m UntypedModuleGroup
 loadFile path = do
-  pkgInfo <-
-    runExceptT (Package.loadAndBuildPackageInfo)
-      >>= (liftEither . first PackageError)
-  runExceptT (ModuleLoader.loadFromPackageInfo pkgInfo path)
-    >>= (liftEither . first LoadError)
+  pkgInfo <- wrapError PackageError Package.loadAndBuildPackageInfo
+  wrapError LoadError $ ModuleLoader.loadFromPackageInfo pkgInfo path
 
 layout :: Document -> SimpleDocStream AnsiStyle
 layout doc = reAnnotateS styleToColor (layoutSmart defaultLayoutOptions doc)

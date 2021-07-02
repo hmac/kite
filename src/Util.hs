@@ -31,6 +31,11 @@ module Util
   ) where
 
 import qualified Control.Monad
+import           Control.Monad.Except           ( ExceptT
+                                                , MonadError
+                                                , liftEither
+                                                , runExceptT
+                                                )
 import qualified Control.Monad.Extra
 import qualified Data.Bifunctor
 import qualified Data.Bitraversable
@@ -175,3 +180,7 @@ instance Debug Char where
 
 instance Debug a => Debug [a] where
   debug xs = concatMap debug xs
+
+-- | Convert a 'MonadError' constraint with a smaller error to one with a larger one.
+wrapError :: (MonadError e m) => (e' -> e) -> ExceptT e' m a -> m a
+wrapError f m = runExceptT m >>= (liftEither . first f)
