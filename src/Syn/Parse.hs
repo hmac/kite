@@ -137,7 +137,7 @@ pImport selfPkg = do
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
   alias     <- optional (symbol "as" >> uppercaseName)
-  items     <- optional $ parens (lexemeN pImportItem `sepBy` comma)
+  items     <- optional $ parensN (lexemeN pImportItem `sepBy` comma)
   pure Import { importQualified = qualified
               , importName      = PkgModuleName (fromMaybe selfPkg pkg) name
               , importAlias     = alias
@@ -149,14 +149,14 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
  where
   -- Foo(..)
   pImportAll = do
-    name <- uppercaseName
+    name <- lexemeN uppercaseName
     void $ parens (symbol "..")
     pure $ ImportAll name
   -- Foo(Bar, Baz)
   -- Monoid(empty)
   pImportSome = do
-    name     <- uppercaseName
-    subItems <- parens (pName `sepBy` comma)
+    name     <- lexemeN uppercaseName
+    subItems <- parensN (lexemeN pName `sepBy` comma)
     pure $ ImportSome name subItems
   -- Foo
   -- foo
