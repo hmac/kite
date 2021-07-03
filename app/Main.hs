@@ -179,17 +179,6 @@ compileModuleGroup outFile g =
         renderIO handle chezCode
         hPutStrLn handle ""
 
-withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
-withParsedFile cb path = do
-  pkgInfoOrError <- runExceptT Package.loadAndBuildPackageInfo
-  case pkgInfoOrError of
-    Left  err     -> printNicely $ pretty err
-    Right pkgInfo -> do
-      mgroup <- runExceptT $ ModuleLoader.loadFromPackageInfo pkgInfo path
-      case mgroup of
-        Left  err -> printNicely $ pretty err
-        Right g   -> cb g
-
 loadFile :: (MonadError Error m, MonadIO m) => FilePath -> m UntypedModuleGroup
 loadFile path = do
   pkgInfo <- wrapError PackageError Package.loadAndBuildPackageInfo
