@@ -23,7 +23,7 @@ main :: IO ()
 main = tests >>= defaultMain
 
 tests :: IO TestTree
-tests = testGroup "Tests" <$> sequence
+tests = localOption TreatPendingAsSuccess . testGroup "Tests" <$> sequence
   [ HS.testSpec "parsing tests" Test.Syn.Parse.test
   , HS.testSpec "printing tests" Test.Syn.Print.test
   , HS.testSpec "typing tests" Test.Type.test
