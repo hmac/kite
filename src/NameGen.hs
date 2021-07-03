@@ -6,13 +6,13 @@ module NameGen
 
 import           Control.Monad.State.Strict
 
-type NameGen = State Int
+type NameGen m = StateT Int m
 
-freshM :: (Int -> a) -> NameGen a
+freshM :: Monad m => (Int -> a) -> NameGen m a
 freshM f = do
   k <- get
   put (k + 1)
   pure (f k)
 
-run :: NameGen a -> a
-run m = evalState m 0
+run :: Monad m => NameGen m a -> m a
+run m = evalStateT m 0

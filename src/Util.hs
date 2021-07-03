@@ -24,6 +24,7 @@ module Util
   , Control.Monad.forM_
   , Control.Monad.foldM
   , Control.Monad.replicateM
+  , Control.Monad.zipWithM
   , Control.Monad.Extra.mconcatMapM
   , Debug.Trace.trace
   , Debug.Trace.traceShow

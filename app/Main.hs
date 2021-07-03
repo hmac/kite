@@ -93,7 +93,7 @@ main = do
 
 runApp :: ExceptT Error IO a -> IO ()
 runApp m = runExceptT m >>= \case
-  Left  err -> pPrint err
+  Left  err -> printNicely $ pretty err
   Right _   -> pure ()
 
 parse :: (MonadIO m, MonadError Error m) => FilePath -> m ()
@@ -103,12 +103,12 @@ dumpChez :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 dumpChez path = do
   group <- loadFile path
   case ModuleGroupTypechecker.typecheckModuleGroup group of
-    Left err -> liftIO $ printNicely (printLocatedError err)
-    Right group' ->
-      let cg      = ModuleGroupCompiler.compileToChez group'
-          defs    = cModuleEnv cg
+    Left  err    -> liftIO $ printNicely (printLocatedError err)
+    Right group' -> do
+      cg <- wrapError CompileError $ ModuleGroupCompiler.compileToChez group'
+      let defs    = cModuleEnv cg
           program = Chez.Print.printProgram defs
-      in  liftIO $ printNicely program
+      liftIO $ printNicely program
 
 dumpTypeEnv :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 dumpTypeEnv path = do
@@ -170,14 +170,14 @@ compileModuleGroup
   :: (MonadIO m, MonadError Error m) => FilePath -> UntypedModuleGroup -> m ()
 compileModuleGroup outFile g =
   case ModuleGroupTypechecker.typecheckModuleGroup g of
-    Left err -> throwError $ TypeError err
-    Right g' ->
-      let cg       = ModuleGroupCompiler.compileToChez g'
-          defs     = cModuleEnv cg
+    Left  err -> throwError $ TypeError err
+    Right g'  -> do
+      cg <- wrapError CompileError $ ModuleGroupCompiler.compileToChez g'
+      let defs     = cModuleEnv cg
           chezCode = layout $ Chez.Print.printProgram defs
-      in  liftIO $ withFile outFile WriteMode $ \handle -> do
-            renderIO handle chezCode
-            hPutStrLn handle ""
+      liftIO $ withFile outFile WriteMode $ \handle -> do
+        renderIO handle chezCode
+        hPutStrLn handle ""
 
 withParsedFile :: (UntypedModuleGroup -> IO ()) -> FilePath -> IO ()
 withParsedFile cb path = do

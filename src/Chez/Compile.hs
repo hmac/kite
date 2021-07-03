@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Chez.Compile
   ( Env
   , Error(..)
@@ -14,6 +15,9 @@ import           Chez                           ( Def(..)
                                                 , null
                                                 , true
                                                 )
+import           Control.Monad.Except           ( MonadError
+                                                , throwError
+                                                )
 import           Data.List.Extra                ( concatUnzip )
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
@@ -22,7 +26,8 @@ import           Data.Name                      ( Name(..)
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           Data.Text.Prettyprint.Doc      ( Pretty
+import           Data.Text.Prettyprint.Doc      ( (<+>)
+                                                , Pretty
                                                 , pretty
                                                 )
 import           GHC.Generics                   ( Generic )
@@ -32,6 +37,7 @@ import           NameGen                        ( NameGen
                                                 )
 import           Prelude                 hiding ( null )
 import qualified Syn.Typed                     as T
+import           Type                           ( Type )
 import           Util
 
 -- Compile Kite to Chez Scheme
@@ -90,33 +96,44 @@ import           Util
 --
 
 data Error = EmptyMCase
+           | EmptyMCaseBranch
+           | CannotCompileHole Name Type
+           | CtorMissingMetadata Name
+           | UnknownFCall String
   deriving (Eq, Generic, Show)
 
 instance Pretty Error where
   pretty = \case
-    EmptyMCase -> "Cannot compile empty mcase"
+    EmptyMCase       -> "Cannot compile empty mcase"
+    EmptyMCaseBranch -> "Cannot compile mcase branch with no variables"
+    CannotCompileHole name _ ->
+      "Encountered a hole in the program: " <+> pretty name
+    CtorMissingMetadata c -> "No metadata for constructor: " <+> pretty c
+    UnknownFCall        n -> "Unknown foreign call: " <+> pretty n
 
-freshName :: NameGen Text
+freshName :: Monad m => NameGen m Text
 freshName = freshM (\i -> ("$" <> pack (show i)))
 
 type Env = [Def]
 
-compileModule :: Env -> T.Module -> Env
-compileModule defs m =
+compileModule :: MonadError Error m => Env -> T.Module -> m Env
+compileModule defs m = do
   let ordering :: T.Decl -> Int
       ordering = \case
         (T.DataDecl _) -> 0
         (T.FunDecl  _) -> 1
-  in  defs <> concatMap compileDecl (sortOn ordering (T.moduleDecls m))
+  decls <- mapM compileDecl $ sortOn ordering $ T.moduleDecls m
+  pure (defs <> concat decls)
 
-compileDecl :: T.Decl -> [Def]
+compileDecl :: MonadError Error m => T.Decl -> m [Def]
 compileDecl = \case
-  T.FunDecl fun ->
-    let (name, expr) = NameGen.run (compileFun fun) in [Def name expr]
-  T.DataDecl d -> compileData d
+  T.FunDecl fun -> do
+    (name, expr) <- NameGen.run (compileFun fun)
+    pure [Def name expr]
+  T.DataDecl d -> pure $ compileData d
 
 -- | Compile a function into a pair of binding name and expression
-compileFun :: T.Fun -> NameGen (Text, SExpr)
+compileFun :: MonadError Error m => T.Fun -> NameGen m (Text, SExpr)
 compileFun fun = do
   expr   <- compileExpr $ T.funExpr fun
   wheres <- mapM compileFun $ T.funWheres fun
@@ -149,7 +166,7 @@ compileData dat =
   in
     recordDefinition : zipWith mkConstructor [0 ..] (T.dataCons dat)
 
-compileExpr :: T.Exp -> NameGen SExpr
+compileExpr :: forall m . MonadError Error m => T.Exp -> NameGen m SExpr
 compileExpr = \case
   T.IntLitT  n        -> pure $ Lit (Int n)
   T.BoolLitT b        -> pure $ Lit (Bool b)
@@ -175,10 +192,10 @@ compileExpr = \case
     scrutVar <- freshName
     let
       -- Each case alt is compiled to a test ((eq? <tag> (<type>-_tag <scrut>)) <rhs>)
-        compileAlt :: T.Pattern -> T.Exp -> NameGen SExpr
+        compileAlt :: T.Pattern -> T.Exp -> NameGen m SExpr
         compileAlt pat rhs = do
-          let (tests, bindings) = compilePat pat (Var scrutVar)
-          rhsExpr <- compileExpr rhs
+          (tests, bindings) <- compilePat pat (Var scrutVar)
+          rhsExpr           <- compileExpr rhs
           pure $ List [App (Var "and") tests, Let bindings rhsExpr]
     scrutExpr <- compileExpr scrut
     -- TODO: Use the Cond constructor
@@ -188,15 +205,14 @@ compileExpr = \case
   -- An mcase takes N arguments and matches each against a pattern simultaneously.
   -- We compile it to a lambda that takes N arguments and then tests them in a cond, similar to
   -- case.
-  T.MCaseT [] _ ->
-    error $ "Chez.Compile.compileExpr: Cannot compile empty mcase"
+  T.MCaseT []                 _ -> throwError EmptyMCase
   T.MCaseT alts@((ps, _) : _) _ -> do
     let argNum = length ps
     vars <- replicateM argNum freshName
-    let compileAlt :: [T.Pattern] -> T.Exp -> NameGen SExpr
+    let compileAlt :: [T.Pattern] -> T.Exp -> NameGen m SExpr
         compileAlt pats rhs = do
-          rhsExpr <- compileExpr rhs
-          let (tests, bindings) = compileMCaseBranch (map Var vars) pats
+          rhsExpr           <- compileExpr rhs
+          (tests, bindings) <- compileMCaseBranch (map Var vars) pats
           pure $ List [App (Var "and") tests, Let bindings rhsExpr]
     flip (foldr (Abs . (: []))) vars
       <$> App (Var "cond")
@@ -226,71 +242,70 @@ compileExpr = \case
     argExprs <- mapM compileExpr args
     let fExpr = compileFCall f
     case argExprs of
-      [] -> pure fExpr
-      _  -> pure $ App fExpr argExprs
+      [] -> fExpr
+      _  -> App <$> fExpr <*> pure argExprs
 
   -- TODO:
   -- - Holes
+  T.HoleT name ty -> throwError $ CannotCompileHole name ty
 
-  e -> error $ "Cannot compile " <> show e <> "yet"
-
-compileMCaseBranch :: [SExpr] -> [T.Pattern] -> ([SExpr], [(Text, SExpr)])
-compileMCaseBranch _ [] = ([], [])
-compileMCaseBranch (v : vars) (p : pats) =
-  let (tests     , bindings     ) = compilePat p v
-      (innerTests, innerBindings) = compileMCaseBranch vars pats
-  in  (tests <> innerTests, bindings <> innerBindings)
-compileMCaseBranch [] _ =
-  error "Chez.Compile.compileMCaseBranch: empty set of variables"
+compileMCaseBranch
+  :: MonadError Error m
+  => [SExpr]
+  -> [T.Pattern]
+  -> m ([SExpr], [(Text, SExpr)])
+compileMCaseBranch _          []         = pure ([], [])
+compileMCaseBranch (v : vars) (p : pats) = do
+  (tests     , bindings     ) <- compilePat p v
+  (innerTests, innerBindings) <- compileMCaseBranch vars pats
+  pure (tests <> innerTests, bindings <> innerBindings)
+compileMCaseBranch [] _ = throwError EmptyMCaseBranch
 
 -- Given a pattern p, and a scrutinee s, 'compilePat p s' compiles the pattern, returning a list of
 -- tests to determine if the pattern matches and a list of bindings to construct if it matches.
-compilePat :: T.Pattern -> SExpr -> ([SExpr], [(Text, SExpr)])
+compilePat
+  :: MonadError Error m => T.Pattern -> SExpr -> m ([SExpr], [(Text, SExpr)])
 compilePat pattern scrut = case pattern of
-  T.VarPat x       -> ([], [(name2Text x, scrut)])
-  T.WildPat        -> ([], [])
-  T.UnitPat        -> ([], [])
-  T.IntPat    n    -> ([App (Var "eq?") [scrut, Lit (Int n)]], [])
-  T.CharPat   c    -> ([App (Var "eq?") [scrut, Lit (Char c)]], [])
-  T.StringPat s    -> ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
-  T.BoolPat   b    -> ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
-  T.TuplePat  pats -> concatUnzip $ zipWith
+  T.VarPat x       -> pure ([], [(name2Text x, scrut)])
+  T.WildPat        -> pure ([], [])
+  T.UnitPat        -> pure ([], [])
+  T.IntPat    n    -> pure ([App (Var "eq?") [scrut, Lit (Int n)]], [])
+  T.CharPat   c    -> pure ([App (Var "eq?") [scrut, Lit (Char c)]], [])
+  T.StringPat s -> pure ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
+  T.BoolPat   b    -> pure ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
+  T.TuplePat  pats -> concatUnzip <$> zipWithM
     (\p i -> compilePat p (App (Var "vector-ref") [scrut, Lit (Int i)]))
     pats
     [0 :: Int ..]
-  T.ListPat pats ->
-    let (tests, bindings) = concatUnzip $ zipWith
-          (\p i -> compilePat p (App (Var "list-ref") [scrut, Lit (Int i)]))
-          pats
-          [0 :: Int ..]
-        lengthTest = App
-          (Var "eq?")
-          [App (Var "length") [scrut], Lit (Int (length pats))]
-    in  (lengthTest : tests, bindings)
+  T.ListPat pats -> do
+    let lengthTest =
+          App (Var "eq?") [App (Var "length") [scrut], Lit (Int (length pats))]
+    (tests, bindings) <- concatUnzip <$> zipWithM
+      (\p i -> compilePat p (App (Var "list-ref") [scrut, Lit (Int i)]))
+      pats
+      [0 :: Int ..]
+    pure (lengthTest : tests, bindings)
   -- TODO: we could use record-accessor to index into the fields of the constructor
   -- https://scheme.com/tspl4/records.html#./records:h1
-  T.ConsPat c Nothing _ ->
-    error $ "Chez.Compile.compilePat: no metadata for constructor " <> show c
-  T.ConsPat c _ [] | c == prim "[]" -> ([App (Var "null?") [scrut]], [])
-  T.ConsPat c _ [headPat, tailPat] | c == prim "::" ->
-    let (headTests, headBindings) =
-          compilePat headPat (App (Var "car") [scrut])
-        (tailTests, tailBindings) =
-          compilePat tailPat (App (Var "cdr") [scrut])
-        notNullTest = App (Var "not") [App (Var "null?") [scrut]]
-    in  (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
+  T.ConsPat c Nothing _ -> throwError $ CtorMissingMetadata c
+  T.ConsPat c _ [] | c == prim "[]" -> pure ([App (Var "null?") [scrut]], [])
+  T.ConsPat c _ [headPat, tailPat] | c == prim "::" -> do
+    let notNullTest = App (Var "not") [App (Var "null?") [scrut]]
+    (headTests, headBindings) <- compilePat headPat (App (Var "car") [scrut])
+    (tailTests, tailBindings) <- compilePat tailPat (App (Var "cdr") [scrut])
+    pure (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
 
-  T.ConsPat _c (Just meta) pats ->
+  T.ConsPat _c (Just meta) pats -> do
     let tag      = T.conMetaTag meta
         ty       = "$" <> name2Text (T.conMetaTypeName meta)
         tagField = ty <> "-" <> "_tag"
         fieldAtIndex i = ty <> "-_" <> pack (show i)
         ctorTest = App (Var "eq?") [App (Var tagField) [scrut], Lit (Int tag)]
-        (tests, bindings) = concatUnzip $ zipWith
-          (\p i -> compilePat p (App (Var (fieldAtIndex i)) [scrut]))
-          pats
-          [0 :: Int ..]
-    in  (ctorTest : tests, bindings)
+    (tests, bindings) <- concatUnzip <$> zipWithM
+      (\p i -> compilePat p (App (Var (fieldAtIndex i)) [scrut]))
+      pats
+      [0 :: Int ..]
+    pure (ctorTest : tests, bindings)
 
 name2Text :: Name -> Text
 name2Text (Local (Name n)              ) = pack n
@@ -298,16 +313,16 @@ name2Text (TopLevel moduleName (Name n)) = pack $ show moduleName ++ "." ++ n
 
 -- Foreign calls are compiled to Chez functions or expressions
 -- Some of these aren't implemented
-compileFCall :: String -> SExpr
+compileFCall :: MonadError Error m => String -> m SExpr
 compileFCall = \case
-  "getLine" -> App (Var "get-line") [App (Var "current-input-port") []]
-  "putStr"  -> Abs ["s"] $ begin
+  "getLine" -> pure $ App (Var "get-line") [App (Var "current-input-port") []]
+  "putStr"  -> pure $ Abs ["s"] $ begin
     [App (Var "put-string") [App (Var "current-output-port") [], Var "s"]]
-  "putStrLn" -> Abs ["s"] $ begin
+  "putStrLn" -> pure $ Abs ["s"] $ begin
     [ App (Var "put-string") [App (Var "current-output-port") [], Var "s"]
     , App (Var "newline")    [App (Var "current-output-port") []]
     ]
-  f -> error $ "Unknown foreign call: " <> f
+  f -> throwError $ UnknownFCall f
 
 -- Implementations for compiler built-in functions like showInt
 builtins :: [Def]

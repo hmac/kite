@@ -4,10 +4,13 @@ module ModuleGroupCompiler where
 -- This module takes a ModuleGroup, compiles each module in it, and somehow
 -- merges it all together.
 
+import           Control.Monad.Except           ( MonadError )
+
 import qualified Chez.Compile                  as Chez
 import           Data.Name
 import           ModuleGroup
 import           Syn.Typed
+import           Util
 
 
 -- We'll attempt this as follows:
@@ -35,12 +38,13 @@ data CompiledModule a = CompiledModule
   deriving Show
 
 
-compileToChez :: TypedModuleGroup -> CompiledModule Chez.Env
-compileToChez (TypedModuleGroup m deps) = CompiledModule
-  { cModuleName    = moduleName m
-  , cModuleImports = moduleImports m
-  , cModuleExports = moduleExports m
-  , cModuleEnv     = Chez.builtins <> env
-  , cModuleDeps    = []
-  }
-  where env = foldl Chez.compileModule mempty (deps ++ [m])
+compileToChez
+  :: MonadError Chez.Error m => TypedModuleGroup -> m (CompiledModule Chez.Env)
+compileToChez (TypedModuleGroup m deps) = do
+  env <- foldM Chez.compileModule mempty (deps ++ [m])
+  pure CompiledModule { cModuleName    = moduleName m
+                      , cModuleImports = moduleImports m
+                      , cModuleExports = moduleExports m
+                      , cModuleEnv     = Chez.builtins <> env
+                      , cModuleDeps    = []
+                      }
