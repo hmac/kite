@@ -2,7 +2,6 @@ module Test.Syn.RoundTrip where
 
 -- This module tests the roundtrip property: parse . print == id
 
-import           Test.Hspec
 import           Text.Megaparsec                ( Parsec
                                                 , eof
                                                 , errorBundlePretty
@@ -30,14 +29,16 @@ import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
 import           Test.Hspec.Hedgehog     hiding ( Var )
 
-test :: Spec
-test = describe "round trip property" $ modifyMaxSuccess (const 200) $ do
-  it "holds for function declarations" roundtripFun
-  it "holds for expressions"           roundtripSyn
-  it "holds for types"                 roundtripType
-  it "holds for data declarations"     roundtripData
-  it "holds for import statements"     roundtripImport
-  it "holds for modules"               roundtripModule
+properties :: H.Group
+properties = H.Group "Roundtrip properties" $ mapSnd
+  (withTests 200)
+  [ ("function declarations", property roundtripFun)
+  , ("expressions"          , property roundtripSyn)
+  , ("types"                , property roundtripType)
+  , ("data declarations"    , property roundtripData)
+  , ("import statements"    , property roundtripImport)
+  , ("modules"              , property roundtripModule)
+  ]
 
 roundtripSyn :: H.PropertyT IO ()
 roundtripSyn = roundtrip genExpr printExpr pExpr
