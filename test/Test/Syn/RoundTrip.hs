@@ -27,17 +27,16 @@ import           Data.Text.Prettyprint.Doc.Render.String
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
-import           Test.Hspec.Hedgehog     hiding ( Var )
 
 properties :: H.Group
 properties = H.Group "Roundtrip properties" $ mapSnd
-  (withTests 200)
-  [ ("function declarations", property roundtripFun)
-  , ("expressions"          , property roundtripSyn)
-  , ("types"                , property roundtripType)
-  , ("data declarations"    , property roundtripData)
-  , ("import statements"    , property roundtripImport)
-  , ("modules"              , property roundtripModule)
+  (H.withTests 200)
+  [ ("function declarations", H.property roundtripFun)
+  , ("expressions"          , H.property roundtripSyn)
+  , ("types"                , H.property roundtripType)
+  , ("data declarations"    , H.property roundtripData)
+  , ("import statements"    , H.property roundtripImport)
+  , ("modules"              , H.property roundtripModule)
   ]
 
 roundtripSyn :: H.PropertyT IO ()
@@ -70,7 +69,7 @@ roundtrip
   -> (a -> Doc b)
   -> Parsec Error String a
   -> H.PropertyT IO ()
-roundtrip gen printer parser = hedgehog $ do
+roundtrip gen printer parser = do
   e <- H.forAll gen
   let printed  = renderString (layoutSmart defaultLayoutOptions (printer e))
       reparsed = first errorBundlePretty $ parse (parser <* eof) "" printed

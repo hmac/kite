@@ -9,7 +9,6 @@ let
   haskellPackages = nixpkgs.pkgs.haskell.packages.${compiler}.override {
     overrides = self: super: {
       "${name}" = self.callCabal2nix "${name}" (gitignore ./.) { };
-      # hspec-hedgehog = self.callHackage "hspec-hedgehog" "0.0.1.2" {};
     };
   };
 
