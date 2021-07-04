@@ -4,9 +4,16 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2.3.4
     - uses: cachix/install-nix-action@v13
     - run: nix-build -A kite
+  format:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v2.3.4
+    - uses: cachix/install-nix-action@v13
+    - run: nix-shell --command "find src app test benchmarks -name '*.hs' | xargs brittany -c"
+
