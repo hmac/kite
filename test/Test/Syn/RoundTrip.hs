@@ -1,6 +1,8 @@
-module Test.Syn.RoundTrip where
-
 -- This module tests the roundtrip property: parse . print == id
+module Test.Syn.RoundTrip
+  ( properties
+  ) where
+
 
 import           Text.Megaparsec                ( Parsec
                                                 , eof
@@ -382,21 +384,14 @@ genString range = Gen.recursive
   genEscape :: H.Gen String
   genEscape = Gen.choice [pure "\\\\", pure "\\\""]
 
--- A simplified generator to speed up generation and shrinking
 genLowerString :: H.Gen String
-genLowerString = Gen.element ["a", "b", "c", "foo", "bar", "xs"]
-
-genLowerString' :: H.Gen String
-genLowerString' = do
+genLowerString = Gen.filter (`notElem` keywords) $ do
   c  <- Gen.lower
   cs <- Gen.list (Range.linear 0 5) Gen.alphaNum
   pure (c : cs)
 
 genUpperString :: H.Gen String
-genUpperString = Gen.element ["A", "B", "C", "Foo", "Bar"]
-
-genUpperString' :: H.Gen String
-genUpperString' = do
+genUpperString = do
   c  <- Gen.upper
   cs <- Gen.list (Range.linear 0 10) Gen.alphaNum
   pure (c : cs)
