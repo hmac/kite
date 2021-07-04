@@ -9,6 +9,7 @@ import           Control.Monad.Except           ( ExceptT
                                                 , runExceptT
                                                 , throwError
                                                 )
+import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.IO.Class         ( MonadIO
                                                 , liftIO
                                                 )
@@ -131,13 +132,14 @@ format path = do
     Right m   -> printNicely (printModule m)
     Left  err -> putStrLn err
 
-eval :: (MonadIO m, MonadError Error m) => FilePath -> m ()
+eval :: (MonadFix m, MonadIO m, MonadError Error m) => FilePath -> m ()
 eval path = do
   group <- loadFile path
-  liftIO $ case ModuleGroupTypechecker.typecheckModuleGroup group of
-    Left err -> print (printLocatedError err)
-    Right g' ->
-      let answer = interpretAndRunMain g' in printNicely (printValue answer)
+  case ModuleGroupTypechecker.typecheckModuleGroup group of
+    Left  err -> liftIO $ print (printLocatedError err)
+    Right g'  -> do
+      answer <- wrapError InterpretError $ interpretAndRunMain g'
+      liftIO $ printNicely (printValue answer)
 
 run :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 run path = do

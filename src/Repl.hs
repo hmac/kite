@@ -1,5 +1,6 @@
 module Repl where
 
+import           Control.Monad.Except           ( runExceptT )
 import           Data.Functor                   ( ($>) )
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Terminal
@@ -88,9 +89,12 @@ processExpr decls e =
   in  case ModuleGroupTypechecker.typecheckModuleGroup g of
         Left  err -> putStrLn $ "Type error: " <> show err
         Right g'  -> do
-          let modul  = let (ModuleGroup m _) = g in m
-          let answer = interpretAndRun (TopLevel (moduleName modul) "$main") g'
-          renderIO stdout (layoutSmart defaultLayoutOptions (printValue answer))
+          let modul = let (ModuleGroup m _) = g in m
+          answer <- runExceptT
+            $ interpretAndRun (TopLevel (moduleName modul) "$main") g'
+          renderIO stdout $ layoutSmart defaultLayoutOptions $ case answer of
+            Left  err   -> pretty err
+            Right value -> printValue value
           putStrLn ""
 
 buildModule :: [Decl Syn] -> Can.Module
