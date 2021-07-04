@@ -21,7 +21,8 @@ import           Data.Text.Prettyprint.Doc      ( (<+>)
                                                 , pretty
                                                 )
 import           GHC.Generics                   ( Generic )
-import           Package.Spec                   ( Spec
+import           Package.Spec                   ( DepSpec(..)
+                                                , Spec(..)
                                                 , parseSpec
                                                 )
 import           System.Directory               ( doesFileExist
@@ -30,9 +31,6 @@ import           System.Directory               ( doesFileExist
 
 import           Data.Name                      ( PackageName
                                                 , mkPackageName
-                                                )
-import           Package.Spec                   ( DepSpec(..)
-                                                , Spec(..)
                                                 )
 
 

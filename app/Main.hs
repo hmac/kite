@@ -46,7 +46,7 @@ import           Error                          ( Error(..) )
 import           Interpret                      ( interpretAndRunMain
                                                 , printValue
                                                 )
-import qualified Package                       as Package
+import qualified Package
 import           Print                          ( Document
                                                 , Style(..)
                                                 )

@@ -128,7 +128,7 @@ defaultEnv = Map.fromList
   , ( TopLevel modPrim "::"
     , Abs
       (\x -> pure $ Abs
-        (\xs -> case xs of
+        (\case
           List xs' -> pure $ List (x : xs')
           e        -> throwError $ BadListArg (show e)
         )
@@ -208,7 +208,7 @@ interpretExpr env expr_ = case expr_ of
     | c == TopLevel modPrim "::" -> pure $ Abs
       (\x -> pure
         (Abs
-          (\xs -> case xs of
+          (\case
             List xs' -> pure $ List (x : xs')
             e        -> throwError $ BadListArg (show e)
           )
@@ -245,7 +245,7 @@ interpretExpr env expr_ = case expr_ of
     Record fields -> case Map.lookup field fields of
       Just val -> pure val
       Nothing  -> throwError $ RecordMissingField field
-    _ -> throwError $ ProjectOnNonRecord
+    _ -> throwError ProjectOnNonRecord
   FCallT s args _ -> FCall s <$> mapM (interpretExpr env) args
 
 interpretPrim :: MonadError Error m => RawName -> m (Value m)
@@ -286,7 +286,7 @@ applyPrim PrimStringUnconsChar [Const (String s), def, Abs f] = case s of
     Abs f' -> f' (Const (String cs))
     _      -> throwError UnconsCharBadArg
 applyPrim PrimShowInt  [Const (Int  x)] = pure $ Const $ String $ show x
-applyPrim PrimShowChar [Const (Char c)] = pure $ Const $ String $ [c]
+applyPrim PrimShowChar [Const (Char c)] = pure $ Const $ String [c]
 applyPrim PrimEqInt [Const (Int x), Const (Int y)] =
   pure $ Const $ Bool $ x == y
 applyPrim PrimEqChar [Const (Char x), Const (Char y)] =
@@ -371,7 +371,7 @@ applyPattern env val pattern = case (pattern, val) of
     | otherwise -> pure Nothing
   (ConsPat (TopLevel m "::") _meta pats, List elems) | m == modPrim ->
     case (elems, pats) of
-      ((e : es), [p1, p2]) -> do
+      (e : es, [p1, p2]) -> do
         env' <- applyPattern env e p1
         case env' of
           Nothing    -> pure Nothing
@@ -387,8 +387,8 @@ interpretStringInterp
   -> String
   -> NonEmpty (Exp, String)
   -> m (Value m)
-interpretStringInterp env prefix comps = (Const . String)
-  <$> go (NE.toList comps)
+interpretStringInterp env prefix comps = Const . String <$> go
+  (NE.toList comps)
  where
   go []                     = pure prefix
   go ((e, suffix) : comps') = interpretExpr env e >>= \case

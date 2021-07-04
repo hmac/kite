@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Chez.Compile
   ( Env
@@ -113,7 +112,7 @@ instance Pretty Error where
     UnknownFCall        n -> "Unknown foreign call: " <+> pretty n
 
 freshName :: Monad m => NameGen m Text
-freshName = freshM (\i -> ("$" <> pack (show i)))
+freshName = freshM (\i -> "$" <> pack (show i))
 
 type Env = [Def]
 
@@ -138,7 +137,7 @@ compileFun :: MonadError Error m => T.Fun -> NameGen m (Text, SExpr)
 compileFun fun = do
   expr   <- compileExpr $ T.funExpr fun
   wheres <- mapM compileFun $ T.funWheres fun
-  pure $ (name2Text (T.funName fun), Let wheres expr)
+  pure (name2Text (T.funName fun), Let wheres expr)
 
 
 compileData :: T.Data -> [Def]
@@ -154,11 +153,12 @@ compileData dat =
     mkConstructor :: Int -> T.DataCon -> Def
     mkConstructor tag con =
       let
-        maxArgs     = length $ T.conArgs con
-        parameters  = map (pack . ('_' :) . show) [0 .. maxArgs - 1]
-        fieldValues = Lit (Int tag) : map Var parameters <> take
-          (maxFields - maxArgs)
-          (repeat null)
+        maxArgs    = length $ T.conArgs con
+        parameters = map (pack . ('_' :) . show) [0 .. maxArgs - 1]
+        fieldValues =
+          Lit (Int tag)
+            :  map Var parameters
+            <> replicate (maxFields - maxArgs) null
         body = case parameters of
           [] -> App (Var ("make-" <> typeName)) fieldValues
           _  -> Abs parameters $ App (Var ("make-" <> typeName)) fieldValues
@@ -188,7 +188,7 @@ compileExpr = \case
   T.LetT bindings body _ ->
     Let
       <$> mapM (\(n, e, _) -> (name2Text n, ) <$> compileExpr e) bindings
-      <*> (compileExpr body)
+      <*> compileExpr body
   T.CaseT scrut alts _ -> do
     scrutVar <- freshName
     let
@@ -201,7 +201,7 @@ compileExpr = \case
     scrutExpr <- compileExpr scrut
     -- TODO: Use the Cond constructor
     Let [(scrutVar, scrutExpr)]
-      <$> App (Var "cond")
+      .   App (Var "cond")
       <$> mapM (uncurry compileAlt) alts
   -- An mcase takes N arguments and matches each against a pattern simultaneously.
   -- We compile it to a lambda that takes N arguments and then tests them in a cond, similar to
@@ -216,7 +216,7 @@ compileExpr = \case
           (tests, bindings) <- compileMCaseBranch (map Var vars) pats
           pure $ List [App (Var "and") tests, Let bindings rhsExpr]
     flip (foldr (Abs . (: []))) vars
-      <$> App (Var "cond")
+      .   App (Var "cond")
       <$> mapM (uncurry compileAlt) alts
   T.RecordT kvs _ -> do
     r       <- freshName
@@ -224,12 +224,12 @@ compileExpr = \case
     pure
       $  Let [(r, App (Var "make-hashtable") [Var "symbol-hash", Var "eq?"])]
       $  begin
-      $  (map
+      $  map
            (\(k, v) ->
              App (Var "symbol-hashtable-set!") [Var r, Quote (Var k), v]
            )
            assigns
-         )
+
       <> [Var r]
   T.ProjectT r k _ -> do
     rExpr <- compileExpr r
@@ -334,13 +334,13 @@ builtins =
     , Def
       (primString "MkIO")
       (Abs ["f"]
-           (App (Var ("make-$kite.Kite.Primitive.IO")) [Lit (Int 0), Var "f"])
+           (App (Var "make-$kite.Kite.Primitive.IO") [Lit (Int 0), Var "f"])
       )
     , Def
       (primString "runIO")
       (Abs
         ["m"]
-        (App (App (Var ("$kite.Kite.Primitive.IO-_0")) [Var "m"])
+        (App (App (Var "$kite.Kite.Primitive.IO-_0") [Var "m"])
              [Abs ["r"] (Var "r")]
         )
       )
