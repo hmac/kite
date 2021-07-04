@@ -147,7 +147,7 @@ canonicaliseExp env = go
     MCase    alts          -> canonicaliseMCase alts
     TupleLit es            -> TupleLit $ fmap (go locals) es
     ListLit  es            -> ListLit $ fmap (go locals) es
-    StringInterp pre parts -> StringInterp pre $ mapFst (go locals) parts
+    StringInterp pre parts -> StringInterp pre $ fmap (first (go locals)) parts
     StringLit s            -> StringLit s
     CharLit   c            -> CharLit c
     Hole      n            -> Hole (canonicaliseName env n)

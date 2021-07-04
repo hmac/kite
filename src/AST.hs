@@ -8,7 +8,9 @@ module AST
 import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
 import           Data.Name                      ( Name )
-import           Util                           ( Debug(debug) )
+import           Util                           ( Debug(debug)
+                                                , NonEmpty(..)
+                                                )
 
 -- TODO: patterns in let bindings
 -- TODO: type sigs in let bindings
@@ -26,7 +28,7 @@ data Expr n t = Var n
          | UnitLit
          | TupleLit [Expr n t]
          | ListLit [Expr n t]
-         | StringInterp String [(Expr n t, String)]
+         | StringInterp String (NonEmpty (Expr n t, String))
          | StringLit String
          | CharLit Char
          | IntLit Int
@@ -90,7 +92,7 @@ data ExprT n t =
   | UnitLitT
   | TupleLitT [ExprT n t] t
   | ListLitT [ExprT n t] t
-  | StringInterpT String [(ExprT n t, String)]
+  | StringInterpT String (NonEmpty (ExprT n t, String))
   | StringLitT String
   | CharLitT Char
   | IntLitT Int

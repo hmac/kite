@@ -22,6 +22,7 @@ import           Syn.Print
 import           Util
 
 import           Data.List                      ( inits )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.String
                                                 ( renderString )
@@ -229,7 +230,7 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
     $ \e1 e2 e3 -> ListLit [e1, e2, e3]
   , StringInterp
   <$> genString (Range.linear 0 10)
-  <*> Gen.list (Range.linear 1 2) genStringInterpPair
+  <*> Gen.nonEmpty (Range.linear 1 2) genStringInterpPair
   , StringLit <$> genString (Range.linear 0 10)
   , Gen.subtermM2 (Gen.small genExpr) (Gen.small genExpr) genRecord
   , genRecordProjection
@@ -268,28 +269,30 @@ genMCase = do
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
-  Var     _          -> []
-  Con     _          -> []
-  Hole    _          -> []
-  IntLit  _          -> []
-  BoolLit _          -> []
-  UnitLit            -> []
-  CharLit _          -> []
-  Abs  (v : vs) e    -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
-  Abs  _        e    -> [e]
-  App  _        b    -> [b]
-  Let  binds    body -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
-  Case e        alts -> [e] <> map snd alts
-  TupleLit  es       -> (TupleLit <$> shrinkList2 es) <> es
-  ListLit   es       -> (ListLit <$> shrinkList es) <> es
-  StringLit _        -> []
-  StringInterp p _   -> [StringInterp p []]
-  Record fields      -> Record <$> shrinkList1 fields
-  Project r _        -> [r]
-  Ann     e _        -> [e]
+  Var     _            -> []
+  Con     _            -> []
+  Hole    _            -> []
+  IntLit  _            -> []
+  BoolLit _            -> []
+  UnitLit              -> []
+  CharLit _            -> []
+  Abs  (v : vs) e      -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
+  Abs  _        e      -> [e]
+  App  _        b      -> [b]
+  Let  binds    body   -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
+  Case e        alts   -> [e] <> map snd alts
+  TupleLit  es         -> (TupleLit <$> shrinkList2 es) <> es
+  ListLit   es         -> (ListLit <$> shrinkList es) <> es
+  StringLit _          -> []
+  StringInterp p comps -> case NE.uncons comps of
+    (_, Just comps') -> [StringInterp p comps']
+    (_, Nothing    ) -> [StringLit p]
+  Record fields -> Record <$> shrinkList1 fields
+  Project r _   -> [r]
+  Ann     e _   -> [e]
   -- We never want to generate empty mcases
-  MCase alts         -> MCase <$> shrinkList2 alts
-  FCall _ args       -> args
+  MCase alts    -> MCase <$> shrinkList2 alts
+  FCall _ args  -> args
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits

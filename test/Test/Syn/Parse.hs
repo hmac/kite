@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 module Test.Syn.Parse
   ( test
   ) where

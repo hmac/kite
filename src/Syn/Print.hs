@@ -1,9 +1,9 @@
 module Syn.Print where
 
-import           Data.Bifunctor                 ( bimap )
 import           Data.List                      ( intersperse )
-import           Data.Maybe                     ( catMaybes )
+import qualified Data.List.NonEmpty            as NE
 import           Prelude                 hiding ( mod )
+import           Util
 
 import           Data.Text.Prettyprint.Doc
 
@@ -198,7 +198,7 @@ printExpr (TupleLit es    ) = align $ tupled (map printExpr es)
 printExpr (ListLit  es    ) = printList es
 printExpr (IntLit   i     ) = pretty i
 printExpr (StringInterp prefix interps) =
-  printInterpolatedString prefix interps
+  printInterpolatedString prefix (NE.toList interps)
 printExpr (StringLit s    ) = printInterpolatedString s []
 -- We use Haskell's encoding rules for characters like \NUL by just deferring to
 -- the Show instance for Char. This is mostly for convenience and we may want to define our own

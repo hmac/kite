@@ -95,7 +95,7 @@ convertExpr ctorInfo = go
     UnitLit              -> T.UnitLitT
     TupleLit es          -> T.TupleLitT (map go es) unknown
     ListLit  es          -> T.ListLitT (map go es) unknown
-    StringInterp s comps -> T.StringInterpT s (mapFst go comps)
+    StringInterp s comps -> T.StringInterpT s (fmap (first go) comps)
     StringLit s          -> T.StringLitT s
     CharLit   c          -> T.CharLitT c
     IntLit    i          -> T.IntLitT i

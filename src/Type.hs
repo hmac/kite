@@ -62,6 +62,7 @@ import           Control.Monad.Reader           ( MonadReader
                                                 )
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Name                      ( ModuleName(..)
                                                 , Name(..)
                                                 , RawName(..)
@@ -1049,7 +1050,7 @@ infer expr_ = do
           expr   = foldl
             (\acc (c, s) -> App (App append acc) (App (App append c) s))
             (StringLit prefix)
-            (mapSnd StringLit comps)
+            (mapSnd StringLit (NE.toList comps))
       infer expr
     StringLit _   -> pure string
     CharLit   _   -> pure char

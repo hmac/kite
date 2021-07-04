@@ -9,6 +9,7 @@ module Interpret
 
 
 import           Canonical.Primitive            ( modPrim )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Map.Lazy                  ( Map )
 import qualified Data.Map.Lazy                 as Map
 import           Data.Name                      ( Name(..)
@@ -323,11 +324,12 @@ applyPattern env val pattern = case (pattern, val) of
       <> " "
       <> show val
 
-interpretStringInterp :: Env -> String -> [(Exp, String)] -> Value
-interpretStringInterp _ s [] = Const (String s)
-interpretStringInterp env prefix ((e, suffix) : comps) =
-  case interpretExpr env e of
-    Const (String s) -> interpretStringInterp env (prefix <> s <> suffix) comps
+interpretStringInterp :: Env -> String -> NonEmpty (Exp, String) -> Value
+interpretStringInterp env prefix comps = Const $ String $ go $ NE.toList comps
+ where
+  go []                     = prefix
+  go ((e, suffix) : comps') = case interpretExpr env e of
+    Const (String s) -> prefix <> s <> suffix <> go comps'
     _ ->
       error $ "Interpret.interpretStringInterp: cannot interpolate non-string"
 

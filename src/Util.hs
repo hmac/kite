@@ -18,6 +18,7 @@ module Util
   , Data.List.Extra.nubOn
   , Data.List.Extra.nubOrdOn
   , Data.List.Extra.snoc
+  , Data.List.NonEmpty.NonEmpty(..)
   , Data.Either.lefts
   , Data.Either.rights
   , Control.Monad.forM
@@ -46,6 +47,7 @@ import qualified Data.List.Extra
 import           Data.List.Extra                ( concatUnzip
                                                 , concatUnzip3
                                                 )
+import qualified Data.List.NonEmpty
 import qualified Data.Maybe
 import           Data.Text.Lazy                 ( unpack )
 import qualified Debug.Trace

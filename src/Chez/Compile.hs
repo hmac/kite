@@ -19,6 +19,7 @@ import           Control.Monad.Except           ( MonadError
                                                 , throwError
                                                 )
 import           Data.List.Extra                ( concatUnzip )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Name                      ( Name(..)
                                                 , RawName(..)
                                                 , prim
@@ -236,7 +237,7 @@ compileExpr = \case
   T.StringInterpT prefix comps -> do
     args <- mconcatMapM
       (\(e, s) -> compileExpr e >>= \e' -> pure [e', Lit (String (pack s))])
-      comps
+      (NE.toList comps)
     pure $ App (Var "string-append") (Lit (String (pack prefix)) : args)
   T.FCallT f args _ -> do
     argExprs <- mapM compileExpr args

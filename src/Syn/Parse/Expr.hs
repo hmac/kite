@@ -4,6 +4,7 @@ module Syn.Parse.Expr
 
 import           Control.Monad                  ( guard )
 import           Data.Functor                   ( void )
+import qualified Data.List.NonEmpty            as NE
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
@@ -134,9 +135,9 @@ pStringLit = do
   pure
     $ let (prefix , rest   ) = first parts
           (prefix', interps) = comps rest
-      in  if null interps
-            then StringLit (prefix <> prefix')
-            else StringInterp (prefix <> prefix') interps
+      in  case NE.nonEmpty interps of
+            Just is -> StringInterp (prefix <> prefix') is
+            Nothing -> StringLit (prefix <> prefix')
  where
   lexChar :: Parser String
   lexChar = do

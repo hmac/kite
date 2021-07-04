@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 module Test.Syn.Print
   ( test
   )
@@ -52,7 +53,7 @@ test = parallel $ do
     it "prints a string with an interpolation" $ do
         show (printInterpolatedString "hello " [(Var "name", "")]) `shouldBe` "\"hello #{name}\""
     it "prints a string with more complex interpolation" $ do
-        show (printInterpolatedString "hello " [(App (App (Var "+") (Var "name")) (StringInterp "!" []), "")])
+        show (printInterpolatedString "hello " [(App (App (Var "+") (Var "name")) (StringLit "!"), "")])
           `shouldBe` "\"hello #{(name + \"!\")}\""
     it "prints a string with a lone hash" $ do
         show (printInterpolatedString "hello hash: #" []) `shouldBe` "\"hello hash: #\""
