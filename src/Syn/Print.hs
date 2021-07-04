@@ -271,11 +271,13 @@ printList es = hang 2 $ encloseSep lbracket rbracket comma (map printExpr es)
 --     y = 2
 --  in expr
 --
---  The hang (-3) pushes 'in' back to end in line with 'let'
+-- The hang 1 pushes 'in' forwards to line up with the end of 'let'
 printLet :: [(RawName, Syn, Maybe Type)] -> Syn -> Document
-printLet binds e = keyword "let" <+> hang
-  (-3)
-  (vsep [hang 0 (vsep (map printLetBind binds)), keyword "in" <+> printExpr e])
+printLet binds e = hang 1 $ vsep
+  [ keyword "let" <+> align (vsep (map printLetBind binds))
+  , keyword "in" <+> printExpr e
+  ]
+
  where
   printLetBind (name, expr, Nothing) =
     printName name <+> "=" <+> printExpr expr

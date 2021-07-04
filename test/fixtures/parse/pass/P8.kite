@@ -1,0 +1,6 @@
+module LetAlignment
+
+main : IO ()
+main = let a = 5
+           b = 6
+        in a + b
