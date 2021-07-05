@@ -28,11 +28,14 @@ main :: IO ()
 main = defaultMain
   [ bgroup
     "parse"
-    [bench "Data.List" $ nfIO $ parseFromPath "std/Data/List.kite" "Data.List"]
+    [ bench "Data.List" $ nfIO $ parseFromPath "pkg/std/Data/List.kite"
+                                               "Data.List"
+    ]
   , bgroup
     "typecheck"
-    [ bench "Data.List" $ nfIO $ typecheckFromPathAndRoot "std/Data/List.kite"
-                                                          "std"
+    [ bench "Data.List" $ nfIO $ typecheckFromPathAndRoot
+      "pkg/std/Data/List.kite"
+      "pkg/std"
     , bench "Data.List.Intersperse" $ nfIO $ typecheckModule exampleModule
     ]
   , bgroup "eval" []
@@ -66,7 +69,7 @@ parseFromPath path modName = do
 
 exampleModule :: Module
 exampleModule = Module
-  { moduleName     = "Data.List.Intersperse"
+  { moduleName     = "std.Data.List.Intersperse"
   , moduleImports  = []
   , moduleExports  = []
   , moduleMetadata = []
