@@ -104,6 +104,8 @@ library
     , text
     , transformers
     , tomland
+    , lens
+    , generic-lens
   default-language: Haskell2010
 
 executable kite
