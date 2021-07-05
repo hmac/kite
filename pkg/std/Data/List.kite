@@ -15,6 +15,7 @@ module Data.List
   , subsequences
   , mapMaybe
   , foldl
+  , filter
   )
 
 from kite import Kite.Primitive (Bool, True, False)
@@ -33,7 +34,7 @@ import Kite.String (monoidString)
 showList : Show a -> Show [a]
 showList =
   showa -> Show { show = xs -> let elems = intersperse ", " (map functorList (show showa) xs)
-                                in concat monoidString elems
+                                in "[#{concat monoidString elems}]"
                 }
 
 listAppend : [a] -> [a] -> [a]
@@ -178,3 +179,9 @@ foldlHelper =
 
 foldl : (b -> a -> b) -> b -> [a] -> b
 foldl = f z xs -> foldlHelper z f z xs
+
+filter : (a -> Bool) -> [a] -> [a]
+filter = _ []      -> []
+         p (x::xs) -> case p x of
+                        True -> x :: (filter p xs)
+                        False -> filter p xs
