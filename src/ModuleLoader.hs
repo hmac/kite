@@ -84,13 +84,6 @@ instance Pretty Error where
 -- We use a global cache of parsed modules to prevent parsing the same file twice.
 type ModuleCache = IORef (Map String Module)
 
--- -- TODO: structured errors
--- loadFromPath
---   :: FilePath -> PackageName -> IO (Either String UntypedModuleGroup)
--- loadFromPath path pkgName = do
---   root <- getCurrentDirectory
---   loadFromPathAndRootDirectory path root pkgName
-
 -- Like 'readFile', but checks to see if the file exists before reading it
 -- If it doesn't exist, throws a 'FileNotFound' error.
 readFile' :: (MonadError Error m, MonadIO m) => FilePath -> m String

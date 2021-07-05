@@ -42,7 +42,6 @@ import           Syn.Parse.Type                 ( pConType
 -- TODO: record patterns
 -- TODO: infix constructors (like List ::)
 -- TODO: empty data types (e.g. Void)
--- TODO: include package in imports: from std import Data.Either
 
 
 {-
