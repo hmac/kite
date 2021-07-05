@@ -1,0 +1,5 @@
+name = "advent-of-code"
+
+[[dependencies]]
+name = "std"
+path = "../std"
