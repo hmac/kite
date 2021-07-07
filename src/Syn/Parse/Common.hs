@@ -22,8 +22,17 @@ import           Text.Megaparsec.Char
 import           Text.Megaparsec.Char.Lexer     ( indentGuard )
 import qualified Text.Megaparsec.Char.Lexer    as L
 
+-- Our parsers generally follow two rules:
+-- - They all consume trailing whitespace, including newlines
+-- - Before consuming any input, they compare the current column to the 'indentCol' in
+--   'ParseSettings'. If the current column is less than 'indentCol', they fail.
+--
+-- Together, these rules mean that parent parsers can limit the scope of child parsers by ensuring
+-- they only parse "more indented" expressions. This tends to be how Kite's layout delineates scope,
+-- so it works quite well.
 
 data ParseSettings = ParseSettings
+  -- The minimum indent required for parsing to succeed.
   { indentCol :: Pos
   }
 
