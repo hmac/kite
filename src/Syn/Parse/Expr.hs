@@ -1,11 +1,19 @@
 module Syn.Parse.Expr
   ( pExpr
+  , pBinApp
+  , pApp
+  , pMultiCase
+  , pCase
+  , pVar
   ) where
 
 import           Control.Monad                  ( guard )
+import           Control.Monad.Reader           ( asks )
 import           Data.Functor                   ( void )
 import qualified Data.List.NonEmpty            as NE
 
+import qualified Control.Monad.Combinators.Expr
+                                               as E
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import           Text.Megaparsec.Char.Lexer     ( indentLevel )
@@ -19,10 +27,14 @@ import           Syn.Parse.Pattern              ( pCasePattern
 import           Syn.Parse.Type                 ( pType )
 
 pExpr :: Parser Syn
-pExpr = try pMultiCase <|> try pBinApp <|> pApp
+pExpr = do
+  ensureIndent
+  try pMultiCase <|> try pApp <|> try pBinApp <|> pExpr'
 
 pExpr' :: Parser Syn
-pExpr' =
+pExpr' = do
+  ensureIndent
+
   pUnitLit
     <|> try pTuple
     <|> parensN pExpr
@@ -40,36 +52,52 @@ pExpr' =
     <|> pCons
     <|> pCase
 
+-- | Compare our column to the current indent level,
+-- and fail if we're not at least as indented as that.
+ensureIndent :: Parser ()
+ensureIndent = asks indentCol >>= indentGEQ_
+
 pUnitLit :: Parser Syn
 pUnitLit = do
   void $ symbolN "()"
   pure UnitLit
 
--- Application of a binary operator
--- e.g. x + y
--- TODO: fixity?
--- Maybe handle this after parsing
+-- | Parse a binary application
+-- The table is ordered by decreasing precedence.
+-- As well as the usual arithmetic operators, we also parse function composition here.
+-- TODO: However, function composition is not yet handled by the rest of the compiler.
+-- We represent these operators as un-namespaced strings because they contain characters not valid
+-- for user-defined names. It would be better to explicitly put them in the Kite.Primitive module or
+-- similar.
+-- See the documentation for 'makeExprParser' for more info.
 pBinApp :: Parser Syn
-pBinApp = do
-  left <- pExpr'
-  op   <- pOp
-  void $ some (char ' ')
-  App (App op left) <$> pExpr'
+pBinApp = hang $ E.makeExprParser term table
  where
-  pOp :: Parser Syn
-  pOp =
-    (Con . Name <$> string "::") <|> (Var . Name <$> (twoCharOp <|> oneCharOp))
-  twoCharOp =
-    string "&&" <|> string "||" <|> string ">=" <|> string "<=" <|> string "<>"
-  oneCharOp = (: []) <$> oneOf ['+', '-', '*', '/', '>', '<']
+  -- Terms in a binary application can be normal applications or anything in 'pExpr'', because they
+  -- are unambiguous. We don't allow unparenthesised multicases or nested binary applications.
+  -- As with 'pExpr', we have to check the indent settings and fail if we don't satisfy them.
+  term = ensureIndent >> (try pApp <|> pExpr')
+  binary name = E.InfixL (App . (App (Var (Name name))) <$ symbolN name)
+  compose = E.InfixR (App . (App (Var (Name "."))) <$ symbolN ".")
+  -- We need to treat (-) specially because it shares a prefix with the comment delimiter "--"
+  minus   = E.InfixL $ do
+    -- Parse "-", unless it is directly followed by another "-"
+    _ <- try $ lexemeN (string "-" >> notFollowedBy "-")
+    pure (App . (App (Var (Name "-"))))
+  table =
+    [ [compose]
+    , [binary "*", binary "/"]
+    , [binary "+", minus, binary "<>"]
+    , [binary "::"]
+    , [binary ">=", binary "<=", binary ">", binary "<"]
+    , [binary "&&", binary "||"]
+    ]
 
--- | Parse one or more expressions, forming an application.
--- If we can only parse one expression then we just return that, with no application.
+-- | Parse two or more expressions, forming an application.
 pApp :: Parser Syn
-pApp = do
-  pos   <- indentLevel
+pApp = hang $ do
   first <- pExpr'
-  rest  <- many (indentGT pos >> pExpr')
+  rest  <- some pExpr'
   pure $ foldl App first rest
 
 -- foo.bar
@@ -78,24 +106,20 @@ pApp = do
 --   (let a = 1 in Foo { x = a }).x
 pRecordProject :: Parser Syn
 pRecordProject = do
-  record <- pVar
+  -- We don't use 'pVar' because we don't want to parse any trailing whitespace
+  record <- lowercaseName
   void (string ".")
-  field <- lowercaseString
-  spaceConsumerN
-  pure $ Project record field
+  field <- lexemeN lowercaseString
+  pure $ Project (Var record) field
 
 pHole :: Parser Syn
 pHole = do
   void (string "?")
-  name <- pHoleName
-  spaceConsumerN
+  name <- lexemeN pHoleName
   pure $ Hole name
 
 pCharLit :: Parser Syn
-pCharLit = do
-  c <- pChar
-  spaceConsumerN
-  pure $ CharLit c
+pCharLit = CharLit <$> lexemeN pChar
 
 -- String literals are quite complex. These are some of the variations we need
 -- to handle:
@@ -174,18 +198,13 @@ pStringLit = do
         pure $ Str s : rest
 
 pVar :: Parser Syn
-pVar = do
-  v <- Var <$> lowercaseName
-  spaceConsumerN
-  pure v
+pVar = Var <$> lexemeN lowercaseName
 
 pFCall :: Parser Syn
-pFCall = do
-  p0 <- indentLevel
+pFCall = hang $ do
   void (symbolN "$fcall")
-  indentGT_ p0
   name <- lexemeN lowercaseName
-  args <- many (indentGT p0 >> pExpr')
+  args <- many pExpr'
   pure $ FCall (unName name) args
 
 -- TODO: patterns in lambda bindings
@@ -213,25 +232,17 @@ pAbs = do
 --           False -> 0
 --  in foo
 pLet :: Parser Syn
-pLet = do
-  p0 <- indentLevel
-  void (string "let")
-  p1    <- indentGT p0
-  first <- pAnnotatedBind <|> pBind
-  rest  <- many $ do
-    indentEQ_ p1
-    pAnnotatedBind <|> pBind
-  indentGT_ p0
-  void (string "in")
-  p2 <- indentLevel
-  indentGT_ p2
-  Let (first : rest) <$> pExpr
+pLet = hang $ do
+  void (symbolN "let")
+  binds <- hang $ some (pAnnotatedBind <|> pBind)
+  expr  <- symbolN "in" >> hang pExpr
+  pure $ Let binds expr
  where
   pBind :: Parser (RawName, Syn, Maybe Type)
   pBind = do
     var <- lowercaseName
     void (symbolN "=")
-    val <- lexemeN pExpr
+    val <- hang $ lexemeN pExpr
     pure (var, val, Nothing)
   pAnnotatedBind :: Parser (RawName, Syn, Maybe Type)
   pAnnotatedBind = do
@@ -239,7 +250,7 @@ pLet = do
     var'      <- lowercaseName
     guard (var' == var)
     void (symbolN "=")
-    val <- lexemeN pExpr
+    val <- hang $ lexemeN pExpr
     pure (var, val, Just ty)
   pAnnotation :: Parser (RawName, Type)
   pAnnotation = do
@@ -250,35 +261,31 @@ pLet = do
 
 pTuple :: Parser Syn
 pTuple = do
-  pos <- indentLevel
-  _   <- symbol "("
-  indentGT_ pos
-  expr1 <- pExpr
-  exprs <- some $ do
-    indentGEQ_ pos
-    _ <- comma
-    indentGT_ pos
-    pExpr
-  spaceConsumerN
-  _ <- symbolN ")"
-  pure $ TupleLit (expr1 : exprs)
+  _ <- symbolN "("
+  hang $ do
+    expr1 <- pExpr
+    exprs <- some $ comma >> pExpr
+    _     <- symbolN ")"
+    pure $ TupleLit (expr1 : exprs)
 
 pList :: Parser Syn
 pList = ListLit <$> bracketsN (lexemeN pExpr `sepBy` lexemeN comma)
 
 pCons :: Parser Syn
 pCons = do
-  name <- uppercaseName
-  spaceConsumerN
+  name <- lexemeN uppercaseName
   pure $ case name of
     "True"  -> BoolLit True
     "False" -> BoolLit False
     n       -> Con n
 
+-- We use 'indentGT_' and 'indentLevel' instead of 'hang' here because we want case alts to be
+-- indent at least two columns beyond the "c" of "case", and 'hang' doesn't really support that at
+-- the moment.
 pCase :: Parser Syn
 pCase = do
   pos <- indentLevel
-  void (symbol "case")
+  void (symbol "case ")
   scrutinee <- pExpr
   void (symbolN "of")
   alts <- some $ do
@@ -289,8 +296,8 @@ pCase = do
   pAlt :: Parser (Syn.Pattern, Syn)
   pAlt = do
     pat <- pCasePattern
-    void (symbol "->")
-    expr <- pExpr
+    void (string "->")
+    expr <- hang (spaceConsumerN >> pExpr)
     pure (pat, expr)
 
 -- A multi-case is a lambda-case expression which can scrutinise multiple things
@@ -306,28 +313,31 @@ pCase = do
 --                       _ -> 2
 --             _    -> 2
 --
+--   or equivalently:
+--
+--   let f True [] = 1
+--       f _    _  = 2
+--    in f
+--
 -- Note that constructor patterns must be parenthesised to distinguish them from
 -- multiple independent patterns. This is why we use pPattern rather than
 -- pCasePattern.
 pMultiCase :: Parser Syn
-pMultiCase = do
-  pos  <- indentLevel
-  alts <- some $ do
-    indentGEQ_ pos
-    pAlt
-  spaceConsumerN
-  pure $ MCase alts
+pMultiCase = MCase <$> hang (some pAlt)
  where
   pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do
+    ensureIndent
     pos  <- indentLevel
     pats <- some $ do
+      -- Patterns must be equally or more indented than the start of the mcase
+      -- This prevents us from parsing any futher alts as part of this alt.
       indentGEQ_ pos
       pPattern
-    indentGT_ pos
     void (symbolN "->")
+    -- The RHS of an alt must be indented more than the alt pattern.
     indentGT_ pos
-    expr <- pExpr
+    expr <- hang pExpr
     pure (pats, expr)
 
 

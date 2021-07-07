@@ -2,6 +2,7 @@ name = "kite-test"
 
 [[dependencies]]
   name = "std"
+  path = "../../pkg/std"
 
   [dependencies.version]
     major = 1

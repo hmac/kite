@@ -104,8 +104,6 @@ last = [] -> Nothing
 
 -- Return all the elements of a list except the last one.
 -- Returns Nothing if the list is empty.
--- TODO: to write this efficiently and nicely, we really need to support
--- pattern matching definitions in let bindings
 init : [a] -> Maybe [a]
 init = [] -> Nothing
        xs -> Just (go xs)

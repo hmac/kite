@@ -6,6 +6,7 @@ import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Syn.Parse                      ( pDecl
                                                 , pExpr
+                                                , parse
                                                 , spaceConsumerN
                                                 )
 import           System.IO                      ( BufferMode(..)
@@ -14,8 +15,6 @@ import           System.IO                      ( BufferMode(..)
                                                 )
 import           Text.Megaparsec                ( (<|>)
                                                 , eof
-                                                , errorBundlePretty
-                                                , parse
                                                 , try
                                                 )
 import           Text.Megaparsec.Char           ( string )
@@ -126,7 +125,7 @@ parseInput = go []
           let allInput = unlines (reverse (input : inputSoFar))
           case parse (parser <* spaceConsumerN <* eof) "" allInput of
             Left e -> do
-              putStrLn (errorBundlePretty e)
+              putStrLn e
               go []
             Right e -> pure e
   parser =

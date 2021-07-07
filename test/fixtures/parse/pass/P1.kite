@@ -6,8 +6,7 @@ type R = R { a : Int
 
 
 mkR : Int -> Bool -> R
-mkR = i b -> R {
-  a = i,
-  b = b
-  }
+mkR = i b -> R { a = i,
+                 b = b
+               }
 

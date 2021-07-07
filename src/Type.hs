@@ -214,6 +214,7 @@ primitiveFns =
   , V (Free (prim "+"))         (Fn int (Fn int int))
   , V (Free (prim "-"))         (Fn int (Fn int int))
   , V (Free (prim "*"))         (Fn int (Fn int int))
+  , V (Free (prim "/"))         (Fn int (Fn int int))
   , V (Free (prim "$showInt"))  (Fn int string)
   , V (Free (prim "$showChar")) (Fn char string)
   , V (Free (prim "$eqInt"))    (Fn int (Fn int bool))

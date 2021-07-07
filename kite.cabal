@@ -95,6 +95,7 @@ library
     , extra
     , hedgehog
     , megaparsec
+    , parser-combinators
     , mtl
     , optparse-generic
     , pretty-simple

@@ -4,11 +4,7 @@ module Test.Syn.RoundTrip
   ) where
 
 
-import           Text.Megaparsec                ( Parsec
-                                                , eof
-                                                , errorBundlePretty
-                                                , parse
-                                                )
+import           Text.Megaparsec                ( eof )
 
 import           AST
 import           Data.Name                      ( PkgModuleName(..) )
@@ -67,15 +63,11 @@ roundtripModule = roundtrip (genModule "kite-roundtrip-tests")
                             (pModule "kite-roundtrip-tests")
 
 roundtrip
-  :: (Show a, Eq a)
-  => H.Gen a
-  -> (a -> Doc b)
-  -> Parsec Error String a
-  -> H.PropertyT IO ()
+  :: (Show a, Eq a) => H.Gen a -> (a -> Doc b) -> Parser a -> H.PropertyT IO ()
 roundtrip gen printer parser = do
   e <- H.forAll gen
   let printed  = renderString (layoutSmart defaultLayoutOptions (printer e))
-      reparsed = first errorBundlePretty $ parse (parser <* eof) "" printed
+      reparsed = parse (parser <* eof) "" printed
   H.annotate printed
   case reparsed of
     Left err -> do
@@ -262,8 +254,10 @@ genLet = Gen.subtermM2 (Gen.small genExpr)
 genMCase :: H.Gen Syn
 genMCase = do
   -- For simplicity we current just generate two alts
-  p1 <- Gen.list (Range.linear 1 5) genPattern
-  p2 <- Gen.list (Range.linear 1 5) genPattern
+  -- Each alt must have the same number of patterns
+  numPatterns <- Gen.integral $ Range.linear 1 5
+  p1          <- Gen.list (Range.singleton numPatterns) genPattern
+  p2          <- Gen.list (Range.singleton numPatterns) genPattern
   Gen.subterm2 (Gen.small genExpr) (Gen.small genExpr)
     $ \e1 e2 -> MCase [(p1, e1), (p2, e2)]
 

@@ -12,6 +12,7 @@ module Syn.Parse
   , spaceConsumerN
   , Error
   , Parser
+  , parse
   ) where
 
 import           Control.Monad                  ( guard )
@@ -20,7 +21,7 @@ import           Data.Maybe                     ( fromMaybe
                                                 , isJust
                                                 )
 
-import           Text.Megaparsec
+import           Text.Megaparsec         hiding ( parse )
 import           Text.Megaparsec.Char
 import           Text.Megaparsec.Char.Lexer     ( indentLevel
                                                 , nonIndented
@@ -79,10 +80,7 @@ import           Syn.Parse.Type                 ( pConType
 -}
 
 parseKiteFile :: FilePath -> PackageName -> String -> Either String Module
-parseKiteFile path pkgName input =
-  case parse (pModule pkgName <* eof) path input of
-    Left  e -> Left (errorBundlePretty e)
-    Right e -> Right e
+parseKiteFile path pkgName input = parse (pModule pkgName <* eof) path input
 
 pModule :: PackageName -> Parser Module
 pModule pkgName = do
@@ -166,20 +164,13 @@ pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
 -- reduces performance, so we keep it simple here. In a later stage of the
 -- compiler we merge adjacent comment and function declarations.
 pDecl :: Parser (Decl Syn)
-pDecl =
-  nonIndented spaceConsumerN
-    $   Comment
-    <$> pComment
-    <|> AliasDecl
-    <$> pAlias
-    <|> DataDecl
-    <$> pData
-    <|> FunDecl
-    <$> pFun
+pDecl = Comment <$> pComment <|> nonIndented
+  spaceConsumerN
+  (AliasDecl <$> pAlias <|> DataDecl <$> pData <|> FunDecl <$> pFun)
 
 pAlias :: Parser Alias
 pAlias = do
-  void (symbol' "type alias")
+  void (symbolN "type alias ")
   alias  <- uppercaseName
   tyvars <- many lowercaseName
   void (symbolN "=")
@@ -188,7 +179,7 @@ pAlias = do
 
 pData :: Parser Data
 pData = do
-  void (symbol' "type")
+  void (symbolN "type ")
   name   <- uppercaseName
   tyvars <- many lowercaseName
   void (symbolN "=")

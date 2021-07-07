@@ -98,6 +98,7 @@ data Primitive = PrimStringAppend
                | PrimStringUnconsChar
                | PrimAdd
                | PrimSub
+               | PrimDiv
                | PrimMult
                | PrimShow -- TODO: this becomes PrimShowInt etc when we have a show typeclass
                | PrimShowInt
@@ -253,6 +254,7 @@ interpretPrim = \case
   "+"            -> binaryPrim PrimAdd
   "*"            -> binaryPrim PrimMult
   "-"            -> binaryPrim PrimSub
+  "/"            -> binaryPrim PrimDiv
   "appendString" -> binaryPrim PrimStringAppend
   "$chars"       -> unaryPrim PrimStringChars
   "$consChar"    -> binaryPrim PrimStringConsChar
@@ -274,6 +276,7 @@ applyPrim :: MonadError Error m => Primitive -> [Value m] -> m (Value m)
 applyPrim PrimAdd  [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x + y
 applyPrim PrimMult [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x * y
 applyPrim PrimSub  [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x - y
+applyPrim PrimDiv  [Const (Int x), Const (Int y)] = pure $ Const $ Int $ div x y
 applyPrim PrimStringAppend [Const (String x), Const (String y)] =
   pure $ Const $ String $ x <> y
 applyPrim PrimStringChars [Const (String s)] =

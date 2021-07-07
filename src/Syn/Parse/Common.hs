@@ -2,10 +2,14 @@
 module Syn.Parse.Common where
 
 import           Control.Monad                  ( guard )
+import           Control.Monad.Reader           ( Reader
+                                                , local
+                                                , runReader
+                                                )
 import           Data.Functor                   ( ($>)
                                                 , void
                                                 )
-import           Data.Maybe                     ( fromMaybe )
+import           Util
 
 import           Data.Name                      ( PackageName
                                                 , mkPackageName
@@ -13,13 +17,47 @@ import           Data.Name                      ( PackageName
 import           Syn                            ( ModuleName(ModuleName)
                                                 , RawName(Name)
                                                 )
-import           Text.Megaparsec
+import           Text.Megaparsec         hiding ( parse )
 import           Text.Megaparsec.Char
 import           Text.Megaparsec.Char.Lexer     ( indentGuard )
 import qualified Text.Megaparsec.Char.Lexer    as L
 
 
-type Parser = Parsec Error String
+data ParseSettings = ParseSettings
+  { indentCol :: Pos
+  }
+
+defaultParseSettings :: ParseSettings
+defaultParseSettings = ParseSettings { indentCol = pos1 }
+
+setIndentCol :: Pos -> ParseSettings -> ParseSettings
+setIndentCol col s = s { indentCol = col }
+
+-- | Run the given parser with 'indentCol' set to the current indent level.
+hang :: Parser a -> Parser a
+hang p = do
+  c <- L.indentLevel
+  local (setIndentCol c) $ p
+
+type Parser = ParsecT Error String (Reader ParseSettings)
+
+-- | Run a parser, providing default parse settings and rendering any error to a 'String'.
+parse :: Parser a -> String -> String -> Either String a
+parse parser filename input =
+  first errorBundlePretty $ parse' parser filename input
+
+-- | Like 'parse' but leaves the error as a 'ParseErrorBundle'.
+-- Used in tests for the parser.
+parse'
+  :: Parser a -> String -> String -> Either (ParseErrorBundle String Error) a
+parse' parser filename input =
+  flip runReader defaultParseSettings $ runParserT parser filename input
+
+-- | Like 'Text.Megaparsec.parseTest' but for our parser type.
+parseTest :: Show a => Parser a -> String -> IO ()
+parseTest p input = case parse p "" input of
+  Left  err -> putStrLn err
+  Right r   -> print r
 
 data Error
   = VarKeyword String
@@ -36,7 +74,7 @@ pChar :: Parser Char
 pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap
   head
   (takeP (Just "char") 1)
-  -- Escaped special characters like \n
+  -- Escape special characters like \n
   -- Currently we only support \n
   -- TODO: what's the full list of escape sequences we should support here?
   where escapedChar = char '\\' >> char 'n' $> '\n'
@@ -44,8 +82,7 @@ pChar = between (string "'") (symbol "'") $ escapedChar <|> fmap
 pInt :: Parser Int
 pInt = do
   sign   <- optional (string "-")
-  digits <- lexeme (some digitChar)
-  spaceConsumerN
+  digits <- lexemeN (some digitChar)
   pure . read $ fromMaybe "" sign <> digits
 
 pName :: Parser RawName
@@ -64,7 +101,6 @@ pPackageName = try $ do
   case mkPackageName s of
     Just n  -> pure n
     Nothing -> customFailure (InvalidPackageName s)
-
 
 pHoleName :: Parser RawName
 pHoleName = lexeme $ Name <$> do
@@ -144,25 +180,13 @@ spaceConsumer' = char ' ' >> spaceConsumer
 spaceConsumerN :: Parser ()
 spaceConsumerN = L.space (skipSome spaceChar) empty empty
 
--- Fails unless it consumes at least one space or newline
-spaceConsumerN' :: Parser ()
-spaceConsumerN' = spaceChar >> spaceConsumerN
-
 -- Parses a specific string, skipping trailing spaces
 symbol :: String -> Parser String
 symbol = L.symbol spaceConsumer
 
--- Parses a specific string, requiring at least one trailing space
-symbol' :: String -> Parser String
-symbol' = L.symbol spaceConsumer'
-
 -- Like symbol but also skips trailing newlines
 symbolN :: String -> Parser String
 symbolN = L.symbol spaceConsumerN
-
--- Like symbol' but also skips trailing newlines
-symbolN' :: String -> Parser String
-symbolN' = L.symbol spaceConsumerN
 
 -- Runs the given parser, skipping trailing spaces
 lexeme :: Parser a -> Parser a
@@ -171,18 +195,6 @@ lexeme = L.lexeme spaceConsumer
 -- Like lexeme but also skips trailing newlines
 lexemeN :: Parser a -> Parser a
 lexemeN = L.lexeme spaceConsumerN
-
--- Skip at least two space characters
-indent :: Parser ()
-indent = char ' ' >> skipSome (char ' ')
-
--- Skip one or more space characters
-someSpace :: Parser ()
-someSpace = skipSome (char ' ')
-
--- Skip zero or more newlines
-skipNewlines :: Parser ()
-skipNewlines = skipMany newline
 
 parens :: Parser p -> Parser p
 parens = between (symbol "(") (symbol ")")
@@ -210,8 +222,8 @@ comma = symbol ","
 -- variable in parentheses
 sepBy2 :: Parser a -> Parser sep -> Parser [a]
 sepBy2 p sep = do
-  first <- p
+  firstResult <- p
   void sep
   rest <- p `sepBy1` sep
-  pure (first : rest)
+  pure (firstResult : rest)
 {-# INLINE sepBy2 #-}

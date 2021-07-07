@@ -12,7 +12,7 @@ miscFunctions :: [RawName]
 miscFunctions = ["error", "appendString"]
 
 numFunctions, list :: [RawName]
-numFunctions = ["+", "*", "-"]
+numFunctions = ["+", "*", "-", "/"]
 list = ["::", "[]"]
 
 io :: [RawName]

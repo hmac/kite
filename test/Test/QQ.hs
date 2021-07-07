@@ -8,12 +8,10 @@ import           Syn.Parse                      ( pExpr
                                                 , pFun
                                                 , pModule
                                                 , pType
+                                                , parse
                                                 , spaceConsumerN
                                                 )
-import           Text.Megaparsec                ( eof
-                                                , errorBundlePretty
-                                                , parse
-                                                )
+import           Text.Megaparsec                ( eof )
 
 -- Construct a name in the module qq.QQ
 -- This is the module that the quasiquoters create
@@ -31,7 +29,7 @@ syn = QuasiQuoter { quoteExp  = f
  where
   f :: String -> Q Exp
   f s = case parse (pExpr <* eof) "" s of
-    Left  err  -> error (errorBundlePretty err)
+    Left  err  -> error err
     Right expr -> dataToExpQ (const Nothing) expr
 
 -- A QuasiQuoter for types
@@ -45,7 +43,7 @@ typ = QuasiQuoter { quoteExp  = f
  where
   f :: String -> Q Exp
   f s = case parse (pType <* eof) "" s of
-    Left  err -> error (errorBundlePretty err)
+    Left  err -> error err
     Right t   -> dataToExpQ (const Nothing) t
 
 -- A QuasiQuoter for functions
@@ -60,7 +58,7 @@ fn = QuasiQuoter { quoteExp  = f
  where
   f :: String -> Q Exp
   f s = case parse (spaceConsumerN *> pFun <* eof) "" s of
-    Left  err -> error (errorBundlePretty err)
+    Left  err -> error err
     Right t   -> dataToExpQ (const Nothing) t
 
 -- A QuasiQuoter for module
@@ -73,5 +71,5 @@ mod = QuasiQuoter { quoteExp  = f
  where
   f :: String -> Q Exp
   f s = case parse (spaceConsumerN *> pModule "qq" <* eof) "" s of
-    Left  err -> error (errorBundlePretty err)
+    Left  err -> error err
     Right t   -> dataToExpQ (const Nothing) t

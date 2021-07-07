@@ -1,0 +1,6 @@
+module P9
+
+f : A
+f = x + y
+
+-- Decompose a list into its head and tail.
