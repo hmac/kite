@@ -289,10 +289,12 @@ printLet binds e = hang 1 $ vsep
 --   pat1 x y -> e1
 --   pat2 z w -> e2
 printCase :: Syn -> [(Syn.Pattern, Syn)] -> Document
-printCase e alts = keyword "case" <+> hang (-3) rest
- where
-  rest = forceVSep ((printExpr e <+> keyword "of") : map printAlt alts)
-  printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
+printCase e alts =
+  hang 2
+    $ forceVSep
+    $ (keyword "case" <+> printExpr e <+> keyword "of")
+    : map printAlt alts
+  where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
 -- pat1 pat2 -> e1
 -- pat3 pat4 -> e2
