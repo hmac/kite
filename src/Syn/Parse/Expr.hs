@@ -67,7 +67,7 @@ pUnitLit = do
 -- As well as the usual arithmetic operators, we also parse function composition here.
 -- TODO: However, function composition is not yet handled by the rest of the compiler.
 -- We represent these operators as un-namespaced strings because they contain characters not valid
--- for user-defined names. It would be better to explicitly put them in the Kite.Primitive module or
+-- for user-defined names. It would be better to explicitly put them in the Kite.Prim module or
 -- similar.
 -- See the documentation for 'makeExprParser' for more info.
 pBinApp :: Parser Syn

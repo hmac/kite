@@ -1,6 +1,6 @@
 module Data.Maybe
 
-from kite import Kite.Primitive (Bool, True, False)
+from kite import Kite.Prim (Bool, True, False)
 import Data.Functor (Functor(..))
 import Data.Eq (Eq, eq)
 import Control.Applicative (Applicative, pure, liftA2)

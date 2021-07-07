@@ -1,6 +1,6 @@
 module Data.Char
 
-from kite import Kite.Primitive ($eqChar, $showChar)
+from kite import Kite.Prim ($eqChar, $showChar)
 import Data.Show (Show(..))
 import Data.Eq (Eq(..))
 

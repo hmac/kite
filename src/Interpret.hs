@@ -10,7 +10,6 @@ module Interpret
   ) where
 
 
-import           Canonical.Primitive            ( modPrim )
 import           Control.Monad.Except           ( MonadError
                                                 , throwError
                                                 )
@@ -24,6 +23,7 @@ import           Data.Name                      ( Name(..)
                                                 )
 import           Data.Text.Prettyprint.Doc
 import           ModuleGroup                    ( TypedModuleGroup(..) )
+import qualified Prim
 import           Syn.Print                      ( printRecordSyntax )
 import           Syn.Typed
 import           Text.Read                      ( readMaybe )
@@ -125,8 +125,8 @@ type Env m = Map Name (Value m)
 
 defaultEnv :: MonadError Error m => Env m
 defaultEnv = Map.fromList
-  [ (TopLevel modPrim "[]", List [])
-  , ( TopLevel modPrim "::"
+  [ (TopLevel Prim.name "[]", List [])
+  , ( TopLevel Prim.name "::"
     , Abs
       (\x -> pure $ Abs
         (\case
@@ -197,16 +197,16 @@ interpretData Data { dataCons = datacons } = map interpretDatacon datacons
 
 interpretExpr :: MonadError Error m => Env m -> Exp -> m (Value m)
 interpretExpr env expr_ = case expr_ of
-  VarT (TopLevel m n) _ | m == modPrim -> interpretPrim n
-  VarT n _                             -> case Map.lookup n env of
+  VarT (TopLevel m n) _ | m == Prim.name -> interpretPrim n
+  VarT n _                               -> case Map.lookup n env of
     Just v  -> pure v
     Nothing -> throwError $ UnknownVariable n
   AppT a b _ -> interpretExpr env a >>= \case
     Abs f -> interpretExpr env b >>= f
     e     -> throwError $ ApplicationOfNonFunction (show e)
   ConT c _ _
-    | c == TopLevel modPrim "[]" -> pure $ List []
-    | c == TopLevel modPrim "::" -> pure $ Abs
+    | c == TopLevel Prim.name "[]" -> pure $ List []
+    | c == TopLevel Prim.name "::" -> pure $ Abs
       (\x -> pure
         (Abs
           (\case
@@ -372,7 +372,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ConsPat (TopLevel m "::") _meta pats, List elems) | m == modPrim ->
+  (ConsPat (TopLevel m "::") _meta pats, List elems) | m == Prim.name ->
     case (elems, pats) of
       (e : es, [p1, p2]) -> do
         env' <- applyPattern env e p1

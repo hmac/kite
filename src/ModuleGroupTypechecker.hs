@@ -2,16 +2,17 @@ module ModuleGroupTypechecker where
 
 import           Data.Name                      ( Name )
 import           ModuleGroup
-import qualified Type                           ( CtorInfo
-                                                , Ctx
-                                                , Exp
+import qualified Type                           ( Exp
                                                 , LocatedError
-                                                , Type
                                                 , defaultTypeEnv
                                                 , runTypecheckM
                                                 )
 import           Type.Module                    ( checkModule
                                                 , translateModule
+                                                )
+import           Type.Type                      ( CtorInfo
+                                                , Ctx
+                                                , Type
                                                 )
 import           Util
 
@@ -38,9 +39,7 @@ typecheckModuleGroup (ModuleGroup m deps) =
 
 dumpEnv
   :: UntypedModuleGroup
-  -> Either
-       Type.LocatedError
-       (Type.Ctx, Type.CtorInfo, [(Name, Maybe Type.Type, Type.Exp)])
+  -> Either Type.LocatedError (Ctx, CtorInfo, [(Name, Maybe Type, Type.Exp)])
 dumpEnv (ModuleGroup m deps) =
   Type.runTypecheckM Type.defaultTypeEnv
     $ mconcatMapM translateModule (deps <> [m])

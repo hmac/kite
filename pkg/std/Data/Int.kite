@@ -1,6 +1,6 @@
 module Data.Int
 
-from kite import Kite.Primitive ($eqInt, $readInt, $showInt)
+from kite import Kite.Prim ($eqInt, $readInt, $showInt)
 import Data.Eq (Eq(..))
 import Data.Read (Read(..))
 import Data.Maybe (Maybe(..))

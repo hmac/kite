@@ -28,7 +28,6 @@ import           GHC.Generics                   ( Generic )
 import           System.Directory               ( doesFileExist )
 
 import           AST                            ( Expr )
-import           Canonical.Primitive            ( modPrim )
 import           Canonicalise                   ( canonicaliseModule )
 import           Data.Graph                     ( SCC(..)
                                                 , flattenSCCs
@@ -41,6 +40,7 @@ import           ExpandImports                  ( expandImports )
 import qualified ExpandImports
 import           ModuleGroup
 import           Package                        ( PackageInfo(..) )
+import qualified Prim
 import           Syn
 import           Syn.Parse                      ( parseKiteFile )
 import           Util
@@ -142,12 +142,15 @@ loadAll info cache pkgModuleName = do
   let modul' = expandExports modul
   pure $ modul' : concat deps
 
+-- | Load a module, either from the module cache or by finding its file and parsing that.
+-- If the module is Kite.Prim, we just directly return its representation.
 load
   :: (MonadError Error m, MonadIO m)
   => PackageInfo
   -> ModuleCache
   -> PkgModuleName
   -> m Module
+load _ _ name | name == Prim.name              = pure Prim.moduleDefinition
 load info cache name@(PkgModuleName pkgName _) = do
   path   <- filePath info name
   cache' <- liftIO $ readIORef cache
@@ -161,12 +164,8 @@ load info cache name@(PkgModuleName pkgName _) = do
         Right m'  -> do
           liftIO $ atomicModifyIORef' cache $ \c -> (Map.insert path m' c, m')
 
--- We skip any references to Kite.Primitive because it's not a normal module.
--- It has no corresponding file and its definitions are automatically in scope
--- anyway.
 dependencies :: Module_ n (Expr n ty) ty -> [PkgModuleName]
-dependencies Module { moduleImports = imports } =
-  filter (/= modPrim) $ nub $ map importName imports
+dependencies Module { moduleImports = imports } = nub $ map importName imports
 
 -- | Attempt to construct a file path to the given module.
 -- If the module is in our own package, use the root package directory.

@@ -135,4 +135,4 @@ instance Debug Name where
   debug = toString
 
 prim :: RawName -> Name
-prim = TopLevel (PkgModuleName "kite" (ModuleName ["Kite", "Primitive"]))
+prim = TopLevel (PkgModuleName "kite" (ModuleName ["Kite", "Prim"]))

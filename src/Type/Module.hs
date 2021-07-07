@@ -23,15 +23,9 @@ import           Syn                            ( DataCon_(..)
                                                 , Module_(..)
                                                 )
 import qualified Syn.Typed                     as T
-import           Type                           ( CtorInfo
-                                                , Ctx
-                                                , CtxElem(V)
-                                                , Exp
+import           Type                           ( Exp
                                                 , LocatedError(..)
-                                                , Type(..)
-                                                , TypeCtx
                                                 , TypecheckM
-                                                , V(..)
                                                 , check
                                                 , infer
                                                 , runTypeM
@@ -43,6 +37,13 @@ import           Type.FromSyn                   ( fromSyn
                                                 , quantify
                                                 )
 import qualified Type.ToTyped                   ( convertModule )
+import           Type.Type                      ( CtorInfo
+                                                , Ctx
+                                                , CtxElem(V)
+                                                , Type(..)
+                                                , TypeCtx
+                                                , V(..)
+                                                )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging

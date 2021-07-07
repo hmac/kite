@@ -10,7 +10,7 @@ module Syn.Typed
 import           AST
 import           Data.Name
 import qualified Syn                           as S
-import           Type                           ( Type )
+import           Type.Type                      ( Type )
 
 -- This module contains the typed AST
 -- Any module that deals with the typed AST can just import this one to get all

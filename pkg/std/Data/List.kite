@@ -18,7 +18,7 @@ module Data.List
   , filter
   )
 
-from kite import Kite.Primitive (Bool, True, False)
+from kite import Kite.Prim (Bool, True, False)
 import Data.Semigroup (Semigroup(..))
 import Data.Eq (Eq, eq)
 import Data.Maybe (Maybe(..))

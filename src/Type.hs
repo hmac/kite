@@ -1,18 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Type
-  ( CtorInfo
-  , Ctx
-  , TypeCtx
-  , test
+  ( test
   , TypecheckM
   , TypeState
   , infer'
-  , CtxElem(..)
-  , Type(..)
   , Exp
-  , V(..)
-  , U(..)
-  , E(..)
   , Pattern
   , Pat(..)
   , unfoldFn
@@ -32,8 +24,6 @@ module Type
   , bool
   , unit
   , list
-  , mkTupleCon
-  , primCtx
   , runTypeM
   , defaultTypeEnv
   , TypeEnv(..)
@@ -48,8 +38,7 @@ module Type
   , runTypecheckM
   ) where
 
-import           AST                            ( ConMeta(..)
-                                                , Expr(..)
+import           AST                            ( Expr(..)
                                                 , Pat(..)
                                                 )
 import           Control.Monad                  ( (>=>)
@@ -108,135 +97,34 @@ import qualified Hedgehog
 import qualified Hedgehog.Gen                  as G
 import qualified Hedgehog.Range                as R
 
-import           Data.Data                      ( Data )
-import           Type.Primitive                 ( listConsMeta
+import           Type.Primitive                 ( bool
+                                                , char
+                                                , int
+                                                , list
+                                                , listConsMeta
                                                 , listNilMeta
+                                                , primCtx
+                                                , primTypeCtx
+                                                , string
+                                                , unit
                                                 )
-import           Type.Reflection                ( Typeable )
+import           Type.Type                      ( Ctx
+                                                , CtxElem(..)
+                                                , E(..)
+                                                , Type(..)
+                                                , TypeCtx
+                                                , U(..)
+                                                , V(..)
+                                                , debugCtx
+                                                )
 
 -- Bidirectional typechecker
 -- Following:
 -- Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
 
--- Primitive types
-string :: Type
-string = TCon (prim "String") []
 
-int :: Type
-int = TCon (prim "Int") []
 
-char :: Type
-char = TCon (prim "Char") []
 
-bool :: Type
-bool = TCon (prim "Bool") []
-
-unit :: Type
-unit = TCon (prim "Unit") []
-
-list :: Type -> Type
-list a = TCon (prim "List") [a]
-
-io :: Type -> Type
-io a = TCon (prim "IO") [a]
-
-primTypeCtx :: TypeCtx
-primTypeCtx = map
-  (\n -> (prim n, ()))
-  [ "String"
-  , "Int"
-  , "Char"
-  , "Bool"
-  , "Unit"
-  , "List"
-  , "IO"
-  , "Tuple2"
-  , "Tuple3"
-  , "Tuple4"
-  , "Tuple5"
-  , "Tuple6"
-  , "Tuple7"
-  , "Tuple8"
-  ]
-
--- Primitive constructors
--- TODO: move all primitive stuff to Type.Primitive
-
-primitiveConstructors :: Ctx
-primitiveConstructors =
-  [ V (Free (prim "Unit"))  unit
-  , V (Free (prim "True"))  bool
-  , V (Free (prim "False")) bool
-  , V (Free (prim "[]")) (Forall (U 0 "a") (list (UType (U 0 "a"))))
-  , V
-    (Free (prim "::"))
-    (Forall
-      (U 0 "a")
-      (Fn (UType (U 0 "a"))
-          (Fn (list (UType (U 0 "a"))) (list (UType (U 0 "a"))))
-      )
-    )
-  , V (Free (prim "Tuple2")) (mkTupleCon 2 (prim "Tuple2"))
-  , V (Free (prim "Tuple3")) (mkTupleCon 3 (prim "Tuple3"))
-  , V (Free (prim "Tuple4")) (mkTupleCon 4 (prim "Tuple4"))
-  , V (Free (prim "Tuple5")) (mkTupleCon 5 (prim "Tuple5"))
-  , V (Free (prim "Tuple6")) (mkTupleCon 6 (prim "Tuple6"))
-  , V (Free (prim "Tuple7")) (mkTupleCon 7 (prim "Tuple7"))
-  , V (Free (prim "Tuple8")) (mkTupleCon 8 (prim "Tuple8"))
-  , V
-    (Free (prim "MkIO"))
-    (Forall (U 0 "a")
-            (Fn (Fn (Fn (UType (U 0 "a")) unit) unit) (io (UType (U 0 "a"))))
-    )
-  ]
-
--- Primitive functions
--- Note: the type of unconsChar is weird because we want to implement it
--- without any knowledge of the runtime structure of complex types like tuples
--- or Maybe, since that may change in the future.
-primitiveFns :: Ctx
-primitiveFns =
-  [ V (Free (prim "appendString")) (Fn string (Fn string string))
-  , V (Free (prim "$chars"))       (Fn string (list char))
-  , V (Free (prim "$consChar"))    (Fn char (Fn string string))
-  -- unconsChar : String -> a -> (Char -> String -> a) -> a
-  , let a = U 0 "a"
-    in
-      V
-        (Free (prim "$unconsChar"))
-
-        (Forall
-          a
-          (Fn string
-              (Fn (UType a) (Fn (Fn char (Fn string (UType a))) (UType a)))
-          )
-        )
-  , V (Free (prim "+"))         (Fn int (Fn int int))
-  , V (Free (prim "-"))         (Fn int (Fn int int))
-  , V (Free (prim "*"))         (Fn int (Fn int int))
-  , V (Free (prim "/"))         (Fn int (Fn int int))
-  , V (Free (prim "$showInt"))  (Fn int string)
-  , V (Free (prim "$showChar")) (Fn char string)
-  , V (Free (prim "$eqInt"))    (Fn int (Fn int bool))
-  , V (Free (prim "$eqChar"))   (Fn char (Fn char bool))
-  -- readInt : String -> a -> (Int -> a) -> a
-  , let a = U 0 "a"
-    in  V
-          (Free (prim "$readInt"))
-
-          (Forall a (Fn string (Fn (UType a) (Fn (Fn int (UType a)) (UType a))))
-          )
-  ]
-
-primCtx :: Ctx
-primCtx = primitiveConstructors <> primitiveFns
-
-mkTupleCon :: Int -> Name -> Type
-mkTupleCon len tcon =
-  let us = map (uncurry U) $ take len $ zip
-        [0 ..]
-        (map (fromString . (: [])) ['a' ..])
-  in  foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
 
 -- In the future we will support syntax to declare the types of foreign calls,
 -- like this:
@@ -260,122 +148,16 @@ fcallInfo =
   --   )
   ]
 
--- | Types
-data Type =
-  -- Function type
-    Fn Type Type
-  -- Universal quantifier
-  | Forall U Type
-  -- Existential variable
-  | EType E
-  -- Universal variable
-  | UType U
-  -- Type constructor (saturated)
-  -- TODO: not always saturated! see subtyping for TApps
-  | TCon Name [Type]
-  -- Record type
-  -- TODO: record typing rules
-  | TRecord [(String, Type)]
-  -- Type application
-  -- unchecked invariant: always in spine form (i.e., head is never a TApp)
-  | TApp Type [Type]
-  deriving (Eq, Show, Typeable, Data)
 
-data DebugPrintCtx = Neutral | AppL | AppR | ArrL | ArrR
-instance Debug Type where
-  debug = debug' AppR
-   where
-    debug' _ (EType e) = debug e
-    debug' _ (UType u) = debug u
-    debug' c (Fn a b ) = case c of
-      Neutral -> debug' ArrL a <+> "->" <+> debug' ArrR b
-      ArrR    -> debug' Neutral (Fn a b)
-      _       -> "(" <> debug' Neutral (Fn a b) <> ")"
-    debug' c (Forall v t) = case c of
-      Neutral -> "∀" <> debug v <> "." <+> "(" <> debug' Neutral t <> ")"
-      _       -> "(" <> debug' Neutral (Forall v t) <> ")"
-    debug' _ (TCon d []  ) = debug d
-    debug' c (TCon d args) = case c of
-      Neutral -> debug d <+> sepBy " " (map debug args)
-      AppL    -> "(" <> debug' Neutral (TCon d args) <> ")"
-      AppR    -> "(" <> debug' Neutral (TCon d args) <> ")"
-      _       -> debug' Neutral (TCon d args)
-    debug' _ (TRecord fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
-      where go (name, ty) = name <+> ":" <+> debug' Neutral ty
-    debug' c (TApp ty args) = case c of
-      Neutral -> debug' AppL ty <+> sepBy " " (map (debug' AppR) args)
-      AppR    -> "(" <> debug' Neutral (TApp ty args) <> ")"
-      _       -> debug' Neutral (TApp ty args)
-
--- | Variables
--- Universal type variable
--- Contains a name hint
-data U = U Int Name
-  deriving (Show, Typeable, Data)
-
-instance Eq U where
-  (U i _) == (U j _) = i == j
-
-instance Debug U where
-  debug (U n v) = debug v <> show n
-
--- Existential type variable
-newtype E = E Int
-  deriving (Eq, Show, Typeable, Data)
-
-instance Debug E where
-  debug (E e) = "e" <> show e
-
--- Free or bound variable
--- Guaranteed to be unique.
--- Contains a name hint for conversion back to source.
-data V = Free Name
-       | Bound Int -- Not currently used, but should be for lambda bindings
-  deriving (Eq, Show, Typeable, Data)
-
-instance Debug V where
-  debug (Free  n) = debug n
-  debug (Bound i) = "v" <> show i
 
 type Exp = Expr V Type
 
 
 type Pattern = Pat V
 
--- | Contexts
 
--- | A mapping from constructor names to their tag, arity and type name.
-type CtorInfo = [(Name, ConMeta)]
 
--- | A mapping of in-scope types to their kinds
--- We don't yet have kinds, so we just store () instead for the moment.
-type TypeCtx = [(Name, ())]
 
--- | A local context, holding top level definitions and local variables
-type Ctx = [CtxElem]
-
-data CtxElem =
-  -- Bound variable
-    V V Type
-  -- Universal type variable
-  | UVar U
-  -- Existential type variable
-  | EVar E
-  -- Solved existential type variable (to a monotype)
-  | ESolved E Type
-  -- Existential variable marker
-  | Marker E
-  deriving (Eq, Show)
-
-instance Debug CtxElem where
-  debug (V v t       ) = debug v <+> ":" <+> debug t
-  debug (UVar u      ) = debug u
-  debug (EVar e      ) = debug e
-  debug (ESolved e ty) = debug e <+> "=" <+> debug ty
-  debug (Marker e    ) = "'" <> debug e
-
-debugCtx :: Ctx -> String
-debugCtx ctx = "[" <> sepBy ", " (map debug ctx) <> "]"
 
 
 -- | The free (existential) variables of the type

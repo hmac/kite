@@ -4,7 +4,7 @@ import Data.Function (const)
 import Data.Functor (Functor(..))
 import Control.Applicative (Applicative(..))
 import Data.Monad (Monad(..))
-from kite import Kite.Primitive (IO(MkIO))
+from kite import Kite.Prim (IO(MkIO))
 
 --type IO a = MkIO ((a -> ()) -> ())
 

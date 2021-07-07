@@ -6,7 +6,7 @@ synopsis:       A Haskell-like language for scripting and web apps
 description:    Kite is a statically typed, strict, purely functional programming language with full type inference.
                 It's the core parts of Haskell with better ergonomics, an interpreter, native JS
                 support and much better tooling.
-                .
+
                 Kite targets the Ruby use case: web applications and scripts. For teams building big
                 Rails apps that are struggling with stability and productivity as their codebase
                 grows, Kite should provide a compelling alternative.
@@ -31,13 +31,13 @@ library
   exposed-modules:
       AST
       Canonical
-      Canonical.Primitive
       Canonicalise
       Data.Name
       Data.Name.Gen
       Error
       ExpandExports
       ExpandImports
+      Prim
       Print
       ModuleGroup
       ModuleGroupCompiler
@@ -59,6 +59,7 @@ library
       Type.Print
       Type.ToTyped
       Type.Primitive
+      Type.Type
       Util
       Interpret
       Chez

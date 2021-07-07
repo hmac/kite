@@ -7,10 +7,10 @@ module ExpandImports
 -- explicit ImportSome items by finding all the matching constructors for each
 -- type.
 
-import           Canonical.Primitive
 import           Control.Monad.Except           ( MonadError
                                                 , throwError
                                                 )
+import qualified Prim
 import           Syn
 import           Util
 
@@ -38,10 +38,10 @@ expandAllImports modul deps = do
   imps' <- mapM (expand (moduleName modul) deps) imps
   pure modul { moduleImports = imps' }
 
--- We don't support expanding imports for Kite.Primitive, since it's not a "real"
+-- We don't support expanding imports for Kite.Prim, since it's not a "real"
 -- module.
 expand :: MonadError Error m => PkgModuleName -> [Module] -> Import -> m Import
-expand _ _ imp | importName imp == modPrim = pure imp
+expand _ _ imp | importName imp == Prim.name = pure imp
 expand modulName deps imp =
   let matchingModule = find ((== importName imp) . moduleName) deps
   in  case matchingModule of

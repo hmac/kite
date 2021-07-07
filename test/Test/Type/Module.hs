@@ -6,9 +6,18 @@ import           Prelude                 hiding ( either
                                                 , mod
                                                 )
 import           Test.Hspec
-import           Type
+import           Type                           ( defaultTypeEnv
+                                                , runTypecheckM
+                                                )
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
+import           Type.Type                      ( Ctx
+                                                , CtxElem(..)
+                                                , Type(..)
+                                                , TypeCtx
+                                                , U(..)
+                                                , V(..)
+                                                )
 
 import           Canonicalise                   ( canonicaliseModule )
 import           Test.QQ

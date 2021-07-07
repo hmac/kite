@@ -8,9 +8,9 @@ import           AST                            ( Expr(..)
                                                 , Pat(..)
                                                 )
 import qualified Canonical                     as Can
-import qualified Canonical.Primitive
 import           Data.List                      ( mapAccumL )
 import           Data.Name                      ( Name(..) )
+import qualified Prim
 import           Syn
 import           Util
 
@@ -44,7 +44,7 @@ buildImports m =
         , item    <- importItems imp
         , subitem <- flattenImportItem m item
         ]
-  in  Map.fromList (imports <> Canonical.Primitive.primitives)
+  in  Map.fromList $ imports <> Prim.globallyAvailablePrimitives
 
 -- Given an ImportItem which may contain nested names (e.g. Either(Left, Right))
 -- flatten it to a list of names: [Either, Left, Right]

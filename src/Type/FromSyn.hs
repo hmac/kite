@@ -13,6 +13,7 @@ import           Data.String                    ( fromString )
 import           Data.Traversable               ( for )
 import           Type                           ( Exp )
 import qualified Type                          as T
+import qualified Type.Type                     as T
 
 import           AST
 import qualified Canonical                     as Can

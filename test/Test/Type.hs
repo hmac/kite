@@ -3,9 +3,34 @@ module Test.Type where
 
 import           Control.Monad                  ( replicateM_ )
 import           Test.Hspec
-import           Type
+import           Type                           ( Error(..)
+                                                , LocatedError(..)
+                                                , check
+                                                , defaultTypeEnv
+                                                , fv
+                                                , infer
+                                                , newU
+                                                , quantify
+                                                , runTypeM
+                                                , runTypecheckM
+                                                , subst
+                                                , withGlobalCtx
+                                                , withGlobalTypeCtx
+                                                )
 import           Type.Module                    ( checkModule )
+import           Type.Primitive                 ( bool
+                                                , int
+                                                , list
+                                                , string
+                                                )
 import           Type.Print                     ( printLocatedError )
+import           Type.Type                      ( Ctx
+                                                , CtxElem(..)
+                                                , Type(..)
+                                                , TypeCtx
+                                                , U(..)
+                                                , V(..)
+                                                )
 
 import           AST
 import           Canonicalise                   ( canonicaliseExp

@@ -2,6 +2,7 @@ module Kite.String
 
 import Data.Semigroup (Semigroup)
 import Data.Monoid (Monoid)
+from kite import Kite.Prim (appendString)
 
 semigroupString : Semigroup String
 semigroupString = Semigroup { append = appendString }

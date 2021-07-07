@@ -4,6 +4,7 @@ import Data.Eq (Eq, eq)
 import Data.Show (Show, show, showInt)
 import Data.List (length)
 import IO (putLine, bindIO)
+from kite import Kite.Prim (IO)
 
 type Assertion = Assertion { value : Bool, message : String }
 

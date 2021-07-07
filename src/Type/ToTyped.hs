@@ -16,11 +16,11 @@ import           Syn                     hiding ( Name
                                                 , Type
                                                 )
 import qualified Syn.Typed                     as T
-import           Type                           ( CtorInfo
+import           Type.Primitive                 ( primitiveCtorInfo )
+import           Type.Type                      ( CtorInfo
                                                 , Type(..)
                                                 , U(..)
                                                 )
-import           Type.Primitive                 ( primitiveCtorInfo )
 import           Util
 
 convertModule :: CtorInfo -> Can.Module -> T.Module

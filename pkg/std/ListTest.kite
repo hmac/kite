@@ -8,36 +8,38 @@ import Data.List (head, subsequences, eqList, tail, last, init, uncons, null, sh
 import Data.Tuple (eqTuple2, showTuple2)
 import Data.Bool (not, eqBool, showBool)
 import Data.Function (id)
+from kite import Kite.Prim (IO)
 
 main : IO ()
-main = testMain [
-  assertEq (eqMaybe eqInt) (showMaybe showInt) (head [1]) (Just 1),
-  assertEq (eqMaybe eqInt) (showMaybe showInt) (head []) Nothing,
+main =
+  testMain [
+    assertEq (eqMaybe eqInt) (showMaybe showInt) (head [1]) (Just 1),
+    assertEq (eqMaybe eqInt) (showMaybe showInt) (head []) Nothing,
 
-  assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (tail []) Nothing,
-  assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (tail [1]) (Just []),
-  assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (tail [1, 2]) (Just [2]),
+    assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (tail []) Nothing,
+    assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (tail [1]) (Just []),
+    assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (tail [1, 2]) (Just [2]),
 
-  assertEq (eqMaybe eqInt) (showMaybe showInt) (last []) Nothing,
-  assertEq (eqMaybe eqInt) (showMaybe showInt) (last [1]) (Just 1),
-  assertEq (eqMaybe eqInt) (showMaybe showInt) (last [1, 2]) (Just 2),
+    assertEq (eqMaybe eqInt) (showMaybe showInt) (last []) Nothing,
+    assertEq (eqMaybe eqInt) (showMaybe showInt) (last [1]) (Just 1),
+    assertEq (eqMaybe eqInt) (showMaybe showInt) (last [1, 2]) (Just 2),
 
-  assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (init []) Nothing,
-  assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (init [1]) (Just []),
-  assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (init [1, 2]) (Just [1]),
+    assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (init []) Nothing,
+    assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (init [1]) (Just []),
+    assertEq (eqMaybe (eqList eqInt)) (showMaybe (showList showInt)) (init [1, 2]) (Just [1]),
 
-  assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons []) Nothing,
-  assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons [1]) (Just (1, [])),
-  assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons [1, 2]) (Just (1, [2])),
+    assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons []) Nothing,
+    assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons [1]) (Just (1, [])),
+    assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons [1, 2]) (Just (1, [2])),
 
-  assertEq eqBool showBool (null []) True,
-  assertEq eqBool showBool (null [1]) False,
+    assertEq eqBool showBool (null []) True,
+    assertEq eqBool showBool (null [1]) False,
 
-  assertEq eqInt showInt (length []) 0,
-  assertEq eqInt showInt (length [1]) 1,
-  assertEq eqInt showInt (length [1,2,3]) 3,
+    assertEq eqInt showInt (length []) 0,
+    assertEq eqInt showInt (length [1]) 1,
+    assertEq eqInt showInt (length [1,2,3]) 3,
 
-  assertEq eqBool showBool (all id []) True,
-  assertEq eqBool showBool (all id [True]) True,
-  assertEq eqBool showBool (all id [False]) False
+    assertEq eqBool showBool (all id []) True,
+    assertEq eqBool showBool (all id [True]) True,
+    assertEq eqBool showBool (all id [False]) False
   ]

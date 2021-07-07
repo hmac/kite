@@ -156,7 +156,7 @@ run path = do
   let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
   liftIO $ withFile scriptFile WriteMode $ \h -> do
     hPutStrLn h $ "(load " <> show outFile <> ")"
-    hPutStrLn h $ "(kite.Kite.Primitive.runIO " <> show mainName <> ")"
+    hPutStrLn h $ "(kite.Kite.Prim.runIO " <> show mainName <> ")"
   -- Run the script
   exitcode <- runProcess
     (proc "/usr/bin/env" ["scheme", "--script", scriptFile])

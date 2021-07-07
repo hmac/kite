@@ -1,10 +1,17 @@
 module Type.Print where
 
-import           Canonical.Primitive            ( modPrim )
 import           Data.List                      ( intersperse )
 import           Data.Name
 import           Data.Text.Prettyprint.Doc
-import           Type
+import qualified Prim
+import           Type                           ( Error(..)
+                                                , LocatedError(..)
+                                                )
+import           Type.Type                      ( E(..)
+                                                , Type(..)
+                                                , U(..)
+                                                , V(..)
+                                                )
 
 printModuleName :: ModuleName -> Doc a
 printModuleName (ModuleName names) = hcat (map pretty (intersperse "." names))
@@ -83,9 +90,9 @@ printType = go P0
       printForall us a =
         "forall" <+> hsep (map printU (reverse us)) <> "." <+> printType a
 
--- If the constructor is in the Kite.Primitive module, omit the module qualifier
+-- If the constructor is in the Kite.Prim module, omit the module qualifier
 printConName :: Name -> Doc a
-printConName (TopLevel moduleName (Name n)) | moduleName == modPrim = pretty n
+printConName (TopLevel moduleName (Name n)) | moduleName == Prim.name = pretty n
 printConName n = printName n
 
 printU :: U -> Doc a

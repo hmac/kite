@@ -1,6 +1,6 @@
 module Data.String (chars, fromChars, consChar, unconsChar, reverseString)
 
-from kite import Kite.Primitive ($chars, $consChar, $unconsChar)
+from kite import Kite.Prim ($chars, $consChar, $unconsChar)
 import Data.Monoid (concat)
 import Data.Show (show)
 import Data.Char (showChar)
