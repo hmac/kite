@@ -238,7 +238,7 @@ genFunExpr =
 genAbs :: H.Gen Syn
 genAbs = Gen.subtermM
   (Gen.small genExpr)
-  (\e -> Abs <$> Gen.list (Range.linear 1 5) genLowerName <*> pure e)
+  (\e -> Abs <$> Gen.nonEmpty (Range.linear 1 5) genLowerName <*> pure e)
 
 genVar :: H.Gen Syn
 genVar = Var <$> genLowerName
@@ -270,11 +270,11 @@ shrinkExpr = \case
   BoolLit _            -> []
   UnitLit              -> []
   CharLit _            -> []
-  Abs  (v : vs) e      -> fmap (\vars -> Abs (v : vars) e) (shrinkList1 vs)
-  Abs  _        e      -> [e]
-  App  _        b      -> [b]
-  Let  binds    body   -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
-  Case e        alts   -> [e] <> map snd alts
+  Abs  (_ :| []) e     -> [e]
+  Abs  (v :| vs) e     -> fmap (\vars -> Abs (v :| vars) e) (shrinkList1 vs)
+  App  _         b     -> [b]
+  Let  binds     body  -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
+  Case e         alts  -> [e] <> map snd alts
   TupleLit  es         -> (TupleLit <$> shrinkList2 es) <> es
   ListLit   es         -> (ListLit <$> shrinkList es) <> es
   StringLit _          -> []

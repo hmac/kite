@@ -81,7 +81,7 @@ convertExpr ctorInfo = go
           $  "Type.ToTyped.convertExpr: No metadata for constructor "
           <> show c
     Hole n      -> T.HoleT unknown n
-    Abs xs    e -> T.AbsT unknown (map (, unknown) xs) (go e)
+    Abs xs    e -> T.AbsT unknown (fmap (, unknown) xs) (go e)
     App a     b -> T.AppT unknown (go a) (go b)
     Let binds e -> T.LetT
       unknown

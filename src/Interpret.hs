@@ -216,7 +216,7 @@ interpretExpr env expr_ = case expr_ of
         )
       )
     | otherwise -> lookupCon c env
-  AbsT _ vars  e    -> interpretAbs env (map fst vars) e
+  AbsT _ vars  e    -> interpretAbs env (fmap fst vars) e
   LetT _ binds expr -> do
     env' <- foldM
       (\env_ (n, e, _) -> do
@@ -299,10 +299,12 @@ applyPrim PrimReadInt [Const (String s), def, Abs f] = case readMaybe s of
   Nothing -> pure def
 applyPrim p _ = throwError $ BadPrim p
 
-interpretAbs :: MonadError Error m => Env m -> [Name] -> Exp -> m (Value m)
-interpretAbs env [] body = interpretExpr env body
-interpretAbs env (v : vars) body =
-  pure $ Abs (\arg -> interpretAbs (Map.insert v arg env) vars body)
+interpretAbs
+  :: MonadError Error m => Env m -> NonEmpty Name -> Exp -> m (Value m)
+interpretAbs env args body = go env (NE.toList args)
+ where
+  go e []         = interpretExpr e body
+  go e (v : vars) = pure $ Abs (\arg -> go (Map.insert v arg e) vars)
 
 interpretCase
   :: MonadError Error m => Env m -> Value m -> [(Pattern, Exp)] -> m (Value m)

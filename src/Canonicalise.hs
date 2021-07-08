@@ -9,6 +9,7 @@ import           AST                            ( Expr(..)
                                                 )
 import qualified Canonical                     as Can
 import           Data.List                      ( mapAccumL )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Name                      ( Name(..) )
 import qualified Prim
 import           Syn
@@ -140,7 +141,7 @@ canonicaliseExp env = go
     Ann e t -> Ann (canonicaliseExp env locals e) (canonicaliseType env t)
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
-    Abs  ns    e           -> Abs (fmap Local ns) $ go (ns <> locals) e
+    Abs ns e -> Abs (fmap Local ns) $ go (NE.toList ns <> locals) e
     App  a     b           -> App (go locals a) (go locals b)
     Let  binds e           -> canonicaliseLet binds e
     Case e     alts        -> canonicaliseCase (e, alts)

@@ -211,9 +211,10 @@ pFCall = hang $ do
 pAbs :: Parser Syn
 pAbs = do
   void (string "\\")
-  args <- many lowercaseName
+  firstArg <- lowercaseName
+  restArgs <- many lowercaseName
   void (symbol "->")
-  Abs args <$> pExpr
+  Abs (firstArg NE.:| restArgs) <$> pExpr
 
 -- let foo = 1 in foo
 --

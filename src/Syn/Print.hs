@@ -189,7 +189,11 @@ printExpr (Record fields) =
 printExpr (Project e f) = printExpr' e <> dot <> pretty f
 printExpr (Hole n     ) = hole ("?" <> printName n)
 printExpr (Abs args e) =
-  parens $ "\\" <> hsep (map printName args) <+> "->" <+> printExpr e
+  parens
+    $   "\\"
+    <>  hsep (map printName (NE.toList args))
+    <+> "->"
+    <+> printExpr e
 printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts

@@ -167,9 +167,6 @@ mapAccumLM f s (x : xs) = do
   (s2, xs') <- mapAccumLM f s1 xs
   return (s2, x' : xs')
 
--- deleteList :: Ord k => [k] -> Map.Map k v -> Map.Map k v
--- deleteList ks m = foldr Map.delete m ks
-
 deleteList :: Ord k => [k] -> [(k, v)] -> [(k, v)]
 deleteList ks = Data.List.filter (not . (`elem` ks) . fst)
 
@@ -183,6 +180,9 @@ instance Debug Char where
 
 instance Debug a => Debug [a] where
   debug xs = concatMap debug xs
+
+instance Debug a => Debug (Data.List.NonEmpty.NonEmpty a) where
+  debug = debug . Data.List.NonEmpty.toList
 
 -- | Convert a 'MonadError' constraint with a smaller error to one with a larger one.
 wrapError :: (MonadError e m) => (e' -> e) -> ExceptT e' m a -> m a

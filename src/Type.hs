@@ -678,11 +678,14 @@ instantiate dir e ty = do
 check :: Exp -> Type -> TypeM ()
 check expr ty = do
   trace' ["check", debug expr, ":", debug ty] $ case (expr, ty) of
-    (Abs []       e, a     ) -> check e a
-    (Abs (x : xs) e, Fn a b) -> do
+    (Abs args e, Fn a b) -> do
+      let (x, body) = case NE.uncons args of
+            (x_, Nothing) -> (x_, e)
+            (x_, Just xs) -> (x_, Abs xs e)
       void $ extendV x a
-      _ <- check (Abs xs e) b
+      _ <- check body b
       dropAfter (V x a)
+
     (e, Forall u a) -> do
       extendU u
       check e a
@@ -767,12 +770,14 @@ infer expr_ = do
     App e1 e2 -> do
       a <- infer e1 >>= subst
       inferApp a e2
-    Abs []       e -> infer e
-    Abs (x : xs) e -> do
+    Abs args e -> do
       alpha <- newE
       beta  <- newE
+      let (x, body) = case NE.uncons args of
+            (x_, Nothing) -> (x_, e)
+            (x_, Just xs) -> (x_, Abs xs e)
       extendE alpha >> extendE beta >> extendV x (EType alpha)
-      _ <- check (Abs xs e) (EType beta)
+      check body (EType beta)
       dropAfter (V x (EType alpha))
       pure $ Fn (EType alpha) (EType beta)
     Hole n                     -> throwError $ CannotInferHole (Hole n)
@@ -1216,7 +1221,7 @@ prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- forAll genV
   let uval = Con (Free (prim "Unit"))
-  let expr = App (Ann (Abs [v] uval) (Fn unit unit)) uval
+  let expr = App (Ann (Abs (NE.fromList [v]) uval) (Fn unit unit)) uval
   typecheckTest mempty (infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
@@ -1282,7 +1287,7 @@ prop_checks_higher_kinded_application = property $ do
   let
     f     = U 1 "f"
     a     = U 2 "a"
-    expr1 = Abs [Bound 0] (Var (Bound 0))
+    expr1 = Abs (NE.fromList [Bound 0]) (Var (Bound 0))
     type1 = Forall
       f
       (Forall a (Fn (TApp (UType f) [UType a]) (TApp (UType f) [UType a])))

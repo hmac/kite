@@ -7,6 +7,7 @@ module AST
 
 import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Name                      ( Name )
 import           GHC.Generics                   ( Generic )
 import           Util                           ( Debug(debug)
@@ -21,10 +22,11 @@ data Expr n t = Var n
          | Ann (Expr n t) t
          | Con n
          | Hole n
-         | Abs [n] (Expr n t)
+         | Abs (NonEmpty n) (Expr n t)
          | App (Expr n t) (Expr n t)
          | Let [(n, Expr n t, Maybe t)] (Expr n t)
          | Case (Expr n t) [(Pat n, Expr n t)]
+         -- TODO: these should probably be NonEmpty
          | MCase [([Pat n], Expr n t)]
          | UnitLit
          | TupleLit [Expr n t]
@@ -88,7 +90,7 @@ data ExprT n t =
   | ConT t n ConMeta
   | HoleT t n
   -- Note that each variable bound in lambda has an annotated type
-  | AbsT t [(n, t)] (ExprT n t)
+  | AbsT t (NonEmpty (n, t)) (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
   | CaseT t (ExprT n t) [(Pat n, ExprT n t)]
@@ -111,7 +113,7 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (AnnT _ e t) = debug e <+> ":" <+> debug t
   debug (AppT _ a b) = debug a <+> debug b
   debug (AbsT _ xs e) =
-    "λ" <> sepBy " " (map (debug . fst) xs) <> "." <+> debug e
+    "λ" <> sepBy " " (map (debug . fst) (NE.toList xs)) <> "." <+> debug e
   debug (ConT t v meta) = debug v <+> debug meta <+> debug t
   debug (HoleT _ s    ) = "?" <> debug s
   debug (CaseT _ e alts) =
