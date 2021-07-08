@@ -11,6 +11,7 @@ import Data.Functor (Functor, map)
 import Data.Eq (eq)
 import Data.Int (eqInt)
 import IO (bind, sequence, putLine, getLine)
+from kite import Kite.Prim (IO)
 
 e : Either Bool String
 e = Left True

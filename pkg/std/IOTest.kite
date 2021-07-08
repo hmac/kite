@@ -9,6 +9,7 @@ import Data.Monad (bind, sequence)
 import Data.Monoid (concat)
 import IO (getLine, putLine, monadIO)
 import Data.String (chars, fromChars)
+from kite import Kite.Prim (IO)
 
 makeGreeting : String -> String
 makeGreeting = name -> append semigroupString "Hello, " name
