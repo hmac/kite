@@ -14,6 +14,7 @@ import           Type                           ( Error(..)
                                                 , newU
                                                 , quantify
                                                 , runTypeM
+                                                , runTypeMAndSolve
                                                 , runTypecheckM
                                                 , subst
                                                 , withGlobalCtx
@@ -31,7 +32,6 @@ import           Type.Type                      ( Ctx
                                                 , Type(..)
                                                 , TypeCtx
                                                 , U(..)
-                                                , V(..)
                                                 )
 
 import           AST
@@ -41,6 +41,7 @@ import           Canonicalise                   ( canonicaliseExp
                                                 )
 import           Data.Name                      ( prim )
 import qualified Syn
+import           Syn.Typed                      ( typeOf )
 import           Test.QQ
 import           Type.FromSyn                   ( convertType
                                                 , fromSyn
@@ -52,64 +53,70 @@ test = do
     let a0 = U 0 "a"
         a1 = U 1 "a"
         maybeType arg = TCon "Maybe" [arg]
-        ctx  = [V (Free "Nothing") (Forall a0 (maybeType (UType a0)))]
+        ctx  = [V "Nothing" (Forall a0 (maybeType (UType a0)))]
         ty   = Forall a1 (list (maybeType (UType a1)))
-        expr = App (App (Var (Free (prim "::"))) (Var (Free "Nothing")))
-                   (Var (Free (prim "[]")))
-        r = check expr ty
+        expr = App (App (Var (prim "::")) (Var "Nothing")) (Var (prim "[]"))
+        r    = check expr ty
     it "typechecks successfully" $ do
-      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (fst <$> runTypeM r))
-        `shouldBe` Right ()
+      fmap
+          typeOf
+          (runTypecheckM defaultTypeEnv
+                         (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+          )
+        `shouldBe` Right ty
   describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
     -- We do this for functions normally anyway (see Type.Module.checkModule)
-    let maybeType arg = TCon "Maybe" [arg]
-        funType = Forall
-          (U 0 "a")
-          (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
-        cons    = Free $ prim "::"
-        nothing = Free "Nothing"
-        fun     = MCase
-          [ ( [ ConsPat cons
-                        Nothing
-                        [ConsPat nothing Nothing [], VarPat (Free "rest")]
-              ]
-            , App (Var (Free "foo")) (Var (Free "rest"))
-            )
-          ]
-        ctx =
-          [ V nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
-          , V (Free "foo") funType
-          ]
+    let
+      maybeType arg = TCon "Maybe" [arg]
+      funType = Forall
+        (U 0 "a")
+        (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
+      cons    = prim "::"
+      nothing = "Nothing"
+      fun     = MCase
+        [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
+          , App (Var "foo") (Var "rest")
+          )
+        ]
+      ctx =
+        [ V nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
+        , V "foo"   funType
+        ]
     it "typechecks successfully" $ do
       let r = check fun funType
-      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (fst <$> runTypeM r))
-        `shouldBe` Right ()
+      fmap
+          typeOf
+          (runTypecheckM defaultTypeEnv
+                         (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+          )
+        `shouldBe` Right funType
   describe "Simple inference" $ do
-    let nat = TCon "Nat" []
-        wrap a = TCon "Wrap" [a]
-        pair a b = TCon "Pair" [a, b]
+    let
+      nat = TCon "Nat" []
+      wrap a = TCon "Wrap" [a]
+      pair a b = TCon "Pair" [a, b]
 
-        tctx = map (, ()) ["Nat", "Wrap", "Pair"]
+      tctx = map (, ()) ["Nat", "Wrap", "Pair"]
 
-        ctx =
-          [ V (Free (qq "Zero")) nat
-          , V (Free (qq "Suc"))  (Fn nat nat)
-          , V (Free (qq "MkWrap"))
-              (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
-          , V
-            (Free (qq "MkPair"))
-            (let a = U 1 "a"
-                 b = U 2 "b"
-             in  Forall a $ Forall b $ Fn
-                   (UType a)
-                   (Fn (UType b) (pair (UType a) (UType b)))
-            )
-          ]
+      ctx =
+        [ V (qq "Zero") nat
+        , V (qq "Suc")  (Fn nat nat)
+        , V (qq "MkWrap")
+            (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
+        , V
+          (qq "MkPair")
+          (let a = U 1 "a"
+               b = U 2 "b"
+           in  Forall a $ Forall b $ Fn
+                 (UType a)
+                 (Fn (UType b) (pair (UType a) (UType b)))
+          )
+        ]
 
-        -- The contexts don't change for most of these tests, so define a shortcut
-        inf = infers tctx ctx
+      -- The contexts don't change for most of these tests, so define a shortcut
+      inf = infers tctx ctx
 
     it "True" $ inf [syn|True|] bool
     it "simple function application" $ inf [syn|(\x -> x) True|] bool
@@ -223,7 +230,7 @@ test = do
           a0 = U 0 "a"
           ctx' =
             [ V
-                (Free (qq "D"))
+                (qq "D")
                 (Forall
                   a0
                   (Fn (TRecord [("field", bool)]) (TCon (qq "D") [UType a0]))
@@ -241,7 +248,7 @@ test = do
       -- f = x (D d) -> x
       $ let ctx' =
               [ V
-                  (Free (qq "D"))
+                  (qq "D")
                   (Forall
                     (U 0 "a")
                     (Fn (TRecord [("field", UType (U 0 "a"))])
@@ -263,7 +270,7 @@ test = do
           a0 = U 0 "a"
           ctx' =
             [ V
-                (Free (qq "D"))
+                (qq "D")
                 (Forall
                   a0
                   (Fn (Fn (UType a0) (UType a0)) (TCon (qq "D") [UType a0]))
@@ -286,7 +293,7 @@ test = do
           t = U 3 "t"
           ctx' =
             [ V
-              (Free (qq "MkF"))
+              (qq "MkF")
               (Forall
                 t
                 (Forall
@@ -298,7 +305,7 @@ test = do
                 )
               )
             , V
-              (Free (qq "f"))
+              (qq "f")
               (Forall
                 b
                 (Forall
@@ -324,7 +331,7 @@ test = do
           t = U 3 "t"
           ctx' =
             [ V
-              (Free (qq "MkF"))
+              (qq "MkF")
               (Forall
                 t
                 (Forall
@@ -335,7 +342,7 @@ test = do
                 )
               )
             , V
-              (Free (qq "f"))
+              (qq "f")
               (Forall
                 b
                 (Forall
@@ -370,10 +377,10 @@ runInfer tctx ctx expr = do
   let moduleName    = "qq.QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
-        e   <- fromSyn canonicalExpr
-        ty  <- infer e >>= subst
-        ty' <- subst ty
-        quantify (fv ty') ty'
+        e  <- fromSyn canonicalExpr
+        e' <- infer e
+        ty <- subst $ typeOf e'
+        quantify (fv ty) ty
   runTypecheckM defaultTypeEnv
     $ withGlobalTypeCtx (<> tctx)
     $ withGlobalCtx (<> ctx)
@@ -391,7 +398,8 @@ infers' tctx ctx expr ty = do
   let r = do
         e  <- fromSyn canonicalExpr
         t  <- convertType mempty canonicalType
-        t' <- infer e >>= subst
+        e' <- infer e
+        t' <- subst $ typeOf e'
         pure (t, t')
   let result =
         runTypecheckM defaultTypeEnv
@@ -418,6 +426,7 @@ checks tctx ctx expr ty = do
                                ]
         , Syn.moduleMetadata = mempty
         }
+      -- TODO: fix this dummy thing
       r =
         runTypeM (replicateM_ 10 (newU "dummy"))
           >> checkModule (Map.fromList tctx, ctx, mempty) modul

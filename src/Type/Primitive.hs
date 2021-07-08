@@ -12,7 +12,6 @@ import           Type.Type                      ( Ctx
                                                 , CtxElem(..)
                                                 , Type(..)
                                                 , U(..)
-                                                , V(..)
                                                 )
 
 -- In the future we will support syntax to declare the types of foreign calls,
@@ -92,27 +91,27 @@ primTypeCtx = Map.fromList $ map
 
 primitiveConstructors :: Ctx
 primitiveConstructors =
-  [ V (Free (prim "Unit"))  unit
-  , V (Free (prim "True"))  bool
-  , V (Free (prim "False")) bool
-  , V (Free (prim "[]")) (Forall (U 0 "a") (list (UType (U 0 "a"))))
+  [ V (prim "Unit")  unit
+  , V (prim "True")  bool
+  , V (prim "False") bool
+  , V (prim "[]") (Forall (U 0 "a") (list (UType (U 0 "a"))))
   , V
-    (Free (prim "::"))
+    (prim "::")
     (Forall
       (U 0 "a")
       (Fn (UType (U 0 "a"))
           (Fn (list (UType (U 0 "a"))) (list (UType (U 0 "a"))))
       )
     )
-  , V (Free (prim "Tuple2")) (mkTupleCon 2 (prim "Tuple2"))
-  , V (Free (prim "Tuple3")) (mkTupleCon 3 (prim "Tuple3"))
-  , V (Free (prim "Tuple4")) (mkTupleCon 4 (prim "Tuple4"))
-  , V (Free (prim "Tuple5")) (mkTupleCon 5 (prim "Tuple5"))
-  , V (Free (prim "Tuple6")) (mkTupleCon 6 (prim "Tuple6"))
-  , V (Free (prim "Tuple7")) (mkTupleCon 7 (prim "Tuple7"))
-  , V (Free (prim "Tuple8")) (mkTupleCon 8 (prim "Tuple8"))
+  , V (prim "Tuple2") (mkTupleCon 2 (prim "Tuple2"))
+  , V (prim "Tuple3") (mkTupleCon 3 (prim "Tuple3"))
+  , V (prim "Tuple4") (mkTupleCon 4 (prim "Tuple4"))
+  , V (prim "Tuple5") (mkTupleCon 5 (prim "Tuple5"))
+  , V (prim "Tuple6") (mkTupleCon 6 (prim "Tuple6"))
+  , V (prim "Tuple7") (mkTupleCon 7 (prim "Tuple7"))
+  , V (prim "Tuple8") (mkTupleCon 8 (prim "Tuple8"))
   , V
-    (Free (prim "MkIO"))
+    (prim "MkIO")
     (Forall (U 0 "a")
             (Fn (Fn (Fn (UType (U 0 "a")) unit) unit) (io (UType (U 0 "a"))))
     )
@@ -124,14 +123,14 @@ primitiveConstructors =
 -- or Maybe, since that may change in the future.
 primitiveFns :: Ctx
 primitiveFns =
-  [ V (Free (prim "appendString")) (Fn string (Fn string string))
-  , V (Free (prim "$chars"))       (Fn string (list char))
-  , V (Free (prim "$consChar"))    (Fn char (Fn string string))
+  [ V (prim "appendString") (Fn string (Fn string string))
+  , V (prim "$chars")       (Fn string (list char))
+  , V (prim "$consChar")    (Fn char (Fn string string))
   -- unconsChar : String -> a -> (Char -> String -> a) -> a
   , let a = U 0 "a"
     in
       V
-        (Free (prim "$unconsChar"))
+        (prim "$unconsChar")
 
         (Forall
           a
@@ -139,18 +138,18 @@ primitiveFns =
               (Fn (UType a) (Fn (Fn char (Fn string (UType a))) (UType a)))
           )
         )
-  , V (Free (prim "+"))         (Fn int (Fn int int))
-  , V (Free (prim "-"))         (Fn int (Fn int int))
-  , V (Free (prim "*"))         (Fn int (Fn int int))
-  , V (Free (prim "/"))         (Fn int (Fn int int))
-  , V (Free (prim "$showInt"))  (Fn int string)
-  , V (Free (prim "$showChar")) (Fn char string)
-  , V (Free (prim "$eqInt"))    (Fn int (Fn int bool))
-  , V (Free (prim "$eqChar"))   (Fn char (Fn char bool))
+  , V (prim "+")         (Fn int (Fn int int))
+  , V (prim "-")         (Fn int (Fn int int))
+  , V (prim "*")         (Fn int (Fn int int))
+  , V (prim "/")         (Fn int (Fn int int))
+  , V (prim "$showInt")  (Fn int string)
+  , V (prim "$showChar") (Fn char string)
+  , V (prim "$eqInt")    (Fn int (Fn int bool))
+  , V (prim "$eqChar")   (Fn char (Fn char bool))
   -- readInt : String -> a -> (Int -> a) -> a
   , let a = U 0 "a"
     in  V
-          (Free (prim "$readInt"))
+          (prim "$readInt")
 
           (Forall a (Fn string (Fn (UType a) (Fn (Fn int (UType a)) (UType a))))
           )

@@ -28,6 +28,7 @@ import           Type                           ( Exp
                                                 , check
                                                 , infer
                                                 , runTypeM
+                                                , runTypeMAndSolve
                                                 , wellFormedType
                                                 , withGlobalCtx
                                                 , withGlobalTypeCtx
@@ -41,7 +42,6 @@ import           Type.Type                      ( CtorInfo
                                                 , CtxElem(V)
                                                 , Type(..)
                                                 , TypeCtx
-                                                , V(..)
                                                 )
 
 -- Translate a module into typechecking structures, and return them
@@ -96,14 +96,14 @@ typecheckFuns funs = do
   -- recursive calls.
   -- If the function has no type signature, skip it.
   let funCtx = flip concatMap funs' $ \(_, (name, ty, _)) -> case ty of
-        Just t  -> [V (Free name) t]
+        Just t  -> [V name t]
         Nothing -> []
 
   withGlobalCtx (<> funCtx) $ mapM_ typecheckFun funs'
 
   pure funCtx
 
-typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM ()
+typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM T.Exp
 typecheckFun (fun, (name, mtype, expr)) =
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
@@ -115,11 +115,11 @@ typecheckFun (fun, (name, mtype, expr)) =
           Nothing -> pure ()
         -- check or infer each function in the where clause
         whereCtx <- typecheckFuns (funWheres fun)
-        fmap fst $ withGlobalCtx (<> whereCtx) $ runTypeM $ case mtype of
+        withGlobalCtx (<> whereCtx) $ runTypeMAndSolve $ case mtype of
           -- check the body of the function
           Just ty -> check expr ty
           -- infer the body of the function
-          Nothing -> void $ infer expr
+          Nothing -> infer expr
 
 funToBind :: Can.Fun Can.Exp -> TypecheckM (Name, Maybe Type, Exp)
 funToBind fun = do
@@ -157,7 +157,7 @@ translateData d = do
     ty <- fmap fst $ runTypeM $ quantify tyvars $ foldr S.TyFun
                                                         resultType
                                                         (conArgs datacon)
-    pure $ V (Free (conName datacon)) ty
+    pure $ V (conName datacon) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
 getFunDecls = getDeclBy $ \case

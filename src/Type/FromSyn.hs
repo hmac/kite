@@ -21,10 +21,10 @@ import qualified Syn                           as S
 
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
-  Var n   -> pure $ Var (T.Free n)
-  Con n   -> pure $ Con (T.Free n)
+  Var n   -> pure $ Var n
+  Con n   -> pure $ Con n
   Ann e t -> Ann <$> fromSyn e <*> convertType mempty t
-  Hole n  -> pure $ Hole (T.Free n)
+  Hole n  -> pure $ Hole n
   App a b -> App <$> fromSyn a <*> fromSyn b
   Case scrut alts ->
     Case
@@ -34,13 +34,13 @@ fromSyn = \case
     MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
   Abs xs a -> do
     a' <- fromSyn a
-    pure $ Abs (fmap T.Free xs) a'
+    pure $ Abs xs a'
   Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM
       (\(n, e, maybeType) -> do
         let t' = for maybeType $ \t -> quantify (Set.toList (S.ftv t)) t
-        (T.Free n, , ) <$> fromSyn e <*> t'
+        (n, , ) <$> fromSyn e <*> t'
       )
       binds
 
@@ -60,17 +60,16 @@ fromSyn = \case
 
 convertPattern :: Can.Pattern -> T.Pattern
 convertPattern = \case
-  VarPat v -> VarPat (T.Free v)
-  ConsPat c _ subpats ->
-    ConsPat (T.Free c) Nothing (map convertPattern subpats)
-  TuplePat subpats -> TuplePat (map convertPattern subpats)
-  ListPat  subpats -> ListPat (map convertPattern subpats)
-  WildPat          -> WildPat
-  UnitPat          -> UnitPat
-  IntPat    i      -> IntPat i
-  CharPat   c      -> CharPat c
-  BoolPat   b      -> BoolPat b
-  StringPat s      -> StringPat s
+  VarPat v            -> VarPat v
+  ConsPat c _ subpats -> ConsPat c Nothing (map convertPattern subpats)
+  TuplePat subpats    -> TuplePat (map convertPattern subpats)
+  ListPat  subpats    -> ListPat (map convertPattern subpats)
+  WildPat             -> WildPat
+  UnitPat             -> UnitPat
+  IntPat    i         -> IntPat i
+  CharPat   c         -> CharPat c
+  BoolPat   b         -> BoolPat b
+  StringPat s         -> StringPat s
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case
@@ -87,7 +86,7 @@ convertType uVarCtx = \case
     in  T.TCon name <$> mapM (convertType uVarCtx) as
   S.TyVar v -> case lookup v uVarCtx of
     Just u  -> pure $ T.UType u
-    Nothing -> T.throwError $ T.UnknownVariable (T.Free v)
+    Nothing -> T.throwError $ T.UnknownVariable v
   S.TyCon c   -> pure $ T.TCon c []
   -- Flatten type applications into spine form, so the head of every TApp is
   -- never a TApp. This is an invariant required by the typechecker.

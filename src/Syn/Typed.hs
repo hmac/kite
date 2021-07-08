@@ -11,6 +11,7 @@ module Syn.Typed
 
 import           AST
 import           Control.Lens                   ( over
+                                                , set
                                                 , view
                                                 )
 import           Data.Generics.Product.Positions
@@ -83,3 +84,7 @@ applySolution s = over (types @Type) solve
 -- | Get the cached type of an 'Exp'
 typeOf :: Exp -> Type
 typeOf = view (position @1)
+
+-- | Store a cached type on an 'Exp'
+cacheType :: Type -> Exp -> Exp
+cacheType = set (position @1)

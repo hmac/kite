@@ -94,6 +94,7 @@ data ExprT n t =
   | AppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
   | CaseT t (ExprT n t) [(Pat n, ExprT n t)]
+  -- TODO: store types on patterns, similar to what we do with abstractions
   | MCaseT t [([Pat n], ExprT n t)]
   | UnitLitT t
   | TupleLitT t [ExprT n t]

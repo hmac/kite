@@ -1,0 +1,22 @@
+module EqList
+
+type Eq b = Eq { eq : b -> b -> Bool }
+
+eq : Eq a -> a -> a -> Bool
+eq = (Eq d) -> d.eq
+
+concat : [Bool] -> Bool
+concat = _ -> True
+
+and : Bool -> Bool -> Bool
+and = False _ -> False
+      True  b -> b
+
+zipWith : (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith = _ [] _  -> []
+          _ _  [] -> []
+          f (x::xs) (y::ys) -> (f x y) :: (zipWith f xs ys)
+
+eqList : (a -> a -> Bool) -> Eq [a]
+eqList = eqa -> Eq { eq = \xs ys -> concat (zipWith eqa xs ys) }
+

@@ -10,7 +10,6 @@ import           Type                           ( Error(..)
 import           Type.Type                      ( E(..)
                                                 , Type(..)
                                                 , U(..)
-                                                , V(..)
                                                 )
 
 printModuleName :: ModuleName -> Doc a
@@ -110,11 +109,11 @@ printError modName = \case
       , "with"
       , indent 4 (printType b)
       ]
-  UnknownVariable (Free v) ->
+  UnknownVariable v ->
     "Variable not in scope:" <+> printName (maybe v (`localise` v) modName)
   UnknownType t ->
     "Type not in scope:" <+> printName (maybe t (`localise` t) modName)
-  DuplicateVariable (Free v) ->
+  DuplicateVariable v ->
     "The variable"
       <+> printName (maybe v (`localise` v) modName)
       <+> "is bound more than once"

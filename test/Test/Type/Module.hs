@@ -17,7 +17,6 @@ import           Type.Type                      ( Ctx
                                                 , Type(..)
                                                 , TypeCtx
                                                 , U(..)
-                                                , V(..)
                                                 )
 
 import           Canonicalise                   ( canonicaliseModule )
@@ -119,12 +118,12 @@ ctx =
     either a b = TCon (qq "Either") [a, b]
     maybe a = TCon (qq "Maybe") [a]
     termCtx =
-      [ V (Free (qq "Zero")) nat
-      , V (Free (qq "Suc"))  (Fn nat nat)
-      , V (Free (qq "MkWrap"))
+      [ V (qq "Zero") nat
+      , V (qq "Suc")  (Fn nat nat)
+      , V (qq "MkWrap")
           (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
       , V
-        (Free (qq "MkPair"))
+        (qq "MkPair")
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn
@@ -132,19 +131,19 @@ ctx =
                (Fn (UType b) (pair (UType a) (UType b)))
         )
       , V
-        (Free (qq "Left"))
+        (qq "Left")
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn (UType a) (either (UType a) (UType b))
         )
       , V
-        (Free (qq "Right"))
+        (qq "Right")
         (let a = U 1 "a"
              b = U 2 "b"
          in  Forall a $ Forall b $ Fn (UType b) (either (UType a) (UType b))
         )
-      , V (Free (qq "Nothing")) (let a = U 1 "a" in Forall a (maybe (UType a)))
-      , V (Free (qq "Just"))
+      , V (qq "Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
+      , V (qq "Just")
           (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
       ]
     typeCtx =

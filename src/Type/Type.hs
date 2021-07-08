@@ -3,7 +3,6 @@ module Type.Type
   ( Type(..)
   , E(..)
   , U(..)
-  , V(..)
   , Ctx
   , CtxElem(..)
   , debugCtx
@@ -88,17 +87,6 @@ newtype E = E Int
 instance Debug E where
   debug (E e) = "e" <> show e
 
--- Free or bound variable
--- Guaranteed to be unique.
--- Contains a name hint for conversion back to source.
-data V = Free Name
-       | Bound Int -- Not currently used, but should be for lambda bindings
-  deriving (Eq, Show, Typeable, Data)
-
-instance Debug V where
-  debug (Free  n) = debug n
-  debug (Bound i) = "v" <> show i
-
 -- Contexts
 
 -- | A local context, holding top level definitions and local variables
@@ -109,8 +97,8 @@ type Ctx = [CtxElem]
 type TypeCtx = Map Name ()
 
 data CtxElem =
-  -- Bound variable
-    V V Type
+  -- Term variable
+    V Name Type
   -- Universal type variable
   | UVar U
   -- Existential type variable
@@ -129,7 +117,7 @@ instance Debug CtxElem where
   debug (Marker e    ) = "'" <> debug e
 
 debugCtx :: Ctx -> String
-debugCtx ctx = "[" <> sepBy ", " (map debug ctx) <> "]"
+debugCtx ctx = "[" <> sepBy ", " (map debug (reverse ctx)) <> "]"
 
 (<+>) :: String -> String -> String
 a <+> b = a <> " " <> b
