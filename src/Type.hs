@@ -51,6 +51,7 @@ import           Control.Monad.Reader           ( MonadReader
                                                 )
 import           Control.Monad.Writer.Strict    ( WriterT
                                                 , runWriterT
+                                                , tell
                                                 )
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
@@ -150,9 +151,9 @@ quantify vars t = do
   -- Generate a fresh UVar for each E
   uMap <- mapM (\e -> (e, ) <$> newU "") vars
   -- Construct a context mapping each E to its replacement UType
-  let ctx = map (\(e, u) -> ESolved e (UType u)) uMap
+  ctx  <- mapM (\(e, u) -> solve e (UType u)) uMap
   -- Apply the substitution to the type
-  let t'  = subst' ctx t
+  let t' = subst' ctx t
   -- Wrap the result in foralls to bind each UType
   pure $ foldr (Forall . snd) t' uMap
 
@@ -279,6 +280,14 @@ lookupType name = do
     Just _  -> pure ()
     Nothing -> throwError (UnknownType name)
 
+-- | "Solve" an existential by generating an 'ESolved' context element which maps it to a type.
+-- We use this to ensure that every time we solve an existential we also write the solution to our
+-- output.
+solve :: E -> Type -> TypeM CtxElem
+solve e t = do
+  tell $ Map.singleton e t
+  pure $ ESolved e t
+
 -- Context construction
 
 -- | Save the current state, run an action that returns a result,
@@ -323,7 +332,8 @@ extendSolved e t = do
     then todoError "extendSolved failed"
     else do
       wellFormedType t
-      pushCtx (ESolved e t)
+      solution <- solve e t
+      pushCtx solution
 
 -- | Extend the current context with an existential marker
 extendMarker :: E -> TypeM ()
@@ -590,7 +600,8 @@ instantiate dir e ty = do
             putCtx r
             lookupE e
           -- If we find it, instantiate f := e and we're done
-          putCtx $ l <> [ESolved f (EType e)] <> r
+          solution <- solve f (EType e)
+          putCtx $ l <> [solution] <> r
         )
         `catchError` (\_ -> do
                        -- e isn't in the prefix, so assume that f occurs before e
@@ -601,14 +612,15 @@ instantiate dir e ty = do
                          lookupE f
                        -- If we find it, instantiate f := e and we're done.
                        -- Otherwise, throw an error
-                       putCtx $ l <> [ESolved e (EType f)] <> r
+                       solution <- solve e (EType f)
+                       putCtx $ l <> [solution] <> r
                      )
     Fn a b -> do
       let (l, r) = splitAt (EVar e) ctx
-      a1 <- newE
-      a2 <- newE
-      putCtx
-        (l <> [ESolved e (Fn (EType a1) (EType a2)), EVar a1, EVar a2] <> r)
+      a1       <- newE
+      a2       <- newE
+      solution <- solve e $ Fn (EType a1) (EType a2)
+      putCtx (l <> [solution, EVar a1, EVar a2] <> r)
       instantiate (flipDir dir) a1 a
       b' <- subst b
       instantiate (flipDir dir) a2 b'
@@ -631,9 +643,10 @@ instantiate dir e ty = do
     TCon c args -> do
       let (l, r) = splitAt (EVar e) ctx
       -- generate new Es for each arg
-      es <- mapM (const newE) args
+      es       <- mapM (const newE) args
       -- insert them into the context before e, along with a solution e = TCon c es
-      putCtx $ l <> [ESolved e (TCon c (map EType es))] <> map EVar es <> r
+      solution <- solve e $ TCon c $ map EType es
+      putCtx $ l <> [solution] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
       mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
 
@@ -642,9 +655,10 @@ instantiate dir e ty = do
     TApp f args -> do
       let (l, r) = splitAt (EVar e) ctx
       -- generate new Es for each arg
-      es <- mapM (const newE) args
+      es       <- mapM (const newE) args
       -- insert them into the context before e, along with a solution e = f es
-      putCtx $ l <> [ESolved e (TApp f (map EType es))] <> map EVar es <> r
+      solution <- solve e $ TApp f $ map EType es
+      putCtx $ l <> [solution] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
       mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
     a -> do
@@ -652,7 +666,8 @@ instantiate dir e ty = do
       call $ do
         putCtx r
         wellFormedType a
-      putCtx $ l <> [ESolved e a] <> r
+      solution <- solve e a
+      putCtx $ l <> [solution] <> r
  where
   flipDir :: InstDir -> InstDir
   flipDir L = R
