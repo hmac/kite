@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 module Syn.Typed
   ( module Syn.Typed
   , AST.Pat(..)
@@ -8,9 +10,15 @@ module Syn.Typed
   ) where
 
 import           AST
+import           Control.Lens                   ( over )
+import           Data.Generics.Product.Types    ( types )
+import qualified Data.Map.Strict               as Map
+import           Data.Map.Strict                ( Map )
 import           Data.Name
 import qualified Syn                           as S
-import           Type.Type                      ( Type )
+import           Type.Type                      ( E
+                                                , Type(EType)
+                                                )
 
 -- This module contains the typed AST
 -- Any module that deals with the typed AST can just import this one to get all
@@ -56,3 +64,14 @@ data DataCon = DataCon
   , conType :: Type
   }
   deriving (Eq, Show)
+
+-- | Apply a set of existential variable solutions to the type annotations of an expression.
+-- This is used after typechecking to resolve any existentials in the cached types.
+applySolution :: Map E Type -> Exp -> Exp
+applySolution s = over (types @Type) solve
+ where
+  solve :: Type -> Type
+  solve (EType e) = case Map.lookup e s of
+    Just t  -> t
+    Nothing -> EType e
+  solve t = t

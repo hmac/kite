@@ -49,9 +49,13 @@ import           Control.Monad.Reader           ( MonadReader
                                                 , asks
                                                 , local
                                                 )
+import           Control.Monad.Writer.Strict    ( WriterT
+                                                , runWriterT
+                                                )
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
 import qualified Data.List.NonEmpty            as NE
+import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Data.Name                      ( ModuleName(..)
                                                 , Name(..)
@@ -71,7 +75,6 @@ import           Data.Maybe                     ( listToMaybe )
 import qualified Control.Monad.Except
 import           Control.Monad.Except           ( ExceptT(..)
                                                 , catchError
-                                                , liftEither
                                                 , runExceptT
                                                 )
 import           Control.Monad.Trans.Class      ( lift )
@@ -98,6 +101,7 @@ import qualified Hedgehog
 import qualified Hedgehog.Gen                  as G
 import qualified Hedgehog.Range                as R
 
+import qualified Syn.Typed
 import           Type.Primitive                 ( bool
                                                 , char
                                                 , fcallInfo
@@ -281,9 +285,9 @@ lookupType name = do
 -- then restore the original state
 call :: TypeM a -> TypeM a
 call m = do
-  st     <- lift $ lift get
+  st     <- lift $ lift $ lift get
   result <- m
-  lift $ lift $ put st
+  lift $ lift $ lift $ put st
   pure result
 
 -- | Extend the current context with a universal variable
@@ -396,23 +400,38 @@ runTypecheckM env m = evalState (runExceptT (runReaderT m env)) 0
 
 -- This type is used only inside this module. It is like TypecheckM but it can also manipulate the
 -- local context.
-type TypeM = ReaderT TypeEnv (ExceptT LocatedError (State TypeState))
+type TypeM
+  = ReaderT
+      TypeEnv
+      (ExceptT LocatedError (WriterT (Map E Type) (State TypeState)))
 
 -- | Convert a TypeM action into a TypecheckM action.
 -- We do this by supplying a default state value, but threading through the variable counter which
 -- is present in TypecheckM. This ensures that we can generate fresh variables in both TypeM and
 -- TypecheckM and they won't clash.
-runTypeM :: TypeM a -> TypecheckM a
+runTypeM :: TypeM a -> TypecheckM (a, Map E Type)
 runTypeM m = do
   c <- lift $ lift get
   let defaultState =
         TypeState { varCounter = c, context = mempty, typeContext = mempty }
   env <- ask
-  let m'            = runReaderT m env
-  let m''           = runExceptT m'
-  let (m''', state) = runState m'' defaultState
+  let m'                          = runReaderT m env
+  let m''                         = runExceptT m'
+  let m'''                        = runWriterT m''
+  let ((m'''', solutions), state) = runState m''' defaultState
   lift $ lift $ put (varCounter state)
-  liftEither m'''
+  case m'''' of
+    Left  err -> lift $ Control.Monad.Except.throwError err
+    Right r   -> pure (r, solutions)
+
+-- | Like 'runTypeM' but specalised to returning 'Syn.Typed.Exp'.
+-- Before returning, we apply the solution to resolve any existential variables stored in type
+-- annotations.
+-- The typechecker doesn't currently produce 'Syn.Typed.Exp', but it will in the future.
+runTypeMAndSolve :: TypeM Syn.Typed.Exp -> TypecheckM Syn.Typed.Exp
+runTypeMAndSolve m = do
+  (e, solution) <- runTypeM m
+  pure $ Syn.Typed.applySolution solution e
 
 -- Functions for modifying the global type context
 -- These are used by other modules, which control the global context.
@@ -436,8 +455,8 @@ incDepth t = t { envDepth = envDepth t + 1 }
 
 newInt :: TypeM Int
 newInt = do
-  i <- lift (lift (gets varCounter))
-  lift $ lift $ modify' (\st -> st { varCounter = i + 1 })
+  i <- lift $ lift $ lift $ gets varCounter
+  lift $ lift $ lift $ modify' (\st -> st { varCounter = i + 1 })
   pure i
 
 newE :: TypeM E
@@ -448,11 +467,11 @@ newU hint = U <$> newInt <*> pure hint
 
 -- Get the current local context
 getCtx :: TypeM Ctx
-getCtx = lift (lift (gets context))
+getCtx = lift $ lift $ lift $ gets context
 
 -- Replace the current local context
 putCtx :: Ctx -> TypeM ()
-putCtx ctx = lift (lift (modify' (\st -> st { context = ctx })))
+putCtx ctx = lift $ lift $ lift $ modify' $ \st -> st { context = ctx }
 
 -- Push a new element on to the local context
 pushCtx :: CtxElem -> TypeM ()
@@ -462,11 +481,12 @@ pushCtx e = do
 
 -- | Get the current type context
 getTypeCtx :: TypeM TypeCtx
-getTypeCtx = lift $ lift $ gets typeContext
+getTypeCtx = lift $ lift $ lift $ gets typeContext
 
 -- | Replace the current type context
 putTypeCtx :: TypeCtx -> TypeM ()
-putTypeCtx tctx = lift $ lift $ modify' $ \st -> st { typeContext = tctx }
+putTypeCtx tctx =
+  lift $ lift $ lift $ modify' $ \st -> st { typeContext = tctx }
 
 
 -- | Lift a 'Maybe' value into the 'MaybeT' monad transformer.
@@ -1160,7 +1180,7 @@ prop_substEForU_commutes = property $ do
 
 typecheckTest :: Ctx -> TypeM a -> Either LocatedError a
 typecheckTest ctx =
-  runTypecheckM defaultTypeEnv . withGlobalCtx (<> ctx) . runTypeM
+  fmap fst . runTypecheckM defaultTypeEnv . withGlobalCtx (<> ctx) . runTypeM
 
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do

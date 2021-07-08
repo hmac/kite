@@ -22,13 +22,14 @@ import           Data.Text.Prettyprint.Doc      ( Pretty
                                                 , pretty
                                                 , punctuate
                                                 )
+import           GHC.Generics                   ( Generic )
 import           Type.Reflection                ( Typeable )
 import           Util
 
 -- Shared types of name
 
 newtype RawName = Name String
-  deriving (Eq, Ord, Typeable, Data)
+  deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show RawName where
   show (Name s) = s
@@ -37,7 +38,7 @@ instance IsString RawName where
   fromString = Name
 
 newtype ModuleName = ModuleName [String]
-  deriving (Eq, Ord, Typeable, Data)
+  deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show ModuleName where
   show = showModuleName
@@ -52,7 +53,7 @@ instance Pretty ModuleName where
   pretty (ModuleName names) = hcat $ punctuate "." $ map pretty names
 
 newtype PackageName = PackageName String
-  deriving (Eq, Ord, Typeable, Data)
+  deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show PackageName where
   show (PackageName n) = n
@@ -72,7 +73,7 @@ mkPackageName s
   | otherwise = Nothing
 
 data PkgModuleName = PkgModuleName PackageName ModuleName
-  deriving (Eq, Ord, Typeable, Data)
+  deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show PkgModuleName where
   show (PkgModuleName pkgName modName) = show pkgName <> "." <> show modName
@@ -92,7 +93,7 @@ instance IsString PkgModuleName where
 data Name
   = Local RawName
   | TopLevel PkgModuleName RawName
-  deriving (Eq, Ord, Typeable, Data)
+  deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show Name where
   show (Local (Name name)              ) = "Local " ++ name

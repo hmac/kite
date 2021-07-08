@@ -83,7 +83,7 @@ instance Debug U where
 
 -- Existential type variable
 newtype E = E Int
-  deriving (Eq, Show, Typeable, Data)
+  deriving (Eq, Ord, Show, Typeable, Data)
 
 instance Debug E where
   debug (E e) = "e" <> show e

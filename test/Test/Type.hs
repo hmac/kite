@@ -58,7 +58,7 @@ test = do
                    (Var (Free (prim "[]")))
         r = check expr ty
     it "typechecks successfully" $ do
-      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
+      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (fst <$> runTypeM r))
         `shouldBe` Right ()
   describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
     -- Note that we add the (claimed) type for foo to the context so that the
@@ -84,7 +84,7 @@ test = do
           ]
     it "typechecks successfully" $ do
       let r = check fun funType
-      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeM r))
+      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (fst <$> runTypeM r))
         `shouldBe` Right ()
   describe "Simple inference" $ do
     let nat = TCon "Nat" []
@@ -377,6 +377,7 @@ runInfer tctx ctx expr = do
   runTypecheckM defaultTypeEnv
     $ withGlobalTypeCtx (<> tctx)
     $ withGlobalCtx (<> ctx)
+    $ fmap fst
     $ runTypeM r
 
 -- Like infers but takes a quasiquoted type expression.
@@ -396,6 +397,7 @@ infers' tctx ctx expr ty = do
         runTypecheckM defaultTypeEnv
           $ withGlobalTypeCtx (<> tctx)
           $ withGlobalCtx (<> ctx)
+          $ fmap fst
           $ runTypeM r
   case result of
     Left err -> expectationFailure $ show (printLocatedError err)

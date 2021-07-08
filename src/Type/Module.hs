@@ -115,7 +115,7 @@ typecheckFun (fun, (name, mtype, expr)) =
           Nothing -> pure ()
         -- check or infer each function in the where clause
         whereCtx <- typecheckFuns (funWheres fun)
-        withGlobalCtx (<> whereCtx) $ runTypeM $ case mtype of
+        fmap fst $ withGlobalCtx (<> whereCtx) $ runTypeM $ case mtype of
           -- check the body of the function
           Just ty -> check expr ty
           -- infer the body of the function
@@ -123,9 +123,9 @@ typecheckFun (fun, (name, mtype, expr)) =
 
 funToBind :: Can.Fun Can.Exp -> TypecheckM (Name, Maybe Type, Exp)
 funToBind fun = do
-  rhs <- runTypeM $ fromSyn (funExpr fun)
+  rhs <- fmap fst $ runTypeM $ fromSyn (funExpr fun)
   sch <- case funType fun of
-    Just t  -> Just <$> runTypeM (quantify (Set.toList (S.ftv t)) t)
+    Just t  -> Just . fst <$> runTypeM (quantify (Set.toList (S.ftv t)) t)
     Nothing -> pure Nothing
   pure (funName fun, sch, rhs)
 
@@ -154,9 +154,9 @@ translateData d = do
   buildCtx dataTypeName tyvars datacon = do
     -- Construct a (Syn) Scheme for this constructor
     let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
-    ty <- runTypeM $ quantify tyvars $ foldr S.TyFun
-                                             resultType
-                                             (conArgs datacon)
+    ty <- fmap fst $ runTypeM $ quantify tyvars $ foldr S.TyFun
+                                                        resultType
+                                                        (conArgs datacon)
     pure $ V (Free (conName datacon)) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]

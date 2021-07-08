@@ -8,6 +8,7 @@ module AST
 import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
 import           Data.Name                      ( Name )
+import           GHC.Generics                   ( Generic )
 import           Util                           ( Debug(debug)
                                                 , NonEmpty(..)
                                                 )
@@ -100,7 +101,7 @@ data ExprT n t =
   | RecordT [(String, ExprT n t)] t
   | ProjectT (ExprT n t) String t
   | FCallT String [ExprT n t] t
-  deriving (Eq, Show, Data)
+  deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (VarT v _  ) = debug v
@@ -146,7 +147,7 @@ data ConMeta = ConMeta
   , conMetaArity    :: Int
   , conMetaTypeName :: Name
   }
-  deriving (Eq, Show, Data)
+  deriving (Eq, Show, Data, Generic)
 
 instance Debug ConMeta where
   debug (ConMeta tag arity typeName) =
@@ -167,7 +168,7 @@ data Pat a = VarPat a
              | ListPat [Pat a]
              | ConsPat a (Maybe ConMeta) [Pat a]
              | StringPat String
-             deriving (Eq, Show, Data)
+             deriving (Eq, Show, Data, Generic)
 
 instance Debug a => Debug (Pat a) where
   debug (VarPat v)      = debug v
