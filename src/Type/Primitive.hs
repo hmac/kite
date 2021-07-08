@@ -13,6 +13,22 @@ import           Type.Type                      ( Ctx
                                                 , V(..)
                                                 )
 
+-- In the future we will support syntax to declare the types of foreign calls,
+-- like this:
+--     foreign putStrLn : String -> IO ()
+--     foreign getLine : IO String
+--     foreign bindIO : IO a -> (a -> IO b) -> IO b
+-- Until then, we hard-code the types here.
+-- If you add a new fcall here, you also need to add its implementation in
+-- Chez.Compile.
+fcallInfo :: [(String, Type)]
+fcallInfo =
+  -- name        type
+  [ ("putStrLn", Fn string unit)
+  , ("putStr"  , Fn string unit)
+  , ("getLine" , string)
+  ]
+
 primCtx :: Ctx
 primCtx = primitiveConstructors <> primitiveFns
 

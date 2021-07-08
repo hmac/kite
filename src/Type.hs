@@ -99,6 +99,7 @@ import qualified Hedgehog.Range                as R
 
 import           Type.Primitive                 ( bool
                                                 , char
+                                                , fcallInfo
                                                 , int
                                                 , list
                                                 , listConsMeta
@@ -122,43 +123,9 @@ import           Type.Type                      ( Ctx
 -- Following:
 -- Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
 
-
-
-
-
--- In the future we will support syntax to declare the types of foreign calls,
--- like this:
---     foreign putStrLn : String -> IO ()
---     foreign getLine : IO String
---     foreign bindIO : IO a -> (a -> IO b) -> IO b
--- Until then, we hard-code the types here.
--- If you add a new fcall here, you also need to add its implementation in
--- LC.Execute.
-fcallInfo :: [(String, Type)]
-fcallInfo =
-  -- name        type
-  [ ("putStrLn", Fn string unit)
-  , ("putStr"  , Fn string unit)
-  , ("getLine" , string)
-  -- , ("pureIO", Forall (U 0 "a") (Fn (UType (U 0 "a")) (io (UType (U 0 "a")))))
-  -- , ( "bindIO"
-  --   , Forall (U 0 "a") $ Forall (U 1 "b") $ Fn (io (UType (U 0 "a"))) $ Fn
-  --     (Fn (UType (U 0 "a")) (io (UType (U 1 "b"))))
-  --     (io (UType (U 1 "b")))
-  --   )
-  ]
-
-
-
 type Exp = Expr V Type
 
-
 type Pattern = Pat V
-
-
-
-
-
 
 -- | The free (existential) variables of the type
 fv :: Type -> [E]
