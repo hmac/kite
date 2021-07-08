@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.Type.Module where
 
+import qualified Data.Map.Strict               as Map
 import           Prelude                 hiding ( either
                                                 , maybe
                                                 , mod
@@ -149,7 +150,7 @@ ctx =
     typeCtx =
       map (, ()) [qq "Nat", qq "Wrap", qq "Pair", qq "Either", qq "Maybe"]
   in
-    (typeCtx, termCtx)
+    (Map.fromList typeCtx, termCtx)
 
 checks :: Syn.Fun Syn.Syn -> Expectation
 checks = checksModule . mkModule

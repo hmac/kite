@@ -2,6 +2,8 @@
 module Test.Type where
 
 import           Control.Monad                  ( replicateM_ )
+import qualified Data.Map.Strict               as Map
+import           Data.Name                      ( Name )
 import           Test.Hspec
 import           Type                           ( Error(..)
                                                 , LocatedError(..)
@@ -349,17 +351,19 @@ test = do
           ty_   = [typ|forall a b. F a (T -> b)|]
       checks tctx' ctx' e ty_
 
-infers :: TypeCtx -> Ctx -> Syn.Syn -> Type -> Expectation
+infers :: [(Name, ())] -> Ctx -> Syn.Syn -> Type -> Expectation
 infers tctx ctx expr t = do
-  case runInfer tctx ctx expr of
+  case runInfer (Map.fromList tctx) ctx expr of
     Left  err      -> expectationFailure $ show (printLocatedError err)
     Right resultTy -> resultTy `shouldBe` t
 
-failsToInfer :: TypeCtx -> Ctx -> Syn.Syn -> (Error -> Bool) -> Expectation
-failsToInfer tctx ctx expr matchesError = case runInfer tctx ctx expr of
-  Right resultTy ->
-    expectationFailure $ "Expected type error but inferred " <> show resultTy
-  Left (LocatedError _ err) -> matchesError err `shouldBe` True
+failsToInfer
+  :: [(Name, ())] -> Ctx -> Syn.Syn -> (Error -> Bool) -> Expectation
+failsToInfer tctx ctx expr matchesError =
+  case runInfer (Map.fromList tctx) ctx expr of
+    Right resultTy ->
+      expectationFailure $ "Expected type error but inferred " <> show resultTy
+    Left (LocatedError _ err) -> matchesError err `shouldBe` True
 
 runInfer :: TypeCtx -> Ctx -> Syn.Syn -> Either LocatedError Type
 runInfer tctx ctx expr = do
@@ -397,7 +401,7 @@ infers' tctx ctx expr ty = do
     Left err -> expectationFailure $ show (printLocatedError err)
     Right (expectedType, actualType) -> actualType `shouldBe` expectedType
 
-checks :: TypeCtx -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
+checks :: [(Name, ())] -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
 checks tctx ctx expr ty = do
   let modul = canonicaliseModule Syn.Module
         { Syn.moduleName     = "qq.QQ"
@@ -414,7 +418,7 @@ checks tctx ctx expr ty = do
         }
       r =
         runTypeM (replicateM_ 10 (newU "dummy"))
-          >> checkModule (tctx, ctx, mempty) modul
+          >> checkModule (Map.fromList tctx, ctx, mempty) modul
           >> pure ()
   case runTypecheckM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)

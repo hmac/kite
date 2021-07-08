@@ -52,6 +52,7 @@ import           Control.Monad.Reader           ( MonadReader
 import           Data.Functor                   ( ($>) )
 import           Data.List                      ( intercalate )
 import qualified Data.List.NonEmpty            as NE
+import qualified Data.Map.Strict               as Map
 import           Data.Name                      ( ModuleName(..)
                                                 , Name(..)
                                                 , RawName(..)
@@ -270,7 +271,7 @@ lookupType :: Name -> TypeM ()
 lookupType name = do
   tctx                               <- getTypeCtx
   TypeEnv { envTypeCtx = globalCtx } <- ask
-  case lookup name (tctx <> globalCtx) of
+  case Map.lookup name (tctx <> globalCtx) of
     Just _  -> pure ()
     Nothing -> throwError (UnknownType name)
 
@@ -672,7 +673,7 @@ check expr ty = do
       -- drop all these variables off the context
       dropAfter (Marker alpha)
     (FCall name args, _) -> do
-      case lookup name fcallInfo of
+      case Map.lookup name fcallInfo of
         Just fCallTy -> do
           resultTy  <- foldM inferApp fCallTy args
           resultTy' <- subst resultTy
@@ -720,8 +721,6 @@ infer' e = trace' ["infer'", debug e] $ do
   ty <- infer e
   subst ty
 
--- TODO: flip this around so it's Ctx -> Exp -> TypeM (Ctx, Typ)
--- This fits with foldM and mapAccumLM
 infer :: Exp -> TypeM Type
 infer expr_ = do
   trace' ["infer", debug expr_] $ case expr_ of
@@ -1068,8 +1067,6 @@ todoError = throwError . TodoError
 
 throwError :: Error -> TypeM a
 throwError err = Control.Monad.Except.throwError (LocatedError Nothing err)
-
-
 
 -- Util functions
 firstJust :: (a -> Maybe b) -> [a] -> Maybe b

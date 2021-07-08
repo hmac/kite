@@ -14,12 +14,13 @@ module Type.Type
 import           AST                            ( ConMeta(..) )
 import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
+import           Data.Map.Strict                ( Map )
 import           Data.Name
 import           Type.Reflection                ( Typeable )
 import           Util                           ( Debug(..) )
 
 -- | A mapping from constructor names to their tag, arity and type name.
-type CtorInfo = [(Name, ConMeta)]
+type CtorInfo = Map Name ConMeta
 
 -- | Types
 data Type =
@@ -105,7 +106,7 @@ type Ctx = [CtxElem]
 
 -- | A mapping of in-scope types to their kinds
 -- We don't yet have kinds, so we just store () instead for the moment.
-type TypeCtx = [(Name, ())]
+type TypeCtx = Map Name ()
 
 data CtxElem =
   -- Bound variable

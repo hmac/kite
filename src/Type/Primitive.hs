@@ -2,6 +2,8 @@
 module Type.Primitive where
 
 import           AST                            ( ConMeta(..) )
+import           Data.Map.Strict                ( Map )
+import qualified Data.Map.Strict               as Map
 import           Data.Name                      ( Name
                                                 , prim
                                                 )
@@ -21,8 +23,8 @@ import           Type.Type                      ( Ctx
 -- Until then, we hard-code the types here.
 -- If you add a new fcall here, you also need to add its implementation in
 -- Chez.Compile.
-fcallInfo :: [(String, Type)]
-fcallInfo =
+fcallInfo :: Map String Type
+fcallInfo = Map.fromList
   -- name        type
   [ ("putStrLn", Fn string unit)
   , ("putStr"  , Fn string unit)
@@ -32,8 +34,8 @@ fcallInfo =
 primCtx :: Ctx
 primCtx = primitiveConstructors <> primitiveFns
 
-primitiveCtorInfo :: [(Name, ConMeta)]
-primitiveCtorInfo =
+primitiveCtorInfo :: Map Name ConMeta
+primitiveCtorInfo = Map.fromList
   [(prim "[]", listNilMeta), (prim "::", listConsMeta), (prim "MkIO", mkIO)]
 
 listNilMeta :: ConMeta
@@ -69,8 +71,8 @@ list a = TCon (prim "List") [a]
 io :: Type -> Type
 io a = TCon (prim "IO") [a]
 
-primTypeCtx :: [(Name, ())]
-primTypeCtx = map
+primTypeCtx :: Map Name ()
+primTypeCtx = Map.fromList $ map
   (\n -> (prim n, ()))
   [ "String"
   , "Int"

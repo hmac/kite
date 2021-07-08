@@ -11,6 +11,7 @@ module Type.ToTyped
 
 import           AST
 import qualified Canonical                     as Can
+import qualified Data.Map.Strict               as Map
 import           Data.Name
 import           Syn                     hiding ( Name
                                                 , Type
@@ -57,7 +58,7 @@ convertType _ = unknown
 
 convertPattern :: CtorInfo -> Can.Pattern -> T.Pattern
 convertPattern ctorInfo = \case
-  ConsPat c _ args -> case lookup c (ctorInfo <> primitiveCtorInfo) of
+  ConsPat c _ args -> case Map.lookup c (ctorInfo <> primitiveCtorInfo) of
     Just meta -> T.ConsPat c (Just meta) (map (convertPattern ctorInfo) args)
     Nothing ->
       error
@@ -73,7 +74,7 @@ convertExpr ctorInfo = go
   go = \case
     Var v     -> T.VarT v unknown
     Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
-    Con c     -> case lookup c (ctorInfo <> primitiveCtorInfo) of
+    Con c     -> case Map.lookup c (ctorInfo <> primitiveCtorInfo) of
       Just meta -> T.ConT c meta unknown
       Nothing ->
         error

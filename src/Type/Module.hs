@@ -4,8 +4,6 @@
 -- type annotations.
 module Type.Module where
 
-import qualified Data.Set                      as Set
-
 import           AST                            ( ConMeta(..) )
 import qualified Canonical                     as Can
 import           Control.Monad                  ( void )
@@ -13,8 +11,9 @@ import qualified Control.Monad.Except          as Except
                                                 ( catchError
                                                 , throwError
                                                 )
-import           Data.List.Extra                ( concatUnzip3 )
+import qualified Data.Map.Strict               as Map
 import           Data.Name
+import qualified Data.Set                      as Set
 import qualified Syn                           as S
 import           Syn                            ( DataCon_(..)
                                                 , Data_(..)
@@ -50,7 +49,7 @@ import           Type.Type                      ( CtorInfo
 translateModule
   :: Can.Module -> TypecheckM (Ctx, CtorInfo, [(Name, Maybe Type, Exp)])
 translateModule modul = do
-  (_, dataTypeCtx, dataTypeInfo) <- concatUnzip3
+  (_, dataTypeCtx, dataTypeInfo) <- concat3
     <$> mapM translateData (getDataDecls (moduleDecls modul))
   funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
   pure (dataTypeCtx, dataTypeInfo, funs)
@@ -63,13 +62,13 @@ checkModule
   -> TypecheckM ((TypeCtx, Ctx, CtorInfo), T.Module)
 checkModule (typeCtx, ctx, ctorInfo) modul = do
   -- Extract type signatures from all datatype definitions in the module
-  (typeNames, dataTypeCtx, dataTypeInfo) <- concatUnzip3
+  (typeNames, dataTypeCtx, dataTypeInfo) <- concat3
     <$> mapM translateData (getDataDecls (moduleDecls modul))
 
   -- Get all the functions defined in the module
   let funs     = getFunDecls (moduleDecls modul)
 
-  let typeCtx' = map (, ()) typeNames <> typeCtx
+  let typeCtx' = Map.fromList (map (, ()) typeNames) <> typeCtx
 
   -- Typecheck each function definition
   funCtx <-
@@ -149,7 +148,7 @@ translateData d = do
         [0 ..]
         (dataCons d)
   ctx <- mapM (buildCtx (dataName d) tyvars) (dataCons d)
-  pure ([dataName d], ctx, info)
+  pure ([dataName d], ctx, Map.fromList info)
  where
   buildCtx :: Name -> [Name] -> Can.DataCon -> TypecheckM CtxElem
   buildCtx dataTypeName tyvars datacon = do
@@ -175,3 +174,8 @@ getDeclBy _       []         = []
 getDeclBy extract (d : rest) = case extract d of
   Just e  -> e : getDeclBy extract rest
   Nothing -> getDeclBy extract rest
+
+-- Like 'Util.concat3' but generalised to any Monoid, not just list
+concat3 :: (Monoid a, Monoid b, Monoid c) => [(a, b, c)] -> (a, b, c)
+concat3 = foldl go (mempty, mempty, mempty)
+  where go (as, bs, cs) (a, b, c) = (a <> as, b <> bs, c <> cs)
