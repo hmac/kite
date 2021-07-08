@@ -169,27 +169,27 @@ compileData dat =
 
 compileExpr :: forall m . MonadError Error m => T.Exp -> NameGen m SExpr
 compileExpr = \case
-  T.IntLitT  n        -> pure $ Lit (Int n)
-  T.BoolLitT b        -> pure $ Lit (Bool b)
-  T.CharLitT c        -> pure $ Lit (Char c)
-  T.UnitLitT          -> pure $ Lit Unit
-  T.StringLitT s      -> pure $ Lit (String (pack s))
-  T.TupleLitT elems _ -> App (Var "vector") <$> mapM compileExpr elems
-  T.ListLitT  elems _ -> App (Var "list") <$> mapM compileExpr elems
-  T.AnnT      e     _ -> compileExpr e
-  T.VarT      v     _ -> pure $ Var $ name2Text v
-  T.ConT c _ _        -> pure $ Var $ name2Text c
-  T.AbsT vars body _ ->
+  T.IntLitT  _ n       -> pure $ Lit (Int n)
+  T.BoolLitT _ b       -> pure $ Lit (Bool b)
+  T.CharLitT _ c       -> pure $ Lit (Char c)
+  T.UnitLitT _         -> pure $ Lit Unit
+  T.StringLitT _ s     -> pure $ Lit (String (pack s))
+  T.TupleLitT  _ elems -> App (Var "vector") <$> mapM compileExpr elems
+  T.ListLitT   _ elems -> App (Var "list") <$> mapM compileExpr elems
+  T.AnnT _ e _         -> compileExpr e
+  T.VarT _ v           -> pure $ Var $ name2Text v
+  T.ConT _ c _         -> pure $ Var $ name2Text c
+  T.AbsT _ vars body ->
     foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
-  T.AppT f arg _ -> do
+  T.AppT _ f arg -> do
     argExpr <- compileExpr arg
     fExpr   <- compileExpr f
     pure $ App fExpr [argExpr]
-  T.LetT bindings body _ ->
+  T.LetT _ bindings body ->
     Let
       <$> mapM (\(n, e, _) -> (name2Text n, ) <$> compileExpr e) bindings
       <*> compileExpr body
-  T.CaseT scrut alts _ -> do
+  T.CaseT _ scrut alts -> do
     scrutVar <- freshName
     let
       -- Each case alt is compiled to a test ((eq? <tag> (<type>-_tag <scrut>)) <rhs>)
@@ -206,8 +206,8 @@ compileExpr = \case
   -- An mcase takes N arguments and matches each against a pattern simultaneously.
   -- We compile it to a lambda that takes N arguments and then tests them in a cond, similar to
   -- case.
-  T.MCaseT []                 _ -> throwError EmptyMCase
-  T.MCaseT alts@((ps, _) : _) _ -> do
+  T.MCaseT _ []                 -> throwError EmptyMCase
+  T.MCaseT _ alts@((ps, _) : _) -> do
     let argNum = length ps
     vars <- replicateM argNum freshName
     let compileAlt :: [T.Pattern] -> T.Exp -> NameGen m SExpr
@@ -218,7 +218,7 @@ compileExpr = \case
     flip (foldr (Abs . (: []))) vars
       .   App (Var "cond")
       <$> mapM (uncurry compileAlt) alts
-  T.RecordT kvs _ -> do
+  T.RecordT _ kvs -> do
     r       <- freshName
     assigns <- mapM (bimapM (pure . pack) compileExpr) kvs
     pure
@@ -231,15 +231,15 @@ compileExpr = \case
            assigns
 
       <> [Var r]
-  T.ProjectT r k _ -> do
+  T.ProjectT _ r k -> do
     rExpr <- compileExpr r
     pure $ App (Var "symbol-hashtable-ref") [rExpr, Quote (Var (pack k)), false]
-  T.StringInterpT prefix comps -> do
+  T.StringInterpT _ prefix comps -> do
     args <- mconcatMapM
       (\(e, s) -> compileExpr e >>= \e' -> pure [e', Lit (String (pack s))])
       (NE.toList comps)
     pure $ App (Var "string-append") (Lit (String (pack prefix)) : args)
-  T.FCallT f args _ -> do
+  T.FCallT _ f args -> do
     argExprs <- mapM compileExpr args
     let fExpr = compileFCall f
     case argExprs of
@@ -248,7 +248,7 @@ compileExpr = \case
 
   -- TODO:
   -- - Holes
-  T.HoleT name ty -> throwError $ CannotCompileHole name ty
+  T.HoleT ty name -> throwError $ CannotCompileHole name ty
 
 compileMCaseBranch
   :: MonadError Error m

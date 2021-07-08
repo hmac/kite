@@ -10,7 +10,11 @@ module Syn.Typed
   ) where
 
 import           AST
-import           Control.Lens                   ( over )
+import           Control.Lens                   ( over
+                                                , view
+                                                )
+import           Data.Generics.Product.Positions
+                                                ( position )
 import           Data.Generics.Product.Types    ( types )
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( Map )
@@ -75,3 +79,7 @@ applySolution s = over (types @Type) solve
     Just t  -> t
     Nothing -> EType e
   solve t = t
+
+-- | Get the cached type of an 'Exp'
+typeOf :: Exp -> Type
+typeOf = view (position @1)

@@ -72,38 +72,38 @@ convertExpr :: CtorInfo -> Can.Exp -> T.Exp
 convertExpr ctorInfo = go
  where
   go = \case
-    Var v     -> T.VarT v unknown
+    Var v     -> T.VarT unknown v
     Ann _e _t -> error "Type.ToTyped.convertExpr: cannot convert annotations"
     Con c     -> case Map.lookup c (ctorInfo <> primitiveCtorInfo) of
-      Just meta -> T.ConT c meta unknown
+      Just meta -> T.ConT unknown c meta
       Nothing ->
         error
           $  "Type.ToTyped.convertExpr: No metadata for constructor "
           <> show c
-    Hole n      -> T.HoleT n unknown
-    Abs xs    e -> T.AbsT (map (, unknown) xs) (go e) unknown
-    App a     b -> T.AppT (go a) (go b) unknown
+    Hole n      -> T.HoleT unknown n
+    Abs xs    e -> T.AbsT unknown (map (, unknown) xs) (go e)
+    App a     b -> T.AppT unknown (go a) (go b)
     Let binds e -> T.LetT
+      unknown
       (map (\(n, v, ty) -> (n, go v, convertType <$> ty)) binds)
       (go e)
-      unknown
     Case s alts ->
       let convertAlt :: (Can.Pattern, Can.Exp) -> (T.Pattern, T.Exp)
           convertAlt (p, e) = (convertPattern ctorInfo p, go e)
-      in  T.CaseT (go s) (map convertAlt alts) unknown
+      in  T.CaseT unknown (go s) (map convertAlt alts)
     MCase alts ->
-      T.MCaseT (map (bimap (map (convertPattern ctorInfo)) go) alts) unknown
-    UnitLit              -> T.UnitLitT
-    TupleLit es          -> T.TupleLitT (map go es) unknown
-    ListLit  es          -> T.ListLitT (map go es) unknown
-    StringInterp s comps -> T.StringInterpT s (fmap (first go) comps)
-    StringLit s          -> T.StringLitT s
-    CharLit   c          -> T.CharLitT c
-    IntLit    i          -> T.IntLitT i
-    BoolLit   b          -> T.BoolLitT b
-    Record    fields     -> T.RecordT (mapSnd go fields) unknown
-    Project r f          -> T.ProjectT (go r) f unknown
-    FCall   f args       -> T.FCallT f (map go args) unknown
+      T.MCaseT unknown (map (bimap (map (convertPattern ctorInfo)) go) alts)
+    UnitLit              -> T.UnitLitT unknown
+    TupleLit es          -> T.TupleLitT unknown (map go es)
+    ListLit  es          -> T.ListLitT unknown (map go es)
+    StringInterp s comps -> T.StringInterpT unknown s (fmap (first go) comps)
+    StringLit s          -> T.StringLitT unknown s
+    CharLit   c          -> T.CharLitT unknown c
+    IntLit    i          -> T.IntLitT unknown i
+    BoolLit   b          -> T.BoolLitT unknown b
+    Record    fields     -> T.RecordT unknown (mapSnd go fields)
+    Project r f          -> T.ProjectT unknown (go r) f
+    FCall   f args       -> T.FCallT unknown f (map go args)
 
 
 unknown :: Type

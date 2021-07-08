@@ -197,14 +197,14 @@ interpretData Data { dataCons = datacons } = map interpretDatacon datacons
 
 interpretExpr :: MonadError Error m => Env m -> Exp -> m (Value m)
 interpretExpr env expr_ = case expr_ of
-  VarT (TopLevel m n) _ | m == Prim.name -> interpretPrim n
-  VarT n _                               -> case Map.lookup n env of
+  VarT _ (TopLevel m n) | m == Prim.name -> interpretPrim n
+  VarT _ n                               -> case Map.lookup n env of
     Just v  -> pure v
     Nothing -> throwError $ UnknownVariable n
-  AppT a b _ -> interpretExpr env a >>= \case
+  AppT _ a b -> interpretExpr env a >>= \case
     Abs f -> interpretExpr env b >>= f
     e     -> throwError $ ApplicationOfNonFunction (show e)
-  ConT c _ _
+  ConT _ c _
     | c == TopLevel Prim.name "[]" -> pure $ List []
     | c == TopLevel Prim.name "::" -> pure $ Abs
       (\x -> pure
@@ -216,8 +216,8 @@ interpretExpr env expr_ = case expr_ of
         )
       )
     | otherwise -> lookupCon c env
-  AbsT vars  e    _ -> interpretAbs env (map fst vars) e
-  LetT binds expr _ -> do
+  AbsT _ vars  e    -> interpretAbs env (map fst vars) e
+  LetT _ binds expr -> do
     env' <- foldM
       (\env_ (n, e, _) -> do
         e' <- interpretExpr env_ e
@@ -226,28 +226,28 @@ interpretExpr env expr_ = case expr_ of
       env
       binds
     interpretExpr env' expr
-  CaseT scrut alts _ -> do
+  CaseT _ scrut alts -> do
     scrut' <- interpretExpr env scrut
     interpretCase env scrut' alts
-  MCaseT alts _ -> interpretMCase (map (\(pats, rhs) -> (pats, env, rhs)) alts)
-  AnnT   e    _              -> interpretExpr env e
-  HoleT n t -> pure $ Error $ "Found hole " <> show n <> " : " <> show t
-  IntLitT i                  -> pure $ Const (Int i)
-  UnitLitT                   -> pure $ Const Unit
-  TupleLitT     args   _     -> Tuple <$> mapM (interpretExpr env) args
-  ListLitT      args   _     -> List <$> mapM (interpretExpr env) args
-  StringInterpT prefix comps -> interpretStringInterp env prefix comps
-  StringLitT s               -> pure $ Const (String s)
-  CharLitT   c               -> pure $ Const (Char c)
-  BoolLitT   b               -> pure $ Const (Bool b)
-  RecordT fields _ ->
+  MCaseT _ alts -> interpretMCase (map (\(pats, rhs) -> (pats, env, rhs)) alts)
+  AnnT _ e _                   -> interpretExpr env e
+  HoleT t n -> pure $ Error $ "Found hole " <> show n <> " : " <> show t
+  IntLitT _ i                  -> pure $ Const (Int i)
+  UnitLitT _                   -> pure $ Const Unit
+  TupleLitT _ args             -> Tuple <$> mapM (interpretExpr env) args
+  ListLitT  _ args             -> List <$> mapM (interpretExpr env) args
+  StringInterpT _ prefix comps -> interpretStringInterp env prefix comps
+  StringLitT _ s               -> pure $ Const (String s)
+  CharLitT   _ c               -> pure $ Const (Char c)
+  BoolLitT   _ b               -> pure $ Const (Bool b)
+  RecordT _ fields ->
     Record . Map.fromList <$> mapM (secondM (interpretExpr env)) fields
-  ProjectT e field _ -> interpretExpr env e >>= \case
+  ProjectT _ e field -> interpretExpr env e >>= \case
     Record fields -> case Map.lookup field fields of
       Just val -> pure val
       Nothing  -> throwError $ RecordMissingField field
     _ -> throwError ProjectOnNonRecord
-  FCallT s args _ -> FCall s <$> mapM (interpretExpr env) args
+  FCallT _ s args -> FCall s <$> mapM (interpretExpr env) args
 
 interpretPrim :: MonadError Error m => RawName -> m (Value m)
 interpretPrim = \case
