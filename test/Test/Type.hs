@@ -17,6 +17,7 @@ import           Type                           ( Error(..)
                                                 , runTypeMAndSolve
                                                 , runTypecheckM
                                                 , subst
+                                                , withCtorInfo
                                                 , withGlobalCtx
                                                 , withGlobalTypeCtx
                                                 )
@@ -27,7 +28,8 @@ import           Type.Primitive                 ( bool
                                                 , string
                                                 )
 import           Type.Print                     ( printLocatedError )
-import           Type.Type                      ( Ctx
+import           Type.Type                      ( CtorInfo
+                                                , Ctx
                                                 , CtxElem(..)
                                                 , Type(..)
                                                 , TypeCtx
@@ -99,6 +101,32 @@ test = do
       pair a b = TCon "Pair" [a, b]
 
       tctx = map (, ()) ["Nat", "Wrap", "Pair"]
+      cctx =
+        [ ( qq "Zero"
+          , ConMeta { conMetaTag      = 0
+                    , conMetaArity    = 0
+                    , conMetaTypeName = qq "Nat"
+                    }
+          )
+        , ( qq "Suc"
+          , ConMeta { conMetaTag      = 1
+                    , conMetaArity    = 1
+                    , conMetaTypeName = qq "Nat"
+                    }
+          )
+        , ( qq "MkPair"
+          , ConMeta { conMetaTag      = 0
+                    , conMetaArity    = 2
+                    , conMetaTypeName = qq "Pair"
+                    }
+          )
+        , ( qq "MkWrap"
+          , ConMeta { conMetaTag      = 0
+                    , conMetaArity    = 1
+                    , conMetaTypeName = qq "Wrap"
+                    }
+          )
+        ]
 
       ctx =
         [ V (qq "Zero") nat
@@ -116,7 +144,7 @@ test = do
         ]
 
       -- The contexts don't change for most of these tests, so define a shortcut
-      inf = infers tctx ctx
+      inf = infers tctx cctx ctx
 
     it "True" $ inf [syn|True|] bool
     it "simple function application" $ inf [syn|(\x -> x) True|] bool
@@ -152,6 +180,7 @@ test = do
                          in id True|]
         in  failsToInfer
               tctx
+              cctx
               ctx
               expr
               (\case
@@ -220,7 +249,7 @@ test = do
     -- Currently we are omitting the IO part as we figure out fcalls.
     -- This may change.
     it "a foreign call"
-      $ checks tctx ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
+      $ checks tctx mempty ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
     it "simple record extraction"
         -- This passes
         -- D : { field : Bool } -> D a
@@ -240,7 +269,7 @@ test = do
           e     = [syn|x (D d) -> x|]
           t     = [typ|forall a. a -> D a -> a|]
         in
-          checks tctx' ctx' e t
+          checks tctx' mempty ctx' e t
     it "polymorphic record extraction"
       -- This fails
       -- D : { field : a } -> D a
@@ -259,7 +288,7 @@ test = do
             tctx' = [(qq "D", ())]
             e     = [syn|x (D d) -> x|]
             t     = [typ|forall a. a -> D a -> a|]
-        in  checks tctx' ctx' e t
+        in  checks tctx' mempty ctx' e t
     it "polymorphic function-typed record extraction"
         -- This ???
         -- type D a = D (a -> a)
@@ -280,7 +309,7 @@ test = do
           t     = [typ|forall a. D a -> (a -> a)|]
           e     = [syn|(D f) -> f|]
         in
-          checks tctx' ctx' e t
+          checks tctx' mempty ctx' e t
     it "higher kinded application" $ do
       -- type F t a = MkF (t a -> t a)
       -- f : T b c -> T b c
@@ -317,9 +346,17 @@ test = do
               )
             ]
           tctx' = [(qq "T", ()), (qq "F", ())]
-          e     = [syn|MkF f|]
-          ty_   = [typ|forall b. F (T b)|]
-      checks tctx' ctx' e ty_
+          cctx' =
+            [ ( qq "MkF"
+              , ConMeta { conMetaTag      = 0
+                        , conMetaArity    = 1
+                        , conMetaTypeName = qq "f"
+                        }
+              )
+            ]
+          e   = [syn|MkF f|]
+          ty_ = [typ|forall b. F (T b)|]
+      checks tctx' cctx' ctx' e ty_
     it "higher kinded application (with ->)" $ do
       -- type F t a = MkF ((t -> a) -> (t -> a))
       -- f : (c -> T -> b) -> (c -> T -> b)
@@ -354,26 +391,40 @@ test = do
               )
             ]
           tctx' = [(qq "F", ()), (qq "T", ())]
-          e     = [syn|MkF f|]
-          ty_   = [typ|forall a b. F a (T -> b)|]
-      checks tctx' ctx' e ty_
+          cctx' =
+            [ ( qq "MkF"
+              , ConMeta { conMetaTag      = 0
+                        , conMetaArity    = 1
+                        , conMetaTypeName = qq "f"
+                        }
+              )
+            ]
+          e   = [syn|MkF f|]
+          ty_ = [typ|forall a b. F a (T -> b)|]
+      checks tctx' cctx' ctx' e ty_
 
-infers :: [(Name, ())] -> Ctx -> Syn.Syn -> Type -> Expectation
-infers tctx ctx expr t = do
-  case runInfer (Map.fromList tctx) ctx expr of
+infers
+  :: [(Name, ())] -> [(Name, ConMeta)] -> Ctx -> Syn.Syn -> Type -> Expectation
+infers tctx cctx ctx expr t = do
+  case runInfer (Map.fromList tctx) (Map.fromList cctx) ctx expr of
     Left  err      -> expectationFailure $ show (printLocatedError err)
     Right resultTy -> resultTy `shouldBe` t
 
 failsToInfer
-  :: [(Name, ())] -> Ctx -> Syn.Syn -> (Error -> Bool) -> Expectation
-failsToInfer tctx ctx expr matchesError =
-  case runInfer (Map.fromList tctx) ctx expr of
+  :: [(Name, ())]
+  -> [(Name, ConMeta)]
+  -> Ctx
+  -> Syn.Syn
+  -> (Error -> Bool)
+  -> Expectation
+failsToInfer tctx cctx ctx expr matchesError =
+  case runInfer (Map.fromList tctx) (Map.fromList cctx) ctx expr of
     Right resultTy ->
       expectationFailure $ "Expected type error but inferred " <> show resultTy
     Left (LocatedError _ err) -> matchesError err `shouldBe` True
 
-runInfer :: TypeCtx -> Ctx -> Syn.Syn -> Either LocatedError Type
-runInfer tctx ctx expr = do
+runInfer :: TypeCtx -> CtorInfo -> Ctx -> Syn.Syn -> Either LocatedError Type
+runInfer tctx cctx ctx expr = do
   let moduleName    = "qq.QQ"
       canonicalExpr = canonicaliseExp (moduleName, mempty) mempty expr
   let r = do
@@ -384,6 +435,7 @@ runInfer tctx ctx expr = do
   runTypecheckM defaultTypeEnv
     $ withGlobalTypeCtx (<> tctx)
     $ withGlobalCtx (<> ctx)
+    $ withCtorInfo (<> cctx)
     $ fmap fst
     $ runTypeM r
 
@@ -411,8 +463,14 @@ infers' tctx ctx expr ty = do
     Left err -> expectationFailure $ show (printLocatedError err)
     Right (expectedType, actualType) -> actualType `shouldBe` expectedType
 
-checks :: [(Name, ())] -> Ctx -> Syn.Syn -> Syn.Type -> Expectation
-checks tctx ctx expr ty = do
+checks
+  :: [(Name, ())]
+  -> [(Name, ConMeta)]
+  -> Ctx
+  -> Syn.Syn
+  -> Syn.Type
+  -> Expectation
+checks tctx cctx ctx expr ty = do
   let modul = canonicaliseModule Syn.Module
         { Syn.moduleName     = "qq.QQ"
         , Syn.moduleImports  = mempty
@@ -429,7 +487,7 @@ checks tctx ctx expr ty = do
       -- TODO: fix this dummy thing
       r =
         runTypeM (replicateM_ 10 (newU "dummy"))
-          >> checkModule (Map.fromList tctx, ctx, mempty) modul
+          >> checkModule (Map.fromList tctx, ctx, Map.fromList cctx) modul
           >> pure ()
   case runTypecheckM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)

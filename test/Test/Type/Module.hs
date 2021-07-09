@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Test.Type.Module where
 
+import           AST                            ( ConMeta(..) )
 import qualified Data.Map.Strict               as Map
 import           Prelude                 hiding ( either
                                                 , maybe
@@ -12,7 +13,8 @@ import           Type                           ( defaultTypeEnv
                                                 )
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
-import           Type.Type                      ( Ctx
+import           Type.Type                      ( CtorInfo
+                                                , Ctx
                                                 , CtxElem(..)
                                                 , Type(..)
                                                 , TypeCtx
@@ -52,7 +54,7 @@ f = (True, y) -> y
 f : Pair Bool Nat -> Bool
 f = (MkPair x Zero) -> x
     _               -> False|]
-    it "Either Bool Nat" $ checks [fn|
+    it "Either Bool INt" $ checks [fn|
 f : Either Bool Nat -> Nat
 f = (Left False) -> Zero
     (Left _)     -> Suc Zero
@@ -109,7 +111,7 @@ module Foo
 const : a -> b -> a
 const = x y -> y|]
 
-ctx :: (TypeCtx, Ctx)
+ctx :: (TypeCtx, Ctx, CtorInfo)
 ctx =
   let
     nat = TCon (qq "Nat") []
@@ -146,10 +148,54 @@ ctx =
       , V (qq "Just")
           (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
       ]
+    ctorInfo =
+      [ ( qq "Zero"
+        , ConMeta { conMetaTag      = 0
+                  , conMetaArity    = 0
+                  , conMetaTypeName = qq "Nat"
+                  }
+        )
+      , ( qq "Suc"
+        , ConMeta { conMetaTag      = 1
+                  , conMetaArity    = 1
+                  , conMetaTypeName = qq "Nat"
+                  }
+        )
+      , ( qq "MkWrap"
+        , ConMeta { conMetaTag      = 0
+                  , conMetaArity    = 1
+                  , conMetaTypeName = qq "Wrap"
+                  }
+        )
+      , ( qq "Left"
+        , ConMeta { conMetaTag      = 0
+                  , conMetaArity    = 1
+                  , conMetaTypeName = qq "Either"
+                  }
+        )
+      , ( qq "Right"
+        , ConMeta { conMetaTag      = 1
+                  , conMetaArity    = 1
+                  , conMetaTypeName = qq "Either"
+                  }
+        )
+      , ( qq "Nothing"
+        , ConMeta { conMetaTag      = 0
+                  , conMetaArity    = 0
+                  , conMetaTypeName = qq "Maybe"
+                  }
+        )
+      , ( qq "Just"
+        , ConMeta { conMetaTag      = 1
+                  , conMetaArity    = 1
+                  , conMetaTypeName = qq "Maybe"
+                  }
+        )
+      ]
     typeCtx =
       map (, ()) [qq "Nat", qq "Wrap", qq "Pair", qq "Either", qq "Maybe"]
   in
-    (Map.fromList typeCtx, termCtx)
+    (Map.fromList typeCtx, termCtx, Map.fromList ctorInfo)
 
 checks :: Syn.Fun Syn.Syn -> Expectation
 checks = checksModule . mkModule
@@ -167,18 +213,14 @@ mkModule fun = Syn.Module { Syn.moduleName     = "qq.QQ"
 
 checksModule :: Syn.Module -> Expectation
 checksModule modul = do
-  let (typeCtx, termCtx) = ctx
-      r = checkModule (typeCtx, termCtx, mempty) (canonicaliseModule modul)
-        >> pure ()
+  let r = checkModule ctx (canonicaliseModule modul) >> pure ()
   case runTypecheckM defaultTypeEnv r of
     Left  err -> expectationFailure $ show (printLocatedError err)
     Right ()  -> pure ()
 
 failsModule :: Syn.Module -> Expectation
 failsModule modul = do
-  let (typeCtx, termCtx) = ctx
-      r = checkModule (typeCtx, termCtx, mempty) (canonicaliseModule modul)
-        >> pure ()
+  let r = checkModule ctx (canonicaliseModule modul) >> pure ()
   case runTypecheckM defaultTypeEnv r of
     Left _ -> pure ()
     Right () ->

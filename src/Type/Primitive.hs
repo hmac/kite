@@ -34,8 +34,19 @@ primCtx :: Ctx
 primCtx = primitiveConstructors <> primitiveFns
 
 primitiveCtorInfo :: Map Name ConMeta
-primitiveCtorInfo = Map.fromList
-  [(prim "[]", listNilMeta), (prim "::", listConsMeta), (prim "MkIO", mkIO)]
+primitiveCtorInfo =
+  Map.fromList
+    $ [(prim "[]", listNilMeta), (prim "::", listConsMeta), (prim "MkIO", mkIO)]
+    <> tuples
+ where
+  tuples = map
+    (\n ->
+      let name = prim $ fromString $ "Tuple" <> show n
+      in  ( name
+          , ConMeta { conMetaTag = 0, conMetaArity = n, conMetaTypeName = name }
+          )
+    )
+    [2 .. 8]
 
 listNilMeta :: ConMeta
 listNilMeta =

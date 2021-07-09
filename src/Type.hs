@@ -36,6 +36,7 @@ module Type
   , quantify
   , withGlobalCtx
   , withGlobalTypeCtx
+  , withCtorInfo
   , runTypecheckM
   ) where
 
@@ -117,10 +118,12 @@ import           Type.Primitive                 ( bool
                                                 , listNilMeta
                                                 , primCtx
                                                 , primTypeCtx
+                                                , primitiveCtorInfo
                                                 , string
                                                 , unit
                                                 )
-import           Type.Type                      ( Ctx
+import           Type.Type                      ( CtorInfo
+                                                , Ctx
                                                 , CtxElem(..)
                                                 , E(..)
                                                 , Type(..)
@@ -285,6 +288,16 @@ lookupType name = do
     Just _  -> pure ()
     Nothing -> throwError (UnknownType name)
 
+-- | Lookup info about a constructor in the global constructor info context.
+-- If it's not there, throw an error.
+lookupCtorInfo :: Name -> TypeM ConMeta
+lookupCtorInfo name = do
+  TypeEnv { envCtorInfo = info } <- ask
+  case Map.lookup name info of
+    Just m  -> pure m
+    -- TODO: throw 'UnknownConstructor' instead of 'UnknownVariable'
+    Nothing -> throwError $ UnknownVariable name
+
 -- | "Solve" an existential by generating an 'ESolved' context element which maps it to a type.
 -- We use this to ensure that every time we solve an existential we also write the solution to our
 -- output.
@@ -387,10 +400,11 @@ wellFormedType ty = do
 
 -- Typechecking monad
 data TypeEnv = TypeEnv
-  { envCtx     :: Ctx    -- The global type context
-  , envTypeCtx :: TypeCtx -- Global type info (primitive types)
-  , envDepth   :: Int  -- The recursion depth, used for debugging
-  , envDebug   :: Bool -- Whether to output debug messages
+  { envCtx      :: Ctx    -- The global type context
+  , envTypeCtx  :: TypeCtx -- Global type info (primitive types)
+  , envCtorInfo :: CtorInfo -- arity etc. of in-scope constructors
+  , envDepth    :: Int  -- The recursion depth, used for debugging
+  , envDebug    :: Bool -- Whether to output debug messages
   }
   deriving (Eq, Show)
 
@@ -400,10 +414,11 @@ defaultTypeEnv =
         case unsafePerformIO (fmap (== "true") <$> lookupEnv "KITE_DEBUG") of
           Just True -> True
           _         -> False
-  in  TypeEnv { envCtx     = primCtx
-              , envTypeCtx = primTypeCtx
-              , envDepth   = 0
-              , envDebug   = debugOn
+  in  TypeEnv { envCtx      = primCtx
+              , envTypeCtx  = primTypeCtx
+              , envCtorInfo = primitiveCtorInfo
+              , envDepth    = 0
+              , envDebug    = debugOn
               }
 
 -- This type is used outside of this module, to raise errors and set the global context.
@@ -457,6 +472,9 @@ withGlobalCtx f = local (\e -> e { envCtx = f (envCtx e) })
 withGlobalTypeCtx
   :: MonadReader TypeEnv m => (TypeCtx -> TypeCtx) -> m a -> m a
 withGlobalTypeCtx f = local (\e -> e { envTypeCtx = f (envTypeCtx e) })
+
+withCtorInfo :: MonadReader TypeEnv m => (CtorInfo -> CtorInfo) -> m a -> m a
+withCtorInfo f = local (\e -> e { envCtorInfo = f (envCtorInfo e) })
 
 data TypeState = TypeState
   { varCounter  :: Int -- A counter for generating fresh names
@@ -832,11 +850,10 @@ infer expr_ = do
       (args', e', ty) <- inferAbs args e
       pure $ AbsT ty args' e'
     Hole n -> throwError $ CannotInferHole (Hole n)
-    Con  x -> ConT <$> lookupV x <*> pure x <*> pure ConMeta
-      { conMetaTag      = 0
-      , conMetaArity    = 0
-      , conMetaTypeName = "fixme"
-      }
+    Con  x -> do
+      t    <- lookupV x
+      meta <- lookupCtorInfo x
+      pure $ ConT t x meta
     c@(  Case _ [])            -> throwError $ EmptyCase c
     Case scrut    (alt : alts) -> do
       scrut' <- infer scrut
@@ -1263,14 +1280,14 @@ typecheckTest ctx =
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
   ctx <- forAll genCtx
-  let expr = Con (prim "Unit")
+  let expr = UnitLit
       ty   = TCon (prim "Unit") []
   typecheckTest ctx (infer expr) === Right ty
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
   ctx <- forAll genCtx
-  let expr = Con (prim "Unit")
+  let expr = UnitLit
       ty   = Fn unit unit
   typecheckTest ctx (check expr ty)
     === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
@@ -1278,14 +1295,14 @@ prop_checks_bad_unit_annotation = property $ do
 prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- forAll genName
-  let uval = Con (prim "Unit")
+  let uval = UnitLit
   let expr = App (Ann (Abs (NE.fromList [v]) uval) (Fn unit unit)) uval
   typecheckTest mempty (infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
-  let uval = Con (prim "Unit")
+  let uval = UnitLit
       ctx  = [V "id" (Fn unit unit)]
   -- The expression is id Unit
   let expr = App (Var "id") uval
@@ -1297,7 +1314,7 @@ prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
   let
-    uval = Con (prim "Unit")
+    uval = UnitLit
     a    = U 0 "a"
     ctx =
       [V "id" (Forall a (Fn (UType a) (UType a))), V "idUnit" (Fn unit unit)]
@@ -1321,15 +1338,13 @@ prop_infers_bool_case = property $ do
       -- case True of
       --   True -> ()
       --   False -> ()
-      expr1 = Case
-        (Con (prim "True"))
-        [(BoolPat True, Con (prim "Unit")), (BoolPat False, Con (prim "Unit"))]
-      -- case True of
-      --   True -> True
-      --   False -> ()
-      expr2 = Case
-        (Con (prim "True"))
-        [(BoolPat True, Con (prim "True")), (BoolPat False, Con (prim "Unit"))]
+    expr1 =
+      Case (BoolLit True) [(BoolPat True, UnitLit), (BoolPat False, UnitLit)]
+    -- case True of
+    --   True -> True
+    --   False -> ()
+    expr2 = Case (BoolLit True)
+                 [(BoolPat True, BoolLit True), (BoolPat False, UnitLit)]
   typecheckTest mempty (infer expr1) === Right unit
   typecheckTest mempty (infer expr2)
     === Left (LocatedError Nothing (SubtypingFailure unit bool))

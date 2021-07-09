@@ -30,6 +30,7 @@ import           Type                           ( Exp
                                                 , runTypeM
                                                 , runTypeMAndSolve
                                                 , wellFormedType
+                                                , withCtorInfo
                                                 , withGlobalCtx
                                                 , withGlobalTypeCtx
                                                 )
@@ -66,13 +67,16 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
     <$> mapM translateData (getDataDecls (moduleDecls modul))
 
   -- Get all the functions defined in the module
-  let funs     = getFunDecls (moduleDecls modul)
+  let funs      = getFunDecls (moduleDecls modul)
 
-  let typeCtx' = Map.fromList (map (, ()) typeNames) <> typeCtx
+  let typeCtx'  = Map.fromList (map (, ()) typeNames) <> typeCtx
+
+  let ctorInfo' = ctorInfo <> dataTypeInfo
 
   -- Typecheck each function definition
   funCtx <-
-    withGlobalTypeCtx (<> typeCtx')
+    withCtorInfo (<> ctorInfo')
+    $ withGlobalTypeCtx (<> typeCtx')
     $ withGlobalCtx (<> (ctx <> dataTypeCtx))
     $ typecheckFuns funs
   let ctx'        = ctx <> dataTypeCtx <> funCtx
@@ -80,7 +84,6 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
   -- Construct a typed module by converting every data & fun decl into the typed
   -- form, with empty type annotations. In the future this should be done during
   -- typechecking itself.
-  let ctorInfo'   = ctorInfo <> dataTypeInfo
   let typedModule = Type.ToTyped.convertModule ctorInfo' modul
 
   -- Done
