@@ -1,0 +1,15 @@
+module Compose
+
+isZero : Int -> Bool
+isZero = 0 -> True
+         _ -> False
+
+not : Bool -> Bool
+not = False -> True
+      True -> False
+
+notZero : Int -> Bool
+notZero = not . isZero
+
+isZero2 : Int -> Bool
+isZero2 = not . not . isZero

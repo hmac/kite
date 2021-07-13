@@ -91,7 +91,6 @@ printConstant = \case
   Prim   _ -> "<builtin>"
   Unit     -> "()"
 
--- TODO: add PrimShowInt etc.
 data Primitive = PrimStringAppend
                | PrimStringChars
                | PrimStringConsChar
@@ -100,7 +99,7 @@ data Primitive = PrimStringAppend
                | PrimSub
                | PrimDiv
                | PrimMult
-               | PrimShow -- TODO: this becomes PrimShowInt etc when we have a show typeclass
+               | PrimCompose
                | PrimShowInt
                | PrimShowChar
                | PrimEqInt
@@ -255,6 +254,7 @@ interpretPrim = \case
   "*"            -> binaryPrim PrimMult
   "-"            -> binaryPrim PrimSub
   "/"            -> binaryPrim PrimDiv
+  "."            -> binaryPrim PrimCompose
   "appendString" -> binaryPrim PrimStringAppend
   "$chars"       -> unaryPrim PrimStringChars
   "$consChar"    -> binaryPrim PrimStringConsChar
@@ -273,10 +273,11 @@ interpretPrim = \case
       (\x -> pure $ Abs (\y -> pure $ Abs (\z -> applyPrim p [x, y, z])))
 
 applyPrim :: MonadError Error m => Primitive -> [Value m] -> m (Value m)
-applyPrim PrimAdd  [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x + y
+applyPrim PrimAdd [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x + y
 applyPrim PrimMult [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x * y
-applyPrim PrimSub  [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x - y
-applyPrim PrimDiv  [Const (Int x), Const (Int y)] = pure $ Const $ Int $ div x y
+applyPrim PrimSub [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x - y
+applyPrim PrimDiv [Const (Int x), Const (Int y)] = pure $ Const $ Int $ div x y
+applyPrim PrimCompose [Abs g, Abs f] = pure $ Abs $ \x -> f x >>= g
 applyPrim PrimStringAppend [Const (String x), Const (String y)] =
   pure $ Const $ String $ x <> y
 applyPrim PrimStringChars [Const (String s)] =
