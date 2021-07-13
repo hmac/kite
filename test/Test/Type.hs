@@ -3,7 +3,9 @@ module Test.Type where
 
 import           Control.Monad                  ( replicateM_ )
 import qualified Data.Map.Strict               as Map
-import           Data.Name                      ( Name )
+import           Data.Name                      ( Name
+                                                , prim
+                                                )
 import           Test.Hspec
 import           Type                           ( Error(..)
                                                 , LocatedError(..)
@@ -41,7 +43,6 @@ import           Canonicalise                   ( canonicaliseExp
                                                 , canonicaliseModule
                                                 , canonicaliseType
                                                 )
-import           Data.Name                      ( prim )
 import qualified Syn
 import           Syn.Typed                      ( typeOf )
 import           Test.QQ
@@ -452,11 +453,11 @@ runInfer tctx cctx ctx expr = do
         ty <- subst $ typeOf e'
         quantify (fv ty) ty
   runTypecheckM defaultTypeEnv
-    $ withGlobalTypeCtx (<> tctx)
-    $ withGlobalCtx (<> ctx)
-    $ withCtorInfo (<> cctx)
-    $ fmap fst
-    $ runTypeM r
+    $   withGlobalTypeCtx (<> tctx)
+    $   withGlobalCtx (<> ctx)
+    $   withCtorInfo (<> cctx)
+    $   fst
+    <$> runTypeM r
 
 -- Like infers but takes a quasiquoted type expression.
 -- Currently unused because most of the time the type is Bool, which is easy to
@@ -474,10 +475,10 @@ infers' tctx ctx expr ty = do
         pure (t, t')
   let result =
         runTypecheckM defaultTypeEnv
-          $ withGlobalTypeCtx (<> tctx)
-          $ withGlobalCtx (<> ctx)
-          $ fmap fst
-          $ runTypeM r
+          $   withGlobalTypeCtx (<> tctx)
+          $   withGlobalCtx (<> ctx)
+          $   fst
+          <$> runTypeM r
   case result of
     Left err -> expectationFailure $ show (printLocatedError err)
     Right (expectedType, actualType) -> actualType `shouldBe` expectedType

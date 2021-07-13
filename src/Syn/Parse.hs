@@ -80,7 +80,7 @@ import           Syn.Parse.Type                 ( pConType
 -}
 
 parseKiteFile :: FilePath -> PackageName -> String -> Either String Module
-parseKiteFile path pkgName input = parse (pModule pkgName <* eof) path input
+parseKiteFile path pkgName = parse (pModule pkgName <* eof) path
 
 pModule :: PackageName -> Parser Module
 pModule pkgName = do

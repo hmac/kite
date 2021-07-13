@@ -77,13 +77,13 @@ pBinApp = hang $ E.makeExprParser term table
   -- are unambiguous. We don't allow unparenthesised multicases or nested binary applications.
   -- As with 'pExpr', we have to check the indent settings and fail if we don't satisfy them.
   term = ensureIndent >> (try pApp <|> pExpr')
-  binary name = E.InfixL (App . (App (Var (Name name))) <$ symbolN name)
-  compose = E.InfixR (App . (App (Var (Name "."))) <$ symbolN ".")
+  binary name = E.InfixL (App . App (Var (Name name)) <$ symbolN name)
+  compose = E.InfixR (App . App (Var (Name ".")) <$ symbolN ".")
   -- We need to treat (-) specially because it shares a prefix with the comment delimiter "--"
   minus   = E.InfixL $ do
     -- Parse "-", unless it is directly followed by another "-"
     _ <- try $ lexemeN (string "-" >> notFollowedBy "-")
-    pure (App . (App (Var (Name "-"))))
+    pure (App . App (Var (Name "-")))
   table =
     [ [compose]
     , [binary "*", binary "/"]

@@ -10,6 +10,7 @@ module Interpret
   ) where
 
 
+import           Control.Monad                  ( (>=>) )
 import           Control.Monad.Except           ( MonadError
                                                 , throwError
                                                 )
@@ -277,7 +278,7 @@ applyPrim PrimAdd [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x + y
 applyPrim PrimMult [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x * y
 applyPrim PrimSub [Const (Int x), Const (Int y)] = pure $ Const $ Int $ x - y
 applyPrim PrimDiv [Const (Int x), Const (Int y)] = pure $ Const $ Int $ div x y
-applyPrim PrimCompose [Abs g, Abs f] = pure $ Abs $ \x -> f x >>= g
+applyPrim PrimCompose [Abs g, Abs f] = pure $ Abs $ f >=> g
 applyPrim PrimStringAppend [Const (String x), Const (String y)] =
   pure $ Const $ String $ x <> y
 applyPrim PrimStringChars [Const (String s)] =

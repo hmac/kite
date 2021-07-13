@@ -31,7 +31,7 @@ import qualified Text.Megaparsec.Char.Lexer    as L
 -- they only parse "more indented" expressions. This tends to be how Kite's layout delineates scope,
 -- so it works quite well.
 
-data ParseSettings = ParseSettings
+newtype ParseSettings = ParseSettings
   -- The minimum indent required for parsing to succeed.
   { indentCol :: Pos
   }
@@ -46,7 +46,7 @@ setIndentCol col s = s { indentCol = col }
 hang :: Parser a -> Parser a
 hang p = do
   c <- L.indentLevel
-  local (setIndentCol c) $ p
+  local (setIndentCol c) p
 
 type Parser = ParsecT Error String (Reader ParseSettings)
 
