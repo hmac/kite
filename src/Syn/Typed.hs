@@ -1,7 +1,16 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 module Syn.Typed
-  ( module Syn.Typed
+  ( Exp
+  , Pattern
+  , Module(..)
+  , Decl(..)
+  , Fun(..)
+  , Data(..)
+  , DataCon(..)
+  , applySolution
+  , typeOf
+  , cacheType
   , AST.Pat(..)
   , AST.ExprT(..)
   , AST.ConMeta(..)
@@ -14,15 +23,19 @@ import           Control.Lens                   ( over
                                                 , set
                                                 , view
                                                 )
+import           Control.Lens.Plated            ( transformOf )
+import           Data.Data.Lens                 ( uniplate )
+import           Data.Generics.Product          ( Param(..)
+                                                , param
+                                                )
 import           Data.Generics.Product.Positions
                                                 ( position )
-import           Data.Generics.Product.Types    ( types )
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( Map )
 import           Data.Name
 import qualified Syn                           as S
 import           Type.Type                      ( E
-                                                , Type(EType)
+                                                , Type(..)
                                                 )
 
 -- This module contains the typed AST
@@ -73,13 +86,16 @@ data DataCon = DataCon
 -- | Apply a set of existential variable solutions to the type annotations of an expression.
 -- This is used after typechecking to resolve any existentials in the cached types.
 applySolution :: Map E Type -> Exp -> Exp
-applySolution s = over (types @Type) solve
+applySolution s = over (param @0) (transformOf uniplate (solve s))
+
+-- Apply a "solution" - i.e. a map of existential variables to their substitutions - to a type.
+-- If the existential solves to another existential or a type containing existentials, we try to
+-- solve those as well.
+solve :: Map E Type -> Type -> Type
+solve s = transformOf uniplate go
  where
-  solve :: Type -> Type
-  solve (EType e) = case Map.lookup e s of
-    Just t  -> t
-    Nothing -> EType e
-  solve t = t
+  go (EType e) = maybe (EType e) (solve s) (Map.lookup e s)
+  go t         = t
 
 -- | Get the cached type of an 'Exp'
 typeOf :: Exp -> Type

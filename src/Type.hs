@@ -560,7 +560,7 @@ subtype typeA typeB =
       subtype' (substEForU alpha u a) b
       dropAfter (Marker alpha)
     (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
-                 | otherwise     -> trace' ["subtype: here"] $ instantiateL e a
+                 | otherwise     -> instantiateL e a
     (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
                  | otherwise     -> instantiateR e a
     (TCon v as, TCon v' bs) | v == v' ->
@@ -592,7 +592,6 @@ subtype typeA typeB =
     (a, b) -> do
       a' <- subst a
       b' <- subst b
-      trace' ["subtype': here", debug a', debug b'] $ pure ()
       throwError $ SubtypingFailure a' b'
 
 -- Instantiation
@@ -714,7 +713,6 @@ checkAbs args body (Fn a b) | (x, Just xs) <- NE.uncons args = do
 checkAbs args body b = do
   a  <- infer (Abs args body) >>= subst . typeOf
   b' <- subst b
-  trace' ["checkAbs: here", debug a, debug b] $ pure ()
   throwError $ SubtypingFailure a b'
 
 -- Typing
@@ -780,7 +778,6 @@ check expr ty = do
       e' <- infer e
       a  <- subst $ typeOf e'
       b' <- subst b
-      trace' ["check: here", debug a, debug b'] $ pure ()
       void $ subtype a b'
       pure $ cacheType b' e'
 

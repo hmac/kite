@@ -52,24 +52,39 @@ import           Type.FromSyn                   ( convertType
 test :: Spec
 test = do
   describe "check [Nothing] : forall a. [Maybe a]" $ do
-    let a0 = U 0 "a"
-        a1 = U 1 "a"
-        maybeType arg = TCon "Maybe" [arg]
-        ctx  = [V "Nothing" (Forall a0 (maybeType (UType a0)))]
-        ty   = Forall a1 (list (maybeType (UType a1)))
-        expr = App (App (Var (prim "::")) (Var "Nothing")) (Var (prim "[]"))
-        r    = check expr ty
-    it "typechecks successfully" $ do
-      fmap
-          typeOf
-          (runTypecheckM defaultTypeEnv
-                         (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+    let
+      a0 = U 0 "a"
+      a1 = U 1 "a"
+      maybeType arg = TCon "Maybe" [arg]
+      listType arg = TCon (prim "List") [arg]
+      ctx      = [V "Nothing" (Forall a0 (maybeType (UType a0)))]
+      ty       = Forall a1 (list (maybeType (UType a1)))
+      expr     = App (App (Var (prim "::")) (Var "Nothing")) (Var (prim "[]"))
+      r        = check expr ty
+      expected = AppT
+        ty
+        (AppT
+          (Fn (TCon (prim "List") [maybeType (UType a1)])
+              (TCon (prim "List") [maybeType (UType a1)])
           )
-        `shouldBe` Right ty
+          (VarT
+            (Forall
+              a0
+              (Fn (UType a0) (Fn (listType (UType a0)) (listType (UType a0))))
+            )
+            (prim "::")
+          )
+          (VarT (maybeType (UType a1)) "Nothing")
+        )
+        (VarT (listType (maybeType (UType a1))) (prim "[]"))
+
+    it "typechecks successfully" $ do
+      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+        `shouldBe` Right expected
   describe "check foo = (Nothing :: rest) -> foo rest : [Maybe a] -> [a]" $ do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
-    -- We do this for functions normally anyway (see Type.Module.checkModule)
+    -- We do this for functions normally anyway (see 'Type.Module.checkModule')
     let
       maybeType arg = TCon "Maybe" [arg]
       funType = Forall
@@ -86,14 +101,18 @@ test = do
         [ V nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
         , V "foo"   funType
         ]
-    it "typechecks successfully" $ do
-      let r = check fun funType
-      fmap
-          typeOf
-          (runTypecheckM defaultTypeEnv
-                         (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+      expected = MCaseT
+        funType
+        [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
+          , AppT (list (UType (U 0 "a")))
+                 (VarT funType "foo")
+                 (VarT (list (maybeType (UType (U 0 "a")))) "rest")
           )
-        `shouldBe` Right funType
+        ]
+      r = check fun funType
+    it "typechecks successfully" $ do
+      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+        `shouldBe` Right expected
   describe "Simple inference" $ do
     let
       nat = TCon "Nat" []
