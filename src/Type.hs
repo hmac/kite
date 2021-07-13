@@ -381,6 +381,26 @@ dropAfter' e = \case
   (e' : ctx) | e' == e   -> ctx
              | otherwise -> dropAfter' e ctx
 
+-- | Search the current context for variables of the given type
+proofSearch :: Type -> TypeM [Name]
+proofSearch ty = do
+  localCtx                       <- getCtx
+  TypeEnv { envCtx = globalCtx } <- ask
+  let ctx = localCtx <> globalCtx
+
+  pure $ flip mapMaybe ctx $ \case
+    V n t | t == ty   -> pure n
+          | otherwise -> Nothing
+    _ -> Nothing
+
+-- | Search the context for a unique variable of the given type.
+--   Throw an error if no variable is found or if more than one variable is found.
+implicitSearch :: Type -> TypeM Name
+implicitSearch ty = proofSearch ty >>= \case
+  [v] -> pure v
+  []  -> throwError $ NoProofFound ty
+  vs  -> throwError $ MultipleProofsFound ty vs
+
 -- Check if a type is well-formed
 wellFormedType :: Type -> TypeM ()
 wellFormedType ty = do
@@ -1171,6 +1191,8 @@ data Error = TodoError String
            | TooManyPatterns
            | DuplicateVariable Name
            | UnknownType Name
+           | NoProofFound Type
+           | MultipleProofsFound Type [Name]
            deriving (Eq, Show)
 
 todoError :: String -> TypeM a

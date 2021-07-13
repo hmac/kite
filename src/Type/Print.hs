@@ -100,6 +100,7 @@ printU (U n v) = printName v <> pretty n
 printE :: E -> Doc a
 printE (E n) = pretty $ "ê" <> show n
 
+-- TODO: complete this
 printError :: Maybe PkgModuleName -> Error -> Doc a
 printError modName = \case
   SubtypingFailure a b ->
