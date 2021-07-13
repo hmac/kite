@@ -24,12 +24,13 @@ moduleDefinition = Module { moduleName     = name
 -- They are in scope globally and we don't expect the user to be able to shadow them.
 globallyAvailablePrimitives :: [(RawName, PkgModuleName)]
 globallyAvailablePrimitives =
-  map (, name) $ listConstructors <> arithmetic <> comparison
+  map (, name) $ listConstructors <> arithmetic <> comparison <> compose
  where
   listConstructors = ["::", "[]"]
   arithmetic       = ["+", "-", "/", "*"]
   -- TODO: ==
   comparison       = [">", "<", ">=", "<="]
+  compose          = ["."]
 
 kitePrimitiveExports :: [(RawName, [RawName])]
 kitePrimitiveExports = [("IO", ["MkIO"])] <> map (, []) (builtins <> fcalls)

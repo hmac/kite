@@ -258,7 +258,10 @@ printApp (App (Con "::") a) b = parens $ case (singleton a, singleton b) of
   (True , False) -> printExpr a <+> "::" <+> parens (printExpr b)
   (False, True ) -> parens (printExpr a) <+> "::" <+> printExpr b
 
-printApp a (App b c) = if big a
+-- special case for function composition
+printApp (App (Var ".") a) b         = printExpr a <+> "." <+> printExpr b
+
+printApp a                 (App b c) = if big a
   then parens (printExpr a) <+> nest 2 (parens (printExpr (App b c)))
   else printExpr a <+> parens (printExpr (App b c))
 printApp a b | big a && big b =

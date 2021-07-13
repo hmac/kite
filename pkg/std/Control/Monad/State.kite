@@ -2,7 +2,7 @@ module Control.Monad.State
 
 import Data.Tuple (fst, snd, first)
 import Data.Functor (Functor(..), map)
-import Data.Function (id, compose)
+import Data.Function (id)
 import Control.Applicative (Applicative(..))
 import Data.Monad (Monad(..))
 
@@ -21,7 +21,7 @@ runState : State s a -> s -> (a, s)
 runState = (State st) s -> st.runState s
 
 execState : State s a -> s -> a
-execState = s -> compose fst (runState s)
+execState = s -> fst . runState s
 
 mapState : (a -> b) -> State s a -> State s b
 mapState = f (State st) -> State { runState = s -> first f (st.runState s) }

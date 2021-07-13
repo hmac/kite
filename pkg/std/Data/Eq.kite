@@ -6,7 +6,7 @@ eq : Eq a -> a -> a -> Bool
 eq = (Eq d) -> d.eq
 
 notEq : Eq a -> a -> a -> Bool
-notEq = e x y -> not (eq e x y)
+notEq = e x -> not . eq e x
 
 -- Data.Bool imports this module, so we can't import Data.Bool.not.
 -- Instead we define it again here.

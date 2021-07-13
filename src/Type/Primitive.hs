@@ -132,6 +132,7 @@ primitiveConstructors =
 -- Note: the type of unconsChar is weird because we want to implement it
 -- without any knowledge of the runtime structure of complex types like tuples
 -- or Maybe, since that may change in the future.
+-- TODO: do we need to be generating globally unique U vars here?
 primitiveFns :: Ctx
 primitiveFns =
   [ V (prim "appendString") (Fn string (Fn string string))
@@ -149,10 +150,26 @@ primitiveFns =
               (Fn (UType a) (Fn (Fn char (Fn string (UType a))) (UType a)))
           )
         )
-  , V (prim "+")         (Fn int (Fn int int))
-  , V (prim "-")         (Fn int (Fn int int))
-  , V (prim "*")         (Fn int (Fn int int))
-  , V (prim "/")         (Fn int (Fn int int))
+  , V (prim "+") (Fn int (Fn int int))
+  , V (prim "-") (Fn int (Fn int int))
+  , V (prim "*") (Fn int (Fn int int))
+  , V (prim "/") (Fn int (Fn int int))
+  , let a = U 0 "a"
+        b = U 1 "b"
+        c = U 2 "c"
+    in  V
+          (prim ".")
+          (Forall
+            b
+            (Forall
+              c
+              (Fn
+                (Fn (UType b) (UType c))
+                (Forall a (Fn (Fn (UType a) (UType b)) (Fn (UType a) (UType c)))
+                )
+              )
+            )
+          )
   , V (prim "$showInt")  (Fn int string)
   , V (prim "$showChar") (Fn char string)
   , V (prim "$eqInt")    (Fn int (Fn int bool))

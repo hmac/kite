@@ -357,6 +357,11 @@ builtins =
           (Abs ["x"] (Abs ["y"] (App (Var "div") [Var "x", Var "y"])))
     , Def (primString "::")
           (Abs ["x"] (Abs ["xs"] (App (Var "cons") [Var "x", Var "xs"])))
+    , Def
+      (primString ".")
+      (Abs ["g"]
+           (Abs ["f"] (Abs ["x"] (App (Var "g") [App (Var "f") [Var "x"]])))
+      )
     , Def (primString "$eqChar")
           (Abs ["c1"] (Abs ["c2"] (App (Var "eq?") [Var "c1", Var "c2"])))
     , Def

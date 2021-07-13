@@ -9,6 +9,7 @@ from std import Data.Function (compose)
 from std import Data.Monoid (concat)
 from std import IO (putLine)
 from std import Data.Tuple (uncurry)
+from kite import Kite.Prim (IO)
 
 numbers : [Int]
 numbers = [ 1975, 1600,  113, 1773, 1782, 1680, 1386, 1682, 1991, 1640, 1760
@@ -31,9 +32,6 @@ numbers = [ 1975, 1600,  113, 1773, 1782, 1680, 1386, 1682, 1991, 1640, 1760
           , 1398, 1992, 1263, 1786, 1723, 1206, 1363, 1177, 1646, 1231, 1140
           , 1088, 1322]
 
-sumsTo : Int -> Int -> Int -> Bool
-sumsTo = total x y -> eq eqInt (x + y) total
-
 cartesianProduct : [Int] -> [Int] -> [(Int, Int)]
 cartesianProduct =
   xs ys -> concat monoidList (map functorList (y -> map functorList (x -> (y,x)) xs) ys)
@@ -44,7 +42,10 @@ unzipWith = f -> map functorList ((x, y) -> f x y)
 answer : [Int]
 answer =
   let mapMultiply = unzipWith (x y -> x * y)
-   in (compose mapMultiply (filter (uncurry (sumsTo 2020))))
+      sumsTo : Int -> (Int, Int) -> Bool
+      sumsTo = total (x, y) -> eq eqInt (x + y) total
+
+   in (mapMultiply . (filter (sumsTo 2020)))
         (cartesianProduct numbers numbers)
 
 main : IO ()
