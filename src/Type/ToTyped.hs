@@ -17,6 +17,7 @@ import           Syn                     hiding ( Name
                                                 , Type
                                                 )
 import qualified Syn.Typed                     as T
+import           Type.DSL                       ( u_ )
 import           Type.Primitive                 ( primitiveCtorInfo )
 import           Type.Type                      ( CtorInfo
                                                 , Type(..)
@@ -107,4 +108,4 @@ convertExpr ctorInfo = go
 
 
 unknown :: Type
-unknown = UType (U 0 "unknown")
+unknown = u_ $ U 0 "unknown"

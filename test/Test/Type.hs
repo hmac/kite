@@ -23,6 +23,16 @@ import           Type                           ( Error(..)
                                                 , withGlobalCtx
                                                 , withGlobalTypeCtx
                                                 )
+-- Type.DSL.fn clashes with Test.QQ.fn
+import qualified Type.DSL                      as T
+                                                ( fn )
+import           Type.DSL                       ( forAll
+                                                , tapp
+                                                , tcon
+                                                , trecord
+                                                , u_
+                                                , u_'
+                                                )
 import           Type.Module                    ( checkModule )
 import           Type.Primitive                 ( bool
                                                 , int
@@ -56,28 +66,28 @@ test = do
     let
       a0 = U 0 "a"
       a1 = U 1 "a"
-      maybeType arg = TCon "Maybe" [arg]
-      listType arg = TCon (prim "List") [arg]
-      ctx      = [V "Nothing" (Forall a0 (maybeType (UType a0)))]
-      ty       = Forall a1 (list (maybeType (UType a1)))
+      maybeType arg = tcon "Maybe" [arg]
+      listType arg = tcon (prim "List") [arg]
+      ctx      = [V "Nothing" (forAll a0 (maybeType (u_ a0)))]
+      ty       = forAll a1 (list (maybeType (u_ a1)))
       expr     = App (App (Var (prim "::")) (Var "Nothing")) (Var (prim "[]"))
       r        = check expr ty
       expected = AppT
         ty
         (AppT
-          (Fn (TCon (prim "List") [maybeType (UType a1)])
-              (TCon (prim "List") [maybeType (UType a1)])
+          (T.fn (tcon (prim "List") [maybeType (u_ a1)])
+                (tcon (prim "List") [maybeType (u_ a1)])
           )
           (VarT
-            (Forall
+            (forAll
               a0
-              (Fn (UType a0) (Fn (listType (UType a0)) (listType (UType a0))))
+              (T.fn (u_ a0) (T.fn (listType (u_ a0)) (listType (u_ a0))))
             )
             (prim "::")
           )
-          (VarT (maybeType (UType a1)) "Nothing")
+          (VarT (maybeType (u_ a1)) "Nothing")
         )
-        (VarT (listType (maybeType (UType a1))) (prim "[]"))
+        (VarT (listType (maybeType (u_ a1))) (prim "[]"))
 
     it "typechecks successfully" $ do
       runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
@@ -87,10 +97,10 @@ test = do
     -- recursive call can be inferred.
     -- We do this for functions normally anyway (see 'Type.Module.checkModule')
     let
-      maybeType arg = TCon "Maybe" [arg]
-      funType = Forall
+      maybeType arg = tcon "Maybe" [arg]
+      funType = forAll
         (U 0 "a")
-        (Fn (list (maybeType (UType (U 0 "a")))) (list (UType (U 0 "a"))))
+        (T.fn (list (maybeType (u_ (U 0 "a")))) (list (u_ (U 0 "a"))))
       cons    = prim "::"
       nothing = "Nothing"
       fun     = MCase
@@ -99,15 +109,15 @@ test = do
           )
         ]
       ctx =
-        [ V nothing (Forall (U 1 "a") (maybeType (UType (U 1 "a"))))
+        [ V nothing (forAll (U 1 "a") (maybeType (u_ (U 1 "a"))))
         , V "foo"   funType
         ]
       expected = MCaseT
         funType
         [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
-          , AppT (list (UType (U 0 "a")))
+          , AppT (list (u_ (U 0 "a")))
                  (VarT funType "foo")
-                 (VarT (list (maybeType (UType (U 0 "a")))) "rest")
+                 (VarT (list (maybeType (u_ (U 0 "a")))) "rest")
           )
         ]
       r = check fun funType
@@ -116,9 +126,9 @@ test = do
         `shouldBe` Right expected
   describe "Simple inference" $ do
     let
-      nat = TCon "Nat" []
-      wrap a = TCon "Wrap" [a]
-      pair a b = TCon "Pair" [a, b]
+      nat = tcon "Nat" []
+      wrap a = tcon "Wrap" [a]
+      pair a b = tcon "Pair" [a, b]
 
       tctx = map (, ()) ["Nat", "Wrap", "Pair"]
       cctx =
@@ -150,16 +160,15 @@ test = do
 
       ctx =
         [ V (qq "Zero") nat
-        , V (qq "Suc")  (Fn nat nat)
+        , V (qq "Suc")  (T.fn nat nat)
         , V (qq "MkWrap")
-            (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
+            (let a = U 0 "a" in forAll a $ T.fn (u_ a) (wrap (u_ a)))
         , V
           (qq "MkPair")
           (let a = U 1 "a"
                b = U 2 "b"
-           in  Forall a $ Forall b $ Fn
-                 (UType a)
-                 (Fn (UType b) (pair (UType a) (UType b)))
+           in  forAll a $ forAll b $ T.fn (u_ a)
+                                          (T.fn (u_ b) (pair (u_ a) (u_ b)))
           )
         ]
 
@@ -254,13 +263,13 @@ test = do
     it "a tuple"
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
-        in  inf expr (TCon (prim "Tuple3") [bool, bool, nat])
+        in  inf expr (tcon (prim "Tuple3") [bool, bool, nat])
     it "a list" $ let expr = [syn|[True, False]|] in inf expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in inf expr int
     it "a string literal" $ let expr = [syn|"Hello"|] in inf expr string
     it "a record"
       $ let expr = [syn|{ five = 5, msg = "Hello" }|]
-        in  inf expr (TRecord [("five", int), ("msg", string)])
+        in  inf expr (trecord [("five", int), ("msg", string)])
     it "a record projection"
       $ let expr = [syn|let r = { five = 5, msg = "Hello" }
                          in r.five|]
@@ -280,9 +289,9 @@ test = do
           ctx' =
             [ V
                 (qq "D")
-                (Forall
+                (forAll
                   a0
-                  (Fn (TRecord [("field", bool)]) (TCon (qq "D") [UType a0]))
+                  (T.fn (trecord [("field", bool)]) (tcon (qq "D") [u_ a0]))
                 )
             ]
           tctx' = [(qq "D", ())]
@@ -298,10 +307,10 @@ test = do
       $ let ctx' =
               [ V
                   (qq "D")
-                  (Forall
+                  (forAll
                     (U 0 "a")
-                    (Fn (TRecord [("field", UType (U 0 "a"))])
-                        (TCon (qq "D") [UType (U 0 "a")])
+                    (T.fn (trecord [("field", u_ (U 0 "a"))])
+                          (tcon (qq "D") [u_ (U 0 "a")])
                     )
                   )
               ]
@@ -320,9 +329,7 @@ test = do
           ctx' =
             [ V
                 (qq "D")
-                (Forall
-                  a0
-                  (Fn (Fn (UType a0) (UType a0)) (TCon (qq "D") [UType a0]))
+                (forAll a0 (T.fn (T.fn (u_ a0) (u_ a0)) (tcon (qq "D") [u_ a0]))
                 )
             ]
           tctx' = [(qq "D", ())]
@@ -334,7 +341,7 @@ test = do
       -- type F t a = MkF (t a -> t a)
       -- f : T b c -> T b c
       --
-      -- e : forall b. F (T b)
+      -- e : forall b c. F (T b) c
       -- e = MkF f
       let a = U 0 "a"
           b = U 1 "b"
@@ -343,24 +350,23 @@ test = do
           ctx' =
             [ V
               (qq "MkF")
-              (Forall
+              (forAll
                 t
-                (Forall
+                (forAll
                   a
-                  (Fn
-                    (Fn (TApp (UType t) [UType a]) (TApp (UType t) [UType a]))
-                    (TCon (qq "F") [UType t])
+                  (T.fn (T.fn (tapp (u_' t) [u_ a]) (tapp (u_' t) [u_ a]))
+                        (tcon (qq "F") [u_ t])
                   )
                 )
               )
             , V
               (qq "f")
-              (Forall
+              (forAll
                 b
-                (Forall
+                (forAll
                   c
-                  (Fn (TCon (qq "T") [UType b, UType c])
-                      (TCon (qq "T") [UType b, UType c])
+                  (T.fn (tcon (qq "T") [u_ b, u_ c])
+                        (tcon (qq "T") [u_ b, u_ c])
                   )
                 )
               )
@@ -375,9 +381,9 @@ test = do
               )
             ]
           e   = [syn|MkF f|]
-          ty_ = [typ|forall b. F (T b)|]
+          ty_ = [typ|forall b c. F (T b) c|]
       checks tctx' cctx' ctx' e ty_
-    it "higher kinded application (with ->)" $ do
+    it "higher kinded function application (with ->)" $ do
       -- type F t a = MkF ((t -> a) -> (t -> a))
       -- f : (c -> T -> b) -> (c -> T -> b)
       --
@@ -389,23 +395,23 @@ test = do
           ctx' =
             [ V
               (qq "MkF")
-              (Forall
+              (forAll
                 t
-                (Forall
+                (forAll
                   a
-                  (Fn (Fn (Fn (UType t) (UType a)) (Fn (UType t) (UType a)))
-                      (TCon (qq "F") [UType t, UType a])
+                  (T.fn (T.fn (T.fn (u_ t) (u_ a)) (T.fn (u_ t) (u_ a)))
+                        (tcon (qq "F") [u_ t, u_ a])
                   )
                 )
               )
             , V
               (qq "f")
-              (Forall
+              (forAll
                 b
-                (Forall
+                (forAll
                   c
-                  (Fn (Fn (UType c) (Fn (TCon (qq "T") []) (UType b)))
-                      (Fn (UType c) (Fn (TCon (qq "T") []) (UType b)))
+                  (T.fn (T.fn (u_ c) (T.fn (tcon (qq "T") []) (u_ b)))
+                        (T.fn (u_ c) (T.fn (tcon (qq "T") []) (u_ b)))
                   )
                 )
               )

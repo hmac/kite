@@ -13,6 +13,13 @@ import           Data.String                    ( fromString )
 import           Data.Traversable               ( for )
 import           Type                           ( Exp )
 import qualified Type                          as T
+import           Type.DSL                       ( fn
+                                                , forAll
+                                                , tapp
+                                                , tcon
+                                                , trecord
+                                                , u_
+                                                )
 import qualified Type.Type                     as T
 
 import           AST
@@ -80,32 +87,32 @@ convertType uVarCtx = \case
   S.TyUnit   -> pure T.unit
   S.TyHole _ ->
     T.throwError $ T.TodoError "Type.fromSyn: holes in types not implemented"
-  S.TyFun a b -> T.Fn <$> convertType uVarCtx a <*> convertType uVarCtx b
+  S.TyFun a b -> fn <$> convertType uVarCtx a <*> convertType uVarCtx b
   S.TyTuple as ->
     let name = prim $ fromString $ "Tuple" <> show (length as)
     in  T.TCon name <$> mapM (convertType uVarCtx) as
   S.TyVar v -> case lookup v uVarCtx of
-    Just u  -> pure $ T.UType u
+    Just u  -> pure $ u_ u
     Nothing -> T.throwError $ T.UnknownVariable v
-  S.TyCon c   -> pure $ T.TCon c []
+  S.TyCon c   -> pure $ tcon c []
   -- Flatten type applications into spine form, so the head of every TApp is
   -- never a TApp. This is an invariant required by the typechecker.
   S.TyApp a b -> do
     b' <- convertType uVarCtx b
     a' <- convertType uVarCtx a
     pure $ case a' of
-      T.TCon c args -> T.TCon c $ args ++ [b']
-      T.TApp f args -> T.TApp f (args <> [b'])
-      _             -> T.TApp a' [b']
-  S.TyList -> pure $ T.TCon (prim "List") []
+      T.TCon c args -> tcon c $ args ++ [b']
+      T.TApp f args -> tapp f (args <> [b'])
+      T.TOther f    -> tapp f [b']
+  S.TyList -> pure $ tcon (prim "List") []
   S.TyRecord fields ->
-    T.TRecord <$> mapM (secondM (convertType uVarCtx) . first toString) fields
+    trecord <$> mapM (secondM (convertType uVarCtx) . first toString) fields
   S.TyAlias _ _ ->
     T.throwError $ T.TodoError "convertType: type aliases not implemented"
   S.TyForall v t -> do
     u  <- T.newU v
     t' <- convertType ((v, u) : uVarCtx) t
-    pure $ T.Forall u t'
+    pure $ forAll u t'
 
 -- Explicitly quantify all type variables, then convert the whole thing to a
 -- T.Type.
@@ -113,4 +120,4 @@ quantify :: [Name] -> Can.Type -> T.TypeM T.Type
 quantify vars t = do
   uMap <- mapM (\v -> (v, ) <$> T.newU v) vars
   t'   <- convertType uMap t
-  pure $ foldr (T.Forall . snd) t' uMap
+  pure $ foldr (forAll . snd) t' uMap

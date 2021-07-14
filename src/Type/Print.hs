@@ -9,6 +9,7 @@ import           Type                           ( Error(..)
                                                 )
 import           Type.Type                      ( E(..)
                                                 , Type(..)
+                                                , Type'(..)
                                                 , U(..)
                                                 )
 
@@ -69,15 +70,17 @@ printType = go P0
   go :: Prec -> Type -> Doc a
   go prec = \case
     TApp f args | prec >= P2 -> parens $ go P1 (TApp f args)
-                | otherwise  -> go P0 f <+> hsep (map (go P2) args)
-    Fn a b | prec >= P1 -> parens $ go P0 (Fn a b)
-           | otherwise  -> go P1 a <+> "->" <+> go P0 b
+                | otherwise  -> go' P0 f <+> hsep (map (go P2) args)
     TCon c [arg] | c == prim "List" -> brackets $ go P0 arg
     TCon c args | c == prim "Tuple2" ->
       parens $ concatWith (surround ", ") $ map (go P0) args
     TCon con [] -> printConName con
     TCon con args | prec >= P2 -> parens $ go P0 (TCon con args)
                   | otherwise  -> printConName con <+> hsep (map (go P0) args)
+    TOther t -> go' prec t
+  go' prec = \case
+    Fn a b | prec >= P1 -> parens $ go' P0 (Fn a b)
+           | otherwise  -> go P1 a <+> "->" <+> go P0 b
     EType   e      -> printE e
     UType   u      -> printU u
     TRecord fields -> braces $ sep $ punctuate comma $ map
@@ -85,7 +88,7 @@ printType = go P0
       fields
     Forall v ty -> printForall [v] ty
      where
-      printForall us (Forall u a) = printForall (u : us) a
+      printForall us (TOther (Forall u a)) = printForall (u : us) a
       printForall us a =
         "forall" <+> hsep (map printU (reverse us)) <> "." <+> printType a
 

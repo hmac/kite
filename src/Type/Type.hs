@@ -1,6 +1,7 @@
 -- 'Type' and associated types
 module Type.Type
   ( Type(..)
+  , Type'(..)
   , E(..)
   , U(..)
   , Ctx
@@ -15,6 +16,7 @@ import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
 import           Data.Map.Strict                ( Map )
 import           Data.Name
+import           GHC.Generics                   ( Generic )
 import           Type.Reflection                ( Typeable )
 import           Util                           ( Debug(..) )
 
@@ -22,7 +24,23 @@ import           Util                           ( Debug(..) )
 type CtorInfo = Map Name ConMeta
 
 -- | Types
+-- Kite types are split into two Haskell types: 'Type' and 'Type''.
+-- 'Type' represents applications and constructors. 'Type'' represents everything else.
+-- This ensures that the head of a 'TApp' is never itself a 'TApp' or a 'TCon', which guarantees
+-- that applications and constructors are always in spine form - i.e. all their given arguments are
+-- in the list and not in a surrounding 'TApp'
+-- TODO: should we use NonEmpty lists for applications?
 data Type =
+    -- Type application
+      TApp Type' [Type]
+    -- Type constructor (saturated)
+    | TCon Name [Type]
+    -- All other types
+    | TOther Type'
+  deriving (Eq, Show, Typeable, Data, Generic)
+
+-- | Types which are not applications
+data Type' =
   -- Function type
     Fn Type Type
   -- Universal quantifier
@@ -31,42 +49,38 @@ data Type =
   | EType E
   -- Universal variable
   | UType U
-  -- Type constructor (saturated)
-  -- TODO: not always saturated! see subtyping for TApps
-  | TCon Name [Type]
   -- Record type
   -- TODO: record typing rules
   | TRecord [(String, Type)]
-  -- Type application
-  -- unchecked invariant: always in spine form (i.e., head is never a TApp)
-  | TApp Type [Type]
-  deriving (Eq, Show, Typeable, Data)
+  deriving (Eq, Show, Typeable, Data, Generic)
 
 data DebugPrintCtx = Neutral | AppL | AppR | ArrL | ArrR
 instance Debug Type where
-  debug = debug' AppR
+  debug = go' AppR
    where
-    debug' _ (EType e) = debug e
-    debug' _ (UType u) = debug u
-    debug' c (Fn a b ) = case c of
-      Neutral -> debug' ArrL a <+> "->" <+> debug' ArrR b
-      ArrR    -> debug' Neutral (Fn a b)
-      _       -> "(" <> debug' Neutral (Fn a b) <> ")"
-    debug' c (Forall v t) = case c of
-      Neutral -> "∀" <> debug v <> "." <+> "(" <> debug' Neutral t <> ")"
-      _       -> "(" <> debug' Neutral (Forall v t) <> ")"
-    debug' _ (TCon d []  ) = debug d
-    debug' c (TCon d args) = case c of
+    go' c (TApp ty args) = case c of
+      Neutral -> go AppL ty <+> sepBy " " (map (go' AppR) args)
+      AppR    -> "(" <> go' Neutral (TApp ty args) <> ")"
+      _       -> go' Neutral (TApp ty args)
+    go' c (TOther t   ) = go c t
+    go' _ (TCon d []  ) = debug d
+    go' c (TCon d args) = case c of
       Neutral -> debug d <+> sepBy " " (map debug args)
-      AppL    -> "(" <> debug' Neutral (TCon d args) <> ")"
-      AppR    -> "(" <> debug' Neutral (TCon d args) <> ")"
-      _       -> debug' Neutral (TCon d args)
-    debug' _ (TRecord fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
-      where go (name, ty) = name <+> ":" <+> debug' Neutral ty
-    debug' c (TApp ty args) = case c of
-      Neutral -> debug' AppL ty <+> sepBy " " (map (debug' AppR) args)
-      AppR    -> "(" <> debug' Neutral (TApp ty args) <> ")"
-      _       -> debug' Neutral (TApp ty args)
+      AppL    -> "(" <> go' Neutral (TCon d args) <> ")"
+      AppR    -> "(" <> go' Neutral (TCon d args) <> ")"
+      _       -> go' Neutral (TCon d args)
+    go :: DebugPrintCtx -> Type' -> String
+    go _ (EType e) = debug e
+    go _ (UType u) = debug u
+    go c (Fn a b ) = case c of
+      Neutral -> go' ArrL a <+> "->" <+> go' ArrR b
+      ArrR    -> go Neutral (Fn a b)
+      _       -> "(" <> go Neutral (Fn a b) <> ")"
+    go c (Forall v t) = case c of
+      Neutral -> "∀" <> debug v <> "." <+> "(" <> go' Neutral t <> ")"
+      _       -> "(" <> go Neutral (Forall v t) <> ")"
+    go _ (TRecord fields) = "{" <+> sepBy ", " (map f fields) <+> "}"
+      where f (name, ty) = name <+> ":" <+> go' Neutral ty
 
 -- | Variables
 -- Universal type variable

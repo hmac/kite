@@ -11,6 +11,11 @@ import           Test.Hspec
 import           Type                           ( defaultTypeEnv
                                                 , runTypecheckM
                                                 )
+-- Type.DSL.fn clashes with Test.QQ.fn
+import qualified Type.DSL                      as T
+import           Type.DSL                       ( forAll
+                                                , u_
+                                                )
 import           Type.Module                    ( checkModule )
 import           Type.Print                     ( printLocatedError )
 import           Type.Type                      ( CtorInfo
@@ -121,32 +126,31 @@ ctx =
     maybe a = TCon (qq "Maybe") [a]
     termCtx =
       [ V (qq "Zero") nat
-      , V (qq "Suc")  (Fn nat nat)
+      , V (qq "Suc")  (T.fn nat nat)
       , V (qq "MkWrap")
-          (let a = U 0 "a" in Forall a $ Fn (UType a) (wrap (UType a)))
+          (let a = U 0 "a" in T.forAll a $ T.fn (u_ a) (wrap (u_ a)))
       , V
         (qq "MkPair")
         (let a = U 1 "a"
              b = U 2 "b"
-         in  Forall a $ Forall b $ Fn
-               (UType a)
-               (Fn (UType b) (pair (UType a) (UType b)))
+         in  forAll a $ forAll b $ T.fn (u_ a)
+                                        (T.fn (u_ b) (pair (u_ a) (u_ b)))
         )
       , V
         (qq "Left")
         (let a = U 1 "a"
              b = U 2 "b"
-         in  Forall a $ Forall b $ Fn (UType a) (either (UType a) (UType b))
+         in  forAll a $ forAll b $ T.fn (u_ a) (either (u_ a) (u_ b))
         )
       , V
         (qq "Right")
         (let a = U 1 "a"
              b = U 2 "b"
-         in  Forall a $ Forall b $ Fn (UType b) (either (UType a) (UType b))
+         in  forAll a $ forAll b $ T.fn (u_ b) (either (u_ a) (u_ b))
         )
-      , V (qq "Nothing") (let a = U 1 "a" in Forall a (maybe (UType a)))
+      , V (qq "Nothing") (let a = U 1 "a" in forAll a (maybe (u_ a)))
       , V (qq "Just")
-          (let a = U 1 "a" in Forall a (Fn (UType a) (maybe (UType a))))
+          (let a = U 1 "a" in forAll a (T.fn (u_ a) (maybe (u_ a))))
       ]
     ctorInfo =
       [ ( qq "Zero"

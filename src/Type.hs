@@ -29,7 +29,6 @@ module Type
   , defaultTypeEnv
   , TypeEnv(..)
   , subst
-  , subst'
   , putCtx
   , putTypeCtx
   , fv
@@ -96,10 +95,9 @@ import           Control.Monad.Trans.State.Strict
 import           Hedgehog                       ( (===)
                                                 , Gen
                                                 , Property
-                                                , forAll
                                                 , property
                                                 )
-import qualified Hedgehog
+import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as G
 import qualified Hedgehog.Range                as R
 
@@ -109,6 +107,16 @@ import           Syn.Typed                      ( ConMeta(..)
                                                 , typeOf
                                                 )
 import qualified Syn.Typed
+import           Type.DSL                       ( e_
+                                                , e_'
+                                                , fn
+                                                , forAll
+                                                , tapp
+                                                , tcon
+                                                , trecord
+                                                , u_
+                                                , u_'
+                                                )
 import           Type.Primitive                 ( bool
                                                 , char
                                                 , fcallInfo
@@ -127,6 +135,7 @@ import           Type.Type                      ( CtorInfo
                                                 , CtxElem(..)
                                                 , E(..)
                                                 , Type(..)
+                                                , Type'(..)
                                                 , TypeCtx
                                                 , U(..)
                                                 , debugCtx
@@ -144,13 +153,17 @@ type Pattern = Pat Name
 -- | The free (existential) variables of the type
 fv :: Type -> [E]
 fv = \case
-  Fn     a b     -> fv a <> fv b
-  Forall _ a     -> fv a
-  EType e        -> [e]
-  UType _        -> []
-  TCon _ as      -> concatMap fv as
-  TRecord fields -> concatMap (fv . snd) fields
-  TApp f as      -> fv f <> concatMap fv as
+  TApp f as -> fv' f <> concatMap fv as
+  TCon _ as -> concatMap fv as
+  TOther t  -> fv' t
+ where
+  fv' :: Type' -> [E]
+  fv' = \case
+    Fn     a b     -> fv a <> fv b
+    Forall _ a     -> fv a
+    EType   e      -> [e]
+    UType   _      -> []
+    TRecord fields -> concatMap (fv . snd) fields
 
 -- | Quantify the given existential variables by replacing them with forall-bound universal
 -- variables.
@@ -159,11 +172,11 @@ quantify vars t = do
   -- Generate a fresh UVar for each E
   uMap <- mapM (\e -> (e, ) <$> newU "") vars
   -- Construct a context mapping each E to its replacement UType
-  ctx  <- mapM (\(e, u) -> solve e (UType u)) uMap
+  ctx  <- mapM (\(e, u) -> solve e (u_ u)) uMap
   -- Apply the substitution to the type
   let t' = subst' ctx t
   -- Wrap the result in foralls to bind each UType
-  pure $ foldr (Forall . snd) t' uMap
+  pure $ foldr (forAll . snd) t' uMap
 
 -- | Apply the current context, as a substitution, to a type
 subst :: Type -> TypeM Type
@@ -171,42 +184,48 @@ subst ty = subst' <$> getCtx <*> pure ty
 
 subst' :: Ctx -> Type -> Type
 subst' ctx = \case
-  UType u        -> UType u
-  Fn     a b     -> Fn (subst' ctx a) (subst' ctx b)
-  Forall u a     -> Forall u (subst' ctx a)
-  TCon   c as    -> TCon c (map (subst' ctx) as)
-  TRecord fields -> TRecord $ mapSnd (subst' ctx) fields
   -- If the substitution yields a nested TCon or TApp, flatten it back to spine
   -- form.
   TApp f as ->
     let as' = map (subst' ctx) as
-    in  case subst' ctx f of
-          TCon c args -> TCon c (args <> as')
-          TApp g cs   -> TApp g (cs <> as')
-          f'          -> TApp f' as'
-  EType e -> substE ctx
-   where
-    substE :: Ctx -> Type
-    substE = \case
-      []                              -> EType e
-      (ESolved e' t : ctx') | e == e' -> subst' ctx' t
-      (EVar e' : _) | e == e'         -> EType e
-      (_ : c)                         -> substE c
+    in  case substType' f of
+          Right f'            -> TApp f' as'
+          Left  (TApp g cs  ) -> TApp g (cs <> as')
+          Left  (TOther f'  ) -> TApp f' as'
+          Left  (TCon c args) -> TCon c (args <> as')
+  TOther t  -> either id TOther $ substType' t
+  TCon c as -> TCon c (map (subst' ctx) as)
+ where
+  substType' :: Type' -> Either Type Type'
+  substType' = \case
+    UType u        -> pure $ UType u
+    Fn     a b     -> pure $ Fn (subst' ctx a) (subst' ctx b)
+    Forall u a     -> pure $ Forall u (subst' ctx a)
+    TRecord fields -> pure $ TRecord $ mapSnd (subst' ctx) fields
+    EType   e      -> substE e ctx
+  substE :: E -> Ctx -> Either Type Type'
+  substE e = \case
+    []                              -> pure $ EType e
+    (ESolved e' t : ctx') | e == e' -> Left $ subst' ctx' t
+    (EVar e' : _) | e == e'         -> pure $ EType e
+    (_ : c)                         -> substE e c
 
 -- | Substitute an existential variable for a universal variable
 substEForU :: E -> U -> Type -> Type
 substEForU e u = go
  where
   go = \case
+    TApp f as -> TApp (go' f) (map go as)
+    TCon c as -> TCon c (map go as)
+    TOther t  -> TOther $ go' t
+  go' = \case
     Fn a b -> Fn (go a) (go b)
     Forall u' a | u == u'   -> Forall u' a
                 | otherwise -> Forall u' (go a)
     EType e' -> EType e'
     UType u' | u == u'   -> EType e
              | otherwise -> UType u'
-    TCon c as      -> TCon c (map go as)
     TRecord fields -> TRecord (mapSnd go fields)
-    TApp f as      -> TApp (go f) (map go as)
 
 -- | The bound variables in a context
 domV :: Ctx -> [Name]
@@ -405,6 +424,13 @@ implicitSearch ty = proofSearch ty >>= \case
 wellFormedType :: Type -> TypeM ()
 wellFormedType ty = do
   trace' ["wellFormedType", debug ty] $ case ty of
+    TApp f as -> go f >> mapM_ wellFormedType as
+    TOther t  -> go t
+    -- TODO: check that c has the correct kind (i.e. for all its args)
+    TCon c as -> lookupType c >> mapM_ wellFormedType as
+ where
+  go :: Type' -> TypeM ()
+  go = \case
     Fn     a b -> wellFormedType a >> wellFormedType b
     Forall u t -> do
       call $ do
@@ -413,10 +439,7 @@ wellFormedType ty = do
     UType u -> lookupU u
     EType e -> do
       lookupE e `catchError` const (void (lookupSolved e))
-    -- TODO: check that c has the correct kind (i.e. for all its args)
-    TCon c _as     -> lookupType c
     TRecord fields -> mapM_ (\(n, t) -> (n, ) <$> wellFormedType t) fields
-    TApp f b       -> wellFormedType f >> mapM_ wellFormedType b
 
 -- Typechecking monad
 data TypeEnv = TypeEnv
@@ -541,7 +564,6 @@ putTypeCtx :: TypeCtx -> TypeM ()
 putTypeCtx tctx =
   lift $ lift $ lift $ modify' $ \st -> st { typeContext = tctx }
 
-
 -- | Lift a 'Maybe' value into the 'MaybeT' monad transformer.
 liftMaybe :: TypeM a -> Maybe a -> TypeM a
 liftMaybe err = maybe err pure
@@ -562,52 +584,84 @@ subtype typeA typeB =
  where
   subtype' :: Type -> Type -> TypeM ()
   subtype' tA tB = trace' ["subtype", debug tA, debug tB] $ case (tA, tB) of
-    (UType a, UType a') | a == a' -> lookupU a
-    (EType a, EType a') | a == a' -> lookupE a
-    (Fn a1 a2, Fn b1 b2)          -> do
+    -- For subtyping between a type application and a constructor, we need to match the arguments up
+    -- from right to left. e.g.
+    --
+    -- f x y    f   x
+    -- | | |    |\  |
+    -- T b c    T b c
+    --
+    -- f ~ T    f ~ T b
+    -- x ~ b    x ~ c
+    -- y ~ c
+    --
+    -- We can have fewer application args than constructor args, but not the other way around.
+    (TApp v [], TCon c []) -> subtype' (TOther v) (TCon c [])
+    (TApp v [], TCon c bs) -> subtype' (TOther v) (TCon c bs)
+    (TApp v as, TCon c []) ->
+      throwError $ SubtypingFailure (TApp v as) (TCon c [])
+    -- 'as' and 'bs' will always be non-empty from here on
+    (TApp v [a], TCon c bs) -> do
+      subtype' a          (last bs)
+      subtype' (TOther v) (TCon c (init bs))
+    (TApp v as, TCon c bs) -> do
+      let (a, b) = (last as, last bs)
+      subtype' a                  b
+      subtype' (TApp v (init as)) (TCon c (init bs))
+
+    -- For subtyping between a constructor and a type application, it's the same thing but reversed.
+    -- TODO: DRY this up by merging with the above
+    (TCon c [], TApp v []) -> subtype' (TCon c []) (TOther v)
+    (TCon c bs, TApp v []) -> subtype' (TCon c bs) (TOther v)
+    (TCon c [], TApp v as) ->
+      throwError $ SubtypingFailure (TApp v as) (TCon c [])
+    (TCon c bs, TApp v [a]) -> do
+      subtype' (last bs)          a
+      subtype' (TCon c (init bs)) (TOther v)
+    (TCon c bs, TApp v as) -> do
+      let (b, a) = (last bs, last as)
+      subtype' b                  a
+      subtype' (TCon c (init bs)) (TApp v (init as))
+
+    (TApp v as, TApp u bs) -> do
+      subtype' (TOther v) (TOther u)
+      mapM_ (uncurry subtype') (zip as bs)
+    (TOther (UType a), TOther (UType a')) | a == a' -> lookupU a
+    (TOther (EType a), TOther (EType a')) | a == a' -> lookupE a
+    (TOther (Fn a1 a2), TOther (Fn b1 b2))          -> do
       subtype' b1 a1
       a2' <- subst a2
       b2' <- subst b2
       subtype' a2' b2'
-    (a, Forall u b) -> do
+    (a, TOther (Forall u b)) -> do
       void $ extendU u
       subtype' a b
       dropAfter (UVar u)
-    (Forall u a, b) -> do
+    (TOther (Forall u a), b) -> do
       alpha <- newE
       void $ extendMarker alpha
       void $ extendE alpha
       subtype' (substEForU alpha u a) b
       dropAfter (Marker alpha)
-    (EType e, a) | e `elem` fv a -> throwError $ OccursCheck e a
-                 | otherwise     -> instantiateL e a
-    (a, EType e) | e `elem` fv a -> throwError $ OccursCheck e a
-                 | otherwise     -> instantiateR e a
+    (TOther (EType e), a) | e `elem` fv a -> throwError $ OccursCheck e a
+                          | otherwise     -> instantiateL e a
+    (a, TOther (EType e)) | e `elem` fv a -> throwError $ OccursCheck e a
+                          | otherwise     -> instantiateR e a
     (TCon v as, TCon v' bs) | v == v' ->
       forM_ (zip as bs) (bimapM subst subst >=> uncurry subtype')
-    (TCon c as, TApp v bs) -> do
-      subtype' (TCon c []) v
-      mapM_ (uncurry subtype') (zip as bs)
-    (TApp v as, TCon c bs) -> do
-      let a = foldApp v as
-      let b = foldApp (TCon c []) bs
-      subtype' a b
-    (TApp v as, TApp u bs) -> do
-      subtype' v u
-      mapM_ (uncurry subtype') (zip as bs)
-    (TRecord as, TRecord bs) -> do
+    (TOther (TRecord as), TOther (TRecord bs)) -> do
       -- For any records A, B
       -- A < B if A and B have the same set of labels and every field fB in B
       -- has a corresponding field fA in A such that fA < fB
       forM_ bs $ \(label, bTy) -> case lookup label as of
-        Nothing  -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
+        Nothing  -> throwError $ SubtypingFailure (trecord as) (trecord bs)
         Just aTy -> do
           aTy' <- subst aTy
           bTy' <- subst bTy
           subtype' aTy' bTy'
       forM_ as $ \(label, _) -> case lookup label bs of
         Just _  -> pure ()
-        Nothing -> throwError $ SubtypingFailure (TRecord as) (TRecord bs)
+        Nothing -> throwError $ SubtypingFailure (trecord as) (trecord bs)
 
     (a, b) -> do
       a' <- subst a
@@ -629,7 +683,7 @@ instantiate :: InstDir -> E -> Type -> TypeM ()
 instantiate dir e ty = do
   ctx <- getCtx
   trace' ["inst", show dir, debug e, debug ty] $ case ty of
-    EType f ->
+    TOther (EType f) ->
       -- Here we want to instantiate either e := f or f := e. Which one depends
       -- on which variable has a greater scope - i.e. appears first in the
       -- context. We are only allowed to instantiate a variable to another
@@ -643,7 +697,7 @@ instantiate dir e ty = do
             putCtx r
             lookupE e
           -- If we find it, instantiate f := e and we're done
-          solution <- solve f (EType e)
+          solution <- solve f (TOther (EType e))
           putCtx $ l <> [solution] <> r
         )
         `catchError` (\_ -> do
@@ -655,19 +709,19 @@ instantiate dir e ty = do
                          lookupE f
                        -- If we find it, instantiate f := e and we're done.
                        -- Otherwise, throw an error
-                       solution <- solve e (EType f)
+                       solution <- solve e (e_ f)
                        putCtx $ l <> [solution] <> r
                      )
-    Fn a b -> do
+    TOther (Fn a b) -> do
       let (l, r) = splitAt (EVar e) ctx
       a1       <- newE
       a2       <- newE
-      solution <- solve e $ Fn (EType a1) (EType a2)
+      solution <- solve e $ fn (e_ a1) (e_ a2)
       putCtx (l <> [solution, EVar a1, EVar a2] <> r)
       instantiate (flipDir dir) a1 a
       b' <- subst b
       instantiate (flipDir dir) a2 b'
-    Forall u a -> case dir of
+    TOther (Forall u a) -> case dir of
       L -> do
         extendU u
         instantiate dir e a
@@ -688,7 +742,7 @@ instantiate dir e ty = do
       -- generate new Es for each arg
       es       <- mapM (const newE) args
       -- insert them into the context before e, along with a solution e = TCon c es
-      solution <- solve e $ TCon c $ map EType es
+      solution <- solve e $ tcon c $ map e_ es
       putCtx $ l <> [solution] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
       mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
@@ -700,7 +754,7 @@ instantiate dir e ty = do
       -- generate new Es for each arg
       es       <- mapM (const newE) args
       -- insert them into the context before e, along with a solution e = f es
-      solution <- solve e $ TApp f $ map EType es
+      solution <- solve e $ tapp f $ map e_ es
       putCtx $ l <> [solution] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
       mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
@@ -717,12 +771,12 @@ instantiate dir e ty = do
   flipDir R = L
 
 checkAbs :: NonEmpty Name -> Exp -> Type -> TypeM (NonEmpty (Name, Type), ExpT)
-checkAbs args body (Fn a b) | (x, Nothing) <- NE.uncons args = do
+checkAbs args body (TOther (Fn a b)) | (x, Nothing) <- NE.uncons args = do
   void $ extendV x a
   body' <- check body b
   dropAfter $ V x a
   pure ((x, a) :| [], body')
-checkAbs args body (Fn a b) | (x, Just xs) <- NE.uncons args = do
+checkAbs args body (TOther (Fn a b)) | (x, Just xs) <- NE.uncons args = do
   void $ extendV x a
   (xs', body') <- checkAbs xs body b
   dropAfter $ V x a
@@ -741,7 +795,7 @@ check :: Exp -> Type -> TypeM ExpT
 check expr ty = do
   trace' ["check", debug expr, ":", debug ty] $ case (expr, ty) of
 
-    (e, Forall u a) -> do
+    (e, TOther (Forall u a)) -> do
       extendU u
       e' <- check e a
       dropAfter (UVar u)
@@ -782,11 +836,11 @@ check expr ty = do
           void $ subtype resultTy' ty
           pure $ FCallT resultTy' name args'
         Nothing -> throwError $ UnknownFCall name
-    (MCase []                  , _     ) -> throwError (EmptyCase expr)
-    (MCase alts@((pats, _) : _), Fn a b) -> do
+    (MCase []                  , _              ) -> throwError (EmptyCase expr)
+    (MCase alts@((pats, _) : _), TOther (Fn a b)) -> do
       -- Split off as many args as there are patterns in the first alt
       let (argTys, exprTy) =
-            let (as, b') = unfoldFn (Fn a b)
+            let (as, b') = unfoldFn (fn a b)
             in  (take (length pats) as, foldFn (drop (length pats) as) b')
       alts' <- mapM (checkMCaseAlt argTys exprTy) alts
       pure $ MCaseT ty alts'
@@ -835,20 +889,20 @@ inferAbs args body = case NE.uncons args of
   (x, Nothing) -> do
     alpha <- newE
     beta  <- newE
-    extendE alpha >> extendE beta >> extendV x (EType alpha)
-    body' <- check body (EType beta)
-    dropAfter $ V x (EType alpha)
-    ty <- subst $ Fn (EType alpha) (EType beta)
-    pure ((x, EType alpha) :| [], body', ty)
+    extendE alpha >> extendE beta >> extendV x (e_ alpha)
+    body' <- check body (e_ beta)
+    dropAfter $ V x (e_ alpha)
+    ty <- subst $ fn (e_ alpha) (e_ beta)
+    pure ((x, e_ alpha) :| [], body', ty)
   (x, Just xs) -> do
     alpha <- newE
     beta  <- newE
-    extendE alpha >> extendE beta >> extendV x (EType alpha)
+    extendE alpha >> extendE beta >> extendV x (e_ alpha)
     (xs', body', t) <- inferAbs xs body
-    subtype t (EType beta)
-    dropAfter $ V x (EType alpha)
-    ty <- subst $ Fn (EType alpha) (EType beta)
-    pure (NE.cons (x, EType alpha) xs', body', ty)
+    subtype t (e_ beta)
+    dropAfter $ V x (e_ alpha)
+    ty <- subst $ fn (e_ alpha) (e_ beta)
+    pure (NE.cons (x, e_ alpha) xs', body', ty)
 
 infer :: Exp -> TypeM ExpT
 infer expr_ = do
@@ -954,7 +1008,7 @@ infer expr_ = do
       -- To infer the type of a record, we must be able to infer types for all its
       -- fields
       fields' <- mapM (secondM infer) fields
-      let ty = TRecord $ mapSnd typeOf fields'
+      let ty = trecord $ mapSnd typeOf fields'
       pure $ RecordT ty fields'
     Project record fieldName -> do
       -- To infer the type of a record projection, we must know the type of the
@@ -962,10 +1016,9 @@ infer expr_ = do
       record' <- infer record
       -- Check if the record contains this field
       ty      <- subst (typeOf record') >>= \case
-        TRecord fields -> case lookup fieldName fields of
+        r@(TOther (TRecord fields)) -> case lookup fieldName fields of
           Just fieldTy -> pure fieldTy
-          Nothing ->
-            throwError $ RecordDoesNotHaveField (TRecord fields) fieldName
+          Nothing      -> throwError $ RecordDoesNotHaveField r fieldName
         t -> throwError $ NotARecordType t
       pure $ ProjectT ty record' fieldName
     e@(FCall _name _args) -> throwError $ CannotInferFCall e
@@ -974,7 +1027,7 @@ infer expr_ = do
 -- existentials.
 -- [] forall a b c. t ==> [e1 e2 e3] [e3/c][e2/b][e1/a]t
 existentialiseOuterForalls :: Type -> TypeM Type
-existentialiseOuterForalls (Forall u a) = do
+existentialiseOuterForalls (TOther (Forall u a)) = do
   alpha <- newE
   extendE alpha
   existentialiseOuterForalls (substEForU alpha u a)
@@ -1015,32 +1068,32 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
       -- Lookup the type of the constructor
     conTy <- lookupV con
     case second unfoldFn (unfoldForall conTy) of
-      (us, (argTys, tcon@TCon{})) -> do
+      (us, (argTys, tycon@TCon{})) -> do
         -- Create new existentials for each universal in the forall
         -- Add them to the context
         eSub <- mapM (\u -> (, u) <$> newE) us
         mapM_ (extendE . fst) eSub
 
-        -- Substitute them into the argtys and the tcon
+        -- Substitute them into the argtys and the tycon
         let argTys' = map
               (\t -> foldl (\t' (e, u) -> substEForU e u t') t eSub)
               argTys
-            tcon' = foldl (\t' (e, u) -> substEForU e u t') tcon eSub
+            tycon' = foldl (\t' (e, u) -> substEForU e u t') tycon eSub
 
         -- Check each subpattern against the corresponding argty
         mapM_ (uncurry checkPattern) (zip subpats argTys')
 
         -- Return the constructor type
-        pure tcon'
+        pure tycon'
       (_, (_, t)) -> throwError $ ExpectedConstructorType t
   VarPat x -> do
     alpha <- newE
-    extendE alpha >> extendV x (EType alpha)
-    pure (EType alpha)
+    extendE alpha >> extendV x (e_ alpha)
+    pure (e_ alpha)
   WildPat -> do
     alpha <- newE
     extendE alpha
-    pure (EType alpha)
+    pure (e_ alpha)
   TuplePat subpats ->
     let con = case subpats of
           []                       -> error "Type.inferPattern: empty tuple"
@@ -1081,26 +1134,26 @@ checkPattern pat ty = do
     ConsPat con _meta subpats -> do
       constructorType <- lookupV con
       case second unfoldFn (unfoldForall constructorType) of
-        (us, (argTys, tcon@TCon{})) -> do
+        (us, (argTys, tycon@TCon{})) -> do
           -- Create new existentials for each universal in the forall
           eSub <- mapM (\u -> (, u) <$> newE) us
 
           -- Add new existentials to the context
           mapM_ (extendE . fst) eSub
 
-          -- Substitute them into the argtys and the tcon
+          -- Substitute them into the argtys and the tycon
           let
             argTys' =
               map (\t -> foldl (\t' (e, u) -> substEForU e u t') t eSub) argTys
-            tcon' = foldl (\t' (e, u) -> substEForU e u t') tcon eSub
+            tycon' = foldl (\t' (e, u) -> substEForU e u t') tycon eSub
 
           -- Check each subpattern against the corresponding argty
           mapM_ (uncurry checkPattern) (zip subpats argTys')
 
           -- Check this against the type we have been given
-          tcon'' <- subst tcon'
-          ty'    <- subst ty
-          subtype tcon'' ty'
+          tycon'' <- subst tycon'
+          ty'     <- subst ty
+          subtype tycon'' ty'
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
     ListPat [] -> checkPattern (ConsPat (prim "[]") (Just listNilMeta) []) ty
     ListPat subpats -> checkPattern
@@ -1129,40 +1182,41 @@ checkPattern pat ty = do
 
 -- | unfoldForall (Forall a (Forall b t)) == ([a, b], t)
 unfoldForall :: Type -> ([U], Type)
-unfoldForall (Forall u t) = let (us, t') = unfoldForall t in (u : us, t')
-unfoldForall t            = ([], t)
+unfoldForall (TOther (Forall u t)) =
+  let (us, t') = unfoldForall t in (u : us, t')
+unfoldForall t = ([], t)
 
 -- | unfoldFn (Fn a (Fn b (Fn c d))) = ([a, b, c], d)
 unfoldFn :: Type -> ([Type], Type)
-unfoldFn (Fn a b) = let (ts, t) = unfoldFn b in (a : ts, t)
-unfoldFn t        = ([], t)
+unfoldFn (TOther (Fn a b)) = let (ts, t) = unfoldFn b in (a : ts, t)
+unfoldFn t                 = ([], t)
 
 -- | foldFn [a, b, c] d = (Fn a (Fn b (Fn c d)))
 foldFn :: [Type] -> Type -> Type
 foldFn []       t = t
-foldFn [a     ] t = Fn a t
-foldFn (a : as) t = Fn a (foldFn as t)
+foldFn [a     ] t = fn a t
+foldFn (a : as) t = fn a (foldFn as t)
 
--- | foldApp A [b, c, d] = TApp (TApp (TApp A b) c) d
-foldApp :: Type -> [Type] -> Type
-foldApp = foldl (\f t -> TApp f [t])
+-- -- | foldApp A [b, c, d] = TApp (TApp (TApp A b) c) d
+-- foldApp :: Type' -> [Type] -> Type
+-- foldApp = foldl (\f t -> tapp f [t])
 
 -- Infer the type of the result when applying a function of type @ty@ to @e@
 -- Return the type of the result, along with a type-annotated @e@.
 inferApp :: Type -> Exp -> TypeM (Type, ExpT)
 inferApp ty e = do
   trace' ["inferApp", debug ty, debug e] $ case ty of
-    Forall u a -> do
+    TOther (Forall u a) -> do
       alpha <- newE
       extendE alpha
       inferApp (substEForU alpha u a) e
-    EType alpha -> do
+    TOther (EType alpha) -> do
       a1 <- newE
       a2 <- newE
-      extendE a2 >> extendE a1 >> extendSolved alpha (Fn (EType a1) (EType a2))
-      e' <- check e (EType a1)
-      pure (EType a2, e')
-    Fn a b -> do
+      extendE a2 >> extendE a1 >> extendSolved alpha (fn (e_ a1) (e_ a2))
+      e' <- check e (e_ a1)
+      pure (e_ a2, e')
+    TOther (Fn a b) -> do
       e' <- check e a
       pure (b, e')
     _ -> throwError $ InfAppFailure ty e
@@ -1225,13 +1279,14 @@ sepBy = intercalate
 
 -- Property tests
 
+-- TODO: records
 genType :: Gen Type
 genType = G.recursive
   G.choice
-  [EType <$> genE, UType <$> genU]
-  [ G.subterm2 genType genType Fn
-  , G.subtermM genType (\t -> Forall <$> genU <*> pure t)
-  , TCon <$> genName <*> G.list (R.linear 0 3) genType
+  [e_ <$> genE, u_ <$> genU]
+  [ G.subterm2 genType genType fn
+  , G.subtermM genType (\t -> forAll <$> genU <*> pure t)
+  , tcon <$> genName <*> G.list (R.linear 0 3) genType
   ]
 
 genCtxElem :: Gen CtxElem
@@ -1264,29 +1319,29 @@ genUpperString = do
 genUpperRawName :: Gen RawName
 genUpperRawName = Name <$> genUpperString
 
-test :: Hedgehog.Group
-test = $$(Hedgehog.discover)
+test :: H.Group
+test = $$(H.discover)
 
 prop_fv_commutes :: Property
 prop_fv_commutes = property $ do
-  a <- forAll genType
-  b <- forAll genType
-  fv (Fn a b) === (fv a <> fv b)
+  a <- H.forAll genType
+  b <- H.forAll genType
+  fv (fn a b) === (fv a <> fv b)
 
 prop_subst_commutes :: Property
 prop_subst_commutes = property $ do
-  ctx <- forAll genCtx
-  a   <- forAll genType
-  b   <- forAll genType
-  subst' ctx (Fn a b) === Fn (subst' ctx a) (subst' ctx b)
+  ctx <- H.forAll genCtx
+  a   <- H.forAll genType
+  b   <- H.forAll genType
+  subst' ctx (fn a b) === fn (subst' ctx a) (subst' ctx b)
 
 prop_substEForU_commutes :: Property
 prop_substEForU_commutes = property $ do
-  e <- forAll genE
-  u <- forAll genU
-  a <- forAll genType
-  b <- forAll genType
-  substEForU e u (Fn a b) === Fn (substEForU e u a) (substEForU e u b)
+  e <- H.forAll genE
+  u <- H.forAll genU
+  a <- H.forAll genType
+  b <- H.forAll genType
+  substEForU e u (fn a b) === fn (substEForU e u a) (substEForU e u b)
 
 typecheckTest :: Ctx -> TypeM ExpT -> Either LocatedError Type
 typecheckTest ctx =
@@ -1298,31 +1353,31 @@ typecheckTest ctx =
 
 prop_uval_infers_unit :: Property
 prop_uval_infers_unit = property $ do
-  ctx <- forAll genCtx
+  ctx <- H.forAll genCtx
   let expr = UnitLit
       ty   = TCon (prim "Unit") []
   typecheckTest ctx (infer expr) === Right ty
 
 prop_checks_bad_unit_annotation :: Property
 prop_checks_bad_unit_annotation = property $ do
-  ctx <- forAll genCtx
+  ctx <- H.forAll genCtx
   let expr = UnitLit
-      ty   = Fn unit unit
+      ty   = fn unit unit
   typecheckTest ctx (check expr ty)
-    === Left (LocatedError Nothing (SubtypingFailure unit (Fn unit unit)))
+    === Left (LocatedError Nothing (SubtypingFailure unit (fn unit unit)))
 
 prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
-  v <- forAll genName
+  v <- H.forAll genName
   let uval = UnitLit
-  let expr = App (Ann (Abs (NE.fromList [v]) uval) (Fn unit unit)) uval
+  let expr = App (Ann (Abs (NE.fromList [v]) uval) (fn unit unit)) uval
   typecheckTest mempty (infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
 prop_infers_app_with_context = property $ do
   -- The context contains id : Unit -> Unit
   let uval = UnitLit
-      ctx  = [V "id" (Fn unit unit)]
+      ctx  = [V "id" (fn unit unit)]
   -- The expression is id Unit
   let expr = App (Var "id") uval
   -- The inferred type should be Unit
@@ -1332,11 +1387,9 @@ prop_infers_polymorphic_app :: Property
 prop_infers_polymorphic_app = property $ do
   -- The context contains id     : forall a. a -> a
   --                      idUnit : Unit -> Unit
-  let
-    uval = UnitLit
-    a    = U 0 "a"
-    ctx =
-      [V "id" (Forall a (Fn (UType a) (UType a))), V "idUnit" (Fn unit unit)]
+  let uval = UnitLit
+      a    = U 0 "a"
+      ctx  = [V "id" (forAll a (fn (u_ a) (u_ a))), V "idUnit" (fn unit unit)]
   -- The expression is idUnit (id Unit)
   let expr = App (Var "idUnit") (App (Var "id") uval)
   -- The inferred type should be Unit
@@ -1345,7 +1398,7 @@ prop_infers_polymorphic_app = property $ do
 prop_infers_list_app :: Property
 prop_infers_list_app = property $ do
   let a    = U 0 "a"
-      ty   = Forall a (list (UType a))
+      ty   = forAll a (list (u_ a))
       -- [] : forall a. List a
       ctx  = [V "[]" ty]
       expr = Var "[]"
@@ -1375,9 +1428,8 @@ prop_checks_higher_kinded_application = property $ do
     f     = U 1 "f"
     a     = U 2 "a"
     expr1 = Abs (NE.fromList ["x"]) (Var "x")
-    type1 = Forall
-      f
-      (Forall a (Fn (TApp (UType f) [UType a]) (TApp (UType f) [UType a])))
+    type1 =
+      forAll f (forAll a (fn (tapp (u_' f) [u_ a]) (tapp (u_' f) [u_ a])))
   typecheckTest mempty (check expr1 type1) === Right type1
   -- ((\x -> x) : f a -> f a) [1] : [Int] should check
   -- ((\x -> x) : f a -> f a) [1]         should infer [Int]
@@ -1387,13 +1439,16 @@ prop_checks_higher_kinded_application = property $ do
   typecheckTest mempty (check expr2 type2) === Right type2
   typecheckTest mempty (infer expr2) === Right (list int)
   -- ((\x -> x) : f a -> f a) True : [Int] should fail to check
-  -- ((\x -> x) : f a -> f a) True         should infer some unknown unification variables
+  -- ((\x -> x) : f a -> f a) True         should fail to infer
   let expr3 = App (Ann expr1 type1) (Var (prim "True"))
       type3 = list int
   typecheckTest mempty (check expr3 type3) === Left
     (LocatedError
       Nothing
-      (SubtypingFailure (TCon (prim "Bool") [EType (E 1)]) (list int))
+      (SubtypingFailure (tcon (prim "Bool") []) (tapp (e_' (E 0)) [e_ (E 1)]))
     )
-  typecheckTest mempty (infer expr3)
-    === Right (TCon (prim "Bool") [EType (E 1)])
+  typecheckTest mempty (infer expr3) === Left
+    (LocatedError
+      Nothing
+      (SubtypingFailure (tcon (prim "Bool") []) (tapp (e_' (E 0)) [e_ (E 1)]))
+    )

@@ -8,6 +8,11 @@ import           Data.Name                      ( Name
                                                 , prim
                                                 )
 import           Data.String                    ( fromString )
+import           Type.DSL                       ( fn
+                                                , forAll
+                                                , tcon
+                                                , u_
+                                                )
 import           Type.Type                      ( Ctx
                                                 , CtxElem(..)
                                                 , Type(..)
@@ -25,13 +30,13 @@ import           Type.Type                      ( Ctx
 fcallInfo :: Map String Type
 fcallInfo = Map.fromList
   -- name        type
-  [ ("putStrLn", Fn string unit)
-  , ("putStr"  , Fn string unit)
+  [ ("putStrLn", (fn string unit))
+  , ("putStr"  , (fn string unit))
   , ("getLine" , string)
   ]
 
 primCtx :: Ctx
-primCtx = primitiveConstructors <> primitiveFns
+primCtx = primitiveConstructors <> primitivefns
 
 primitiveCtorInfo :: Map Name ConMeta
 primitiveCtorInfo =
@@ -61,25 +66,25 @@ mkIO =
   ConMeta { conMetaTag = 0, conMetaArity = 1, conMetaTypeName = prim "IO" }
 
 string :: Type
-string = TCon (prim "String") []
+string = tcon (prim "String") []
 
 int :: Type
-int = TCon (prim "Int") []
+int = tcon (prim "Int") []
 
 char :: Type
-char = TCon (prim "Char") []
+char = tcon (prim "Char") []
 
 bool :: Type
-bool = TCon (prim "Bool") []
+bool = tcon (prim "Bool") []
 
 unit :: Type
-unit = TCon (prim "Unit") []
+unit = tcon (prim "Unit") []
 
 list :: Type -> Type
-list a = TCon (prim "List") [a]
+list a = tcon (prim "List") [a]
 
 io :: Type -> Type
-io a = TCon (prim "IO") [a]
+io a = tcon (prim "IO") [a]
 
 primTypeCtx :: Map Name ()
 primTypeCtx = Map.fromList $ map
@@ -105,14 +110,12 @@ primitiveConstructors =
   [ V (prim "Unit")  unit
   , V (prim "True")  bool
   , V (prim "False") bool
-  , V (prim "[]") (Forall (U 0 "a") (list (UType (U 0 "a"))))
+  , V (prim "[]") (forAll (U 0 "a") (list (u_ (U 0 "a"))))
   , V
     (prim "::")
-    (Forall
+    (forAll
       (U 0 "a")
-      (Fn (UType (U 0 "a"))
-          (Fn (list (UType (U 0 "a"))) (list (UType (U 0 "a"))))
-      )
+      (fn (u_ (U 0 "a")) (fn (list (u_ (U 0 "a"))) (list (u_ (U 0 "a")))))
     )
   , V (prim "Tuple2") (mkTupleCon 2 (prim "Tuple2"))
   , V (prim "Tuple3") (mkTupleCon 3 (prim "Tuple3"))
@@ -123,8 +126,8 @@ primitiveConstructors =
   , V (prim "Tuple8") (mkTupleCon 8 (prim "Tuple8"))
   , V
     (prim "MkIO")
-    (Forall (U 0 "a")
-            (Fn (Fn (Fn (UType (U 0 "a")) unit) unit) (io (UType (U 0 "a"))))
+    (forAll (U 0 "a")
+            (fn (fn (fn (u_ (U 0 "a")) unit) unit) (io (u_ (U 0 "a"))))
     )
   ]
 
@@ -133,59 +136,52 @@ primitiveConstructors =
 -- without any knowledge of the runtime structure of complex types like tuples
 -- or Maybe, since that may change in the future.
 -- TODO: do we need to be generating globally unique U vars here?
-primitiveFns :: Ctx
-primitiveFns =
-  [ V (prim "appendString") (Fn string (Fn string string))
-  , V (prim "$chars")       (Fn string (list char))
-  , V (prim "$consChar")    (Fn char (Fn string string))
+primitivefns :: Ctx
+primitivefns =
+  [ V (prim "appendString") (fn string (fn string string))
+  , V (prim "$chars")       (fn string (list char))
+  , V (prim "$consChar")    (fn char (fn string string))
   -- unconsChar : String -> a -> (Char -> String -> a) -> a
   , let a = U 0 "a"
-    in
-      V
-        (prim "$unconsChar")
+    in  V
+          (prim "$unconsChar")
 
-        (Forall
-          a
-          (Fn string
-              (Fn (UType a) (Fn (Fn char (Fn string (UType a))) (UType a)))
+          (forAll
+            a
+            (fn string (fn (u_ a) (fn (fn char (fn string (u_ a))) (u_ a))))
           )
-        )
-  , V (prim "+") (Fn int (Fn int int))
-  , V (prim "-") (Fn int (Fn int int))
-  , V (prim "*") (Fn int (Fn int int))
-  , V (prim "/") (Fn int (Fn int int))
+  , V (prim "+") (fn int (fn int int))
+  , V (prim "-") (fn int (fn int int))
+  , V (prim "*") (fn int (fn int int))
+  , V (prim "/") (fn int (fn int int))
   , let a = U 0 "a"
         b = U 1 "b"
         c = U 2 "c"
     in  V
           (prim ".")
-          (Forall
+          (forAll
             b
-            (Forall
+            (forAll
               c
-              (Fn
-                (Fn (UType b) (UType c))
-                (Forall a (Fn (Fn (UType a) (UType b)) (Fn (UType a) (UType c)))
-                )
+              (fn (fn (u_ b) (u_ c))
+                  (forAll a (fn (fn (u_ a) (u_ b)) (fn (u_ a) (u_ c))))
               )
             )
           )
-  , V (prim "$showInt")  (Fn int string)
-  , V (prim "$showChar") (Fn char string)
-  , V (prim "$eqInt")    (Fn int (Fn int bool))
-  , V (prim "$eqChar")   (Fn char (Fn char bool))
+  , V (prim "$showInt")  (fn int string)
+  , V (prim "$showChar") (fn char string)
+  , V (prim "$eqInt")    (fn int (fn int bool))
+  , V (prim "$eqChar")   (fn char (fn char bool))
   -- readInt : String -> a -> (Int -> a) -> a
   , let a = U 0 "a"
-    in  V
-          (prim "$readInt")
+    in  V (prim "$readInt")
 
-          (Forall a (Fn string (Fn (UType a) (Fn (Fn int (UType a)) (UType a))))
-          )
+          (forAll a (fn string (fn (u_ a) (fn (fn int (u_ a)) (u_ a)))))
   ]
 
 mkTupleCon :: Int -> Name -> Type
-mkTupleCon len tcon =
+mkTupleCon len con =
   let us = map (uncurry U) $ take len $ zip
         [0 ..]
         (map (fromString . (: [])) ['a' ..])
-  in  foldr Forall (foldr (Fn . UType) (TCon tcon (map UType us)) us) us
+  in  foldr forAll (foldr (fn . u_) (tcon con (map u_ us)) us) us

@@ -23,7 +23,9 @@ import           Control.Lens                   ( over
                                                 , set
                                                 , view
                                                 )
-import           Control.Lens.Plated            ( transformOf )
+import           Control.Lens.Plated            ( transformMOf
+                                                , transformOf
+                                                )
 import           Data.Data.Lens                 ( uniplate )
 import           Data.Generics.Product          ( Param(..)
                                                 , param
@@ -36,6 +38,7 @@ import           Data.Name
 import qualified Syn                           as S
 import           Type.Type                      ( E
                                                 , Type(..)
+                                                , Type'(..)
                                                 )
 
 -- This module contains the typed AST
@@ -92,10 +95,26 @@ applySolution s = over (param @0) (transformOf uniplate (solve s))
 -- If the existential solves to another existential or a type containing existentials, we try to
 -- solve those as well.
 solve :: Map E Type -> Type -> Type
-solve s = transformOf uniplate go
+solve s = transformOf uniplate solve'
  where
-  go (EType e) = maybe (EType e) (solve s) (Map.lookup e s)
-  go t         = t
+  solve' :: Type -> Type
+  solve' (TApp f xs) = case trySolve f of
+    Left  (TApp g ys) -> TApp g (ys <> xs)
+    Left  (TOther f') -> TApp f' xs
+    Left  (TCon t ys) -> TCon t (ys <> xs)
+    Right t           -> TApp t xs
+  solve' (TCon t xs) = TCon t xs
+  solve' (TOther t ) = case trySolve t of
+    Left  t' -> t'
+    Right t' -> TOther t'
+  -- Apply the solution to the given 'Type''.
+  -- Returns either a 'Type' in 'Left' or a 'Type'' in 'Right'
+  trySolve :: Type' -> Either Type Type'
+  trySolve = transformMOf uniplate go
+   where
+    go :: Type' -> Either Type Type'
+    go (EType e) = maybe (Right (EType e)) (Left . solve s) (Map.lookup e s)
+    go t         = Right t
 
 -- | Get the cached type of an 'Exp'
 typeOf :: Exp -> Type

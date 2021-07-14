@@ -60,6 +60,7 @@ library
       Type.ToTyped
       Type.Primitive
       Type.Type
+      Type.DSL
       Util
       Interpret
       Chez
