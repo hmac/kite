@@ -15,6 +15,12 @@ fn a b = TOther $ Fn a b
 fn' :: Type -> Type -> Type'
 fn' = Fn
 
+ifn :: Type -> Type -> Type
+ifn a b = TOther $ IFn a b
+
+ifn' :: Type -> Type -> Type'
+ifn' = IFn
+
 forAll :: U -> Type -> Type
 forAll u t = TOther $ Forall u t
 

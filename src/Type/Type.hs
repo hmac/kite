@@ -43,6 +43,8 @@ data Type =
 data Type' =
   -- Function type
     Fn Type Type
+  -- Implicit function type
+  | IFn Type Type
   -- Universal quantifier
   | Forall U Type
   -- Existential variable
@@ -69,18 +71,21 @@ instance Debug Type where
       AppL    -> "(" <> go' Neutral (TCon d args) <> ")"
       AppR    -> "(" <> go' Neutral (TCon d args) <> ")"
       _       -> go' Neutral (TCon d args)
+
     go :: DebugPrintCtx -> Type' -> String
-    go _ (EType e) = debug e
-    go _ (UType u) = debug u
-    go c (Fn a b ) = case c of
-      Neutral -> go' ArrL a <+> "->" <+> go' ArrR b
-      ArrR    -> go Neutral (Fn a b)
-      _       -> "(" <> go Neutral (Fn a b) <> ")"
+    go _ (EType e   ) = debug e
+    go _ (UType u   ) = debug u
+    go c (Fn     a b) = debugArrow "->" c a b
+    go c (IFn    a b) = debugArrow "=>" c a b
     go c (Forall v t) = case c of
       Neutral -> "∀" <> debug v <> "." <+> "(" <> go' Neutral t <> ")"
       _       -> "(" <> go Neutral (Forall v t) <> ")"
     go _ (TRecord fields) = "{" <+> sepBy ", " (map f fields) <+> "}"
       where f (name, ty) = name <+> ":" <+> go' Neutral ty
+
+    debugArrow arr Neutral a b = go' ArrL a <+> arr <+> go' ArrR b
+    debugArrow arr ArrR    a b = debugArrow arr Neutral a b
+    debugArrow arr _       a b = "(" <> debugArrow arr Neutral a b <> ")"
 
 -- | Variables
 -- Universal type variable

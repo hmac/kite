@@ -160,6 +160,7 @@ fv = \case
   fv' :: Type' -> [E]
   fv' = \case
     Fn     a b     -> fv a <> fv b
+    IFn    a b     -> fv a <> fv b
     Forall _ a     -> fv a
     EType   e      -> [e]
     UType   _      -> []
@@ -200,6 +201,7 @@ subst' ctx = \case
   substType' = \case
     UType u        -> pure $ UType u
     Fn     a b     -> pure $ Fn (subst' ctx a) (subst' ctx b)
+    IFn    a b     -> pure $ IFn (subst' ctx a) (subst' ctx b)
     Forall u a     -> pure $ Forall u (subst' ctx a)
     TRecord fields -> pure $ TRecord $ mapSnd (subst' ctx) fields
     EType   e      -> substE e ctx
@@ -219,7 +221,8 @@ substEForU e u = go
     TCon c as -> TCon c (map go as)
     TOther t  -> TOther $ go' t
   go' = \case
-    Fn a b -> Fn (go a) (go b)
+    Fn  a b -> Fn (go a) (go b)
+    IFn a b -> IFn (go a) (go b)
     Forall u' a | u == u'   -> Forall u' a
                 | otherwise -> Forall u' (go a)
     EType e' -> EType e'
@@ -432,6 +435,7 @@ wellFormedType ty = do
   go :: Type' -> TypeM ()
   go = \case
     Fn     a b -> wellFormedType a >> wellFormedType b
+    IFn    a b -> wellFormedType a >> wellFormedType b
     Forall u t -> do
       call $ do
         void $ extendU u

@@ -79,8 +79,8 @@ printType = go P0
                   | otherwise  -> printConName con <+> hsep (map (go P0) args)
     TOther t -> go' prec t
   go' prec = \case
-    Fn a b | prec >= P1 -> parens $ go' P0 (Fn a b)
-           | otherwise  -> go P1 a <+> "->" <+> go P0 b
+    Fn  a b        -> printArrow "->" prec a b
+    IFn a b        -> printArrow "=>" prec a b
     EType   e      -> printE e
     UType   u      -> printU u
     TRecord fields -> braces $ sep $ punctuate comma $ map
@@ -91,6 +91,9 @@ printType = go P0
       printForall us (TOther (Forall u a)) = printForall (u : us) a
       printForall us a =
         "forall" <+> hsep (map printU (reverse us)) <> "." <+> printType a
+
+  printArrow arr prec a b | prec >= P1 = parens $ printArrow arr P0 a b
+                          | otherwise  = go P1 a <+> arr <+> go P0 b
 
 -- If the constructor is in the Kite.Prim module, omit the module qualifier
 printConName :: Name -> Doc a
