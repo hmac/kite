@@ -46,7 +46,7 @@ trecord' :: [(String, Type)] -> Type'
 trecord' = TRecord
 
 tcon :: Name -> [Type] -> Type
-tcon n ts = TCon n ts
+tcon = TCon
 
 tapp :: Type' -> [Type] -> Type
-tapp f ts = TApp f ts
+tapp = TApp

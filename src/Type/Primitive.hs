@@ -30,8 +30,8 @@ import           Type.Type                      ( Ctx
 fcallInfo :: Map String Type
 fcallInfo = Map.fromList
   -- name        type
-  [ ("putStrLn", (fn string unit))
-  , ("putStr"  , (fn string unit))
+  [ ("putStrLn", fn string unit)
+  , ("putStr"  , fn string unit)
   , ("getLine" , string)
   ]
 

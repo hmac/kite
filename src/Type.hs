@@ -1093,7 +1093,7 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
             tycon' = foldl (\t' (e, u) -> substEForU e u t') tycon eSub
 
         -- Check each subpattern against the corresponding argty
-        subpats' <- mapM (uncurry checkPattern) (zip subpats argTys')
+        subpats' <- zipWithM checkPattern subpats argTys'
 
         -- Lookup the metadata of the constructor
         meta     <- lookupCtorInfo con
@@ -1163,7 +1163,7 @@ checkPattern pat ty = do
             tycon' = foldl (\t' (e, u) -> substEForU e u t') tycon eSub
 
           -- Check each subpattern against the corresponding argty
-          subpats' <- mapM (uncurry checkPattern) (zip subpats argTys')
+          subpats' <- zipWithM checkPattern subpats argTys'
 
           -- Check this against the type we have been given
           tycon''  <- subst tycon'
