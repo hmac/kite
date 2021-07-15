@@ -109,7 +109,8 @@ canonicaliseType env = \case
   TyChar          -> TyChar
   TyBool          -> TyBool
   TyUnit          -> TyUnit
-  TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyFun  a b      -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyIFun a b      -> TyIFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
   TyAlias  n a    -> TyAlias (canonicaliseName env n) (canonicaliseType env a)
   TyForall v t    -> TyForall (Local v) (canonicaliseType env t)

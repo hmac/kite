@@ -108,15 +108,22 @@ printFun Fun { funComments = comments, funName = name, funExpr = defs, funType =
 -- f a -> f b
 -- a -> b -> c
 -- (a -> b) -> c
+-- a => b => c
+-- a => b -> c
+-- (a -> b) => c
+-- a -> b => c
 printType :: Type -> Document
 printType = printType' Root
 
 data Context = Root | AppL | AppR  | ArrL | ArrR
 
+-- TODO: Refactor this to use precedence levels and associativity properly.
 printType' :: Context -> Type -> Document
 printType' ctx ty = case (ctx, ty) of
   -- top level arrows don't get parenthesised
   (Root, TyFun a b      ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
+  -- TODO: print implicit function arrows properly
+  (_   , TyIFun a b     ) -> printType' ArrL a <+> "=>" <+> printType' ArrR b
   -- applications of TyList get special-cased
   (Root, TyApp TyList a ) -> brackets (printType' Root a)
   -- top level applications don't get parenthesised
