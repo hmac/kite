@@ -171,6 +171,12 @@ ctx =
                   , conMetaTypeName = qq "Wrap"
                   }
         )
+      , ( qq "MkPair"
+        , ConMeta { conMetaTag      = 0
+                  , conMetaArity    = 2
+                  , conMetaTypeName = qq "Pair"
+                  }
+        )
       , ( qq "Left"
         , ConMeta { conMetaTag      = 0
                   , conMetaArity    = 1

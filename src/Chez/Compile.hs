@@ -144,7 +144,7 @@ compileData :: T.Data -> [Def]
 compileData dat =
       -- The maximum number of fields for a constructor of this type
   let
-    maxFields        = maximum $ map (length . T.conArgs) (T.dataCons dat)
+    maxFields = maximum $ map (T.conMetaArity . T.conMeta) (T.dataCons dat)
     fields           = "_tag" : map (pack . ('_' :) . show) [0 .. maxFields - 1]
     typeName         = "$" <> name2Text (T.dataName dat)
     recordDefinition = DefRecord typeName fields
@@ -153,7 +153,7 @@ compileData dat =
     mkConstructor :: Int -> T.DataCon -> Def
     mkConstructor tag con =
       let
-        maxArgs    = length $ T.conArgs con
+        maxArgs    = T.conMetaArity $ T.conMeta con
         parameters = map (pack . ('_' :) . show) [0 .. maxArgs - 1]
         fieldValues =
           Lit (Int tag)
@@ -288,7 +288,6 @@ compilePat pattern scrut = case pattern of
     pure (lengthTest : tests, bindings)
   -- TODO: we could use record-accessor to index into the fields of the constructor
   -- https://scheme.com/tspl4/records.html#./records:h1
-  T.ConsPat c Nothing _ -> throwError $ CtorMissingMetadata c
   T.ConsPat c _ [] | c == prim "[]" -> pure ([App (Var "null?") [scrut]], [])
   T.ConsPat c _ [headPat, tailPat] | c == prim "::" -> do
     let notNullTest = App (Var "not") [App (Var "null?") [scrut]]
@@ -296,6 +295,7 @@ compilePat pattern scrut = case pattern of
     (tailTests, tailBindings) <- compilePat tailPat (App (Var "cdr") [scrut])
     pure (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
 
+  T.ConsPat c  Nothing     _    -> throwError $ CtorMissingMetadata c
   T.ConsPat _c (Just meta) pats -> do
     let tag      = T.conMetaTag meta
         ty       = "$" <> name2Text (T.conMetaTypeName meta)

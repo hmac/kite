@@ -57,7 +57,6 @@ library
       Type.FromSyn
       Type.Module
       Type.Print
-      Type.ToTyped
       Type.Primitive
       Type.Type
       Type.DSL

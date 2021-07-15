@@ -37,20 +37,20 @@ import           Type                           ( Exp
 import           Type.FromSyn                   ( fromSyn
                                                 , quantify
                                                 )
-import qualified Type.ToTyped                   ( convertModule )
 import           Type.Type                      ( CtorInfo
                                                 , Ctx
                                                 , CtxElem(V)
                                                 , Type(..)
                                                 , TypeCtx
                                                 )
+import           Util                           ( zipWithM )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
 translateModule
   :: Can.Module -> TypecheckM (Ctx, CtorInfo, [(Name, Maybe Type, Exp)])
 translateModule modul = do
-  (_, dataTypeCtx, dataTypeInfo) <- concat3
+  (_, dataTypeCtx, dataTypeInfo, _datas) <- concat4
     <$> mapM translateData (getDataDecls (moduleDecls modul))
   funs <- mapM funToBind $ getFunDecls (moduleDecls modul)
   pure (dataTypeCtx, dataTypeInfo, funs)
@@ -63,7 +63,7 @@ checkModule
   -> TypecheckM ((TypeCtx, Ctx, CtorInfo), T.Module)
 checkModule (typeCtx, ctx, ctorInfo) modul = do
   -- Extract type signatures from all datatype definitions in the module
-  (typeNames, dataTypeCtx, dataTypeInfo) <- concat3
+  (typeNames, dataTypeCtx, dataTypeInfo, datas) <- concat4
     <$> mapM translateData (getDataDecls (moduleDecls modul))
 
   -- Get all the functions defined in the module
@@ -74,23 +74,25 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
   let ctorInfo' = ctorInfo <> dataTypeInfo
 
   -- Typecheck each function definition
-  funCtx <-
+  (funCtx, funs') <-
     withCtorInfo (<> ctorInfo')
     $ withGlobalTypeCtx (<> typeCtx')
     $ withGlobalCtx (<> (ctx <> dataTypeCtx))
     $ typecheckFuns funs
-  let ctx'        = ctx <> dataTypeCtx <> funCtx
+  let ctx' = ctx <> dataTypeCtx <> funCtx
 
-  -- Construct a typed module by converting every data & fun decl into the typed
-  -- form, with empty type annotations. In the future this should be done during
-  -- typechecking itself.
-  let typedModule = Type.ToTyped.convertModule ctorInfo' modul
+  let typedModule = T.Module
+        { T.moduleName    = moduleName modul
+        , T.moduleImports = moduleImports modul
+        , T.moduleExports = map fst $ moduleExports modul
+        , T.moduleDecls   = map T.FunDecl funs' <> map T.DataDecl datas
+        }
 
   -- Done
   pure ((typeCtx', ctx', ctorInfo'), typedModule)
 
 -- | Typecheck a group of functions which may refer to each other.
-typecheckFuns :: [Can.Fun Can.Exp] -> TypecheckM Ctx
+typecheckFuns :: [Can.Fun Can.Exp] -> TypecheckM (Ctx, [T.Fun])
 typecheckFuns funs = do
   funs' <- mapM (\f -> (f, ) <$> funToBind f) funs
 
@@ -102,12 +104,12 @@ typecheckFuns funs = do
         Just t  -> [V name t]
         Nothing -> []
 
-  withGlobalCtx (<> funCtx) $ mapM_ typecheckFun funs'
+  funs'' <- withGlobalCtx (<> funCtx) $ mapM typecheckFun funs'
 
-  pure funCtx
+  pure (funCtx, funs'')
 
-typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM T.Exp
-typecheckFun (fun, (name, mtype, expr)) =
+typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM T.Fun
+typecheckFun (fun, (name, mtype, expr)) = do
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
     $ do
@@ -117,12 +119,17 @@ typecheckFun (fun, (name, mtype, expr)) =
             void $ runTypeM $ wellFormedType ty
           Nothing -> pure ()
         -- check or infer each function in the where clause
-        whereCtx <- typecheckFuns (funWheres fun)
-        withGlobalCtx (<> whereCtx) $ runTypeMAndSolve $ case mtype of
+        (whereCtx, wheres) <- typecheckFuns (funWheres fun)
+        expr' <- withGlobalCtx (<> whereCtx) $ runTypeMAndSolve $ case mtype of
           -- check the body of the function
           Just ty -> check expr ty
           -- infer the body of the function
           Nothing -> infer expr
+        pure T.Fun { T.funName   = name
+                   , T.funType   = T.typeOf expr'
+                   , T.funExpr   = expr'
+                   , T.funWheres = wheres
+                   }
 
 funToBind :: Can.Fun Can.Exp -> TypecheckM (Name, Maybe Type, Exp)
 funToBind fun = do
@@ -143,24 +150,43 @@ funToBind fun = do
 -- becomes
 --   V (Free "Functor") (Forall f. { map : Forall a b. (a -> b) -> f a -> f b })
 --
-translateData :: Can.Data -> TypecheckM ([Name], Ctx, CtorInfo)
+translateData :: Can.Data -> TypecheckM ([Name], Ctx, CtorInfo, [T.Data])
 translateData d = do
   let tyvars = map Local (dataTyVars d)
       info   = zipWith
         (\tag c -> (conName c, ConMeta tag (length (conArgs c)) (dataName d)))
         [0 ..]
         (dataCons d)
+  datacons <- zipWithM
+    (\tag c -> do
+      t <- ctorType (dataName d) tyvars c
+      pure T.DataCon
+        { T.conName = conName c
+        , T.conType = t
+        , T.conMeta = ConMeta { conMetaTag      = tag
+                              , conMetaArity    = length (conArgs c)
+                              , conMetaTypeName = dataName d
+                              }
+        }
+    )
+    [0 ..]
+    (dataCons d)
   ctx <- mapM (buildCtx (dataName d) tyvars) (dataCons d)
-  pure ([dataName d], ctx, Map.fromList info)
+  let data_ = T.Data { T.dataName   = dataName d
+                     , T.dataTyVars = tyvars
+                     , T.dataCons   = datacons
+                     }
+  pure ([dataName d], ctx, Map.fromList info, [data_])
  where
   buildCtx :: Name -> [Name] -> Can.DataCon -> TypecheckM CtxElem
-  buildCtx dataTypeName tyvars datacon = do
-    -- Construct a (Syn) Scheme for this constructor
-    let resultType = foldl S.TyApp (S.TyCon dataTypeName) (map S.TyVar tyvars)
-    ty <- fmap fst $ runTypeM $ quantify tyvars $ foldr S.TyFun
+  buildCtx dataTypeName tyvars datacon =
+    V (conName datacon) <$> ctorType dataTypeName tyvars datacon
+  ctorType :: Name -> [Name] -> Can.DataCon -> TypecheckM Type
+  ctorType typeName typeVars datacon =
+    let resultType = foldl S.TyApp (S.TyCon typeName) (map S.TyVar typeVars)
+    in  fmap fst $ runTypeM $ quantify typeVars $ foldr S.TyFun
                                                         resultType
                                                         (conArgs datacon)
-    pure $ V (conName datacon) ty
 
 getFunDecls :: [Decl_ n e ty] -> [Fun_ n e ty]
 getFunDecls = getDeclBy $ \case
@@ -182,3 +208,9 @@ getDeclBy extract (d : rest) = case extract d of
 concat3 :: (Monoid a, Monoid b, Monoid c) => [(a, b, c)] -> (a, b, c)
 concat3 = foldl go (mempty, mempty, mempty)
   where go (as, bs, cs) (a, b, c) = (a <> as, b <> bs, c <> cs)
+
+-- Like 'Util.concat4' but generalised to any Monoid, not just list
+concat4
+  :: (Monoid a, Monoid b, Monoid c, Monoid d) => [(a, b, c, d)] -> (a, b, c, d)
+concat4 = foldl go (mempty, mempty, mempty, mempty)
+  where go (as, bs, cs, ds) (a, b, c, d) = (a <> as, b <> bs, c <> cs, d <> ds)

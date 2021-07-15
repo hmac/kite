@@ -189,9 +189,10 @@ interpretFun env Fun { funName = name, funExpr = expr } = mdo
 interpretData :: Monad m => Data -> [(Name, Value m)]
 interpretData Data { dataCons = datacons } = map interpretDatacon datacons
  where
-  interpretDatacon DataCon { conName = name, conArgs = args } =
-    (name, go args [])
+  interpretDatacon DataCon { conName = name, conMeta = meta } =
+    (name, go (replicate (conMetaArity meta) ()) [])
    where
+    -- TODO: this should just be a fold
     go []       collectedArgs = Cons name (reverse collectedArgs)
     go (_ : as) collected     = Abs (\v -> pure (go as (v : collected)))
 

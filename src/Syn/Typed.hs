@@ -53,6 +53,7 @@ type Pattern = AST.Pat Name
 data Module = Module
   { moduleName    :: PkgModuleName
   , moduleImports :: [S.Import]
+  -- TODO: why is this different from 'Syn.moduleExports'?
   , moduleExports :: [Name]
   , moduleDecls   :: [Decl]
   }
@@ -81,8 +82,8 @@ data Data = Data
 
 data DataCon = DataCon
   { conName :: Name
-  , conArgs :: [Type]
   , conType :: Type
+  , conMeta :: ConMeta
   }
   deriving (Eq, Show)
 

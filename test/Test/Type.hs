@@ -114,6 +114,14 @@ test = do
         [ V nothing (forAll (U 1 "a") (maybeType (u_ (U 1 "a"))))
         , V "foo"   funType
         ]
+      ctorInfo =
+        [ ( "Nothing"
+          , ConMeta { conMetaTag      = 0
+                    , conMetaArity    = 0
+                    , conMetaTypeName = "Maybe"
+                    }
+          )
+        ]
       expected = MCaseT
         funType
         [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
@@ -124,7 +132,11 @@ test = do
         ]
       r = check fun funType
     it "typechecks successfully" $ do
-      runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+      runTypecheckM
+          defaultTypeEnv
+          (withCtorInfo (<> ctorInfo)
+                        (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+          )
         `shouldBe` Right expected
   describe "implicit: check foo = (f :: A => B -> C) b : C" $ do
     let
@@ -348,7 +360,6 @@ test = do
     it "a foreign call"
       $ checks tctx mempty ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
     it "simple record extraction"
-        -- This passes
         -- D : { field : Bool } -> D a
         -- f : a -> D a -> a
         -- f = x (D d) -> x
@@ -363,12 +374,19 @@ test = do
                 )
             ]
           tctx' = [(qq "D", ())]
-          e     = [syn|x (D d) -> x|]
-          t     = [typ|forall a. a -> D a -> a|]
+          cctx' =
+            [ ( qq "D"
+              , ConMeta { conMetaTag      = 0
+                        , conMetaArity    = 1
+                        , conMetaTypeName = qq "D"
+                        }
+              )
+            ]
+          e = [syn|x (D d) -> x|]
+          t = [typ|forall a. a -> D a -> a|]
         in
-          checks tctx' mempty ctx' e t
+          checks tctx' cctx' ctx' e t
     it "polymorphic record extraction"
-      -- This fails
       -- D : { field : a } -> D a
       -- f : a -> D a -> a
       -- f = x (D d) -> x
@@ -383,11 +401,18 @@ test = do
                   )
               ]
             tctx' = [(qq "D", ())]
-            e     = [syn|x (D d) -> x|]
-            t     = [typ|forall a. a -> D a -> a|]
-        in  checks tctx' mempty ctx' e t
+            cctx' =
+              [ ( qq "D"
+                , ConMeta { conMetaTag      = 0
+                          , conMetaArity    = 1
+                          , conMetaTypeName = qq "D"
+                          }
+                )
+              ]
+            e = [syn|x (D d) -> x|]
+            t = [typ|forall a. a -> D a -> a|]
+        in  checks tctx' cctx' ctx' e t
     it "polymorphic function-typed record extraction"
-        -- This ???
         -- type D a = D (a -> a)
         -- [D : (a -> a) -> D a]
         -- f : D a -> (a -> a)
@@ -401,10 +426,18 @@ test = do
                 )
             ]
           tctx' = [(qq "D", ())]
-          t     = [typ|forall a. D a -> (a -> a)|]
-          e     = [syn|(D f) -> f|]
+          cctx' =
+            [ ( qq "D"
+              , ConMeta { conMetaTag      = 0
+                        , conMetaArity    = 1
+                        , conMetaTypeName = qq "D"
+                        }
+              )
+            ]
+          t = [typ|forall a. D a -> (a -> a)|]
+          e = [syn|(D f) -> f|]
         in
-          checks tctx' mempty ctx' e t
+          checks tctx' cctx' ctx' e t
     it "higher kinded application" $ do
       -- type F t a = MkF (t a -> t a)
       -- f : T b c -> T b c

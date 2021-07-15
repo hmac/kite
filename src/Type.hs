@@ -962,15 +962,15 @@ infer expr_ = do
       -- variables that need to be resolved later on.
 
       -- First, we infer a type for each pattern in the first alt
-      patTys <- mapM inferPattern pats
+      (pats', patTys) <- unzip <$> mapM inferPattern pats
       -- Next, infer a type for the RHS
-      expr'  <- infer expr
+      expr'           <- infer expr
       let exprTy = typeOf expr'
       -- Now check the remaining alts using this information
       alts' <- mapM (checkMCaseAlt patTys exprTy) alts
       -- Now construct a result type and return it
       let ty = foldFn patTys exprTy
-      pure $ MCaseT ty ((pats, expr') : alts')
+      pure $ MCaseT ty ((pats', expr') : alts')
     Let binds body -> do
       -- generate a dummy existential that we'll use to cut the context
       alpha <- newE
@@ -1055,29 +1055,29 @@ checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
       , debug expr
       ]
     $ do
-        checkPattern pat scrutTy
+        pat'  <- checkPattern pat scrutTy
         expr' <- check expr expectedAltTy
-        pure (pat, expr')
+        pure (pat', expr')
 
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
 inferCaseAlt :: Type -> (Pattern, Exp) -> TypeM (Pattern, ExpT)
 inferCaseAlt scrutTy (pat, expr) = do
   trace' ["inferCaseAlt", debug scrutTy, debug pat, debug expr] $ do
-    checkPattern pat scrutTy
+    pat'  <- checkPattern pat scrutTy
     expr' <- infer expr
-    pure (pat, expr')
+    pure (pat', expr')
 
 {-# ANN inferPattern ("HLint: ignore Reduce duplication" :: String) #-}
-inferPattern :: Pattern -> TypeM Type
+inferPattern :: Pattern -> TypeM (Pattern, Type)
 inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
-  IntPat  _                 -> pure int
-  CharPat _                 -> pure char
-  BoolPat _                 -> pure bool
-  UnitPat                   -> pure unit
-  StringPat _               -> pure string
+  IntPat  _                 -> pure (pat, int)
+  CharPat _                 -> pure (pat, char)
+  BoolPat _                 -> pure (pat, bool)
+  UnitPat                   -> pure (pat, unit)
+  StringPat _               -> pure (pat, string)
   ConsPat con _meta subpats -> do
-      -- Lookup the type of the constructor
+    -- Lookup the type of the constructor
     conTy <- lookupV con
     case second unfoldFn (unfoldForall conTy) of
       (us, (argTys, tycon@TCon{})) -> do
@@ -1093,19 +1093,22 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
             tycon' = foldl (\t' (e, u) -> substEForU e u t') tycon eSub
 
         -- Check each subpattern against the corresponding argty
-        mapM_ (uncurry checkPattern) (zip subpats argTys')
+        subpats' <- mapM (uncurry checkPattern) (zip subpats argTys')
+
+        -- Lookup the metadata of the constructor
+        meta     <- lookupCtorInfo con
 
         -- Return the constructor type
-        pure tycon'
+        pure (ConsPat con (Just meta) subpats', tycon')
       (_, (_, t)) -> throwError $ ExpectedConstructorType t
   VarPat x -> do
     alpha <- newE
     extendE alpha >> extendV x (e_ alpha)
-    pure (e_ alpha)
+    pure (pat, e_ alpha)
   WildPat -> do
     alpha <- newE
     extendE alpha
-    pure (e_ alpha)
+    pure (pat, e_ alpha)
   TuplePat subpats ->
     let con = case subpats of
           []                       -> error "Type.inferPattern: empty tuple"
@@ -1129,20 +1132,20 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
            subpats
     )
 
-checkPattern :: Pattern -> Type -> TypeM ()
+checkPattern :: Pattern -> Type -> TypeM Pattern
 checkPattern pat ty = do
   trace' ["checkPattern", debug pat, ":", debug ty] $ case pat of
-    WildPat  -> pure ()
+    WildPat  -> pure pat
     VarPat x -> do
       ctx <- getCtx
       if x `elem` domV ctx
         then throwError (DuplicateVariable x)
-        else void $ extendV x ty
-    IntPat  _                 -> subtype ty int
-    CharPat _                 -> subtype ty char
-    BoolPat _                 -> subtype ty bool
-    UnitPat                   -> subtype ty unit
-    StringPat _               -> subtype ty string
+        else extendV x ty >> pure pat
+    IntPat  _                 -> subtype ty int >> pure pat
+    CharPat _                 -> subtype ty char >> pure pat
+    BoolPat _                 -> subtype ty bool >> pure pat
+    UnitPat                   -> subtype ty unit >> pure pat
+    StringPat _               -> subtype ty string >> pure pat
     ConsPat con _meta subpats -> do
       constructorType <- lookupV con
       case second unfoldFn (unfoldForall constructorType) of
@@ -1160,12 +1163,17 @@ checkPattern pat ty = do
             tycon' = foldl (\t' (e, u) -> substEForU e u t') tycon eSub
 
           -- Check each subpattern against the corresponding argty
-          mapM_ (uncurry checkPattern) (zip subpats argTys')
+          subpats' <- mapM (uncurry checkPattern) (zip subpats argTys')
 
           -- Check this against the type we have been given
-          tycon'' <- subst tycon'
-          ty'     <- subst ty
+          tycon''  <- subst tycon'
+          ty'      <- subst ty
           subtype tycon'' ty'
+
+          -- Lookup the metadata of the constructor
+          meta <- lookupCtorInfo con
+
+          pure $ ConsPat con (Just meta) subpats'
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
     ListPat [] -> checkPattern (ConsPat (prim "[]") (Just listNilMeta) []) ty
     ListPat subpats -> checkPattern
