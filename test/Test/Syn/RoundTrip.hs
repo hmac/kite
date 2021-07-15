@@ -179,6 +179,7 @@ genType = Gen.recursive
   , TyHole <$> genHoleName
   ]
   [ Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
+  , Gen.subterm2 (Gen.small genType) (Gen.small genType) TyIFun
   , Gen.subterm2 (Gen.small genType) (Gen.small genType) TyApp
   , Gen.subterm2 (Gen.small genType)
                  (Gen.small genType)

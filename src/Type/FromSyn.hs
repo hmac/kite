@@ -1,6 +1,9 @@
 module Type.FromSyn where
 
 -- Convert Syn to Type.Exp, ready for typechecking
+--
+-- This module doesn't really do anything except convert 'Syn.Type' to 'Type.Type.Type'
+-- It needs a 'TypeM' context to generate fresh type variables.
 
 import           Util
 
@@ -15,6 +18,7 @@ import           Type                           ( Exp )
 import qualified Type                          as T
 import           Type.DSL                       ( fn
                                                 , forAll
+                                                , ifn
                                                 , tapp
                                                 , tcon
                                                 , trecord
@@ -87,7 +91,8 @@ convertType uVarCtx = \case
   S.TyUnit   -> pure T.unit
   S.TyHole _ ->
     T.throwError $ T.TodoError "Type.fromSyn: holes in types not implemented"
-  S.TyFun a b -> fn <$> convertType uVarCtx a <*> convertType uVarCtx b
+  S.TyFun  a b -> fn <$> convertType uVarCtx a <*> convertType uVarCtx b
+  S.TyIFun a b -> ifn <$> convertType uVarCtx a <*> convertType uVarCtx b
   S.TyTuple as ->
     let name = prim $ fromString $ "Tuple" <> show (length as)
     in  T.TCon name <$> mapM (convertType uVarCtx) as

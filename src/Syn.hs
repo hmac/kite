@@ -141,6 +141,7 @@ type Pattern = AST.Pat RawName
 -- Maybe Int
 -- a
 -- Int -> String
+-- Eq a => a -> String
 -- a -> b
 -- f a
 -- { a : A, b : B }
@@ -160,6 +161,7 @@ data Type_ a =
         | TyBool
         | TyUnit
         | TyFun (Type_ a) (Type_ a)
+        | TyIFun (Type_ a) (Type_ a)
         | TyRecord [(a, Type_ a)]
         | TyAlias a (Type_ a)
         | TyForall a (Type_ a)
