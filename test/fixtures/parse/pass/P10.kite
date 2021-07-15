@@ -1,0 +1,20 @@
+module Implicit
+
+type A = A
+type B = B
+type C = C
+
+foo : A => B -> C
+foo = _ -> C
+
+foo : A -> B => B -> C
+foo = _ -> C
+
+foo : A -> (B => B) -> C
+foo = _ -> C
+
+foo : (A -> B) => B -> C
+foo = _ -> C
+
+foo : A -> B => (B -> C)
+foo = _ -> C
