@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedLists #-}
 module Test.Type where
 
 import           Control.Monad                  ( replicateM_ )
@@ -27,6 +28,7 @@ import           Type                           ( Error(..)
 import qualified Type.DSL                      as T
                                                 ( fn )
 import           Type.DSL                       ( forAll
+                                                , ifn
                                                 , tapp
                                                 , tcon
                                                 , trecord
@@ -123,6 +125,32 @@ test = do
       r = check fun funType
     it "typechecks successfully" $ do
       runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+        `shouldBe` Right expected
+  describe "implicit: check foo = (f :: A => B -> C) b : C" $ do
+    let
+      fType = ifn (tcon "A" []) $ T.fn (tcon "B" []) (tcon "C" [])
+      tctx  = [("A", ()), ("B", ()), ("C", ())]
+      ctx =
+        [ V "a" (tcon "A" [])
+        , V "b" (tcon "B" [])
+        , V "c" (tcon "C" [])
+        , V "f" fType
+        ]
+      expr     = App (Var "f") (Var "b")
+      expected = AppT
+        (tcon "C" [])
+        (AppT (T.fn (tcon "B" []) (tcon "C" []))
+              (VarT fType "f")
+              (VarT (tcon "A" []) "a")
+        )
+        (VarT (tcon "B" []) "b")
+      r = check expr (tcon "C" [])
+    it "typechecks successfully" $ do
+      runTypecheckM
+          defaultTypeEnv
+          (withGlobalTypeCtx (<> tctx)
+                             (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+          )
         `shouldBe` Right expected
   describe "Simple inference" $ do
     let

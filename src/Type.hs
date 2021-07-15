@@ -916,11 +916,19 @@ infer expr_ = do
       void $ wellFormedType a
       check e a
     App e1 e2 -> do
-      e1'      <- infer e1
-      a        <- subst $ typeOf e1'
-      (b, e2') <- inferApp a e2
-      b'       <- subst b
-      pure $ AppT b' e1' e2'
+      e1' <- infer e1
+      subst (typeOf e1') >>= \case
+        -- If 'e1' has an implicit function type, we need to resolve that before we can infer the
+        -- application. We do that by searching the context for a value to fill it with.
+        TOther (IFn a b) -> do
+          valueA    <- implicitSearch a
+          (b', e2') <- inferApp b e2
+          b''       <- subst b'
+          pure $ AppT b'' (AppT b e1' (VarT a valueA)) e2'
+        ty -> do
+          (b, e2') <- inferApp ty e2
+          b'       <- subst b
+          pure $ AppT b' e1' e2'
     Abs args e -> do
       (args', e', ty) <- inferAbs args e
       pure $ AbsT ty args' e'
@@ -1200,10 +1208,6 @@ foldFn :: [Type] -> Type -> Type
 foldFn []       t = t
 foldFn [a     ] t = fn a t
 foldFn (a : as) t = fn a (foldFn as t)
-
--- -- | foldApp A [b, c, d] = TApp (TApp (TApp A b) c) d
--- foldApp :: Type' -> [Type] -> Type
--- foldApp = foldl (\f t -> tapp f [t])
 
 -- Infer the type of the result when applying a function of type @ty@ to @e@
 -- Return the type of the result, along with a type-annotated @e@.
