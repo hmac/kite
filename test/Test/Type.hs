@@ -152,6 +152,46 @@ test = do
                              (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
           )
         `shouldBe` Right expected
+  describe
+      "implicit: check foo = (f :: A => B -> C) b fails when no a : A in scope"
+    $ do
+        let fType = ifn (tcon "A" []) $ T.fn (tcon "B" []) (tcon "C" [])
+            tctx  = [("A", ()), ("B", ()), ("C", ())]
+            ctx   = [V "b" (tcon "B" []), V "c" (tcon "C" []), V "f" fType]
+            expr  = App (Var "f") (Var "b")
+            r     = check expr (tcon "C" [])
+        it "fails" $ do
+          runTypecheckM
+              defaultTypeEnv
+              (withGlobalTypeCtx (<> tctx)
+                                 (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+              )
+            `shouldBe` Left (LocatedError Nothing (NoProofFound (tcon "A" [])))
+  describe
+      "implicit: check foo = (f :: A => B -> C) b fails when multiple As in scope"
+    $ do
+        let fType = ifn (tcon "A" []) $ T.fn (tcon "B" []) (tcon "C" [])
+            tctx  = [("A", ()), ("B", ()), ("C", ())]
+            ctx =
+              [ V "a1" (tcon "A" [])
+              , V "a2" (tcon "A" [])
+              , V "b"  (tcon "B" [])
+              , V "c"  (tcon "C" [])
+              , V "f"  fType
+              ]
+            expr = App (Var "f") (Var "b")
+            r    = check expr (tcon "C" [])
+        it "fails" $ do
+          runTypecheckM
+              defaultTypeEnv
+              (withGlobalTypeCtx (<> tctx)
+                                 (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
+              )
+            `shouldBe` Left
+                         (LocatedError
+                           Nothing
+                           (MultipleProofsFound (tcon "A" []) ["a1", "a2"])
+                         )
   describe "Simple inference" $ do
     let
       nat = tcon "Nat" []
