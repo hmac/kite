@@ -181,7 +181,8 @@ ftv = \case
   TyVar x         -> Set.singleton x
   TyApp a b       -> ftv a <> ftv b
   TyTuple as      -> mconcat (map ftv as)
-  TyFun a b       -> ftv a <> ftv b
+  TyFun  a b      -> ftv a <> ftv b
+  TyIFun a b      -> ftv a <> ftv b
   TyRecord fields -> mconcat $ map (ftv . snd) fields
   TyAlias _ a     -> ftv a
   _               -> mempty

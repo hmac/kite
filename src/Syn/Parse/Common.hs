@@ -6,9 +6,7 @@ import           Control.Monad.Reader           ( Reader
                                                 , local
                                                 , runReader
                                                 )
-import           Data.Functor                   ( ($>)
-                                                , void
-                                                )
+import           Data.Functor                   ( void )
 import           Util
 
 import           Data.Name                      ( PackageName

@@ -14,7 +14,6 @@ import           Control.Monad                  ( (>=>) )
 import           Control.Monad.Except           ( MonadError
                                                 , throwError
                                                 )
-import           Control.Monad.Extra            ( mapMaybeM )
 import           Control.Monad.Fix              ( MonadFix )
 import qualified Data.List.NonEmpty            as NE
 import           Data.Map.Lazy                  ( Map )
@@ -205,6 +204,9 @@ interpretExpr env expr_ = case expr_ of
   AppT _ a b -> interpretExpr env a >>= \case
     Abs f -> interpretExpr env b >>= f
     e     -> throwError $ ApplicationOfNonFunction (show e)
+  IAppT _ a b -> interpretExpr env a >>= \case
+    Abs f -> interpretExpr env b >>= f
+    e     -> throwError $ ApplicationOfNonFunction (show e)
   ConT _ c _
     | c == TopLevel Prim.name "[]" -> pure $ List []
     | c == TopLevel Prim.name "::" -> pure $ Abs
@@ -217,7 +219,8 @@ interpretExpr env expr_ = case expr_ of
         )
       )
     | otherwise -> lookupCon c env
-  AbsT _ vars  e    -> interpretAbs env (fmap fst vars) e
+  AbsT _ vars e     -> interpretAbs env (fmap fst vars) e
+  IAbsT _ var _ e   -> interpretAbs env (var NE.:| []) e
   LetT _ binds expr -> do
     env' <- foldM
       (\env_ (n, e, _) -> do
