@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
+{-# OPTIONS_GHC -freduction-depth=300 #-}
 module Syn.Typed
   ( Exp
   , Pattern

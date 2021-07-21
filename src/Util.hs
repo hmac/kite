@@ -21,12 +21,14 @@ module Util
   , Data.List.NonEmpty.NonEmpty(..)
   , Data.Either.lefts
   , Data.Either.rights
+  , (Data.Functor.$>)
   , Control.Monad.forM
   , Control.Monad.forM_
   , Control.Monad.foldM
   , Control.Monad.replicateM
   , Control.Monad.zipWithM
   , Control.Monad.Extra.mconcatMapM
+  , Control.Monad.Extra.mapMaybeM
   , Debug.Trace.trace
   , Debug.Trace.traceShow
   , Debug.Trace.traceShowId
@@ -42,6 +44,7 @@ import qualified Control.Monad.Extra
 import qualified Data.Bifunctor
 import qualified Data.Bitraversable
 import qualified Data.Either
+import qualified Data.Functor
 import qualified Data.List
 import qualified Data.List.Extra
 import           Data.List.Extra                ( concatUnzip

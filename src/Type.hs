@@ -403,25 +403,31 @@ dropAfter' e = \case
   (e' : ctx) | e' == e   -> ctx
              | otherwise -> dropAfter' e ctx
 
--- | Search the current context for variables of the given type
+-- | Search the current context for variables of the given type.
 proofSearch :: Type -> TypeM [Name]
 proofSearch ty = do
   localCtx                       <- getCtx
   TypeEnv { envCtx = globalCtx } <- ask
   let ctx = localCtx <> globalCtx
+  ty' <- subst ty
 
-  pure $ flip mapMaybe ctx $ \case
-    V n t | t == ty   -> pure n
-          | otherwise -> Nothing
-    _ -> Nothing
+  flip mapMaybeM ctx $ \case
+    V n t -> do
+      -- -- Run subtyping between @t@ and @ty@, but throw away any changes it makes to the state.
+      -- call ((subtype t ty $> Just n) `catchError` (const (pure Nothing)))
+      t' <- subst t
+      pure $ if t' == ty' then Just n else Nothing
+    _ -> pure Nothing
 
 -- | Search the context for a unique variable of the given type.
 --   Throw an error if no variable is found or if more than one variable is found.
 implicitSearch :: Type -> TypeM Name
-implicitSearch ty = proofSearch ty >>= \case
-  [v] -> pure v
-  []  -> throwError $ NoProofFound ty
-  vs  -> throwError $ MultipleProofsFound ty vs
+implicitSearch ty = do
+  ty' <- subst ty
+  proofSearch ty' >>= \case
+    [v] -> pure v
+    []  -> throwError $ NoProofFound ty
+    vs  -> throwError $ MultipleProofsFound ty vs
 
 -- Check if a type is well-formed
 wellFormedType :: Type -> TypeM ()
@@ -806,6 +812,21 @@ check expr ty = do
       -- Re-add the forall by caching the input type on the expression
       pure $ cacheType ty e'
 
+    -- We've encountered an implicit function type, so we must try to fill it in.
+    (e, TOther (IFn a b)) -> do
+      alpha <- newE
+      void $ extendMarker alpha
+      extendSolved alpha a
+
+      -- Check e : b under the assumption that alpha : A is in scope.
+      e' <- check e b
+
+      dropAfter (Marker alpha)
+
+      -- Return a normal lambda which expects a value of type A as its first argument.
+      -- TODO: generate a fresh variable name properly
+      pure $ IAbsT (TOther (Fn a b)) "fixme" a e'
+
     (Abs args e, _) -> do
       (args', e') <- checkAbs args e ty
       pure $ AbsT ty args' e'
@@ -835,10 +856,19 @@ check expr ty = do
     (FCall name args, _) -> do
       case Map.lookup name fcallInfo of
         Just fCallTy -> do
-          (resultTy, args') <- mapAccumLM inferApp fCallTy args
-          resultTy'         <- subst resultTy
-          void $ subtype resultTy' ty
-          pure $ FCallT resultTy' name args'
+          -- Construct a temporary 'FCallT' annotated with the type of the
+          -- foreign call in order to feed it to 'inferApp'.
+          let fcall = FCallT fCallTy name []
+          (result, args') <- mapAccumLM
+            (\r a -> do
+              (rTy, r', a') <- inferApp2 r a
+              pure (AppT rTy r' a', a')
+            )
+            fcall
+            args
+          resultTy <- subst (typeOf result)
+          void $ subtype resultTy ty
+          pure $ FCallT resultTy name args'
         Nothing -> throwError $ UnknownFCall name
     (MCase []                  , _              ) -> throwError (EmptyCase expr)
     (MCase alts@((pats, _) : _), TOther (Fn a b)) -> do
@@ -916,19 +946,22 @@ infer expr_ = do
       void $ wellFormedType a
       check e a
     App e1 e2 -> do
-      e1' <- infer e1
-      subst (typeOf e1') >>= \case
-        -- If 'e1' has an implicit function type, we need to resolve that before we can infer the
-        -- application. We do that by searching the context for a value to fill it with.
-        TOther (IFn a b) -> do
-          valueA    <- implicitSearch a
-          (b', e2') <- inferApp b e2
-          b''       <- subst b'
-          pure $ AppT b'' (AppT b e1' (VarT a valueA)) e2'
-        ty -> do
-          (b, e2') <- inferApp ty e2
-          b'       <- subst b
-          pure $ AppT b' e1' e2'
+      e1'            <- infer e1
+      (t, e1'', e2') <- inferApp2 e1' e2
+      pure $ AppT t e1'' e2'
+      -- subst (typeOf e1') >>= \case
+      --   -- If 'e1' has an implicit function type, we need to resolve that before we can infer the
+      --   -- application. We do that by searching the context for a value to fill it with.
+      --   -- TODO: can we get rid of this now we handle implicits in 'check'?
+      --   TOther (IFn a b) -> do
+      --     valueA    <- implicitSearch a
+      --     (b', e2') <- inferApp b e2
+      --     b''       <- subst b'
+      --     pure $ AppT b'' (AppT b e1' (VarT a valueA)) e2'
+      --   ty -> do
+      --     (b, e2') <- inferApp ty e2
+      --     b'       <- subst b
+      --     pure $ AppT b' e1' e2'
     Abs args e -> do
       (args', e', ty) <- inferAbs args e
       pure $ AbsT ty args' e'
@@ -1216,6 +1249,33 @@ foldFn :: [Type] -> Type -> Type
 foldFn []       t = t
 foldFn [a     ] t = fn a t
 foldFn (a : as) t = fn a (foldFn as t)
+
+-- | Infer the result when applying an already-typechecked expression @e1@ to @e2@.
+-- Returns a tuple @(t, a, b)@ of the type, lhs and rhs of the resultant application.
+-- This is so you can split it back out again if you need to (e.g. see fcall)
+inferApp2 :: ExpT -> Exp -> TypeM (Type, ExpT, ExpT)
+inferApp2 e1 e2 = do
+  t1 <- subst $ typeOf e1
+  trace' ["inferApp", debug e1, debug t1, debug e2] $ case t1 of
+    TOther (Forall u a) -> do
+      alpha <- newE
+      extendE alpha
+      let t1' = substEForU alpha u a
+      inferApp2 (cacheType t1' e1) e2
+    TOther (EType alpha) -> do
+      a1 <- newE
+      a2 <- newE
+      extendE a2 >> extendE a1 >> extendSolved alpha (fn (e_ a1) (e_ a2))
+      e2' <- check e2 (e_ a1)
+      pure (e_ a2, e1, e2')
+    TOther (Fn a b) -> do
+      e2' <- check e2 a
+      pure (b, e1, e2')
+    TOther (IFn a b) -> do
+      valueA <- implicitSearch a
+      let e1' = AppT b e1 (VarT a valueA)
+      inferApp2 e1' e2
+    _ -> throwError $ InfAppFailure t1 e2
 
 -- Infer the type of the result when applying a function of type @ty@ to @e@
 -- Return the type of the result, along with a type-annotated @e@.

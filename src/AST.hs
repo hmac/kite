@@ -91,7 +91,15 @@ data ExprT n t =
   | HoleT t n
   -- Note that each variable bound in lambda has an annotated type
   | AbsT t (NonEmpty (n, t)) (ExprT n t)
+  -- Binding of an implicit argument.
+  -- This construct doesn't exist in the surface syntax - it is constructed by the typechecker when
+  -- elaborating implicit function types.
+  | IAbsT t n t (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
+  -- Application of an implicit argument.
+  -- Like 'IAbstT', this doesn't exist in the surface syntax.
+  -- TODO: can we remove this?
+  | IAppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
   | CaseT t (ExprT n t) [(Pat n, ExprT n t)]
   -- TODO: store types on patterns, similar to what we do with abstractions
@@ -110,11 +118,13 @@ data ExprT n t =
   deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (ExprT v t) where
-  debug (VarT _ v  ) = debug v
-  debug (AnnT _ e t) = debug e <+> ":" <+> debug t
-  debug (AppT _ a b) = debug a <+> debug b
+  debug (VarT _ v   ) = debug v
+  debug (AnnT  _ e t) = debug e <+> ":" <+> debug t
+  debug (AppT  _ a b) = debug a <+> debug b
+  debug (IAppT _ a b) = debug a <+> debug b
   debug (AbsT _ xs e) =
     "λ" <> sepBy " " (map (debug . fst) (NE.toList xs)) <> "." <+> debug e
+  debug (IAbsT _ n _ e) = "λ" <> debug n <> "=>" <+> debug e
   debug (ConT t v meta) = debug v <+> debug meta <+> debug t
   debug (HoleT _ s    ) = "?" <> debug s
   debug (CaseT _ e alts) =

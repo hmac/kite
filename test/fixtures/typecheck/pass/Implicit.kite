@@ -1,0 +1,29 @@
+module Implicit
+
+type A = A
+
+foo : A => Bool -> Bool
+foo = x -> x
+
+bar : Bool
+bar = foo True
+
+type Eq a = Eq a
+
+baz : Eq a => a -> a
+baz = x -> x
+
+eqBool : Eq Bool
+eqBool = Eq True
+
+nope : Bool
+nope = baz True
+
+other : Eq a => Eq b => a -> b -> a
+other = x y -> x
+
+useOther1 : Bool
+useOther1 = other True False
+
+useOther2 : Bool
+useOther2 = other False 0
