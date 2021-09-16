@@ -8,6 +8,121 @@ Kite's (new) syntax is designed with two goals in mind:
 This means we don't use whitespace for layout: instead we delimit code blocks
 using braces.
 
+## Examples
+```kite
+module Data.Maybe
+
+from kite import Kite.Prim {Bool, True, False}
+import Data.Functor {Functor {*} }
+import Data.Eq {Eq, eq}
+import Control.Applicative {Applicative, pure, liftA2}
+import Control.Monad.State {State, monadState, applicativeState}
+import Data.Monad {Monad, bind}
+import Data.Function {flip}
+import Control.Alternative {Alternative}
+import Data.Show {Show {*}, show}
+
+type Maybe a { Just a, Nothing }
+
+eqMaybe : Eq a -> Eq (Maybe a) {
+  match {
+    eqa -> Eq [
+      eq : match {
+            Nothing, Nothing -> True,
+            Just x,  Just y  -> eq eqa x y,
+            _,       _       -> False
+          }
+    ]
+  }
+}
+
+showMaybe : Show a -> Show (Maybe a) {
+  match {
+    showa -> Show [
+      show: match {
+        mx -> maybe "Nothing" match {x -> "Just #{show showa x}"} mx
+      }
+    ]
+  }
+}
+
+mapMaybe : (a -> b) -> Maybe a -> Maybe b {
+  match {
+    _, Nothing -> Nothing,
+    f, Just x  -> Just (f x),
+  }
+}
+
+functorMaybe : Functor Maybe {
+  Functor [map: mapMaybe]
+}
+
+apMaybe : Maybe (a -> b) -> Maybe a -> Maybe b {
+  match {
+    Nothing, _ -> Nothing,
+    Just f, m  -> mapMaybe f m
+  }
+}
+
+applicativeMaybe : Applicative Maybe {
+  Applicative [functor: functorMaybe, pure: Just, ap: apMaybe]
+}
+
+bindMaybe : Maybe a -> (a -> Maybe b) -> Maybe b {
+  match {
+    Nothing, _ -> Nothing,
+    Just x, f -> f x,
+  }
+}
+
+monadMaybe : Monad Maybe {
+  Monad [applicative: applicativeMaybe, bind: bindMaybe]
+}
+
+plusMaybe : Maybe a -> Maybe a -> Maybe a {
+  match {
+    Nothing, r -> r,
+    l,       _ -> l,
+  }
+}
+
+alternativeMaybe : Alternative Maybe {
+  Alternative [applicative: applicativeMaybe, zero: Nothing, plus: plusMaybe]
+}
+
+maybe : b -> (a -> b) -> Maybe a -> b {
+  match {
+    n, _, Nothing -> n,
+    _, f, Just x  -> f x
+  }
+}
+
+isJust : Maybe a -> Bool {
+  match {
+    Nothing -> False,
+    _ -> True,
+  }
+}
+
+catMaybes : [Maybe a] -> [a] {
+  match {
+    [] -> [],
+    Just x :: rest -> x :: catMaybes rest,
+    Nothing :: rest -> catMaybes rest,
+  }
+}
+
+filterMaybe : (a -> Maybe b) -> [a] -> [b] {
+  match {
+    _, [] -> [],
+    f, x::xs -> match f x {
+      Just r -> r :: filterMaybe f xs,
+      Nothing -> filterMaybe f xs,
+    }
+  }
+}
+```
+
 ## Grammar
 
 ```ebnf
@@ -69,7 +184,7 @@ let = "let", [let_pair, {",", let_pair}, [","]], "{", expr, "}" ;
 let_pair = lower_ident, "=", expr ;
 
 (* Match expressions *)
-match = "match", "{", [match_branch, {",", match_branch}, [","]], "}" ;
+match = "match", [expr], "{", [match_branch, {",", match_branch}, [","]], "}" ;
 match_branch = pattern_group, "->", expr ;
 pattern_group = pattern, {",", pattern} ;
 
