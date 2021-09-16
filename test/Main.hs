@@ -31,7 +31,7 @@ tests = localOption TreatPendingAsSuccess . testGroup "Tests" <$> sequence
   , HS.testSpec "typechecking integration tests" Integration.Typecheck.test
   , HS.testSpec "parsing integration tests" Integration.Parse.test
   , pure typecheckProperties
-  , pure roundTripProperties
+  -- , pure roundTripProperties
   ]
 
 roundTripProperties :: TestTree

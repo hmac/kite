@@ -115,6 +115,10 @@ data ExprT n t =
   | RecordT t [(String, ExprT n t)]
   | ProjectT t (ExprT n t) String
   | FCallT t String [ExprT n t]
+  -- | An unsolved implicit argument.
+  -- Its name is generated, and used as a key to lookup the set of variables that are in-scope from
+  -- it.
+  | Implicit t n
   deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (ExprT v t) where

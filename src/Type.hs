@@ -948,7 +948,8 @@ infer expr_ = do
     App e1 e2 -> do
       e1'            <- infer e1
       (t, e1'', e2') <- inferApp2 e1' e2
-      pure $ AppT t e1'' e2'
+      t'             <- subst t
+      pure $ AppT t' e1'' e2'
       -- subst (typeOf e1') >>= \case
       --   -- If 'e1' has an implicit function type, we need to resolve that before we can infer the
       --   -- application. We do that by searching the context for a value to fill it with.
@@ -1272,9 +1273,19 @@ inferApp2 e1 e2 = do
       e2' <- check e2 a
       pure (b, e1, e2')
     TOther (IFn a b) -> do
+      -- Run 'inferApp' to resolve any existentials required to find a proof for this implicit.
+      -- This _won't_ elaborate any further implicits present in 'b'.
+      _      <- inferApp b e2
       valueA <- implicitSearch a
+      a'     <- subst a
+      trace' ["proof found:", debug valueA, debug a'] $ pure ()
+
+      -- Now we have a proof for 'a', run 'inferApp2' to properly elaborate any further implicits in
+      -- 'e1'.
       let e1' = AppT b e1 (VarT a valueA)
-      inferApp2 e1' e2
+      (t', e21, e22) <- inferApp2 e1' e2
+      pure (t', e1', AppT t' e21 e22)
+
     _ -> throwError $ InfAppFailure t1 e2
 
 -- Infer the type of the result when applying a function of type @ty@ to @e@
@@ -1295,7 +1306,8 @@ inferApp ty e = do
     TOther (Fn a b) -> do
       e' <- check e a
       pure (b, e')
-    _ -> throwError $ InfAppFailure ty e
+    TOther (IFn _a b) -> inferApp b e
+    _                 -> throwError $ InfAppFailure ty e
 
 -- A type error, optionally with the name of the function definition that caused
 -- it.
