@@ -10,7 +10,7 @@ using braces.
 
 ## Examples
 ```kite
-module Data.Maybe
+module Data.Maybe { Maybe {*}, showMaybe, eqMaybe }
 
 from kite import Kite.Prim {Bool, True, False}
 import Data.Functor {Functor {*} }
@@ -18,9 +18,9 @@ import Data.Eq {Eq, eq}
 import Control.Applicative {Applicative, pure, liftA2}
 import Control.Monad.State {State, monadState, applicativeState}
 import Data.Monad {Monad, bind}
-import Data.Function {flip}
+import Data.Function {flip} as F
 import Control.Alternative {Alternative}
-import Data.Show {Show {*}, show}
+import qualified Data.Show
 
 type Maybe a { Just a, Nothing }
 
@@ -134,8 +134,9 @@ lower_ident = /[a-z_][A-z0-9_]*/ ;
 pkg_ident = /[a-z][a-z0-9]*/ ;
 
 (* Modules and imports *)
-module = "module", qual_upper_ident, {import}, {def} ;
-import = ["from", pkg_ident], "import", ["open"], qual_upper_ident, [import_list], ["as", qual_upper_ident] ;
+module = "module", qual_upper_ident, [export_list], {import}, {def} ;
+export_list = import_list ;
+import = ["from", pkg_ident], "import", ["qualified"], qual_upper_ident, [import_list], ["as", qual_upper_ident] ;
 import_list = "{", [ import_list_item, {",", import_list_item}, [","] ] "}" ;
 import_list_item = (
                     upper_ident,
@@ -148,11 +149,14 @@ import_list_item = (
                  | lower_ident ;
 
 (* Definitions *)
-def = val_def | type_def ;
+def = val_def | type_def | type_alias ;
 val_def = lower_ident, ":", type, "{", expr, "}" ;
 type_def = "type", upper_ident, [type_params], "{", [ ctor_def, {",", ctor_def}, [","] ], "}" ;
 ctor_def = upper_ident, {atomic_type} ;
 type_params = lower_ident, {lower_ident} ;
+
+(* Type aliases *)
+type_alias = "type alias", upper_ident, [type_params], "{", type, "}" ;
 
 (* Types *)
 type = atomic_type | function_type | application_type ;
@@ -169,10 +173,11 @@ var_type = lower_ident ;
 (* Expressions *)
 expr = atomic_expr | infix_expr | application_expr ;
 atomic_expr = match | ctor | let | var | list | record | record_projection
-            | tuple | int | string | "(", expr, ")" ;
+            | tuple | int | char | string | hole | "(", expr, ")" ;
 
 application_expr = atomic_expr, atomic_expr, {atomic_expr} ;
 int = /[0-9]+/ ;
+char = "'", /[^']/, "'" ;
 ctor = qual_upper_ident ;
 var = qual_lower_ident ;
 list = "[", [expr, {",", expr}, [","]], "]" ;
@@ -181,7 +186,8 @@ record = "[", (":" | [record_pair, {",", record_pair}, [","]]), "]" ;
 record_pair = lower_ident, ":", expr ;
 record_projection = atomic_expr, <no whitespace>, lower_ident ;
 let = "let", [let_pair, {",", let_pair}, [","]], "{", expr, "}" ;
-let_pair = lower_ident, "=", expr ;
+let_pair = lower_ident, [":", type], "=", expr ;
+hole = "?", lower_ident ;
 
 (* Match expressions *)
 match = "match", [expr], "{", [match_branch, {",", match_branch}, [","]], "}" ;
@@ -189,12 +195,14 @@ match_branch = pattern_group, "->", expr ;
 pattern_group = pattern, {",", pattern} ;
 
 (* Patterns *)
-pattern = ctor_pattern | wildcard_pattern | list_pattern | cons_pattern | var_pattern ;
+pattern = ctor_pattern | wildcard_pattern | list_pattern | cons_pattern | var_pattern | int_pattern | char_pattern ;
 ctor_pattern = ctor, {pattern} ;
 wildcard_pattern = "_" ;
 list_pattern = "[", {pattern}, "]" ;
 cons_pattern = pattern, "::", pattern ;
 var_pattern = lower_ident ;
+int_pattern = int ;
+char_pattern = char ;
 
 (* Infix expressions *)
 infix_expr = expr, infix_op, expr ;
