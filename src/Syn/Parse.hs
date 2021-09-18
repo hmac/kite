@@ -15,7 +15,6 @@ module Syn.Parse
   , parse
   ) where
 
-import           Control.Monad                  ( guard )
 import           Data.Functor                   ( void )
 import           Data.Maybe                     ( fromMaybe
                                                 , isJust
@@ -23,9 +22,7 @@ import           Data.Maybe                     ( fromMaybe
 
 import           Text.Megaparsec         hiding ( parse )
 import           Text.Megaparsec.Char
-import           Text.Megaparsec.Char.Lexer     ( indentLevel
-                                                , nonIndented
-                                                )
+import           Text.Megaparsec.Char.Lexer     ( nonIndented )
 
 
 import           Syn                     hiding ( Pattern )
@@ -84,57 +81,41 @@ parseKiteFile path pkgName = parse (pModule pkgName <* eof) path
 
 pModule :: PackageName -> Parser Module
 pModule pkgName = do
-  metadata <- optional pMetadata
   void $ symbol "module"
   name    <- lexemeN pModuleName
-  exports <- optional . lexemeN . parens $ lexemeN pExport `sepBy` comma
-  imports <- many (lexemeN (pImport pkgName))
-  decls   <- many (lexemeN pDecl)
+  exports <- optional . braces $ pExport `sepBy` comma
+  imports <- many (pImport pkgName)
+  decls   <- many pDecl
   pure $ Module { moduleName     = PkgModuleName pkgName name
                 , moduleImports  = imports
                 , moduleExports  = fromMaybe [] exports
                 , moduleDecls    = decls
-                , moduleMetadata = fromMaybe [] metadata
+                , moduleMetadata = []
                 }
 
--- TODO: Constructor(..)
+-- Foo { Bar, Baz }
+-- mkFoo
+-- TODO: Maybe {*}
 pExport :: Parser (RawName, [RawName])
 pExport = do
   export     <- pName
-  subexports <- fromMaybe [] <$> optional (parens (pName `sepBy` comma))
+  subexports <- fromMaybe [] <$> optional (braces (pName `sepBy` comma))
   pure (export, subexports)
 
--- ---
--- key1: val1
--- key2: 2
--- ---
-pMetadata :: Parser [(String, String)]
-pMetadata = do
-  void $ string "---" >> newline
-  items <- many pMetaItem
-  void $ string "---" >> newline
-  pure items
- where
-  pMetaItem :: Parser (String, String)
-  pMetaItem = do
-    key <- lowercaseString
-    void (symbol ":")
-    val <- many alphaNumChar
-    void newline
-    pure (key, val)
-
 -- import Bar
--- import qualified Baz as Boo (fun1, fun2)
--- import Foo (SomeType(..), OtherType(AConstructor), SomeClass)
+-- import Baz {fun1, fun2} as Boo 
+-- import Foo {SomeType{ * }, OtherType{ AConstructor }, SomeClass}
+-- import qualified Data.Show
 -- from some_pkg import Foo
+-- TODO: import Foo { * }
 pImport :: PackageName -> Parser Import
 pImport selfPkg = do
   pkg <- optional $ string "from " >> pPackageName
   void $ symbol "import"
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
+  items     <- optional $ braces (pImportItem `sepBy` comma)
   alias     <- optional (symbol "as" >> uppercaseName)
-  items     <- optional $ parensN (lexemeN pImportItem `sepBy` comma)
   pure Import { importQualified = qualified
               , importName      = PkgModuleName (fromMaybe selfPkg pkg) name
               , importAlias     = alias
@@ -144,16 +125,16 @@ pImport selfPkg = do
 pImportItem :: Parser ImportItem
 pImportItem = try pImportAll <|> try pImportSome <|> pImportSingle
  where
-  -- Foo(..)
+  -- Foo{ * }
   pImportAll = do
     name <- lexemeN uppercaseName
-    void $ parens (symbol "..")
+    void $ braces (symbol "*")
     pure $ ImportAll name
-  -- Foo(Bar, Baz)
-  -- Monoid(empty)
+  -- Foo{ Bar, Baz }
+  -- Monoid{ empty }
   pImportSome = do
     name     <- lexemeN uppercaseName
-    subItems <- parensN (lexemeN pName `sepBy` comma)
+    subItems <- braces (pName `sepBy` comma)
     pure $ ImportSome name subItems
   -- Foo
   -- foo
@@ -168,22 +149,22 @@ pDecl = Comment <$> pComment <|> nonIndented
   spaceConsumerN
   (AliasDecl <$> pAlias <|> DataDecl <$> pData <|> FunDecl <$> pFun)
 
+-- type alias FallibleFn a b { a -> Maybe b }
 pAlias :: Parser Alias
 pAlias = do
   void (symbolN "type alias ")
   alias  <- uppercaseName
   tyvars <- many lowercaseName
-  void (symbolN "=")
-  ty <- pType
+  ty     <- braces pType
   pure Alias { aliasName = alias, aliasTyVars = tyvars, aliasType = ty }
 
+-- type Maybe a { Just a, Nothing }
 pData :: Parser Data
 pData = do
   void (symbolN "type ")
-  name   <- uppercaseName
-  tyvars <- many lowercaseName
-  void (symbolN "=")
-  constructors <- lexemeN pCon `sepBy` symbolN "|"
+  name         <- uppercaseName
+  tyvars       <- many lowercaseName
+  constructors <- braces $ pCon `sepBy` comma
   pure Data { dataName = name, dataTyVars = tyvars, dataCons = constructors }
  where
   pCon :: Parser DataCon
@@ -193,33 +174,30 @@ pData = do
 -- Functions consist of a type signature, a newline, and an implementation
 -- Unlike Haskell, functions only have a single equation.
 -- Pattern matching happens on the RHS
+--
+-- swap : (a, b) -> (b, a) {
+--  match {
+--    (x, y) -> (y, x)
+--  }
+-- }
 pFun :: Parser (Fun Syn)
 pFun = do
   comments <- many pComment
-  p0       <- indentLevel
   name     <- lowercaseName <?> "function name"
-  sig      <- symbol ":" >> pType
-  indentGEQ_ p0
-  _ <- lexeme lowercaseName >>= \n -> guard (name == n)
-  void $ symbolN "="
-  indentGT_ p0
-  expr        <- pExpr
-  whereClause <- optional $ do
-    indentGT_ p0
-    pos <- indentLevel
-    void $ symbolN "where"
-    many (indentGT_ pos >> pFun)
+  _        <- symbol ":"
+  sig      <- pType
+  expr     <- braces pExpr
 
   pure Fun { funComments = comments
            , funName     = name
            , funType     = Just sig
            , funExpr     = expr
-           , funWheres   = fromMaybe [] whereClause
+           , funWheres   = []
            }
 
 pComment :: Parser String
 pComment = do
-  void (string "-- " <|> string "--")
+  void (string "# " <|> string "#")
   s <- takeWhileP (Just "comment") (/= '\n')
   spaceConsumerN
   pure s

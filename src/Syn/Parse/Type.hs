@@ -38,8 +38,9 @@ pType' ctx = case ctx of
   AppL  -> try app <|> atomic <|> parens (pType' Neutral)
   AppR  -> atomic <|> parens (pType' Neutral)
  where
-  atomic = unit <|> con <|> var <|> hole <|> list <|> record <|> try tuple
-  arr    = do
+  atomic =
+    unit <|> con <|> var <|> hole <|> (try record <|> list) <|> try tuple
+  arr = do
     a <- lexemeN (try app <|> pType' Paren)
     void $ symbolN "->"
     TyFun a <$> pType' Neutral
@@ -48,7 +49,7 @@ pType' ctx = case ctx of
     rs <- some (pType' AppR)
     pure $ foldl TyApp l rs
   var  = TyVar <$> lowercaseName
-  unit = symbol "()" >> pure TyUnit
+  unit = symbol "(,)" >> pure TyUnit
   con  = do
     name <- uppercaseName
     pure $ case name of
@@ -63,12 +64,11 @@ pType' ctx = case ctx of
   list =
     (TyList <$ symbol "[]") <|> (TyApp TyList <$> brackets (pType' Neutral))
   tuple       = TyTuple <$> parens (lexemeN (pType' Neutral) `sepBy2` comma)
-  record      = TyRecord <$> braces (recordField `sepBy1` comma)
+  record      = TyRecord <$> brackets (recordField `sepEndBy1` comma)
   recordField = do
     fName <- lowercaseName
     void (symbolN ":")
     ty <- pType' Neutral
-    spaceConsumerN
     pure (fName, ty)
   for_all = do
     void (symbol "forall")

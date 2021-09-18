@@ -1,9 +1,9 @@
 module NotEnoughRecordFields
 
-type Foo = Foo { a : Int, b : Bool }
+type Foo {
+  Foo [ a : Int, b : Bool ]
+}
 
-f : Foo
-f = Foo { a = 0 }
+f : Foo { Foo [a: 0] }
 
-g : { a : Int, b : Bool }
-g = { a = 0 }
+g : [ a : Int, b : Bool ] { [a: 0] }

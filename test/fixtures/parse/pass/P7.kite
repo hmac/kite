@@ -1,15 +1,14 @@
 module P7
 
-from vector import Vector (
+from vector import Vector {
                             Vector
                           , transpose
                           , diagonal
                           , dotProduct
                           , crossProduct
-                          , Matrix (
+                          , Matrix {
                               M1
                             , M2
-                          ) )
+                          } }
 
-identity : Vector -> Vector
-identity = compose transpose transpose
+identity : Vector -> Vector { compose transpose transpose }

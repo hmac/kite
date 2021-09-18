@@ -1,17 +1,15 @@
 module T4
 
-type Default a = Default { def : a }
+type Default a { Default [ def : a ] }
 
-def : Default a -> a
-def = (Default d) -> d.def
+def : Default a -> a { match {
+Default d -> d.def
+}}
 
-type D = A | B | C
+type D { A , B , C }
 
-defaultD : Default D
-defaultD = Default { def = A }
+defaultD : Default D { Default [def: A] }
 
-defD : D
-defD = def defaultD
+defD : D { def defaultD }
 
-getDefD : Default D -> D
-getDefD = (Default d) -> d.def
+getDefD : Default D -> D { match { Default d -> d.def } }

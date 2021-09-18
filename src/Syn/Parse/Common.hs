@@ -148,6 +148,7 @@ keywords =
   , "import"
   , "forall"
   , "$fcall"
+  , "match"
   ]
 
 -- | Consume whitespace and newlines, then check that the indentation level is equal to the given
@@ -191,7 +192,7 @@ spaceConsumerN = L.space (skipSome spaceChar) empty empty
 
 -- Parses a specific string, skipping trailing spaces
 symbol :: String -> Parser String
-symbol = L.symbol spaceConsumer
+symbol = L.symbol spaceConsumerN
 
 -- Like symbol but also skips trailing newlines
 symbolN :: String -> Parser String
@@ -199,7 +200,7 @@ symbolN = L.symbol spaceConsumerN
 
 -- Runs the given parser, skipping trailing spaces
 lexeme :: Parser a -> Parser a
-lexeme = L.lexeme spaceConsumer
+lexeme = L.lexeme spaceConsumerN
 
 -- Like lexeme but also skips trailing newlines
 lexemeN :: Parser a -> Parser a

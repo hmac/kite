@@ -1,18 +1,17 @@
 module T6
 
-import T5 (Semigroup, append)
+import T5 {Semigroup, append}
 
-type Foo = Empty | MkFoo
+type Foo { Empty, MkFoo }
 
-semigroupFoo : Semigroup Foo
-semigroupFoo = Semigroup { append = appendFoo }
+semigroupFoo : Semigroup Foo { Semigroup [append: appendFoo] }
 
-appendFoo : Foo -> Foo -> Foo
-appendFoo = Empty f -> f
-            MkFoo _ -> MkFoo
+appendFoo : Foo -> Foo -> Foo { match {
+  Empty, f -> f,
+  MkFoo, _ -> MkFoo
+}
+}
 
-foo1 : Foo
-foo1 = MkFoo
+foo1 : Foo { MkFoo }
 
-foo2 : Foo
-foo2 = append semigroupFoo Empty MkFoo
+foo2 : Foo { append semigroupFoo Empty MkFoo }

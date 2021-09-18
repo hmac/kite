@@ -1,11 +1,11 @@
 module SimplifiedHigherKindExample
 
-type T a b = MkT a b
+type T a b { MkT a b }
 
-type F t = MkF (forall a. t a -> t a)
+type F t { MkF (forall a. t a -> t a) }
 
-f : T c a -> T c a
-f = (MkT x y) -> MkT x y
+f : T c a -> T c a { match {
+MkT x y -> MkT x y
+}}
 
-fT : F (T a)
-fT = MkF f
+fT : F (T a) { MkF f }

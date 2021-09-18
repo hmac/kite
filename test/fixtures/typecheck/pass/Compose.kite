@@ -1,15 +1,19 @@
 module Compose
 
-isZero : Int -> Bool
-isZero = 0 -> True
-         _ -> False
+isZero : Int -> Bool {
+  match {
+    0 -> True,
+    _ -> False
+  }
+}
 
-not : Bool -> Bool
-not = False -> True
-      True -> False
+not : Bool -> Bool {
+  match {
+    False -> True,
+    True -> False
+  }
+}
 
-notZero : Int -> Bool
-notZero = not . isZero
+notZero : Int -> Bool { not . isZero }
 
-isZero2 : Int -> Bool
-isZero2 = not . not . isZero
+isZero2 : Int -> Bool { not . not . isZero }

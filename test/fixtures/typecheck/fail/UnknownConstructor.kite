@@ -1,5 +1,8 @@
 module UnknownDataType
 
-fromMaybe : Maybe a -> a -> a
-fromMaybe = (Just x) _ -> x
-            _        y -> y
+fromMaybe : Maybe a -> a -> a {
+  match {
+    Just x, _ -> x,
+    _, y -> y
+  }
+}

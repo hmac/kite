@@ -1,6 +1,7 @@
 module LetAlignment
 
-main : IO ()
-main = let a = 5
-           b = 6
-        in a + b
+main : IO (,) {
+  let a = 5,
+      b = 6
+      { a + b }
+}

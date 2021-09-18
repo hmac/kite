@@ -256,37 +256,29 @@ test = do
       inf = infers tctx cctx ctx
 
     it "True" $ inf [syn|True|] bool
-    it "simple function application" $ inf [syn|(\x -> x) True|] bool
+    it "simple function application" $ inf [syn|match {x -> x} True|] bool
     it "multi-arg function application"
-      $ inf [syn|(\x y -> x) True (Suc Zero)|] bool
+      $ inf [syn|match {x, y -> x} True (Suc Zero)|] bool
     it "compound lets"
-      $ let expr = [syn|let
-                            x  = True
-                            id = \y -> y
-                         in id x|]
+      $ let expr = [syn|let x  = True, id = match {y -> y} { id x }|]
         in  inf expr bool
     it "simple case expressions"
-      $ let expr = [syn|case True of
-                              True -> False
-                              False -> True|]
+      $ let expr = [syn|match True { True -> False, False -> True }|]
         in  inf expr bool
+    it "simple functions"
+      $ let expr = [syn|match { True -> False, False -> True }|]
+        in  inf expr (T.fn bool bool)
     it "combined case and let expressions"
-      $ let expr = [syn|case True of
-                         True -> let id = \y -> y
-                                  in id True
-                         False -> True|]
+      $ let expr = [syn|match True {
+                         True -> let id = match { y -> y }
+                                  { id True },
+                         False -> True}|]
         in  inf expr bool
     it "expressions with annotated lets"
-      $ let expr = [syn|let
-                            id : Bool -> Bool
-                            id = x -> x
-                        in id True|]
+      $ let expr = [syn|let id : Bool -> Bool = match {x -> x} { id True }|]
         in  inf expr bool
     it "expressions with badly annotated lets"
-      $ let expr = [syn|let
-                            id : Char
-                            id = x -> x
-                         in id True|]
+      $ let expr = [syn|let id : Char = match { x -> x } { id True }|]
         in  failsToInfer
               tctx
               cctx
@@ -297,68 +289,52 @@ test = do
                 _                    -> False
               )
     it "simultaneous let definitions"
-      $ let expr = [syn|let
-                            y = True
-                            x = y
-                         in x|]
-        in  inf expr bool
+      $ let expr = [syn|let y = True, x = y { x }|] in inf expr bool
     it "case expressions with variable patterns"
-      $ let expr = [syn|case True of
-                         x -> Zero|]
-        in  inf expr nat
+      $ let expr = [syn|match True { x -> Zero }|] in inf expr nat
     it "case expressions that use bound variables"
-      $ let expr = [syn|case True of
-                         False -> False
-                         x -> x|]
-        in  inf expr bool
+      $ let expr = [syn|match True { False -> False, x -> x}|] in inf expr bool
     it "case expressions with wildcard patterns"
-      $ let expr = [syn|case True of
-                        _ -> False|]
-        in  inf expr bool
+      $ let expr = [syn|match True { _ -> False }|] in inf expr bool
     it "case expressions with a mixture of patterns"
-      $ let expr = [syn|case True of
-                         True -> False
-                         x -> True|]
+      $ let expr = [syn|match True { True -> False, x -> True }|]
         in  inf expr bool
     it "creating an instance of a parameterised type"
       $ let expr = [syn|MkPair False Zero|] in inf expr (pair bool nat)
     it "deconstructing a parameterised type with a case expression (Wrap)"
-      $ let expr = [syn|case (MkWrap True) of
-                         MkWrap y -> y|]
-        in  inf expr bool
+      $ let expr = [syn|match MkWrap True { MkWrap y -> y }|] in inf expr bool
     it "deconstructing a parameterised type with a case expression (Pair)"
-      $ let expr = [syn|case (MkPair False Zero) of
-                         MkPair y z -> MkWrap y
-                         w -> MkWrap False|]
+      $ let expr = [syn|match MkPair False Zero {
+                          MkPair y z -> MkWrap y,
+                          w -> MkWrap False
+                        }|]
         in  inf expr (wrap bool)
     it "an expression hole (1)"
-      $ let _expr = [syn|let x = ?foo in True|]
+      $ let _expr = [syn|let x = ?foo { True }|]
         in  pendingWith "this results in a type error: cannot infer hole"
     it "an expression hole (2)"
       $ let _expr = [syn|let
-                            not = True -> False
-                                  False -> True
-                         in not ?foo|]
+                            not = match { True -> False, False -> True }
+                            { not ?foo }|]
         in  pendingWith "this results in a type error: cannot check hole"
     it "a tuple"
-      -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
         in  inf expr (tcon (prim "Tuple3") [bool, bool, nat])
     it "a list" $ let expr = [syn|[True, False]|] in inf expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in inf expr int
     it "a string literal" $ let expr = [syn|"Hello"|] in inf expr string
     it "a record"
-      $ let expr = [syn|{ five = 5, msg = "Hello" }|]
+      $ let expr = [syn|[ five : 5, msg : "Hello" ]|]
         in  inf expr (trecord [("five", int), ("msg", string)])
     it "a record projection"
-      $ let expr = [syn|let r = { five = 5, msg = "Hello" }
-                         in r.five|]
+      $ let expr = [syn|let r = [ five : 5, msg : "Hello" ]
+                         { r.five }|]
         in  inf expr int
     -- fcalls have hardcoded types. putStrLn : String -> IO Unit
     -- Currently we are omitting the IO part as we figure out fcalls.
     -- This may change.
     it "a foreign call"
-      $ checks tctx mempty ctx [syn|$fcall putStrLn "Hello"|] [typ|()|]
+      $ checks tctx mempty ctx [syn|$fcall putStrLn "Hello"|] [typ|(,)|]
     it "simple record extraction"
         -- D : { field : Bool } -> D a
         -- f : a -> D a -> a
@@ -382,7 +358,7 @@ test = do
                         }
               )
             ]
-          e = [syn|x (D d) -> x|]
+          e = [syn|match { x, D d -> x }|]
           t = [typ|forall a. a -> D a -> a|]
         in
           checks tctx' cctx' ctx' e t
@@ -409,7 +385,7 @@ test = do
                           }
                 )
               ]
-            e = [syn|x (D d) -> x|]
+            e = [syn|match {x, D d -> x}|]
             t = [typ|forall a. a -> D a -> a|]
         in  checks tctx' cctx' ctx' e t
     it "polymorphic function-typed record extraction"
@@ -435,7 +411,7 @@ test = do
               )
             ]
           t = [typ|forall a. D a -> (a -> a)|]
-          e = [syn|(D f) -> f|]
+          e = [syn|match {D f -> f}|]
         in
           checks tctx' cctx' ctx' e t
     it "higher kinded application" $ do

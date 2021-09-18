@@ -31,18 +31,15 @@ test :: Spec
 test = parallel $ do
   describe "parsing declarations" $ do
     it "parses a basic function definition" $ do
-      parse' pDecl "" "id : a -> a\nid = x -> x" `shouldParse` FunDecl Fun
-        { funComments = []
-        , funName     = "id"
-        , funType     = Just (TyVar "a" `fn` TyVar "a")
-        , funExpr     = MCase [([VarPat "x"], Var "x")]
-        , funWheres   = []
-        }
-    it "requires a line fold to be indented" $ do
-      parse' pDecl "" `shouldFailOn` "id : a -> a\nid x =\nx"
-
+      parse' pDecl "" "id : a -> a { match {  x -> x } }" `shouldParse` FunDecl
+        Fun { funComments = []
+            , funName     = "id"
+            , funType     = Just (TyVar "a" `fn` TyVar "a")
+            , funExpr     = MCase [([VarPat "x"], Var "x")]
+            , funWheres   = []
+            }
     it "parses a definition with multiple type arrows" $ do
-      parse' pDecl "" "const : a -> b -> a\nconst = x y -> x"
+      parse' pDecl "" "const : a -> b -> a { match { x, y -> x } }"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName = "const"
@@ -52,7 +49,9 @@ test = parallel $ do
                         , funWheres = []
                         }
     it "parses a higher kinded type definition" $ do
-      parse' pDecl "" "map : (a -> b) -> f a -> f b\nmap = f m -> undefined"
+      parse' pDecl
+             ""
+             "map : (a -> b) -> f a -> f b { match { f, m -> undefined } }"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "map"
@@ -68,7 +67,7 @@ test = parallel $ do
       parse'
           (pDecl <* eof)
           ""
-          "head : [a] -> a\nhead = [] -> error \"head: empty list\"\n       (Cons x xs) -> x"
+          "head : [a] -> a { match { [] -> error \"head: empty list\", Cons x xs -> x } }"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "head"
@@ -88,7 +87,7 @@ test = parallel $ do
       parse'
           pDecl
           ""
-          "fromLeft : Either a b -> Maybe a\nfromLeft = (Left x) -> Just x\n           (Right _) -> Nothing"
+          "fromLeft : Either a b -> Maybe a { match { Left x -> Just x, Right _ -> Nothing } }"
         `shouldParse` FunDecl Fun
                         { funComments = []
                         , funName     = "fromLeft"
@@ -110,7 +109,7 @@ test = parallel $ do
     it "parses a case expression inside an mcase" $ do
       let
         str
-          = "functor : Alternative f -> Functor f\nfunctor = f -> case applicative f of\n                 (Applicative g) -> g.functor"
+          = "functor : Alternative f -> Functor f { match { f -> match applicative f { Applicative g -> g.functor } } } "
       parse' pDecl "" str `shouldParse` FunDecl Fun
         { funComments = []
         , funName     = "functor"
@@ -131,7 +130,7 @@ test = parallel $ do
         }
 
     it "parses a simple type definition" $ do
-      parse' pDecl "" "type Unit = Unit" `shouldParse` DataDecl Data
+      parse' pDecl "" "type Unit { Unit }" `shouldParse` DataDecl Data
         { dataName   = "Unit"
         , dataTyVars = []
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
@@ -139,7 +138,7 @@ test = parallel $ do
     it "parses a record definition" $ do
       parse' (pDecl <* eof)
              ""
-             "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+             "type Foo a { Foo [ unFoo : a, label : ?b, c : A A ] }"
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
@@ -157,7 +156,7 @@ test = parallel $ do
                           ]
                         }
     it "parses the definition of List" $ do
-      parse' pDecl "" "type List a = Nil | Cons a (List a)"
+      parse' pDecl "" "type List a { Nil, Cons a (List a) }"
         `shouldParse` DataDecl Data
                         { dataName = "List"
                         , dataTyVars = ["a"]
@@ -172,22 +171,20 @@ test = parallel $ do
                                      ]
                         }
     it "parses a simple type alias definition" $ do
-      parse' pDecl "" "type alias Foo = Int" `shouldParse` AliasDecl Alias
+      parse' pDecl "" "type alias Foo { Int }" `shouldParse` AliasDecl Alias
         { aliasName   = "Foo"
         , aliasTyVars = []
         , aliasType   = TyInt
         }
     it "parses a type alias definition with type variables" $ do
-      parse' pDecl "" "type alias MyList a = [a]" `shouldParse` AliasDecl Alias
-        { aliasName   = "MyList"
-        , aliasTyVars = ["a"]
-        , aliasType   = TyApp TyList (TyVar "a")
-        }
+      parse' pDecl "" "type alias MyList a { [a] }" `shouldParse` AliasDecl
+        Alias { aliasName   = "MyList"
+              , aliasTyVars = ["a"]
+              , aliasType   = TyApp TyList (TyVar "a")
+              }
   describe "parsing modules" $ do
-    it "parses a basic module with metadata" $ do
-      parse' (pModule "test")
-             ""
-             "---\nkey: val\n---\nmodule Foo\none : Int\none = 1"
+    it "parses a basic module" $ do
+      parse' (pModule "test") "" "module Foo\none : Int { 1 }"
         `shouldParse` Module
                         { moduleName     = "test.Foo"
                         , moduleImports  = []
@@ -199,13 +196,13 @@ test = parallel $ do
                                                          , funWheres = []
                                                          }
                                            ]
-                        , moduleMetadata = [("key", "val")]
+                        , moduleMetadata = []
                         }
     it "parses a module with imports and exports" $ do
       parse'
           (pModule "test")
           ""
-          "module Foo (fun1, fun2)\nimport Bar\nimport qualified Bar.Baz as B (fun3, fun4, Foo(..), Bar(BarA, BarB))\nfrom somepkg import Http"
+          "module Foo {fun1, fun2}\nimport Bar\nimport qualified Bar.Baz {fun3, fun4, Foo{*}, Bar{BarA, BarB}} as B\nfrom somepkg import Http"
         `shouldParse` Module
                         { moduleName     = "test.Foo"
                         , moduleImports  =
@@ -278,40 +275,39 @@ test = parallel $ do
         (App (App (Var ".") (App (App (Var "g") (Var "y")) (Var "z"))) (Var "h")
         )
     it "parses function composition (3)" $ do
-      parse' (pExpr <* eof) "" "f . (x -> x) . h" `shouldParse` App
+      parse' (pExpr <* eof) "" "f . match {x -> x} . h" `shouldParse` App
         (App (Var ".") (Var "f"))
         (App (App (Var ".") (MCase [([VarPat "x"], Var "x")])) (Var "h"))
     it "parses a case expression" $ do
-      parse' pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
-        `shouldParse` Case
-                        (Var "x")
-                        [ (ConsPat "Just" Nothing [VarPat "y"], Var "y")
-                        , (ConsPat "Nothing" Nothing []       , Var "z")
-                        ]
+      parse' pExpr "" "match x { Just y -> y, Nothing -> z }" `shouldParse` Case
+        (Var "x")
+        [ (ConsPat "Just" Nothing [VarPat "y"], Var "y")
+        , (ConsPat "Nothing" Nothing []       , Var "z")
+        ]
     it "parses a case with variable patterns" $ do
-      parse' pExpr "" "case x of\n  y -> y"
+      parse' pExpr "" "match x { y -> y }"
         `shouldParse` Case (Var "x") [(VarPat "y", Var "y")]
     it "parses a let expression on one line" $ do
-      parse' pExpr "" "let x = 1 in add x 1" `shouldParse` Let
+      parse' pExpr "" "let x = 1 { add x 1 }" `shouldParse` Let
         [("x", IntLit 1, Nothing)]
         (App (App (Var "add") (Var "x")) (IntLit 1))
     it "parses a let expression split over two lines" $ do
-      parse' pExpr "" "let x = 1\n    y = 2\n in add x y" `shouldParse` Let
+      parse' pExpr "" "let x = 1,\n    y = 2\n { add x y }" `shouldParse` Let
         [("x", IntLit 1, Nothing), ("y", IntLit 2, Nothing)]
         (App (App (Var "add") (Var "x")) (Var "y"))
     it "parses a let expression with a multiline binding" $ do
       -- let x = foo
-      --          bar
+      --          bar,
       --     y = baz
-      --  in x
-      parseExpr "let x = foo\n         bar\n    y = baz\n in x"
+      --  { x }
+      parseExpr "let x = foo\n         bar,\n    y = baz\n { x }"
         `shouldParse` Let
                         [ ("x", App (Var "foo") (Var "bar"), Nothing)
                         , ("y", Var "baz"                  , Nothing)
                         ]
                         (Var "x")
     it "parses an annotated let expression" $ do
-      parseExpr "let f : Int -> Int\n    f = i -> i + 1\n in f 1"
+      parseExpr "let f : Int -> Int = match { i -> i + 1 } { f 1 }"
         `shouldParse` Let
                         [ ( "f"
                           , MCase
@@ -325,7 +321,7 @@ test = parallel $ do
                         (App (Var "f") (IntLit 1))
     it "parses multiple annotated let bindings" $ do
       parseExpr
-          "let f : Int -> Int\n    f = i -> i + 1\n    g : Bool -> Int\n    g = True -> 1\n        False -> 0\n in 1"
+          "let f : Int -> Int = match { i -> i + 1 }, g : Bool -> Int = match { True -> 1, False -> 0 } { 1 }"
         `shouldParse` Let
                         [ ( "f"
                           , MCase
@@ -351,7 +347,7 @@ test = parallel $ do
       parse' pExpr "" "(\"\", 0)"
         `shouldParse` TupleLit [StringLit "", IntLit 0]
     it "parses a record" $ do
-      parse' pExpr "" "{ a = a, b = b }"
+      parse' pExpr "" "[ a: a, b: b ]"
         `shouldParse` Record [("a", Var "a"), ("b", Var "b")]
     it "parses record projection" $ do
       parseExpr "a.b" `shouldParse` Project (Var "a") "b"
@@ -461,7 +457,7 @@ test = parallel $ do
     it "parses nested type constructors" $ do
       parse' pType "" "A B" `shouldParse` TyApp (TyCon "A") (TyCon "B")
     it "parses record types" $ do
-      parse' pType "" "{x : a, y : b}"
+      parse' pType "" "[x : a, y : b]"
         `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]
     it "parses applications of holes to types" $ do
       parse' pType "" "?a A" `shouldParse` (TyHole "a" `tyapp` TyCon "A")

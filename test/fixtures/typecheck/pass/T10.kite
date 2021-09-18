@@ -1,14 +1,15 @@
 module T10
 
--- Return the elements of the list in reverse order.
-reverse : [a] -> [a]
-reverse = xs -> go xs []
- where
-  go : [a] -> [a] -> [a]
-  go = [] acc        -> acc
-       (x :: xs) acc -> go xs (x :: acc)
-  imNotUsed : Bool
-  imNotUsed = True
+# Return the elements of the list in reverse order.
+reverse : [a] -> [a] { match { xs -> go xs [] } }
 
-main : [Int]
-main = reverse [1,2,3,4]
+go : [a] -> [a] -> [a] {
+  match {
+    [], acc        -> acc,
+    x :: xs, acc -> go xs (x :: acc)
+  }
+}
+
+imNotUsed : Bool { True }
+
+main : [Int] { reverse [1,2,3,4] }

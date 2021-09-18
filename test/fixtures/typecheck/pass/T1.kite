@@ -1,11 +1,17 @@
 module T1
 
-type Maybe a = Just a | Nothing
+type Maybe a { Just a, Nothing }
 
-fromMaybe : Maybe a -> a -> a
-fromMaybe = (Just x) _ -> x
-            _        y -> y
+fromMaybe : Maybe a -> a -> a {
+  match {
+    Just x, _ -> x,
+    _,      y -> y
+  }
+}
 
-leftJoin : Maybe a -> Maybe a -> Maybe a
-leftJoin = (Just x) _ -> Just x
-           Nothing  y -> y
+leftJoin : Maybe a -> Maybe a -> Maybe a {
+  match {
+    Just x, _   -> Just x,
+    Nothing,  y -> y
+  }
+}

@@ -1,4 +1,3 @@
 module BadPatternMatch
 
-foo : Int -> Int
-foo = True -> 0
+foo : Int -> Int { match { True -> 0 } }

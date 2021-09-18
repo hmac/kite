@@ -1,6 +1,5 @@
 module UnknownDataType
 
--- This function is valid, except that Maybe isn't defined anywhere.
+# This function is valid, except that Maybe isn't defined anywhere.
 
-idMaybe : Maybe a -> Maybe a
-idMaybe = x -> x
+idMaybe : Maybe a -> Maybe a { match { x -> x } }

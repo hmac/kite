@@ -1,11 +1,9 @@
 module T3
 
-type Maybe a = Just a | Nothing
+type Maybe a { Just a, Nothing }
 
-type Foo = Foo
+type Foo { Foo }
 
-foo : Maybe Foo
-foo = Nothing
+foo : Maybe Foo { Nothing }
 
-bar : Maybe Foo
-bar = Just Foo
+bar : Maybe Foo { Just Foo }

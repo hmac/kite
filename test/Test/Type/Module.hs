@@ -35,86 +35,97 @@ test :: Spec
 test = do
   describe "typing functions" $ do
     it "a simple function" $ checks [fn|
-f : Bool -> Bool
-f = x -> case x of
-           True -> True
-           False -> False|]
+f : Bool -> Bool {
+  match {
+    x -> match x {
+           True -> True,
+           False -> False
+         }
+  }
+}|]
     it "a function with pattern matching" $ checks [fn|
-f : Bool -> Bool
-f = True -> True
-    False -> False|]
+f : Bool -> Bool {
+  match {
+    True -> True,
+    False -> False
+  }
+}|]
     it "list patterns" $ checks [fn|
-f : [a] -> Bool
-f = [] -> False
-    (x :: xs) -> True|]
+f : [a] -> Bool {
+  match {
+    [] -> False,
+    x :: xs -> True
+  }
+}|]
     it "a recursive function" $ checks [fn|
-f : [a] -> Bool
-f = [] -> True
-    (x :: xs) -> f xs|]
+f : [a] -> Bool {
+  match {
+    [] -> True,
+    x :: xs -> f xs
+  }
+}|]
     it "tuple patterns" $ checks [fn|
-f : (Bool, Int) -> Int
-f = (True, y) -> y
-    (x, 0) -> 0|]
+f : (Bool, Int) -> Int {
+  match {
+    (True, y) -> y,
+    (x, 0) -> 0
+  }
+}|]
     it "constructors with arguments" $ checks [fn|
-f : Pair Bool Nat -> Bool
-f = (MkPair x Zero) -> x
-    _               -> False|]
+f : Pair Bool Nat -> Bool {
+  match {
+    MkPair x Zero -> x,
+    _               -> False
+  }
+}|]
     it "Either Bool INt" $ checks [fn|
-f : Either Bool Nat -> Nat
-f = (Left False) -> Zero
-    (Left _)     -> Suc Zero
-    (Right n)    -> n|]
+f : Either Bool Nat -> Nat {
+  match {
+    Left False -> Zero,
+    Left _     -> Suc Zero,
+    Right n    -> n
+  }
+}|]
     it "Maybe Bool" $ checks [fn|
-f : Maybe Bool -> Bool
-f = (Just b) -> b
-    Nothing  -> False|]
+f : Maybe Bool -> Bool {
+  match {
+    Just b -> b,
+    Nothing  -> False
+  }
+}|]
     it "A foreign call" $ checks [fn|
-f : String -> ()
-f = s -> $fcall putStrLn s|]
+f : String -> (,) { match { s -> $fcall putStrLn s } }|]
   describe "expected type failures" $ do
     -- TODO: check the error message matches what we expect
     it "mismatched constructors in pattern" $ fails [fn|
-f : Bool -> Bool
-f = True -> True
-    Zero -> False|]
+f : Bool -> Bool { match { True -> True, Zero -> False } }|]
     it "type mismatch between list pattern and boolean" $ fails [fn|
-f : [a] -> Bool
-f = [] -> False
-    x -> x|]
+f : [a] -> Bool { match { [] -> False, x -> x } }|]
     it "type mismatch in tuple pattern" $ fails [fn|
-f : (Bool, a) -> a
-f = (True, y) -> y
-    (Zero, x) -> x|]
+f : (Bool, a) -> a { match { (True, y) -> y, (Zero, x) -> x } }|]
     it "type mismatch between function and annotation" $ fails [fn|
-id : a -> a
-id = x -> 5|]
+id : a -> a { match { x -> 5 } }|]
     it "different numbers of patterns in equations" $ fails [fn|
-f : Bool -> Bool
-f = True False -> True|]
+f : Bool -> Bool { match { True, False -> True } }|]
   describe "typing simple modules" $ do
     it "five : Int; five = 5" $ checksModule [mod|
 module Foo
-five : Int
-five = 5|]
+five : Int { 5 }
+|]
     it "const : a -> b -> a; const x y = x" $ checksModule [mod|
 module Foo
-const : a -> b -> a
-const = x y -> x|]
+const : a -> b -> a { match { x, y -> x } }|]
     it "fromMaybe" $ checksModule [mod|
 module Foo
-type Maybe a = Just a | Nothing
-fromMaybe : Maybe a -> a -> a
-fromMaybe = (Just x) _ -> x
-            Nothing  y -> y|]
+type Maybe a { Just a, Nothing }
+fromMaybe : Maybe a -> a -> a { match { Just x, _ -> x, Nothing, y -> y } }|]
   describe "expected typing failures" $ do
     it "id : a -> a; id x = 5" $ failsModule [mod|
 module Foo
-id : a -> a
-id = x -> 5|]
+id : a -> a { match { x -> 5 }}|]
     it "const : a -> b -> a; const x y = y" $ failsModule [mod|
 module Foo
-const : a -> b -> a
-const = x y -> y|]
+const : a -> b -> a { match { x, y -> y } }|]
 
 ctx :: (TypeCtx, Ctx, CtorInfo)
 ctx =

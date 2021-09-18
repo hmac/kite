@@ -1,17 +1,17 @@
 module T5
 
-test : Int
-test = append semigroupInt 2 2
+test : Int { append semigroupInt 2 2 }
 
-type Semigroup a = Semigroup { append : a -> a -> a }
+type Semigroup a { Semigroup [ append : a -> a -> a ] }
 
-append : Semigroup a -> a -> a -> a
-append = (Semigroup d) -> d.append
+append : Semigroup a -> a -> a -> a { match {
+Semigroup d -> d.append
+}}
 
-type Foo = Foo Int
+type Foo { Foo Int }
 
-appendInt : Int -> Int -> Int
-appendInt = x y -> x + y
+appendInt : Int -> Int -> Int { match {
+x, y -> x + y
+}}
 
-semigroupInt : Semigroup Int
-semigroupInt = Semigroup { append = appendInt }
+semigroupInt : Semigroup Int { Semigroup [ append: appendInt ] }

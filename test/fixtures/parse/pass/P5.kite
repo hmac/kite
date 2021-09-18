@@ -1,11 +1,17 @@
 module P5
 
-runTest : Test -> TestResult
-runTest = (Test t) -> runAssertions t.assertions
- where
-  runAssertions : [Assertion] -> TestResult
-  runAssertions = [] -> Pass
-                  (a :: rest) ->
-                    case runAssertion a of
-                      True -> runAssertions rest
-                      False -> Fail a
+runTest : Test -> TestResult {
+  match {
+    Test t -> runAssertions t.assertions
+  }
+}
+
+runAssertions : [Assertion] -> TestResult {
+  match {
+    [] -> Pass,
+    a :: rest -> match runAssertion a {
+      True -> runAssertions rest,
+      False -> Fail a
+    }
+  }
+}

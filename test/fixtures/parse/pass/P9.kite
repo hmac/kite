@@ -1,6 +1,5 @@
 module P9
 
-f : A
-f = x + y
+f : A { x + y }
 
--- Decompose a list into its head and tail.
+# Decompose a list into its head and tail.

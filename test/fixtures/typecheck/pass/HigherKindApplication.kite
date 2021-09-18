@@ -1,9 +1,9 @@
 module HigherKindApplication
 
-foo : f a -> f a
-foo = \x -> x
+foo : f a -> f a { match { x -> x } }
 
-bar : [Int]
-bar = let g : f a -> f a
-          g = \x -> x
-       in g [1]
+bar : [Int] {
+  let g : f a -> f a
+        = match { x -> x }
+  { g [1] }
+}

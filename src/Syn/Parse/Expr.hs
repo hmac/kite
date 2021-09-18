@@ -2,12 +2,10 @@ module Syn.Parse.Expr
   ( pExpr
   , pBinApp
   , pApp
-  , pMultiCase
-  , pCase
   , pVar
+  , pMatch
   ) where
 
-import           Control.Monad                  ( guard )
 import           Control.Monad.Reader           ( asks )
 import           Data.Functor                   ( void )
 import qualified Data.List.NonEmpty            as NE
@@ -16,29 +14,22 @@ import qualified Control.Monad.Combinators.Expr
                                                as E
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
-import           Text.Megaparsec.Char.Lexer     ( indentLevel )
 
 import           AST
 import           Syn
 import           Syn.Parse.Common
-import           Syn.Parse.Pattern              ( pCasePattern
-                                                , pPattern
-                                                )
+import           Syn.Parse.Pattern              ( pPattern )
 import           Syn.Parse.Type                 ( pType )
 
 pExpr :: Parser Syn
 pExpr = do
-  ensureIndent
-  try pMultiCase <|> try pApp <|> try pBinApp <|> pExpr'
+  try pApp <|> try pBinApp <|> pExpr'
 
 pExpr' :: Parser Syn
 pExpr' = do
-  ensureIndent
-
   pUnitLit
     <|> try pTuple
     <|> parensN pExpr
-    <|> pRecord
     <|> pHole
     <|> pCharLit
     <|> try pStringLit
@@ -46,11 +37,10 @@ pExpr' = do
     <|> try pRecordProject
     <|> pVar
     <|> pFCall
-    <|> pAbs
     <|> pLet
-    <|> pList
+    <|> pRecordOrList
     <|> pCons
-    <|> pCase
+    <|> pMatch
 
 -- | Compare our column to the current indent level,
 -- and fail if we're not at least as indented as that.
@@ -59,7 +49,7 @@ ensureIndent = asks indentCol >>= indentGEQ_
 
 pUnitLit :: Parser Syn
 pUnitLit = do
-  void $ symbolN "()"
+  void $ symbolN "(,)"
   pure UnitLit
 
 -- | Parse a binary application
@@ -207,58 +197,35 @@ pFCall = hang $ do
   args <- many pExpr'
   pure $ FCall (unName name) args
 
--- TODO: patterns in lambda bindings
-pAbs :: Parser Syn
-pAbs = do
-  void (string "\\")
-  firstArg <- lowercaseName
-  restArgs <- many lowercaseName
-  void (symbol "->")
-  Abs (firstArg NE.:| restArgs) <$> pExpr
-
--- let foo = 1 in foo
+-- let foo = 1 { foo }
 --
--- let foo = 1
---     bar = 2
---  in foo
+-- let foo = 1,
+--     bar = 2,
+--  { foo }
 --
--- let foo = 1
---      bar = 2
---  in foo
+-- let foo = 1, bar = 2
+--  { foo }
 --
--- let foo : Int
---     foo = 1
---     bar : Bool -> Int
---     bar = True -> 1
---           False -> 0
---  in foo
+-- let foo : Int = 1,
+--     bar : Bool -> Int = match {
+--       True -> 1,
+--       False -> 0,
+--     }
+--  { foo }
 pLet :: Parser Syn
-pLet = hang $ do
+pLet = do
   void (symbolN "let")
-  binds <- hang $ some (pAnnotatedBind <|> pBind)
-  expr  <- symbolN "in" >> hang pExpr
+  binds <- pBind `sepEndBy1` comma
+  expr  <- braces pExpr
   pure $ Let binds expr
  where
   pBind :: Parser (RawName, Syn, Maybe Type)
   pBind = do
     var <- lowercaseName
+    ty  <- optional (void (symbol ":") >> pType)
     void (symbolN "=")
-    val <- hang $ lexemeN pExpr
-    pure (var, val, Nothing)
-  pAnnotatedBind :: Parser (RawName, Syn, Maybe Type)
-  pAnnotatedBind = do
-    (var, ty) <- try pAnnotation
-    var'      <- lowercaseName
-    guard (var' == var)
-    void (symbolN "=")
-    val <- hang $ lexemeN pExpr
-    pure (var, val, Just ty)
-  pAnnotation :: Parser (RawName, Type)
-  pAnnotation = do
-    var <- lowercaseName
-    void (symbolN ":")
-    ty <- lexemeN pType
-    pure (var, ty)
+    val <- pExpr
+    pure (var, val, ty)
 
 pTuple :: Parser Syn
 pTuple = do
@@ -269,9 +236,6 @@ pTuple = do
     _     <- symbolN ")"
     pure $ TupleLit (expr1 : exprs)
 
-pList :: Parser Syn
-pList = ListLit <$> bracketsN (lexemeN pExpr `sepBy` lexemeN comma)
-
 pCons :: Parser Syn
 pCons = do
   name <- lexemeN uppercaseName
@@ -280,73 +244,55 @@ pCons = do
     "False" -> BoolLit False
     n       -> Con n
 
--- We use 'indentGT_' and 'indentLevel' instead of 'hang' here because we want case alts to be
--- indent at least two columns beyond the "c" of "case", and 'hang' doesn't really support that at
--- the moment.
-pCase :: Parser Syn
-pCase = do
-  pos <- indentLevel
-  void (symbol "case ")
-  scrutinee <- pExpr
-  void (symbolN "of")
-  alts <- some $ do
-    try $ indentGT_ pos
-    pAlt
-  pure $ Case scrutinee alts
+-- A 'match' expression.
+-- If it has a target, it behaves like a 'case'.
+-- Otherwise, it behaves like an 'mcase'.
+--
+-- match [1] {
+--   [] -> Nothing,
+--   x::_ -> Just x
+-- }
+--
+-- head : [a] -> Maybe a {
+--   match {
+--     [] -> Nothing,
+--     x::_ -> Just x
+--   }
+-- }
+pMatch :: Parser Syn
+pMatch = do
+  void (symbol "match")
+  maybeTarget <- optional pExpr
+  case maybeTarget of
+    Just target -> do
+      alts <- braces $ pAlt `sepEndBy1` comma
+      pure $ Case target alts
+    Nothing -> do
+      alts <- braces $ pMultiAlt `sepEndBy1` comma
+      pure $ MCase alts
  where
   pAlt :: Parser (Syn.Pattern, Syn)
   pAlt = do
-    pat <- pCasePattern
-    void (string "->")
-    expr <- hang (spaceConsumerN >> pExpr)
+    pat <- pPattern
+    void $ symbol "->"
+    expr <- pExpr
     pure (pat, expr)
-
--- A multi-case is a lambda-case expression which can scrutinise multiple things
--- at once. It looks like this:
---     True [] -> 1
---     _    _  -> 2
---
--- This is equivalent to the haskell expression:
---
---   \b l -> case b of
---             True -> case l of
---                       [] -> 1
---                       _ -> 2
---             _    -> 2
---
---   or equivalently:
---
---   let f True [] = 1
---       f _    _  = 2
---    in f
---
--- Note that constructor patterns must be parenthesised to distinguish them from
--- multiple independent patterns. This is why we use pPattern rather than
--- pCasePattern.
-pMultiCase :: Parser Syn
-pMultiCase = MCase <$> hang (some pAlt)
- where
-  pAlt :: Parser ([Syn.Pattern], Syn)
-  pAlt = do
-    ensureIndent
-    pos  <- indentLevel
-    pats <- some $ do
-      -- Patterns must be equally or more indented than the start of the mcase
-      -- This prevents us from parsing any futher alts as part of this alt.
-      indentGEQ_ pos
-      pPattern
-    void (symbolN "->")
-    -- The RHS of an alt must be indented more than the alt pattern.
-    indentGT_ pos
-    expr <- hang pExpr
+  pMultiAlt :: Parser ([Syn.Pattern], Syn)
+  pMultiAlt = do
+    pats <- pPattern `sepEndBy1` comma
+    void $ symbolN "->"
+    expr <- pExpr
     pure (pats, expr)
 
-
-pRecord :: Parser Syn
-pRecord = Record <$> bracesN (pField `sepBy1` symbolN ",")
+pRecordOrList :: Parser Syn
+pRecordOrList =
+  brackets
+    $   do
+          (Record <$> try pField `sepEndBy1` comma)
+    <|> (ListLit <$> pExpr `sepEndBy` comma)
  where
   pField = do
     name <- lowercaseString
-    void (symbol "=")
+    void (symbol ":")
     expr <- pExpr
     pure (name, expr)

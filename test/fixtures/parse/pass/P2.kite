@@ -1,29 +1,35 @@
 module P2
 
-a : String
-a = case a of
-     a -> case a of
-           a -> a
-           a -> a
-     a -> a
-
-a : String
-a =
-  case a of
-    a -> a ?a
+a : String {
+  match a {
+    a -> match a {
+      a -> a,
+      a -> a,
+    },
     a -> a
+  }
+}
 
-a : String
-a =
-  case a of
-    a      -> -5
+a : String {
+  match a {
+    a -> a ?a,
+    a -> a
+  }
+}
+
+a : String {
+  match a {
+    a      -> -5,
     (a, a) -> a
+  }
+}
 
-a : String
-a =
-  case a of
-    a -> case a of
-           a -> a
-           a -> ()
+a : String {
+  match a {
+    a -> match a {
+      a -> a,
+      a -> (,)
+    },
     a -> a
-
+  }
+}

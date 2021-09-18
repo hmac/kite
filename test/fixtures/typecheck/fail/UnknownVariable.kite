@@ -1,4 +1,3 @@
 module UnknownVariable
 
-foo : Int -> Int
-foo = x -> y
+foo : Int -> Int { match { x -> y } }

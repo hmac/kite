@@ -1,5 +1,7 @@
 module T7
 
-length : [a] -> Int
-length = [] -> 0
-         (x :: xs) -> 1 + (length xs)
+length : [a] -> Int { match {
+  [] -> 0,
+  x :: xs -> 1 + length xs
+  }
+}

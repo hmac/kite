@@ -1,15 +1,19 @@
 module FunctorEither
 
-type Either a b = Left a | Right b
+type Either a b { Left a, Right b }
 
-mapEither : forall c a b. (a -> b) -> (Either c) a -> (Either c) b
-mapEither = _ (Left l) -> Left l
-            f (Right r) -> Right (f r)
+mapEither : forall c a b. (a -> b) -> (Either c) a -> (Either c) b {
+  match {
+    _, Left l -> Left l,
+    f, Right r -> Right (f r)
+  }
+}
 
-type Functor f = Functor (forall a b. (a -> b) -> f a -> f b)
+type Functor f {
+  Functor (forall a b. (a -> b) -> f a -> f b)
+}
 
--- Functor   : forall f. (forall a b. (a -> b) -> f a -> f b)
--- mapEither : forall c. (forall a b. (a -> b) -> Either c a -> Either c b)
+# Functor   : forall f. (forall a b. (a -> b) -> f a -> f b)
+# mapEither : forall c. (forall a b. (a -> b) -> Either c a -> Either c b)
 
-functorEither : Functor (Either c)
-functorEither = Functor mapEither
+functorEither : Functor (Either c) { Functor mapEither }

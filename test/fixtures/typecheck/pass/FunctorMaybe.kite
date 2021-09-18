@@ -1,15 +1,17 @@
 module FunctorMaybe
 
-type Maybe c a = Nothing | Just a
+type Maybe c a { Nothing, Just a }
 
-mapMaybe : forall c a b. (a -> b) -> (Maybe c a) -> (Maybe c b)
-mapMaybe = _ Nothing -> Nothing
-            f (Just x) -> Just (f x)
+mapMaybe : forall c a b. (a -> b) -> (Maybe c a) -> (Maybe c b) {
+  match {
+    _, Nothing -> Nothing,
+    f, Just x -> Just (f x)
+  }
+}
 
-type Functor f = Functor (forall a b. (a -> b) -> f a -> f b)
+type Functor f { Functor (forall a b. (a -> b) -> f a -> f b) }
 
--- Functor   : forall f. (forall a b. (a -> b) -> f a -> f b)
--- mapMaybe : forall a b. (a -> b) -> Maybe a -> Maybe b
+# Functor   : forall f. (forall a b. (a -> b) -> f a -> f b)
+# mapMaybe : forall a b. (a -> b) -> Maybe a -> Maybe b
 
-functorMaybe : forall c. Functor (Maybe c)
-functorMaybe = Functor mapMaybe
+functorMaybe : forall c. Functor (Maybe c) { Functor mapMaybe }
