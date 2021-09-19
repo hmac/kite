@@ -17,7 +17,9 @@ import           Data.Text.Prettyprint.Doc
                                          hiding ( group )
 import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.UUID.V4                   ( nextRandom )
-import           System.Exit                    ( exitWith )
+import           System.Exit                    ( exitFailure
+                                                , exitWith
+                                                )
 import           System.IO                      ( IOMode(WriteMode)
                                                 , hPutStrLn
                                                 , stdout
@@ -94,8 +96,11 @@ main = do
 
 runApp :: ExceptT Error IO a -> IO ()
 runApp m = runExceptT m >>= \case
-  Left  err -> printNicely $ pretty err
-  Right _   -> pure ()
+  Left err -> do
+    printNicely $ pretty err
+    exitFailure
+
+  Right _ -> pure ()
 
 parse :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 parse path = loadFile path >>= pPrint
@@ -128,9 +133,9 @@ typecheck path = do
 format :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 format path = do
   fileContents <- wrapError LoadError $ ModuleLoader.readFile' path
-  liftIO $ case parseKiteFile path "fake-pkg" fileContents of
-    Right m   -> printNoColour $ printModule m
-    Left  err -> putStrLn err
+  case parseKiteFile path "fake-pkg" fileContents of
+    Right m   -> liftIO $ printNoColour $ printModule m
+    Left  err -> throwError $ ParseError err
 
 eval :: (MonadFix m, MonadIO m, MonadError Error m) => FilePath -> m ()
 eval path = do
