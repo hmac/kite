@@ -126,7 +126,7 @@ lowercaseName :: Parser RawName
 lowercaseName = Name <$> lowercaseString
 
 lowercaseString :: Parser String
-lowercaseString = lexeme $ lowercaseStringWithoutTrailingWhitespace
+lowercaseString = lexeme lowercaseStringWithoutTrailingWhitespace
 
 lowercaseStringWithoutTrailingWhitespace :: Parser String
 lowercaseStringWithoutTrailingWhitespace = try $ do

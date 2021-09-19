@@ -270,25 +270,19 @@ printLet binds e = hang 1 $ vsep
   printLetBind (name, expr, Just ty) =
     printName name <+> ":" <+> printType ty <+> "=" <+> printExpr expr
 
--- case expr of
---   pat1 x y -> e1
---   pat2 z w -> e2
+-- match expr {
+--   pat1 -> e1,
+--   pat2 -> e2
+-- }
 printCase :: Syn -> [(Syn.Pattern, Syn)] -> Document
 printCase e alts = printMatch (Just e) $ map (\(p, r) -> ([p], r)) alts
-  -- hang 2
-  --   $ forceVSep
-  --   $ (keyword "case" <+> printExpr e <+> keyword "of")
-  --   : map printAlt alts
-  -- where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
--- pat1 pat2 -> e1
--- pat3 pat4 -> e2
+-- match {
+--   pat1, pat2 -> e1,
+--   pat3, pat4 -> e2
+-- }
 printMCase :: [([Syn.Pattern], Syn)] -> Document
-printMCase alts = printMatch Nothing alts
-  -- parens $ hang 0 $ forceVSep $ map printAlt alts
-  --  where
-  --   printAlt (pats, expr) =
-  --     hsep (map printPattern pats) <+> "->" <+> printExpr expr
+printMCase = printMatch Nothing
 
 printMatch :: Maybe Syn -> [([Syn.Pattern], Syn)] -> Document
 printMatch scrut alts =

@@ -274,11 +274,11 @@ pMatch = do
     pure (pats, expr)
 
 pRecordOrList :: Parser Syn
-pRecordOrList =
-  brackets
-    $   do
-          (Record <$> try pField `sepEndBy1` comma)
-    <|> (ListLit <$> pExpr `sepEndBy` comma)
+pRecordOrList = brackets $ do
+  Record
+    <$>         try pField
+    `sepEndBy1` comma
+    <|>         (ListLit <$> pExpr `sepEndBy` comma)
  where
   pField = do
     name <- lowercaseString
