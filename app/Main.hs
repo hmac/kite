@@ -129,7 +129,7 @@ format :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 format path = do
   fileContents <- wrapError LoadError $ ModuleLoader.readFile' path
   liftIO $ case parseKiteFile path "fake-pkg" fileContents of
-    Right m   -> printNicely (printModule m)
+    Right m   -> printNoColour $ printModule m
     Left  err -> putStrLn err
 
 eval :: (MonadFix m, MonadIO m, MonadError Error m) => FilePath -> m ()
@@ -187,10 +187,13 @@ loadFile path = do
   wrapError LoadError $ ModuleLoader.loadFromPackageInfo pkgInfo path
 
 layout :: Document -> SimpleDocStream AnsiStyle
-layout doc = reAnnotateS styleToColor (layoutSmart defaultLayoutOptions doc)
+layout = reAnnotateS styleToColor . layoutSmart defaultLayoutOptions
 
 printNicely :: Document -> IO ()
 printNicely doc = renderIO stdout (layout doc) >> putStrLn ""
+
+printNoColour :: Document -> IO ()
+printNoColour doc = renderIO stdout (unAnnotateS (layout doc)) >> putStrLn ""
 
 -- Conor Colours
 -- https://github.com/idris-lang/Idris-dev/blob/master/docs/reference/semantic-highlighting.rst
