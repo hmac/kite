@@ -231,7 +231,7 @@ printApp (App (Var op) a) b | op `elem` binOps =
       parens (printExpr a) <+> printExpr (Var op) <+> printExpr b
 
 -- special case for the only infix constructor: (::)
-printApp (App (Con "::") a) b = parens $ case (singleton a, singleton b) of
+printApp (App (Var "::") a) b = case (singleton a, singleton b) of
   (True , True ) -> printExpr a <+> "::" <+> printExpr b
   (False, False) -> parens (printExpr a) <+> "::" <+> parens (printExpr b)
   (True , False) -> printExpr a <+> "::" <+> parens (printExpr b)

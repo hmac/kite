@@ -86,6 +86,10 @@ test = parallel $ do
         `shouldBe` "\"hello hash bracket: #\\{\""
     it "prints a string with several escaped backslashes" $ do
       show (printInterpolatedString "\\\\" []) `shouldBe` "\"\\\\\\\\\""
+  describe "printing expressions" $ do
+    it "prints cons expressions" $ do
+      show (printExpr (App (App (Var "::") (Var "x")) (Var "y")))
+        `shouldBe` "x :: y"
   describe "printing modules" $ do
     it "prints module name correctly" $ do
       let name = ModuleName ["Data", "List", "NonEmpty"]
