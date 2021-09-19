@@ -114,8 +114,8 @@ pImport selfPkg = do
   void $ symbol "import"
   qualified <- isJust <$> optional (symbol "qualified")
   name      <- pModuleName
-  items     <- optional $ braces (pImportItem `sepBy` comma)
   alias     <- optional (symbol "as" >> uppercaseName)
+  items     <- optional $ braces (pImportItem `sepBy` comma)
   pure Import { importQualified = qualified
               , importName      = PkgModuleName (fromMaybe selfPkg pkg) name
               , importAlias     = alias
@@ -177,22 +177,31 @@ pData = do
 --
 -- swap : (a, b) -> (b, a) {
 --  match {
---    (x, y) -> (y, x)
+--    (x, y) -> (y, id x)
 --  }
+-- } where {
+--   id : a -> b {
+--     match {
+--       x -> x
+--     }
+--   }
 -- }
 pFun :: Parser (Fun Syn)
 pFun = do
-  comments <- many pComment
-  name     <- lowercaseName <?> "function name"
-  _        <- symbol ":"
-  sig      <- pType
-  expr     <- braces pExpr
+  comments    <- many pComment
+  name        <- lowercaseName <?> "function name"
+  _           <- symbol ":"
+  sig         <- pType
+  expr        <- braces pExpr
+  whereClause <- optional $ do
+    void $ symbol "where"
+    braces $ many pFun
 
   pure Fun { funComments = comments
            , funName     = name
            , funType     = Just sig
            , funExpr     = expr
-           , funWheres   = []
+           , funWheres   = fromMaybe [] whereClause
            }
 
 pComment :: Parser String

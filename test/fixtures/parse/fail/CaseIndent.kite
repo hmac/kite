@@ -1,9 +1,0 @@
-module CaseIndent
-
--- The branches of a case must be indented past the 'c' of case, unlike in Haskell, where they can
--- start at any column greater than 1.
--- It would be nice to relax this restriction.
-fromMaybe : a -> Maybe a -> a
-fromMaybe = d m -> case m of
-              Just x -> x
-              Nothing -> d

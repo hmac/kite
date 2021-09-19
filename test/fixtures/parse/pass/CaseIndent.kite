@@ -1,0 +1,9 @@
+module CaseIndent
+
+# The branches of a case can be indented by any amount.
+fromMaybe : a -> Maybe a -> a {
+  match {
+d, m -> match m {
+                                Just x -> x,
+  Nothing -> d
+  }}}

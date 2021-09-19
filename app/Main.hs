@@ -196,7 +196,7 @@ printNicely doc = renderIO stdout (layout doc) >> putStrLn ""
 -- https://github.com/idris-lang/Idris-dev/blob/master/docs/reference/semantic-highlighting.rst
 styleToColor :: Style -> AnsiStyle
 styleToColor VarStyle      = color Magenta
-styleToColor KeywordStyle  = bold
+styleToColor KeywordStyle  = bold <> color Cyan
 styleToColor FunctionStyle = color Green
 styleToColor TypeStyle     = color Blue
 styleToColor DataStyle     = color Red

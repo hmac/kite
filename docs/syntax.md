@@ -18,7 +18,7 @@ import Data.Eq {Eq, eq}
 import Control.Applicative {Applicative, pure, liftA2}
 import Control.Monad.State {State, monadState, applicativeState}
 import Data.Monad {Monad, bind}
-import Data.Function {flip} as F
+import Data.Function as F {flip}
 import Control.Alternative {Alternative}
 import qualified Data.Show
 
@@ -121,6 +121,23 @@ filterMaybe : (a -> Maybe b) -> [a] -> [b] {
     }
   }
 }
+
+# Return all the elements of a list except the last one.
+# Returns Nothing if the list is empty.
+init : [a] -> Maybe [a] {
+  match {
+    [] -> Nothing,
+    xs -> Just (go xs)
+  }
+}
+where {
+  go : [a] -> [a] {
+    match {
+      [x]     -> [],
+      x :: xs -> x :: go xs
+    }
+  }
+ }
 ```
 
 ## Grammar
@@ -136,7 +153,7 @@ pkg_ident = /[a-z][a-z0-9]*/ ;
 (* Modules and imports *)
 module = "module", qual_upper_ident, [export_list], {import}, {def} ;
 export_list = import_list ;
-import = ["from", pkg_ident], "import", ["qualified"], qual_upper_ident, [import_list], ["as", qual_upper_ident] ;
+import = ["from", pkg_ident], "import", ["qualified"], qual_upper_ident, ["as", qual_upper_ident], [import_list] ;
 import_list = "{", [ import_list_item, {",", import_list_item}, [","] ] "}" ;
 import_list_item = (
                     upper_ident,
@@ -150,7 +167,7 @@ import_list_item = (
 
 (* Definitions *)
 def = val_def | type_def | type_alias ;
-val_def = lower_ident, ":", type, "{", expr, "}" ;
+val_def = lower_ident, ":", type, "{", expr, "}", [ "where", "{", {val_def}, "}" ] ;
 type_def = "type", upper_ident, [type_params], "{", [ ctor_def, {",", ctor_def}, [","] ], "}" ;
 ctor_def = upper_ident, {atomic_type} ;
 type_params = lower_ident, {lower_ident} ;
@@ -198,11 +215,12 @@ pattern_group = pattern, {",", pattern} ;
 pattern = ctor_pattern | wildcard_pattern | list_pattern | cons_pattern | var_pattern | int_pattern | char_pattern ;
 ctor_pattern = ctor, {pattern} ;
 wildcard_pattern = "_" ;
-list_pattern = "[", {pattern}, "]" ;
+list_pattern = "[", [pattern, {",", pattern}, [","]], "]" ;
 cons_pattern = pattern, "::", pattern ;
 var_pattern = lower_ident ;
 int_pattern = int ;
 char_pattern = char ;
+tuple_pattern = "(", [pattern, {",", pattern}, [","]], ")" ;
 
 (* Infix expressions *)
 infix_expr = expr, infix_op, expr ;

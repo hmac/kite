@@ -100,6 +100,7 @@ type Fun exp = Fun_ RawName exp (Type_ RawName)
 data Fun_ name exp ty = Fun
   { funComments :: [String]
   , funName     :: name
+  -- TODO: remove the Maybe?
   , funType     :: Maybe ty
   , funExpr     :: exp
   , funWheres   :: [Fun_ name exp ty]

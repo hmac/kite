@@ -21,41 +21,29 @@ import           Syn                     hiding ( Pattern )
 
 printModule :: Module -> Document
 printModule mod = vsep $ catMaybes
-  [ printMetadata (moduleMetadata mod)
-  , Just $ printModName modName
+  [ Just $ printModName modName
   , indent 2 <$> printModExports (moduleExports mod)
   , (line <>) <$> printImports pkgName (moduleImports mod)
   , (line <>) <$> printModDecls (moduleDecls mod)
   ]
   where PkgModuleName pkgName modName = moduleName mod
 
--- ---
--- key1: val1
--- key2: val2
--- ---
--- The return type is a Maybe so we can render the empty string when there's no
--- metadata. (https://stackoverflow.com/a/52843774)
-printMetadata :: [(String, String)] -> Maybe Document
-printMetadata []  = Nothing
-printMetadata kvs = Just $ vsep ["---", printKvs, "---"]
-  where printKvs = vsep $ map (\(k, v) -> hcat [pretty k, ": ", pretty v]) kvs
-
 -- module Foo
 printModName :: ModuleName -> Document
 printModName (ModuleName names) =
   keyword "module" <+> hcat (map pretty (intersperse "." names))
 
---   (fun1, fun2)
+--   {fun1, fun2}
 printModExports :: [(RawName, [RawName])] -> Maybe Document
 printModExports []      = Nothing
-printModExports exports = Just $ tupled (map printExport exports)
+printModExports exports = Just $ bracesList $ map printExport exports
  where
   printExport :: (RawName, [RawName]) -> Document
   printExport (e, []) = printName e
-  printExport (e, s ) = printName e <> tupled (map printName s)
+  printExport (e, s ) = printName e <> bracesList (map printName s)
 
 -- import Data.Text
--- import qualified Data.Text.Encoding as E (encodeUtf8)
+-- import qualified Data.Text.Encoding {encodeUtf8} as E
 printImports :: PackageName -> [Import] -> Maybe Document
 printImports _       []      = Nothing
 printImports selfPkg imports = Just $ vsep (map (printImport selfPkg) imports)
@@ -71,15 +59,15 @@ printImport selfPkg i =
     alias = maybe mempty (\n -> keyword " as" <+> printName n) (importAlias i)
     items = if null (importItems i)
       then mempty
-      else " " <> hang 0 (tupled (map printImportItem (importItems i)))
+      else " " <> hang 0 (bracesList (map printImportItem (importItems i)))
   in
     hcat [pkg, keyword "import", qual, prettyModuleName modName, alias, items]
 
 printImportItem :: ImportItem -> Document
 printImportItem i = printName (importItemName i) <> case i of
   ImportSingle{} -> mempty
-  ImportAll{}    -> parens ".."
-  ImportSome{}   -> tupled (map printName (importItemConstructors i))
+  ImportAll{}    -> braces "*"
+  ImportSome{}   -> bracesList (map printName (importItemConstructors i))
 
 printModDecls :: [Decl Syn] -> Maybe Document
 printModDecls []    = Nothing
@@ -92,15 +80,19 @@ printDecl (DataDecl  d) = printData d
 printDecl (AliasDecl a) = printAlias a
 
 printFun :: Fun Syn -> Document
-printFun Fun { funComments = comments, funName = name, funExpr = defs, funType = ty, funWheres = wheres }
-  = vsep $ printComments comments ++ sig ++ [printDef name defs] ++ whereClause
+printFun Fun { funComments = comments, funName = name, funExpr = expr, funType = ty, funWheres = wheres }
+  = vsep
+    $  printComments comments
+    <> [func (printName name) <+> sig <+> block (printExpr expr)]
+    <> whereClause
  where
   whereClause = case wheres of
     [] -> []
-    ws -> [hang 2 $ forceVSep $ " where" : map printFun ws]
+    ws ->
+      [hang 2 $ keyword "where" <+> "{" <> forceVSep (map printFun ws <> ["}"])]
   sig = case ty of
-    Just t  -> [func (printName name) <> align (space <> colon <+> printType t)]
-    Nothing -> []
+    Just t  -> align (colon <+> printType t)
+    Nothing -> mempty
   printComments [] = []
   printComments cs = map printComment cs
 
@@ -150,18 +142,10 @@ printType' ctx ty = case (ctx, ty) of
   (_   , TyString       ) -> type_ "String"
   (_   , TyChar         ) -> type_ "Char"
   (_   , TyBool         ) -> type_ "Bool"
-  (_   , TyUnit         ) -> type_ "()"
+  (_   , TyUnit         ) -> type_ "(,)"
   (_, TyRecord fields) ->
     printRecordSyntax ":" $ map (bimap printName printType) fields
   (_, TyForall v t) -> "forall" <+> printName v <> "." <+> printType t
-
--- For "big" expressions, print them on a new line under the =
--- For small expressions, print them on the same line
--- TODO: when we drop support for LHS patterns, update this
-printDef :: RawName -> Syn -> Document
-printDef name expr | big expr  = nest 2 $ vsep [lhs, printExpr expr]
-                   | otherwise = lhs <+> printExpr expr
-  where lhs = func (printName name) <+> equals
 
 printPattern :: Syn.Pattern -> Document
 printPattern (VarPat n)      = printName n
@@ -170,14 +154,14 @@ printPattern (IntPat    i)   = pretty i
 printPattern (CharPat   c)   = squotes (pretty c)
 printPattern (StringPat s)   = dquotes (pretty s)
 printPattern (BoolPat   b)   = pretty b
-printPattern UnitPat         = "()"
+printPattern UnitPat         = "(,)"
 printPattern (TuplePat pats) = align $ htupled (map printPattern pats)
 printPattern (ListPat  pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
 printPattern (ConsPat "::" _ [x, y]) =
-  parens $ printPattern x <+> "::" <+> printPattern y
+  printPattern x <+> "::" <+> printPattern y
 printPattern (ConsPat n _ pats) =
-  parens $ data_ (printName n) <+> hsep (map printPattern pats)
+  hsep $ data_ (printName n) : map printPattern pats
 
 -- TODO: binary operators
 printExpr :: Syn -> Document
@@ -185,15 +169,10 @@ printExpr (Var n  ) = printName n
 printExpr (Ann e t) = printExpr e <+> colon <+> printType t
 printExpr (Con n  ) = data_ (printName n)
 printExpr (Record fields) =
-  data_ $ printRecordSyntax "=" $ map (bimap pretty printExpr) fields
-printExpr (Project e f) = printExpr' e <> dot <> pretty f
-printExpr (Hole n     ) = hole ("?" <> printName n)
-printExpr (Abs args e) =
-  parens
-    $   "\\"
-    <>  hsep (map printName (NE.toList args))
-    <+> "->"
-    <+> printExpr e
+  data_ $ printRecordSyntax ":" $ map (bimap pretty printExpr) fields
+printExpr (Project e f    ) = printExpr' e <> dot <> pretty f
+printExpr (Hole n         ) = hole ("?" <> printName n)
+printExpr (Abs args e) = printExpr $ MCase [(map VarPat (NE.toList args), e)]
 printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts
@@ -210,7 +189,7 @@ printExpr (StringLit s    ) = printInterpolatedString s []
 printExpr (CharLit   c    ) = pretty (show c)
 printExpr (BoolLit   True ) = data_ "True"
 printExpr (BoolLit   False) = data_ "False"
-printExpr UnitLit           = data_ "()"
+printExpr UnitLit           = data_ "(,)"
 printExpr (FCall proc args) =
   "$fcall" <+> pretty proc <+> hsep (map printExpr' args)
 
@@ -281,43 +260,58 @@ printList es = hang 2 $ encloseSep lbracket rbracket comma (map printExpr es)
 -- The hang 1 pushes 'in' forwards to line up with the end of 'let'
 printLet :: [(RawName, Syn, Maybe Type)] -> Syn -> Document
 printLet binds e = hang 1 $ vsep
-  [ keyword "let" <+> align (vsep (map printLetBind binds))
-  , keyword "in" <+> printExpr e
+  [ keyword "let" <+> align (vsep (punctuate comma (map printLetBind binds)))
+  , block (printExpr e)
   ]
 
  where
   printLetBind (name, expr, Nothing) =
     printName name <+> "=" <+> printExpr expr
   printLetBind (name, expr, Just ty) =
-    (printName name <+> ":" <+> printType ty) <> hardline <> printLetBind
-      (name, expr, Nothing)
+    printName name <+> ":" <+> printType ty <+> "=" <+> printExpr expr
 
 -- case expr of
 --   pat1 x y -> e1
 --   pat2 z w -> e2
 printCase :: Syn -> [(Syn.Pattern, Syn)] -> Document
-printCase e alts =
-  hang 2
-    $ forceVSep
-    $ (keyword "case" <+> printExpr e <+> keyword "of")
-    : map printAlt alts
-  where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
+printCase e alts = printMatch (Just e) $ map (\(p, r) -> ([p], r)) alts
+  -- hang 2
+  --   $ forceVSep
+  --   $ (keyword "case" <+> printExpr e <+> keyword "of")
+  --   : map printAlt alts
+  -- where printAlt (pat, expr) = printPattern pat <+> "->" <+> printExpr expr
 
 -- pat1 pat2 -> e1
 -- pat3 pat4 -> e2
 printMCase :: [([Syn.Pattern], Syn)] -> Document
-printMCase alts = parens $ hang 0 $ forceVSep $ map printAlt alts
+printMCase alts = printMatch Nothing alts
+  -- parens $ hang 0 $ forceVSep $ map printAlt alts
+  --  where
+  --   printAlt (pats, expr) =
+  --     hsep (map printPattern pats) <+> "->" <+> printExpr expr
+
+printMatch :: Maybe Syn -> [([Syn.Pattern], Syn)] -> Document
+printMatch scrut alts =
+  hsep $ keyword "match" : target <> [blockList (map printAlt alts)]
  where
+  target = case scrut of
+    Nothing -> []
+    Just s  -> [printExpr s]
   printAlt (pats, expr) =
-    hsep (map printPattern pats) <+> "->" <+> printExpr expr
+    (hsep . punctuate comma . map printPattern) pats <+> "->" <+> printExpr expr
 
 printData :: Data -> Document
 printData d =
-  keyword "type"
-    <+> printName (dataName d)
-    <+> hsep (map printName (dataTyVars d))
-    <+> equals
-    <+> hsep (punctuate pipe (map printCon (dataCons d)))
+  hsep
+    $  keyword "type"
+    :  printName (dataName d)
+    :  map printName (dataTyVars d)
+    <> [blockList (map printCon (dataCons d))]
+
+  -- keyword "type"
+  --   <+> printName (dataName d)
+  --   <+> hsep (map printName (dataTyVars d))
+  --   <+> blockList (map printCon (dataCons d))
 
 printAlias :: Alias -> Document
 printAlias a =
@@ -329,10 +323,10 @@ printAlias a =
 
 printCon :: DataCon -> Document
 printCon DataCon { conName = name, conArgs = args } =
-  printName name <+> hsep (map (printType' AppR) args)
+  hsep $ printName name : map (printType' AppR) args
 
 printComment :: String -> Document
-printComment c = "--" <+> pretty c
+printComment c = "#" <+> pretty c
 
 printName :: RawName -> Document
 printName (Name n) = pretty n
@@ -368,7 +362,7 @@ size _         = 1
 
 printRecordSyntax :: Doc a -> [(Doc a, Doc a)] -> Doc a
 printRecordSyntax separator rec =
-  braces' $ hsep $ punctuate comma (map (\(n, t) -> n <+> separator <+> t) rec)
+  brackets $ hsep $ punctuate "," (map (\(n, t) -> n <> separator <+> t) rec)
 
 -- Like tupled but will always print everything on the same line
 htupled :: [Doc a] -> Doc a
@@ -377,6 +371,30 @@ htupled elems = mconcat (zipWith (<>) (lparen : repeat comma) elems) <> rparen
 -- Like braces but will pad with a space on either side
 braces' :: Doc a -> Doc a
 braces' d = "{" <+> d <+> "}"
+
+-- Like tupled but with braces
+bracesList :: [Doc a] -> Doc a
+bracesList = group . encloseSep (flatAlt "{ " "{") (flatAlt " }" "}") ", "
+
+-- Prints a block - i.e. some code wrapped in braces, and indented.
+-- > "where" <+> block "..."
+-- where {
+--   ...
+-- }
+block :: Doc a -> Doc a
+block d = "{" <> nest 2 (line <> d) <> line <> "}"
+
+-- Prints a sequence of code in a block, separated by commas.
+-- > "match" <+> blockList ["a -> b", "c -> d"]
+-- match {
+--   a -> b,
+--   c -> d
+-- }
+-- > "data Void" <+> blockList []
+-- data Void { }
+blockList :: [Doc a] -> Doc a
+blockList [] = "{ }"
+blockList ds = block $ vsep $ punctuate "," ds
 
 -- Like vsep but uses hardline instead of line to prevent 'group' from removing the line breaks.
 forceVSep :: [Doc a] -> Doc a

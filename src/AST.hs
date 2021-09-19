@@ -22,6 +22,7 @@ data Expr n t = Var n
          | Ann (Expr n t) t
          | Con n
          | Hole n
+         -- TODO: to be removed in favour of MCase
          | Abs (NonEmpty n) (Expr n t)
          | App (Expr n t) (Expr n t)
          | Let [(n, Expr n t, Maybe t)] (Expr n t)

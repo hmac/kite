@@ -86,19 +86,15 @@ test = parallel $ do
         `shouldBe` "\"hello hash bracket: #\\{\""
     it "prints a string with several escaped backslashes" $ do
       show (printInterpolatedString "\\\\" []) `shouldBe` "\"\\\\\\\\\""
-  describe "printing module" $ do
+  describe "printing modules" $ do
     it "prints module name correctly" $ do
       let name = ModuleName ["Data", "List", "NonEmpty"]
       show (printModName name) `shouldBe` "module Data.List.NonEmpty"
-    it "prints module metadata correctly" $ do
-      let meta     = [("hi", "there"), ("how", "are you")]
-          expected = "---\nhi: there\nhow: are you\n---"
-      show (printMaybe (printMetadata meta)) `shouldBe` expected
     it "prints module exports correctly" $ do
       let exports =
             [("fun1", []), ("SomeType", []), ("OtherType", ["SomeConstructor"])]
       show (printMaybe (printModExports exports))
-        `shouldBe` "(fun1, SomeType, OtherType(SomeConstructor))"
+        `shouldBe` "{fun1, SomeType, OtherType{SomeConstructor}}"
     it "prints an empty module correctly" $ do
       let mod = Module
             { moduleName     = "text.Data.Text"
@@ -115,8 +111,63 @@ test = parallel $ do
                                         , importItems     = []
                                         }
                                ]
-            , moduleMetadata = [("package", "text")]
+            , moduleMetadata = []
             , moduleDecls    = []
             }
       show (printModule mod)
-        `shouldBe` "---\npackage: text\n---\nmodule Data.Text\n  (Text)\n\nimport qualified Data.Text.Internal.Text as Internal (Text)\nfrom std import           Data.Maybe"
+        `shouldBe` "module Data.Text\n  {Text}\n\nimport qualified Data.Text.Internal.Text as Internal {Text}\nfrom std import           Data.Maybe"
+  describe "printing type definitions" $ do
+    it "prints simple types" $ do
+      show
+          (printData Data
+            { dataName   = "Maybe"
+            , dataTyVars = ["a"]
+            , dataCons   = [ DataCon { conName = "Nothing", conArgs = [] }
+                           , DataCon { conName = "Just", conArgs = [TyVar "a"] }
+                           ]
+            }
+          )
+        `shouldBe` "type Maybe a {\n  Nothing,\n  Just a\n}"
+    it "prints types with embedded records" $ do
+      show
+          (printData Data
+            { dataName   = "Eq"
+            , dataTyVars = ["a"]
+            , dataCons   =
+              [ DataCon
+                  { conName = "Eq"
+                  , conArgs =
+                    [ TyRecord
+                        [("eq", TyFun (TyVar "a") (TyFun (TyVar "a") TyBool))]
+                    ]
+                  }
+              ]
+            }
+          )
+        `shouldBe` "type Eq a {\n  Eq [eq: a -> a -> Bool]\n}"
+    it "prints types no constructors" $ do
+      show
+          (printData Data { dataName = "Void", dataTyVars = [], dataCons = [] })
+        `shouldBe` "type Void { }"
+    it "prints types with no parameters" $ do
+      show
+          (printData Data
+            { dataName   = "Bool"
+            , dataTyVars = []
+            , dataCons   = [ DataCon { conName = "True", conArgs = [] }
+                           , DataCon { conName = "False", conArgs = [] }
+                           ]
+            }
+          )
+        `shouldBe` "type Bool {\n  True,\n  False\n}"
+    it "prints types with multiple parameters" $ do
+      show
+          (printData Data
+            { dataName = "Either"
+            , dataTyVars = ["a", "b"]
+            , dataCons = [ DataCon { conName = "Left", conArgs = [TyVar "a"] }
+                         , DataCon { conName = "Right", conArgs = [TyVar "b"] }
+                         ]
+            }
+          )
+        `shouldBe` "type Either a b {\n  Left a,\n  Right b\n}"

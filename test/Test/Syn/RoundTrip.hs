@@ -87,7 +87,7 @@ genModule pkg =
     <*> Gen.list (Range.linear 0 5) genImport
     <*> Gen.list (Range.linear 0 5) genExport
     <*> (uniqueFunNames <$> Gen.list (Range.linear 0 10) genDecl)
-    <*> genMetadata
+    <*> pure []
 
 -- Filter a list of decls, removing any functions with duplicate names
 uniqueFunNames :: [Decl Syn] -> [Decl Syn]
@@ -99,13 +99,6 @@ uniqueFunNames = go []
     | otherwise             = FunDecl f : go (funName f : seen) rest
   go seen (notFun : rest) = notFun : go seen rest
 
-
-genMetadata :: H.Gen [(String, String)]
-genMetadata = Gen.list (Range.linear 0 5) genKV
- where
-  genKV :: H.Gen (String, String)
-  genKV =
-    (,) <$> genLowerString <*> Gen.string (Range.linear 1 100) Gen.alphaNum
 
 genImport :: H.Gen Import
 genImport = do
@@ -203,10 +196,10 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   , CharLit <$> Gen.alphaNum
   , pure UnitLit
   ]
-  [ genAbs
+  [
   -- We don't parse arbitrary inline annotations (yet) so we don't generate them.
   -- , Gen.subtermM (Gen.small genExpr) (\e -> Ann e <$> genType)
-  , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
+    Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
   , Gen.subtermM2 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
@@ -232,13 +225,7 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
 
 -- Generate an expression which could be on the LHS of an application.
 genFunExpr :: H.Gen Syn
-genFunExpr =
-  Gen.recursive Gen.choice [genVar, genRecordProjection] [genAbs, genLet]
-
-genAbs :: H.Gen Syn
-genAbs = Gen.subtermM
-  (Gen.small genExpr)
-  (\e -> Abs <$> Gen.nonEmpty (Range.linear 1 5) genLowerName <*> pure e)
+genFunExpr = Gen.recursive Gen.choice [genVar, genRecordProjection] [genLet]
 
 genVar :: H.Gen Syn
 genVar = Var <$> genLowerName

@@ -6,7 +6,6 @@ module Syn.Parse.Expr
   , pMatch
   ) where
 
-import           Control.Monad.Reader           ( asks )
 import           Data.Functor                   ( void )
 import qualified Data.List.NonEmpty            as NE
 
@@ -42,11 +41,6 @@ pExpr' = do
     <|> pCons
     <|> pMatch
 
--- | Compare our column to the current indent level,
--- and fail if we're not at least as indented as that.
-ensureIndent :: Parser ()
-ensureIndent = asks indentCol >>= indentGEQ_
-
 pUnitLit :: Parser Syn
 pUnitLit = do
   void $ symbolN "(,)"
@@ -66,18 +60,13 @@ pBinApp = hang $ E.makeExprParser term table
   -- Terms in a binary application can be normal applications or anything in 'pExpr'', because they
   -- are unambiguous. We don't allow unparenthesised multicases or nested binary applications.
   -- As with 'pExpr', we have to check the indent settings and fail if we don't satisfy them.
-  term = ensureIndent >> (try pApp <|> pExpr')
+  term = try pApp <|> pExpr'
   binary name = E.InfixL (App . App (Var (Name name)) <$ symbolN name)
-  compose = E.InfixR (App . App (Var (Name ".")) <$ symbolN ".")
-  -- We need to treat (-) specially because it shares a prefix with the comment delimiter "--"
-  minus   = E.InfixL $ do
-    -- Parse "-", unless it is directly followed by another "-"
-    _ <- try $ lexemeN (string "-" >> notFollowedBy "-")
-    pure (App . App (Var (Name "-")))
+  compose = E.InfixR (App . App (Var (Name ".")) <$ symbolN ". ")
   table =
     [ [compose]
     , [binary "*", binary "/"]
-    , [binary "+", minus, binary "<>"]
+    , [binary "+", binary "-", binary "<>"]
     , [binary "::"]
     , [binary ">=", binary "<=", binary ">", binary "<"]
     , [binary "&&", binary "||"]
@@ -97,7 +86,7 @@ pApp = hang $ do
 pRecordProject :: Parser Syn
 pRecordProject = do
   -- We don't use 'pVar' because we don't want to parse any trailing whitespace
-  record <- lowercaseName
+  record <- Name <$> lowercaseStringWithoutTrailingWhitespace
   void (string ".")
   field <- lexemeN lowercaseString
   pure $ Project (Var record) field

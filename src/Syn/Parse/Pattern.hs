@@ -49,7 +49,7 @@ pListPat :: Parser Syn.Pattern
 pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
 
 pUnitPat :: Parser Syn.Pattern
-pUnitPat = symbol "()" >> pure UnitPat
+pUnitPat = symbol "(,)" >> pure UnitPat
 
 pVarPat :: Parser Syn.Pattern
 pVarPat = VarPat <$> lowercaseName

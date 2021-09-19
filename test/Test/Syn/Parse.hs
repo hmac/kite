@@ -38,6 +38,23 @@ test = parallel $ do
             , funExpr     = MCase [([VarPat "x"], Var "x")]
             , funWheres   = []
             }
+    it "parses a function definition with a where clause" $ do
+      parse' pDecl
+             ""
+             "id : a -> a { match {  x -> x } } where { foo : a { x } }"
+        `shouldParse` FunDecl Fun
+                        { funComments = []
+                        , funName     = "id"
+                        , funType     = Just (TyVar "a" `fn` TyVar "a")
+                        , funExpr     = MCase [([VarPat "x"], Var "x")]
+                        , funWheres   = [ Fun { funComments = []
+                                              , funName     = "foo"
+                                              , funType     = Just (TyVar "a")
+                                              , funExpr     = Var "x"
+                                              , funWheres   = []
+                                              }
+                                        ]
+                        }
     it "parses a definition with multiple type arrows" $ do
       parse' pDecl "" "const : a -> b -> a { match { x, y -> x } }"
         `shouldParse` FunDecl Fun
@@ -202,7 +219,7 @@ test = parallel $ do
       parse'
           (pModule "test")
           ""
-          "module Foo {fun1, fun2}\nimport Bar\nimport qualified Bar.Baz {fun3, fun4, Foo{*}, Bar{BarA, BarB}} as B\nfrom somepkg import Http"
+          "module Foo {fun1, fun2}\nimport Bar\nimport qualified Bar.Baz as B {fun3, fun4, Foo{*}, Bar{BarA, BarB}}\nfrom somepkg import Http"
         `shouldParse` Module
                         { moduleName     = "test.Foo"
                         , moduleImports  =
@@ -242,7 +259,7 @@ test = parallel $ do
       parse' pPattern "" "[1,_,3]"
         `shouldParse` ListPat [IntPat 1, WildPat, IntPat 3]
     it "parses a unit pattern" $ do
-      parse' pPattern "" "()" `shouldParse` UnitPat
+      parse' pPattern "" "(,)" `shouldParse` UnitPat
     it "parses a tuple pattern" $ do
       parse' pPattern "" "(1, _)" `shouldParse` TuplePat [IntPat 1, WildPat]
     it "parses a variable pattern" $ do
@@ -356,6 +373,28 @@ test = parallel $ do
       -- Not currently supported
       -- parseExpr "{ a = a }.b"
       --   `shouldParse` (Project (Record [("a", Var "a")]) "b")
+    it "parses match expressions in infix args (1)" $ do
+      parseExpr "(match { x -> x }) + y" `shouldParse` App
+        (App (Var "+") (MCase [([VarPat "x"], Var "x")]))
+        (Var "y")
+    it "parses match expressions in infix args (2)" $ do
+      parseExpr "((match z {\nx -> x,\nx -> x\n}) + y)" `shouldParse` App
+        (App (Var "+")
+             (Case (Var "z") [(VarPat "x", Var "x"), (VarPat "x", Var "x")])
+        )
+        (Var "y")
+    it "parses match expressions in infix args (3)" $ do
+      parseExpr "match {a -> ((match z {x -> x\n}) + y), a -> a}"
+        `shouldParse` MCase
+                        [ ( [VarPat "a"]
+                          , App
+                            (App (Var "+")
+                                 (Case (Var "z") [(VarPat "x", Var "x")])
+                            )
+                            (Var "y")
+                          )
+                        , ([VarPat "a"], Var "a")
+                        ]
   describe "parsing char literals" $ do
     it "parses a simple char" $ do
       parse' pExpr "" "'a'" `shouldParse` CharLit 'a'

@@ -126,7 +126,10 @@ lowercaseName :: Parser RawName
 lowercaseName = Name <$> lowercaseString
 
 lowercaseString :: Parser String
-lowercaseString = lexeme . try $ do
+lowercaseString = lexeme $ lowercaseStringWithoutTrailingWhitespace
+
+lowercaseStringWithoutTrailingWhitespace :: Parser String
+lowercaseStringWithoutTrailingWhitespace = try $ do
   t <- (:) <$> (lowerChar <|> char '$') <*> many alphaNumChar
   guard (t `notElem` keywords)
   pure t

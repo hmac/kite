@@ -1,6 +1,0 @@
-module RecordProjectionWithWhitespace
-
-data Foo = Foo { bar : Int }
-
-getBar : Foo -> Int
-getBar = Foo r -> r . bar

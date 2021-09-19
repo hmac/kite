@@ -6,7 +6,7 @@ match {
     let result = runTest asserts,
         numResults = length results {
       match result {
-        Pass -> putLine "${show showInt numResults} tests passed.",
+        Pass -> putLine "#{show showInt numResults} tests passed.",
         Fail (Assertion a) -> bindIO (putLine "FAIL") match {x -> putLine a.message}
       }
     }
