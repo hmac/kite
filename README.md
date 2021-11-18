@@ -41,7 +41,7 @@ A few things immediately jump out:
   - `type` instead of `data` for declaring new data types
 - Ruby-esque string interpolation
 - Imports specify their package
-- [Multi-case](https://github.com/hmac/kite/blob/main/README.md#multi-case)
+- [Multi-case](https://github.com/hmac/kite/blob/main/README.md#multi-case-expressions)
 
 Kite has many other features which are described below.
 
