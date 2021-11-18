@@ -1,16 +1,16 @@
 # Kite
 
-> Ruby and Haskell have a baby
+> A small, strict, modern functional programming language.
 
 Kite is a statically typed, strict, purely functional programming language with full type inference.
 It's the core parts of Haskell with better ergonomics, an interpreter, native JS
 support and much better tooling.
 
-Kite targets the Ruby use case: web applications and scripts. For teams building big
+Kite aims to be good for web applications and scripts. For teams building big
 Rails apps that are struggling with stability and productivity as their codebase
 grows, Kite should provide a compelling alternative.
 
-Kite is also intended to be a gateway drug to Haskell. Migration from Kite to
+Kite is also intended to be a gateway to Haskell. Migration from Kite to
 Haskell should be feasible. Kite is _not_ intended to replace Haskell. Its type
 system is much less powerful than GHC's and its performance will be much lower.
 If you're happy with Haskell then please stick with it!
@@ -18,10 +18,6 @@ If you're happy with Haskell then please stick with it!
 An example Kite program:
 
 ```haskell
----
-owner: hmac
-description: A hello program
----
 module Main
 
 from std import Data.String (toUpper)
@@ -31,21 +27,21 @@ type User = User { name : String, age : Int }
 main : IO ()
 main = do
   name <- getLine
-  age <- fmap read getLine
+  age <- map read getLine
   let user = User { name, age }
   greet name
 
 greet : User -> IO ()
-greet User { name } = putLine "Hello #{toUpper name}!"
+greet = User { name } -> putLine "Hello #{toUpper name}!"
 ```
 
 A few things immediately jump out:
-- Kite files support arbitrary YAML frontmatter that you can use for metadata
-- Kite syntax is similar to Haskell, with some minor differences
+- Similar syntax to Haskell, with some minor differences
   - single colons for type annotations
   - `type` instead of `data` for declaring new data types
-  - Ruby-esque string interpolation
-- Kite has more sophisticated record support built-in (more on that later)
+- Ruby-esque string interpolation
+- Imports specify their package
+- [Multi-case](https://github.com/hmac/kite/blob/main/README.md#multi-case)
 
 Kite has many other features which are described below.
 
@@ -55,28 +51,29 @@ Kite is in early development and most of its features don't exist yet. Here's
 the current state of progress:
 
 - [x] Basic Haskell-style syntax
-- [x] Pattern matching in functions and case expressions
+- [x] Pattern matching
+- [x] Multi-case
 - [x] String interpolation
 - [x] Source code formatting
-- [x] Typeclasses
 - [x] Interpreter
 - [x] Typed holes
+- [ ] LSP
+- [ ] Implicits
 - [ ] Standard library
 - [ ] Totality checker
 - [ ] Safety checker
 - [ ] Errors & warnings
-- [ ] Automatic typeclass deriving
-- [ ] Generics
-- [x] Ergonomic records
+- [ ] Data-generic programming support
+- [x] Anonymous records
 - [ ] Markdown support in comments
 - [ ] Multiline strings
 - [ ] Overloaded string literals
 - [ ] Doctests
 - [ ] Automatic test discovery
-- [ ] REPL
+- [-] REPL
 - [ ] Go backend
 - [ ] JS backend
-- [ ] Packaging
+- [-] Packaging
 - [ ] IO and runtime support
 
 ## Type system
@@ -87,34 +84,20 @@ additional tools, including typed holes and implicit arguments.
 
 ### Typed Holes
 
-Kite supports typed holes in both terms and types. With this code:
+Kite supports typed holes in terms. With this code:
 ```haskell
 foo : a -> Maybe a -> a
-foo x m = ?1
+foo = x m -> ?1
 ```
 
 You'll get an error like this:
 ```
 Hole:
        ?1 : a
-In:    foo x m = ?1
+In:    foo = x m -> ?1
 Scope: x : a
        m : Maybe a
 Fits:  x
-```
-
-You can also put holes in types:
-```haskell
-foo : a -> Maybe ?1 -> a
-foo x Nothing = x
-foo x (Just y) = y
-```
-
-yielding the error
-```
-Hole:
-       ?1 : a
-In:    foo : a -> Maybe ?1 -> a
 ```
 
 All holes begin with a question mark. The compiler will attempt to infer the
@@ -123,7 +106,7 @@ succeed, but holes in terms may be left (and will generate a warning). If the
 program encounters a term hole at runtime it will throw an error. This is quite
 useful if you have half a program written and just want to try it out quickly.
 
-### In the future: Case splitting
+### Case splitting
 
 Holes give a useful marker from which we can perform other interactive steps.
 When Kite gains LSP support, this will include case splitting on variables near
@@ -131,13 +114,13 @@ holes, much like Agda and Idris.
 
 ```haskell
 foo : a -> Maybe a -> a
-foo x m = ?1
+foo = x m -> ?1
 
 -- case-split ?1 m
 
 foo : a -> Maybe a -> a
-foo x (Just m1) = ?1
-foo x Nothing   = ?2
+foo = x (Just m1) -> ?1
+      x Nothing   -> ?2
 ```
 
 Case split works by looking at they type of the variable and the constructors of
@@ -177,30 +160,38 @@ depend on a safe package without worrying about it stealing your secrets in
 production, and the automated update of safe dependencies poses no security risk
 either. A module is safe if none of the functions defined in it use IO or FFI.
 
-### Typeclasses
+### Implicits
 
 Kite doesn't support typeclasses in the traditional sense. Instead, it takes the
 [Scrap Your Typeclasses](http://www.haskellforall.com/2012/05/scrap-your-type-classes.html)
-philosophy and extends it with some extra tooling.  Typeclasses in Kite are just
+philosophy and extends it with some extra tooling. Typeclasses in Kite are just
 record types, like this:
 ```haskell
 type Eq a = Eq { eq : a -> a -> Bool }
 
 eq : Eq a -> a -> a -> Bool
-eq (Eq r) = r.eq
+eq = (Eq r) -> r.eq
 ```
 Typeclass instances are records:
 ```haskell
 eqBool = Eq { eq = \b1 b2 -> ... }
 ```
 Functions with typeclass constraints just take records as extra arguments:
+```haskell
+-- True if the list contains the given element
+contains : Eq a -> a -> [a] -> True
+contains =
+  _ _ []    -> False
+  r x y::ys -> case eq r x y of
+                 True -> True
+                 False -> contains r x ys
 ```
-nub : Eq a -> [a] -> [a]
-nub _ [] = []
-nub r [x] = [x]
-nub r (x:y:xs) = case eq r x y of
-                   True -> nub (y:xs)
-                   False -> x : (nub (y:xs))
+
+When calling `contains` on a concrete type, we pass in a concrete typeclass
+instance:
+
+```haskell
+contains eqBool True [True, False]
 ```
 
 ## Implicit Arguments
@@ -209,13 +200,16 @@ It's quite a drag to write these typeclass instances everywhere, so Kite support
 implicit arguments to automate this. You can declare a function with an implicit
 argument as follows:
 ```haskell
-eq : {{Eq a}} -> a -> a -> Bool
-eq (Eq r) = r.eq
+eq : Eq a => -> a -> a -> Bool
+eq = Eq r => r.eq
 ```
 
-The syntax `{{_}}` around an argument in a type signature indicates that the
-argument can be omitted in a call site, and Kite will attempt to infer a value
-for it. `eq` is then used like this:
+The syntax `=>` is an implicit function arrow. The argument on the left of a
+`=>` is an implicit argument, which is not supplied when calling the function.
+The argument on the right is treated normally. At the call site, Kite
+will attempt to infer a value for the argument.
+
+For example, in the following call to `eq`:
 
 ```haskell
 eq True True
@@ -225,13 +219,13 @@ Kite will search the current scope for a value of type `Eq Bool`. If it finds
 _exactly one_ match, it will insert it into the call site. If it finds zero or
 more than one match, it will report an error.
 
-This provides most of the ergonomics of Haskell typeclasses without introducing
-new syntactic forms, new namespaces, or complex resolution logic.
+This provides most of the ergonomics of Haskell typeclasses with a small amount
+of additional syntax, and avoids any new namespaces or complex resolution logic.
 
 ### Typeclass deriving
 
 Kite will be able to automatically generate typeclass instances for some common typeclasses:
-- Eq, Show, Read, Functor, etc.
+- Eq, Show, Debug, Functor, etc.
 - Generic
 - FromJSON, ToJSON
 - Maybe an FFI typeclass of some sort?
@@ -263,9 +257,6 @@ option for a few reasons:
   everything you can express in a lazy language can also be expressed in a
   strict one.
 
-However I'm not wedded to this choice. If it turns out that Kite would really
-benefit from laziness then it might change in the future.
-
 Kite has very few infix operators, preferring named functions instead. `map`
 instead of `<$>`, brackets instead of `$`. Infix numeric and comparison
 operators will remain because they're familiar to everyone, and we still use `.`
@@ -274,60 +265,93 @@ infix by placing it in backticks.
 
 ## Syntax
 
-Kite files start with optional YAML-style metadata delimited by `---`.
-
-```haskell
----
-example: metadata
-someKey: someValue
----
-```
-
 Every Kite file defines a module, which begins `module <name>`. The module name
 must begin with a capital letter. This is optionally followed by a list of
-exported definitions, and the `where` keyword.
+exported definitions.
 
 ```haskell
-module Example (fun1, fun2, SomeType, SomeClass) where
+module Example (fun1, fun2, SomeType, SomeClass)
 ```
 
 The contents of a Kite module is a series of definitions, which are either
-- Function definitions
-- Data type definitions
-- Typeclass definitions
-- Typeclass instance definitions
-- Comments
+bindings or type definitions.
 
-### Function Syntax
+### Binding Syntax
 
-Functions are defined by one or more equations, preceded by a type signature.
-Each equation can have a series of arguments, which are arguments to the
-function. You must have the same number of arguments for each equation.
-
-Type signatures describe the types of the arguments to the function, and the
-type it returns. Each is separated by a function arrow (`->`).
+Top-level bindings are names for expressions. They must have a type signature.
+The following example defines two bindings: `zero` has type `Int` and is bound
+to the literal value `0`. `isZero` has type `Int -> Bool` (it's a function) and
+is bound to a multi-case expression.
 
 ```haskell
+zero : Int
+zero = 0
+
 isZero : Int -> Bool
-isZero 0 = True
-isZero _ = False
+isZero = 0 -> True
+         _ -> False
 ```
 
-In this example, the function `isZero` takes one argument of type `Int` and
-returns a value of type `Bool`. It is defined by two equations:
-- The first describes what to return when the argument is 0
-- The second describes what to return otherwise
+### Case expressions
 
-The second equation uses a _wildcard pattern_, written using a single
-underscore. This pattern matches any value. There are several types of pattern
-you can use as function arguments. Here is a full list:
+Case expressions are syntactically identical to Haskell, Elm or Purescript.
+
+```haskell
+case my_list of
+  [] -> Nothing
+  [x] -> Just x
+  _ -> Nothing
+```
+
+A case expression consists of the keyword `case`, a _target_ which can be any
+expression, the keyword `of`, and one or more branches. Each branch consists of
+a pattern and a corresponding expression, separated by `->`.
+
+The case expression evaluates the target and selects the first branch whose pattern
+matches it. The result of the case expression is the right hand side of the
+selected branch. Branches are checked in order from top to bottom.
+
+```haskell
+case Just 5 of
+  Nothing -> False
+  Just 2 -> False
+  Just x -> True
+
+-- evaluates to True
+```
+
+Kite supports several different types of pattern:
 - Variable patterns: `x`
 - Wildcard patterns: `_`
 - Tuple patterns: `(x, y)`, `(x, y, z)`
 - List patterns: `[1,2,3]`, `[]`
-- List constructor patterns: `(x :: xs)`
-- General constructor patterns: `(Just x)`, `(Right y)`
+- List constructor patterns: `x::xs`
+- General constructor patterns: `Just x`, `Right y`
 - String patterns: `"hello"`
+
+Variable patterns like `x` match any value, but also bind the value to the name
+(`x`) in the right hand side. Wildcard patterns `_` match any value but don't
+bind it to a name.
+
+### [Multi-case expressions](#multi-case)
+
+Multi-case expressions are like case expressions without a target. They define
+functions of one or more arguments. This is best illustrated by an example:
+
+```haskell
+mapMaybe : (a -> b) -> Maybe a -> Maybe b
+mapMaybe =
+  _ Nothing  -> Nothing
+  f (Just x) -> Just (f x)
+```
+
+This multi-case expression has two patterns in each branch, corresponding to the
+two arguments `(a -> b)` and `Maybe a`. Multi-case expressions are the primary
+way that functions are defined, as Kite has no support for binding variables on
+the left hand side of function definitions (as in other Haskell-like languages).
+
+"Lambda syntax" can be approximated by a multi-case expression that has just one
+branch with only variable patterns, like `x y -> x + y`.
 
 ### Let expressions
 
@@ -338,8 +362,7 @@ value.
 
 ```
 doubleAndAddFive : Int -> Int
-doubleAndAddFive x = let doubled = x + x
-                      in doubled + 5
+doubleAndAddFive = x -> let doubled = x + x in doubled + 5
 ```
 
 A let expression is one or more bindings of the form `variableName =
@@ -356,9 +379,6 @@ let a = 1
 
 This expression simplifies to `(1 + 2) + (1 + 2)` and hence to `6`.
 
-Unlike in Haskell, let expressions cannot take arguments. If you want to bind
-functions in a let, use `where` instead.
-
 ### Where clauses
 
 Where clauses allow you to define helper functions that are only available in
@@ -366,11 +386,11 @@ the scope of some particular top level function. For example:
 
 ```haskell
 init : [a] -> Maybe [a]
-init [] = Nothing
-init xs = Just (helper xs)
-  where helper : [a] -> [a]
-        helper [x] = []
-        helper (x :: xs) = x :: (helper xs)
+init = [] -> Nothing
+init = xs -> Just (helper xs)
+ where helper : [a] -> [a]
+       helper = [x]   -> []
+                x::xs -> x :: helper xs
 ```
 
 The top level function defined here is `init` and it calls the helper
@@ -381,34 +401,22 @@ inside `init`. Unlike Haskell, `helper` cannot see any variables bound in
 You can think of `where` as defining a top level function which can only be used
 by the parent function.
 
-### Anonymous functions
+### Type definitions
 
-Anonymous functions can be defined like this `\x y -> x`. You can write any
-number of variables after the `\` and any expression after the `->`. Anonymous
-functions can be used anywhere in an expression, for example:
+Type definitions look like this:
 
 ```haskell
-oneIsOne : Int
-oneIsOne = let one = 1
-               identity = \x -> x
-            in identity one
+type Action
+ = DoNothing
+ | StoreInt Int
+ | Transform (Int -> Int)
+ | CompareAndSwap Int Int
+
+type Eq a = Eq (a -> a -> Bool)
 ```
 
-### Case expressions
-
-TODO: identical to Haskell, so see there for details (for now)
-
-### Data type syntax
-
-TODO: identical to Haskell, so see there for details (for now)
-
-### Typeclass syntax
-
-TODO: identical to Haskell, so see there for details (for now)
-
-### Typeclass instance syntax
-
-TODO: identical to Haskell, so see there for details (for now)
+This should be familiar to users of Haskell, Elm or Purescript, except that the
+keyword is `type` rather than `data`.
 
 ## Records
 
@@ -428,7 +436,7 @@ record fields.
 
 An example:
 ```haskell
-data User = User { name : String, age : Int }
+type User = User { name : String, age : Int }
 
 users = [User { name = "Kurt", age = 114}, User { name = "Alan", age = 108}]
 
@@ -450,7 +458,7 @@ argument determines the namespace that the compiler will infer for the function,
 and therefore what specific selector is chosen. For example:
 
 ```haskell
-data User = User { name : String, age : Int }
+type User = User { name : String, age : Int }
 -- internally, this generates
 -- User.name : User -> String
 -- User.age : User -> Int
@@ -460,7 +468,7 @@ kurt = User { name = "Kurt", age = 114 }
 -- age is resolved to User.age because kurt : User
 kurtAge = age kurt
 
-data Animal = Animal { age : Int, mammal : Bool }
+type Animal = Animal { age : Int, mammal : Bool }
 
 whale = Animal { age = 60, mammal = True }
 
@@ -502,15 +510,6 @@ aList = [1, 2, 3]
 -- Interpolating a variable which doesn't have a Show instance is a type error.
 aString = "this is a tuple: #{tuple}"
 
--- Pattern matching with sugar for tuples and lists
-length : [a] -> Integer
-length []       = 0
-length (x : xs) = 1 + length xs
-
--- _ for wildcard patterns
-snd : (a, b) -> b
-snd (_, x) = x
-
 -- use """ to delimit multiline strings
 help = """
   Welcome to the Kite REPL.
@@ -524,7 +523,7 @@ In the future there may also be some sugar for list ranges, like `[1..100]`.
 
 All string literals will be overloaded by default, meaning their type will be
 ```
-IsString a => a
+StringLike a => a
 ```
 This will allow libraries to use string literals for their own types, e.g. for
 safe SQL queries.
@@ -546,8 +545,8 @@ languages.
 -- head ["foo", "bar"] == "foo"
 -- ```
 head : [a] -> a
-head [] = error "head: empty list"
-head (x : xs) = x
+head = []    -> error "head: empty list"
+head = x::xs -> x
 ```
 
 Any code blocks in comments in a Kite module will be extracted and run in the scope
@@ -596,9 +595,10 @@ compiledMain =
 
 -- any code outside the IO monad can be shared between backends
 fib : Int -> Int
-fib 0 = 0
-fib 1 = 1
-fib n = fib (n - 2) + fib (n - 1)
+fib = 
+  0 -> 0
+  1 -> 1
+  n -> fib (n - 2) + fib (n - 1)
 ```
 
 JS compilation will produce a single minified JS file that exports your main
