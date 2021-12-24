@@ -35,7 +35,9 @@ import           Type.DSL                       ( forAll
                                                 , u_
                                                 , u_'
                                                 )
-import           Type.Module                    ( checkModule )
+import           Type.Module                    ( checkModule
+                                                , typecheckFun
+                                                )
 import           Type.Primitive                 ( bool
                                                 , int
                                                 , list
@@ -57,6 +59,7 @@ import           Canonicalise                   ( canonicaliseExp
                                                 )
 import qualified Syn
 import           Syn.Typed                      ( typeOf )
+import qualified Syn.Typed                     as T
 import           Test.QQ
 import           Type.FromSyn                   ( convertType
                                                 , fromSyn
@@ -65,31 +68,30 @@ import           Type.FromSyn                   ( convertType
 test :: Spec
 test = do
   describe "check [Nothing] : forall a. [Maybe a]" $ do
-    let
-      a0 = U 0 "a"
-      a1 = U 1 "a"
-      maybeType arg = tcon "Maybe" [arg]
-      listType arg = tcon (prim "List") [arg]
-      ctx      = [V "Nothing" (forAll a0 (maybeType (u_ a0)))]
-      ty       = forAll a1 (list (maybeType (u_ a1)))
-      expr     = App (App (Var (prim "::")) (Var "Nothing")) (Var (prim "[]"))
-      r        = check expr ty
-      expected = AppT
-        ty
-        (AppT
-          (T.fn (tcon (prim "List") [maybeType (u_ a1)])
-                (tcon (prim "List") [maybeType (u_ a1)])
-          )
-          (VarT
-            (forAll
-              a0
-              (T.fn (u_ a0) (T.fn (listType (u_ a0)) (listType (u_ a0))))
+    let a0 = U 0 "a"
+        a1 = U 1 "a"
+        maybeType arg = tcon "Maybe" [arg]
+        listType arg = tcon (prim "List") [arg]
+        ctx      = [V "Nothing" (forAll a0 (maybeType (u_ a0)))]
+        ty       = forAll a1 (list (maybeType (u_ a1)))
+        expr     = App (App (Var (prim "::")) (Var "Nothing")) (Var (prim "[]"))
+        r        = check expr ty
+        expected = AppT
+          ty
+          (AppT
+            (T.fn (listType (maybeType (u_ a1))) (listType (maybeType (u_ a1))))
+            (VarT
+              (T.fn
+                (maybeType (u_ a1))
+                (T.fn (listType (maybeType (u_ a1)))
+                      (listType (maybeType (u_ a1)))
+                )
+              )
+              (prim "::")
             )
-            (prim "::")
+            (VarT (maybeType (u_ a1)) "Nothing")
           )
-          (VarT (maybeType (u_ a1)) "Nothing")
-        )
-        (VarT (listType (maybeType (u_ a1))) (prim "[]"))
+          (VarT (listType (maybeType (u_ a1))) (prim "[]"))
 
     it "typechecks successfully" $ do
       runTypecheckM defaultTypeEnv (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
@@ -98,39 +100,36 @@ test = do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
     -- We do this for functions normally anyway (see 'Type.Module.checkModule')
-    let
-      maybeType arg = tcon "Maybe" [arg]
-      funType = forAll
-        (U 0 "a")
-        (T.fn (list (maybeType (u_ (U 0 "a")))) (list (u_ (U 0 "a"))))
-      cons    = prim "::"
-      nothing = "Nothing"
-      fun     = MCase
-        [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
-          , App (Var "foo") (Var "rest")
-          )
-        ]
-      ctx =
-        [ V nothing (forAll (U 1 "a") (maybeType (u_ (U 1 "a"))))
-        , V "foo"   funType
-        ]
-      ctorInfo =
-        [ ( "Nothing"
-          , ConMeta { conMetaTag      = 0
-                    , conMetaArity    = 0
-                    , conMetaTypeName = "Maybe"
-                    }
-          )
-        ]
-      expected = MCaseT
-        funType
-        [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
-          , AppT (list (u_ (U 0 "a")))
-                 (VarT funType "foo")
-                 (VarT (list (maybeType (u_ (U 0 "a")))) "rest")
-          )
-        ]
-      r = check fun funType
+    let a0 = U 0 "a"
+        a1 = U 1 "a"
+        maybeType arg = tcon "Maybe" [arg]
+        funType = forAll a0 (T.fn (list (maybeType (u_ a0))) (list (u_ a0)))
+        cons    = prim "::"
+        nothing = "Nothing"
+        fun     = MCase
+          [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
+            , App (Var "foo") (Var "rest")
+            )
+          ]
+        ctx = [V nothing (forAll a1 (maybeType (u_ a1))), V "foo" funType]
+        ctorInfo =
+          [ ( "Nothing"
+            , ConMeta { conMetaTag      = 0
+                      , conMetaArity    = 0
+                      , conMetaTypeName = "Maybe"
+                      }
+            )
+          ]
+        expected = MCaseT
+          funType
+          [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
+            , AppT
+              (list (u_ a0))
+              (VarT (T.fn (list (maybeType (u_ a0))) (list (u_ a0))) "foo")
+              (VarT (list (maybeType (u_ a0))) "rest")
+            )
+          ]
+        r = check fun funType
     it "typechecks successfully" $ do
       runTypecheckM
           defaultTypeEnv
@@ -138,7 +137,7 @@ test = do
                         (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
           )
         `shouldBe` Right expected
-  describe "implicit: check foo = (f :: A => B -> C) b : C" $ do
+  describe "implicit arguments" $ do
     let
       fType = ifn (tcon "A" []) $ T.fn (tcon "B" []) (tcon "C" [])
       tctx  = [("A", ()), ("B", ()), ("C", ())]
@@ -148,62 +147,72 @@ test = do
         , V "c" (tcon "C" [])
         , V "f" fType
         ]
-      expr     = App (Var "f") (Var "b")
-      expected = AppT
-        (tcon "C" [])
-        (AppT (T.fn (tcon "B" []) (tcon "C" []))
-              (VarT fType "f")
-              (VarT (tcon "A" []) "a")
-        )
-        (VarT (tcon "B" []) "b")
-      r = check expr (tcon "C" [])
-    it "typechecks successfully" $ do
-      runTypecheckM
-          defaultTypeEnv
-          (withGlobalTypeCtx (<> tctx)
-                             (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
-          )
-        `shouldBe` Right expected
-  describe
-      "implicit: check foo = (f :: A => B -> C) b fails when no a : A in scope"
-    $ do
-        let fType = ifn (tcon "A" []) $ T.fn (tcon "B" []) (tcon "C" [])
-            tctx  = [("A", ()), ("B", ()), ("C", ())]
-            ctx   = [V "b" (tcon "B" []), V "c" (tcon "C" []), V "f" fType]
-            expr  = App (Var "f") (Var "b")
-            r     = check expr (tcon "C" [])
-        it "fails" $ do
-          runTypecheckM
-              defaultTypeEnv
-              (withGlobalTypeCtx (<> tctx)
-                                 (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
-              )
-            `shouldBe` Left (LocatedError Nothing (NoProofFound (tcon "A" [])))
-  describe
-      "implicit: check foo = (f :: A => B -> C) b fails when multiple As in scope"
-    $ do
-        let fType = ifn (tcon "A" []) $ T.fn (tcon "B" []) (tcon "C" [])
-            tctx  = [("A", ()), ("B", ()), ("C", ())]
-            ctx =
-              [ V "a1" (tcon "A" [])
-              , V "a2" (tcon "A" [])
-              , V "b"  (tcon "B" [])
-              , V "c"  (tcon "C" [])
-              , V "f"  fType
-              ]
-            expr = App (Var "f") (Var "b")
-            r    = check expr (tcon "C" [])
-        it "fails" $ do
-          runTypecheckM
-              defaultTypeEnv
-              (withGlobalTypeCtx (<> tctx)
-                                 (withGlobalCtx (<> ctx) (runTypeMAndSolve r))
-              )
-            `shouldBe` Left
-                         (LocatedError
-                           Nothing
-                           (MultipleProofsFound (tcon "A" []) ["a1", "a2"])
-                         )
+      expr = App (Var "f") (Var "b")
+      fun  = Syn.Fun { Syn.funName     = "foo"
+                     , Syn.funType     = Just $ Syn.TyCon "C"
+                     , Syn.funExpr     = expr
+                     , Syn.funWheres   = []
+                     , Syn.funComments = []
+                     }
+      arg = (fun, ("foo", Just (tcon "C" []), expr))
+    describe "check foo = (f :: A => B -> C) b : C" $ do
+      let expected = T.Fun
+            { T.funName   = "foo"
+            , T.funType   = tcon "C" []
+            , T.funExpr   = AppT
+                              (tcon "C" [])
+                              (AppT (T.fn (tcon "B" []) (tcon "C" []))
+                                    (VarT fType "f")
+                                    (ImplicitT (tcon "A" []) (Solved "a"))
+                              )
+                              (VarT (tcon "B" []) "b")
+            , T.funWheres = []
+            }
+      it "typechecks successfully" $ do
+        runTypecheckM
+            defaultTypeEnv
+            (withGlobalTypeCtx (const tctx)
+                               (withGlobalCtx (const ctx) (typecheckFun arg))
+            )
+          `shouldBe` Right expected
+    describe
+        "implicit: check foo = (f :: A => B -> C) b fails when no a : A in scope"
+      $ do
+          let ctx2 = [V "b" (tcon "B" []), V "c" (tcon "C" []), V "f" fType]
+          it "fails" $ do
+            runTypecheckM
+                defaultTypeEnv
+                (withGlobalTypeCtx
+                  (const tctx)
+                  (withGlobalCtx (const ctx2) (typecheckFun arg))
+                )
+              `shouldBe` Left
+                           (LocatedError
+                             (Just "foo")
+                             (NoProofFound (tcon "A" []))
+                           )
+    describe
+        "implicit: check foo = (f :: A => B -> C) b fails when multiple As in scope"
+      $ do
+          let ctx2 =
+                [ V "a1" (tcon "A" [])
+                , V "a2" (tcon "A" [])
+                , V "b"  (tcon "B" [])
+                , V "c"  (tcon "C" [])
+                , V "f"  fType
+                ]
+          it "fails" $ do
+            runTypecheckM
+                defaultTypeEnv
+                (withGlobalTypeCtx
+                  (const tctx)
+                  (withGlobalCtx (const ctx2) (typecheckFun arg))
+                )
+              `shouldBe` Left
+                           (LocatedError
+                             (Just "foo")
+                             (MultipleProofsFound (tcon "A" []) ["a1", "a2"])
+                           )
   describe "Simple inference" $ do
     let
       nat = tcon "Nat" []

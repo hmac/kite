@@ -2,15 +2,19 @@
 -- Currently we just return unit (and an updated type env) if the module
 -- typechecked. In future we will need to return a copy of the module with full
 -- type annotations.
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 module Type.Module where
 
 import           AST                            ( ConMeta(..) )
 import qualified Canonical                     as Can
+import           Control.Lens                   ( transformMOf )
 import           Control.Monad                  ( void )
 import qualified Control.Monad.Except          as Except
                                                 ( catchError
                                                 , throwError
                                                 )
+import           Data.Data.Lens                 ( uniplate )
 import qualified Data.Map.Strict               as Map
 import           Data.Name
 import qualified Data.Set                      as Set
@@ -22,10 +26,15 @@ import           Syn                            ( DataCon_(..)
                                                 , Module_(..)
                                                 )
 import qualified Syn.Typed                     as T
-import           Type                           ( Exp
+import           Type                           ( Error
+                                                  ( MultipleProofsFound
+                                                  , NoProofFound
+                                                  )
+                                                , Exp
                                                 , LocatedError(..)
                                                 , TypecheckM
                                                 , check
+                                                , getGlobalCtx
                                                 , infer
                                                 , runTypeM
                                                 , runTypeMAndSolve
@@ -43,7 +52,9 @@ import           Type.Type                      ( CtorInfo
                                                 , Type(..)
                                                 , TypeCtx
                                                 )
-import           Util                           ( zipWithM )
+import           Util                           ( mapMaybe
+                                                , zipWithM
+                                                )
 
 -- Translate a module into typechecking structures, and return them
 -- Used for debugging
@@ -92,7 +103,7 @@ checkModule (typeCtx, ctx, ctorInfo) modul = do
   pure ((typeCtx', ctx', ctorInfo'), typedModule)
 
 -- | Typecheck a group of functions which may refer to each other.
-typecheckFuns :: [Can.Fun Can.Exp] -> TypecheckM (Ctx, [T.Fun])
+typecheckFuns :: [Can.Fun] -> TypecheckM (Ctx, [T.Fun])
 typecheckFuns funs = do
   funs' <- mapM (\f -> (f, ) <$> funToBind f) funs
 
@@ -108,7 +119,8 @@ typecheckFuns funs = do
 
   pure (funCtx, funs'')
 
-typecheckFun :: (Can.Fun Can.Exp, (Name, Maybe Type, Exp)) -> TypecheckM T.Fun
+-- | Typecheck a single function.
+typecheckFun :: (Can.Fun, (Name, Maybe Type, Exp)) -> TypecheckM T.Fun
 typecheckFun (fun, (name, mtype, expr)) = do
   flip Except.catchError
        (\(LocatedError _ e) -> Except.throwError (LocatedError (Just name) e))
@@ -125,13 +137,38 @@ typecheckFun (fun, (name, mtype, expr)) = do
           Just ty -> check expr ty
           -- infer the body of the function
           Nothing -> infer expr
+        -- Resolve any implicits in the function, using the global context only
+        -- (so implicit values cannot be defined locally)
+        expr'' <- resolveImplicitsInExpr expr'
         pure T.Fun { T.funName   = name
-                   , T.funType   = T.typeOf expr'
-                   , T.funExpr   = expr'
+                   , T.funType   = T.typeOf expr''
+                   , T.funExpr   = expr''
                    , T.funWheres = wheres
                    }
 
-funToBind :: Can.Fun Can.Exp -> TypecheckM (Name, Maybe Type, Exp)
+resolveImplicitsInExpr :: T.Exp -> TypecheckM T.Exp
+resolveImplicitsInExpr expr = do
+  ctx <- getGlobalCtx
+  transformMOf
+    uniplate
+    (\case
+      T.ImplicitT ty i -> uncurry T.ImplicitT <$> search ctx (ty, i)
+      e                -> pure e
+    )
+    expr
+ where
+  search ctx (ty, T.Unsolved) = do
+    let results = flip mapMaybe ctx $ \case
+          V n t | t == ty -> Just n
+          _               -> Nothing
+    case results of
+      []  -> Except.throwError $ LocatedError Nothing (NoProofFound ty)
+      [v] -> pure (ty, T.Solved v)
+      vs ->
+        Except.throwError $ LocatedError Nothing (MultipleProofsFound ty vs)
+  search _ r = pure r
+
+funToBind :: Can.Fun -> TypecheckM (Name, Maybe Type, Exp)
 funToBind fun = do
   rhs <- fmap fst $ runTypeM $ fromSyn (funExpr fun)
   sch <- case funType fun of

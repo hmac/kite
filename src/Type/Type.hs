@@ -99,9 +99,9 @@ instance Eq U where
 instance Debug U where
   debug (U n v) = debug v <> show n
 
--- Existential type variable
+-- | Existential type variable
 newtype E = E Int
-  deriving (Eq, Ord, Show, Typeable, Data)
+  deriving (Eq, Ord, Show,  Data)
 
 instance Debug E where
   debug (E e) = "e" <> show e

@@ -2,6 +2,7 @@ module AST
   ( Expr(..)
   , ExprT(..)
   , Pat(..)
+  , Implicit_(..)
   , ConMeta(..)
   ) where
 
@@ -115,10 +116,7 @@ data ExprT n t =
   | RecordT t [(String, ExprT n t)]
   | ProjectT t (ExprT n t) String
   | FCallT t String [ExprT n t]
-  -- | An unsolved implicit argument.
-  -- Its name is generated, and used as a key to lookup the set of variables that are in-scope from
-  -- it.
-  | Implicit t n
+  | ImplicitT t (Implicit_ n t)
   deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (ExprT v t) where
@@ -159,8 +157,18 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (TupleLitT _ elems ) = "(" <+> sepBy ", " (map debug elems) <+> ")"
   debug (RecordT   _ fields) = "{" <+> sepBy ", " (map go fields) <+> "}"
     where go (name, expr) = debug name <+> "=" <+> debug expr
-  debug (ProjectT _ r f   ) = debug r <> "." <> debug f
-  debug (FCallT   _ f args) = "$fcall" <+> f <+> sepBy " " (map debug args)
+  debug (ProjectT _ r f        ) = debug r <> "." <> debug f
+  debug (FCallT   _ f args     ) = "$fcall" <+> f <+> sepBy " " (map debug args)
+  debug (ImplicitT t Unsolved  ) = "{{? " <> debug t <> " ?}}"
+  debug (ImplicitT _ (Solved n)) = "{{" <> debug n <> "}}"
+
+-- | An implicit argument.
+-- This is inserted, unsolved, into the AST during typechecking.
+-- After typechecking, it is solved.
+-- A solved implicit contains the name of the variable it refers to.
+-- In evaluation, it acts just like a variable.
+data Implicit_ n t = Unsolved  | Solved n
+  deriving (Eq, Show, Generic, Data)
 
 data ConMeta = ConMeta
   { conMetaTag      :: Int

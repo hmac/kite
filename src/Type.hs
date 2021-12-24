@@ -34,12 +34,14 @@ module Type
   , fv
   , quantify
   , withGlobalCtx
+  , getGlobalCtx
   , withGlobalTypeCtx
   , withCtorInfo
   , runTypecheckM
   ) where
 
 import           AST                            ( Expr(..)
+                                                , Implicit_(Unsolved)
                                                 , Pat(..)
                                                 )
 import           Control.Monad                  ( (>=>)
@@ -403,32 +405,6 @@ dropAfter' e = \case
   (e' : ctx) | e' == e   -> ctx
              | otherwise -> dropAfter' e ctx
 
--- | Search the current context for variables of the given type.
-proofSearch :: Type -> TypeM [Name]
-proofSearch ty = do
-  localCtx                       <- getCtx
-  TypeEnv { envCtx = globalCtx } <- ask
-  let ctx = localCtx <> globalCtx
-  ty' <- subst ty
-
-  flip mapMaybeM ctx $ \case
-    V n t -> do
-      -- -- Run subtyping between @t@ and @ty@, but throw away any changes it makes to the state.
-      -- call ((subtype t ty $> Just n) `catchError` (const (pure Nothing)))
-      t' <- subst t
-      pure $ if t' == ty' then Just n else Nothing
-    _ -> pure Nothing
-
--- | Search the context for a unique variable of the given type.
---   Throw an error if no variable is found or if more than one variable is found.
-implicitSearch :: Type -> TypeM Name
-implicitSearch ty = do
-  ty' <- subst ty
-  proofSearch ty' >>= \case
-    [v] -> pure v
-    []  -> throwError $ NoProofFound ty
-    vs  -> throwError $ MultipleProofsFound ty vs
-
 -- Check if a type is well-formed
 wellFormedType :: Type -> TypeM ()
 wellFormedType ty = do
@@ -486,7 +462,13 @@ runTypecheckM env m = evalState (runExceptT (runReaderT m env)) 0
 type TypeM
   = ReaderT
       TypeEnv
-      (ExceptT LocatedError (WriterT (Map E Type) (State TypeState)))
+      (ExceptT LocatedError (WriterT ExistentialSolutions (State TypeState)))
+
+-- | A type holding the things we emit during typechecking.
+-- As we typecheck, we emit solutions for existential variables (e.g. e3 = Bool)
+-- which we can apply to annotated expressions to fully resolve their
+-- annotations at the end of typechecking.
+type ExistentialSolutions = Map E Type
 
 -- | Convert a TypeM action into a TypecheckM action.
 -- We do this by supplying a default state value, but threading through the variable counter which
@@ -521,6 +503,9 @@ runTypeMAndSolve m = do
 -- The local context should be managed only by this module.
 withGlobalCtx :: MonadReader TypeEnv m => (Ctx -> Ctx) -> m a -> m a
 withGlobalCtx f = local (\e -> e { envCtx = f (envCtx e) })
+
+getGlobalCtx :: MonadReader TypeEnv m => m Ctx
+getGlobalCtx = envCtx <$> ask
 
 withGlobalTypeCtx
   :: MonadReader TypeEnv m => (TypeCtx -> TypeCtx) -> m a -> m a
@@ -938,6 +923,8 @@ inferAbs args body = case NE.uncons args of
     ty <- subst $ fn (e_ alpha) (e_ beta)
     pure (NE.cons (x, e_ alpha) xs', body', ty)
 
+-- | Infer a type for an expression.
+-- Returns a type-annotated version of the expression
 infer :: Exp -> TypeM ExpT
 infer expr_ = do
   trace' ["infer", debug expr_] $ case expr_ of
@@ -950,19 +937,6 @@ infer expr_ = do
       (t, e1'', e2') <- inferApp2 e1' e2
       t'             <- subst t
       pure $ AppT t' e1'' e2'
-      -- subst (typeOf e1') >>= \case
-      --   -- If 'e1' has an implicit function type, we need to resolve that before we can infer the
-      --   -- application. We do that by searching the context for a value to fill it with.
-      --   -- TODO: can we get rid of this now we handle implicits in 'check'?
-      --   TOther (IFn a b) -> do
-      --     valueA    <- implicitSearch a
-      --     (b', e2') <- inferApp b e2
-      --     b''       <- subst b'
-      --     pure $ AppT b'' (AppT b e1' (VarT a valueA)) e2'
-      --   ty -> do
-      --     (b, e2') <- inferApp ty e2
-      --     b'       <- subst b
-      --     pure $ AppT b' e1' e2'
     Abs args e -> do
       (args', e', ty) <- inferAbs args e
       pure $ AbsT ty args' e'
@@ -1273,18 +1247,14 @@ inferApp2 e1 e2 = do
       e2' <- check e2 a
       pure (b, e1, e2')
     TOther (IFn a b) -> do
-      -- Run 'inferApp' to resolve any existentials required to find a proof for this implicit.
-      -- This _won't_ elaborate any further implicits present in 'b'.
-      _      <- inferApp b e2
-      valueA <- implicitSearch a
-      a'     <- subst a
-      trace' ["proof found:", debug valueA, debug a'] $ pure ()
-
-      -- Now we have a proof for 'a', run 'inferApp2' to properly elaborate any further implicits in
-      -- 'e1'.
-      let e1' = AppT b e1 (VarT a valueA)
-      (t', e21, e22) <- inferApp2 e1' e2
-      pure (t', e1', AppT t' e21 e22)
+      -- e1 : A => B
+      -- e2 : C
+      -- We first inferApp B e2 to give a result type D and annotated e2T
+      -- Then we create a placeholer implicit argument I of type A
+      -- Then we construct the application ((e1 (I : A) : B) e2T) : D
+      -- We return this
+      (d, e2T) <- inferApp b e2
+      pure (d, AppT b e1 (ImplicitT a Unsolved), e2T)
 
     _ -> throwError $ InfAppFailure t1 e2
 

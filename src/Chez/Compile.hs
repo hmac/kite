@@ -98,6 +98,7 @@ import           Util
 data Error = EmptyMCase
            | EmptyMCaseBranch
            | CannotCompileHole Name Type
+           | CannotCompileImplicit Type
            | CtorMissingMetadata Name
            | UnknownFCall String
   deriving (Eq, Generic, Show)
@@ -108,6 +109,8 @@ instance Pretty Error where
     EmptyMCaseBranch -> "Cannot compile mcase branch with no variables"
     CannotCompileHole name _ ->
       "Encountered a hole in the program: " <+> pretty name
+    CannotCompileImplicit ty ->
+      "Encountered an unsolved implicit in the program : " <+> pretty (show ty)
     CtorMissingMetadata c -> "No metadata for constructor: " <+> pretty c
     UnknownFCall        n -> "Unknown foreign call: " <+> pretty n
 
@@ -253,7 +256,9 @@ compileExpr = \case
 
   -- TODO:
   -- - Holes
-  T.HoleT ty name -> throwError $ CannotCompileHole name ty
+  T.HoleT     ty name         -> throwError $ CannotCompileHole name ty
+  T.ImplicitT ty (T.Solved v) -> compileExpr $ T.VarT ty v
+  T.ImplicitT ty T.Unsolved   -> throwError $ CannotCompileImplicit ty
 
 compileMCaseBranch
   :: MonadError Error m

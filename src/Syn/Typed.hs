@@ -15,6 +15,8 @@ module Syn.Typed
   , AST.Pat(..)
   , AST.ExprT(..)
   , AST.ConMeta(..)
+  , Syn.Typed.Implicit
+  , AST.Implicit_(..)
   , S.Import(..)
   , Type
   ) where
@@ -50,6 +52,7 @@ import           Type.Type                      ( E
 
 type Exp = ExprT Name Type
 type Pattern = AST.Pat Name
+type Implicit = AST.Implicit_ Name Type
 
 data Module = Module
   { moduleName    :: PkgModuleName

@@ -86,7 +86,7 @@ canonicaliseDecl env = \case
   AliasDecl a -> AliasDecl $ canonicaliseAlias env a
   Comment   s -> Comment s
 
-canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
+canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun
 canonicaliseFun env@(mod, _) f = f
   { funName   = TopLevel mod (funName f)
   , funExpr   = canonicaliseExp env mempty (funExpr f)

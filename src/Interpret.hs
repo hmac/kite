@@ -252,6 +252,8 @@ interpretExpr env expr_ = case expr_ of
       Nothing  -> throwError $ RecordMissingField field
     _ -> throwError ProjectOnNonRecord
   FCallT _ s args -> FCall s <$> mapM (interpretExpr env) args
+  ImplicitT t (Solved v) -> interpretExpr env $ VarT t v
+  ImplicitT t Unsolved -> pure $ Error $ "Found unsolved implicit : " <> show t
 
 interpretPrim :: MonadError Error m => RawName -> m (Value m)
 interpretPrim = \case
