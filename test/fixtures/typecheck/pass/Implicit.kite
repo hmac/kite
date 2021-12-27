@@ -27,3 +27,6 @@ useOther1 = other True False
 
 useOther2 : Bool
 useOther2 = other False 0
+
+other2 : Eq a => Eq b => a -> b -> a
+other2 = other

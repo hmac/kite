@@ -628,6 +628,13 @@ subtype typeA typeB =
       a2' <- subst a2
       b2' <- subst b2
       subtype' a2' b2'
+    -- Implicit function types
+    -- Subtyping works the same as for normal function types
+    (TOther (IFn a1 a2), TOther (IFn b1 b2)) -> do
+      subtype' b1 a1
+      a2' <- subst a2
+      b2' <- subst b2
+      subtype' a2' b2'
     (a, TOther (Forall u b)) -> do
       void $ extendU u
       subtype' a b
@@ -797,8 +804,12 @@ check expr ty = do
       -- Re-add the forall by caching the input type on the expression
       pure $ cacheType ty e'
 
+    -- When checking a variable against an implicit function type, look up the
+    -- variable's type before trying to fill in any implicits.
+    (Var v, TOther (IFn a b)) -> checkDefault (Var v) (TOther (IFn a b))
     -- We've encountered an implicit function type, so we must try to fill it in.
-    (e, TOther (IFn a b)) -> do
+    -- TODO: this looks a bit off - double check it.
+    (e    , TOther (IFn a b)) -> do
       alpha <- newE
       void $ extendMarker alpha
       extendSolved alpha a
@@ -867,12 +878,16 @@ check expr ty = do
       scrut' <- infer scrut
       alts'  <- mapM (checkCaseAlt ty (typeOf scrut')) alts
       pure $ CaseT ty scrut' alts'
-    (e, b) -> do
-      e' <- infer e
-      a  <- subst $ typeOf e'
-      b' <- subst b
-      void $ subtype a b'
-      pure $ cacheType b' e'
+    (e, b) -> checkDefault e b
+ where
+   -- | The default behaviour of 'check': infer the type of the expression and
+   -- test that it's a subtype of the checking type.
+  checkDefault e b = do
+    e' <- infer e
+    a  <- subst $ typeOf e'
+    b' <- subst b
+    void $ subtype a b'
+    pure $ cacheType b' e'
 
 checkMCaseAlt :: [Type] -> Type -> ([Pattern], Exp) -> TypeM ([Pattern], ExpT)
 checkMCaseAlt patTys _ (pats, _) | length patTys /= length pats =

@@ -1,0 +1,7 @@
+module Args
+
+f : a -> b -> c -> c
+f = x y z -> z
+
+g : Int
+g = f 1 2 3
