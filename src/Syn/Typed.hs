@@ -19,15 +19,20 @@ module Syn.Typed
   , AST.Implicit_(..)
   , S.Import(..)
   , Type
+  , traverseExprWithLocals
   ) where
 
 import           AST
 import           Control.Lens                   ( over
                                                 , set
+                                                , traverseOf
                                                 , view
                                                 )
 import           Control.Lens.Plated            ( transformMOf
                                                 , transformOf
+                                                )
+import           Control.Monad.Reader           ( MonadReader
+                                                , local
                                                 )
 import           Data.Data.Lens                 ( uniplate )
 import           Data.Generics.Product          ( Param(..)
@@ -35,6 +40,7 @@ import           Data.Generics.Product          ( Param(..)
                                                 )
 import           Data.Generics.Product.Positions
                                                 ( position )
+import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( Map )
 import           Data.Name
@@ -128,3 +134,29 @@ typeOf = view (position @1)
 -- | Store a cached type on an 'Exp'
 cacheType :: Type -> Exp -> Exp
 cacheType = set (position @1)
+
+-- | Walk an expression, visiting each node, collecting bound variables as we go
+-- under lambdas or mcases.
+-- TODO: this doesn't work yet
+traverseExprWithLocals
+  :: MonadReader [(Name, Type)] m => (Exp -> m Exp) -> Exp -> m Exp
+traverseExprWithLocals action = \case
+  AbsT t vars e -> AbsT t vars <$> local (<> NE.toList vars) (action e)
+  IAbsT t pat pt e ->
+    IAbsT t pat pt <$> local (<> varsBoundByPattern pat) (action e)
+  CaseT t e alts ->
+    let caseAlt (p, rhs) = do
+          rhs' <- local (<> varsBoundByPattern p) (action rhs)
+          pure (p, rhs')
+    in  CaseT t <$> action e <*> traverse caseAlt alts
+  MCaseT t alts ->
+    let mCaseAlt (pats, rhs) = do
+          let vars = concatMap varsBoundByPattern pats
+          rhs' <- local (<> vars) (action rhs)
+          pure (pats, rhs')
+    in  MCaseT t <$> traverse mCaseAlt alts
+  e -> traverseOf uniplate (traverseExprWithLocals action) e
+ where
+   -- TODO: we need to store types with patterns in order to implement this
+  varsBoundByPattern :: Pattern -> [(Name, Type)]
+  varsBoundByPattern = undefined

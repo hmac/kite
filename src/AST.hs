@@ -97,7 +97,7 @@ data ExprT n t =
   | IAbsT t (Pat n) t (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
   -- Application of an implicit argument.
-  -- Like 'IAbstT', this doesn't exist in the surface syntax.
+  -- This doesn't exist in the surface syntax.
   -- TODO: can we remove this?
   | IAppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
@@ -163,10 +163,12 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
 
 -- | An implicit argument.
 -- This is inserted, unsolved, into the AST during typechecking.
--- After typechecking, it is solved.
--- A solved implicit contains the name of the variable it refers to.
--- In evaluation, it acts just like a variable.
-data Implicit_ n t = Unsolved  | Solved n
+-- It is solved after typechecking (see 'Type.Module.resolveImplicitsInExpr').
+-- A solved implicit contains just the name of the variable it refers to.
+-- In evaluation, a solved implicit acts just like a variable.
+-- Unsolved implicits should not reach evaluation, because their presence is a
+-- type error.
+data Implicit_ n t = Unsolved   | Solved n
   deriving (Eq, Show, Generic, Data)
 
 data ConMeta = ConMeta
