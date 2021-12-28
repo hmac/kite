@@ -8,13 +8,16 @@ module Type.Module where
 
 import           AST                            ( ConMeta(..) )
 import qualified Canonical                     as Can
-import           Control.Lens                   ( transformMOf )
+import           Control.Lens                   ( transformMOf
+                                                , traverseOf
+                                                )
 import           Control.Monad                  ( void )
 import qualified Control.Monad.Except          as Except
                                                 ( catchError
                                                 , throwError
                                                 )
 import           Data.Data.Lens                 ( uniplate )
+import           Data.Generics.Sum              ( _Ctor' )
 import qualified Data.Map.Strict               as Map
 import           Data.Name
 import qualified Data.Set                      as Set
@@ -149,14 +152,9 @@ typecheckFun (fun, (name, mtype, expr)) = do
 resolveImplicitsInExpr :: T.Exp -> TypecheckM T.Exp
 resolveImplicitsInExpr expr = do
   ctx <- getGlobalCtx
-  transformMOf
-    uniplate
-    (\case
-      T.ImplicitT ty i -> uncurry T.ImplicitT <$> search ctx (ty, i)
-      e                -> pure e
-    )
-    expr
+  transformMOf uniplate (traverseOf (_Ctor' @"ImplicitT") (search ctx)) expr
  where
+  search :: Ctx -> (T.Type, T.Implicit) -> TypecheckM (T.Type, T.Implicit)
   search ctx (ty, T.Unsolved) = do
     let results = flip mapMaybe ctx $ \case
           V n t | t == ty -> Just n
