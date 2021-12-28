@@ -8,15 +8,12 @@ module Type.Module where
 
 import           AST                            ( ConMeta(..) )
 import qualified Canonical                     as Can
-import           Control.Lens                   ( transformMOf
-                                                , traverseOf
-                                                )
+import           Control.Lens                   ( preview )
 import           Control.Monad                  ( void )
 import qualified Control.Monad.Except          as Except
                                                 ( catchError
                                                 , throwError
                                                 )
-import           Data.Data.Lens                 ( uniplate )
 import           Data.Generics.Sum              ( _Ctor' )
 import qualified Data.Map.Strict               as Map
 import           Data.Name
@@ -151,14 +148,20 @@ typecheckFun (fun, (name, mtype, expr)) = do
 
 resolveImplicitsInExpr :: T.Exp -> TypecheckM T.Exp
 resolveImplicitsInExpr expr = do
-  ctx <- getGlobalCtx
-  transformMOf uniplate (traverseOf (_Ctor' @"ImplicitT") (search ctx)) expr
+  -- Fetch all the in-scope top-level definitions, and their types, from the
+  -- global context.
+  ctx <- mapMaybe (preview (_Ctor' @"V")) <$> getGlobalCtx
+  -- Walk each node of the expression, ignore everything that isn't an
+  -- 'ImplicitT' node, and use the in-scope local variable combined with the
+  -- top-level definitions to search for a solution to the implicit.
+  T.traverseExprWithLocals (\c e -> (_Ctor' @"ImplicitT") (search c) e) ctx expr
  where
-  search :: Ctx -> (T.Type, T.Implicit) -> TypecheckM (T.Type, T.Implicit)
+  search
+    :: [(Name, Type)] -> (T.Type, T.Implicit) -> TypecheckM (T.Type, T.Implicit)
   search ctx (ty, T.Unsolved) = do
     let results = flip mapMaybe ctx $ \case
-          V n t | t == ty -> Just n
-          _               -> Nothing
+          (n, t) | t == ty -> Just n
+          _                -> Nothing
     case results of
       []  -> Except.throwError $ LocatedError Nothing (NoProofFound ty)
       [v] -> pure (ty, T.Solved v)

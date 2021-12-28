@@ -96,8 +96,9 @@ data Name
   deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show Name where
-  show (Local (Name name)              ) = "Local " ++ name
-  show (TopLevel moduleName (Name name)) = show moduleName ++ "." ++ name
+  show (Local (Name name)) = "\"" <> name <> "\""
+  show (TopLevel moduleName (Name name)) =
+    "\"" <> show moduleName <> "." <> name <> "\""
 
 instance Pretty Name where
   pretty (Local (Name n)) = pretty n

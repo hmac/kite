@@ -126,7 +126,7 @@ data CtxElem =
   | ESolved E Type
   -- Existential variable marker
   | Marker E
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance Debug CtxElem where
   debug (V v t       ) = debug v <+> ":" <+> debug t
