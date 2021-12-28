@@ -15,7 +15,7 @@ import           Syn                     hiding ( Name )
 
 type Exp = AST.Expr Name (Type_ Name)
 type Type = Type_ Name
-type Pattern = AST.Pat Name
+type Pattern = AST.Pat () Name
 type DataCon = DataCon_ Name
 type Data = Data_ Name
 type Alias = Alias_ Name

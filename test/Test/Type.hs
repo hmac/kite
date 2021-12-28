@@ -38,6 +38,7 @@ import           Type.DSL                       ( forAll
 import           Type.Module                    ( checkModule
                                                 , typecheckFun
                                                 )
+import           Type.Primitive                 ( listConsMeta )
 import           Type.Primitive                 ( bool
                                                 , int
                                                 , list
@@ -100,36 +101,44 @@ test = do
     -- Note that we add the (claimed) type for foo to the context so that the
     -- recursive call can be inferred.
     -- We do this for functions normally anyway (see 'Type.Module.checkModule')
-    let a0 = U 0 "a"
-        a1 = U 1 "a"
-        maybeType arg = tcon "Maybe" [arg]
-        funType = forAll a0 (T.fn (list (maybeType (u_ a0))) (list (u_ a0)))
-        cons    = prim "::"
-        nothing = "Nothing"
-        fun     = MCase
-          [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
-            , App (Var "foo") (Var "rest")
-            )
-          ]
-        ctx = [V nothing (forAll a1 (maybeType (u_ a1))), V "foo" funType]
-        ctorInfo =
-          [ ( "Nothing"
-            , ConMeta { conMetaTag      = 0
-                      , conMetaArity    = 0
-                      , conMetaTypeName = "Maybe"
-                      }
-            )
-          ]
-        expected = MCaseT
-          funType
-          [ ( [ConsPat cons Nothing [ConsPat nothing Nothing [], VarPat "rest"]]
-            , AppT
-              (list (u_ a0))
-              (VarT (T.fn (list (maybeType (u_ a0))) (list (u_ a0))) "foo")
-              (VarT (list (maybeType (u_ a0))) "rest")
-            )
-          ]
-        r = check fun funType
+    let
+      a0 = U 0 "a"
+      a1 = U 1 "a"
+      maybeType arg = tcon "Maybe" [arg]
+      funType = forAll a0 (T.fn (list (maybeType (u_ a0))) (list (u_ a0)))
+      cons    = prim "::"
+      nothing = "Nothing"
+      fun     = MCase
+        [ ( [ ConsPat ()
+                      cons
+                      Nothing
+                      [ConsPat () nothing Nothing [], VarPat () "rest"]
+            ]
+          , App (Var "foo") (Var "rest")
+          )
+        ]
+      ctx         = [V nothing (forAll a1 (maybeType (u_ a1))), V "foo" funType]
+      nothingMeta = ConMeta { conMetaTag      = 0
+                            , conMetaArity    = 0
+                            , conMetaTypeName = "Maybe"
+                            }
+      ctorInfo = [("Nothing", nothingMeta)]
+      expected = MCaseT
+        funType
+        [ ( [ ConsPat
+                (list (maybeType (u_ a0)))
+                cons
+                (Just listConsMeta)
+                [ ConsPat (tcon "Maybe" [u_ a0]) nothing (Just nothingMeta) []
+                , VarPat (list (maybeType (u_ a0))) "rest"
+                ]
+            ]
+          , AppT (list (u_ a0))
+                 (VarT (T.fn (list (maybeType (u_ a0))) (list (u_ a0))) "foo")
+                 (VarT (list (maybeType (u_ a0))) "rest")
+          )
+        ]
+      r = check fun funType
     it "typechecks successfully" $ do
       runTypecheckM
           defaultTypeEnv

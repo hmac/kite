@@ -135,7 +135,7 @@ data DataCon_ name = DataCon
   deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
-type Pattern = AST.Pat RawName
+type Pattern = AST.Pat () RawName
 
 -- Int
 -- Maybe Int

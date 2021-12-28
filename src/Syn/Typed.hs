@@ -57,7 +57,7 @@ import           Type.Type                      ( E
 -- pointless conversions.
 
 type Exp = ExprT Name Type
-type Pattern = AST.Pat Name
+type Pattern = AST.Pat Type Name
 type Implicit = AST.Implicit_ Name Type
 
 data Module = Module

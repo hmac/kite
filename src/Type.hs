@@ -103,6 +103,7 @@ import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as G
 import qualified Hedgehog.Range                as R
 
+import qualified Canonical                     as Can
 import           Syn.Typed                      ( ConMeta(..)
                                                 , ExprT(..)
                                                 , cacheType
@@ -151,7 +152,8 @@ import           Type.Type                      ( CtorInfo
 type Exp = Expr Name Type
 type ExpT = Syn.Typed.Exp
 
-type Pattern = Pat Name
+type Pattern = Can.Pattern
+type PatternT = Syn.Typed.Pattern
 
 -- | The free (existential) variables of the type
 fv :: Type -> [E]
@@ -835,7 +837,7 @@ check expr ty = do
 
       -- Return a normal lambda which expects a value of type A as its first argument.
       -- TODO: generate a fresh variable name properly
-      pure $ IAbsT (TOther (Fn a b)) (VarPat "fixme") a e'
+      pure $ IAbsT (TOther (Fn a b)) (VarPat a "fixme") a e'
 
     (Abs args e, _) -> do
       (args', e') <- checkAbs args e ty
@@ -903,7 +905,7 @@ check expr ty = do
     void $ subtype a b'
     pure $ cacheType b' e'
 
-checkMCaseAlt :: [Type] -> Type -> ([Pattern], Exp) -> TypeM ([Pattern], ExpT)
+checkMCaseAlt :: [Type] -> Type -> ([Pattern], Exp) -> TypeM ([PatternT], ExpT)
 checkMCaseAlt patTys _ (pats, _) | length patTys /= length pats =
   throwError TooManyPatterns
 checkMCaseAlt patTys rhsTy (pats, rhs) = do
@@ -914,15 +916,15 @@ checkMCaseAlt patTys rhsTy (pats, rhs) = do
 
   -- check each pat against the corresponding pat type, accumulating a new
   -- context
-  mapM_ (uncurry checkPattern) (zip pats patTys)
+  pats' <- mapM (uncurry checkPattern) (zip pats patTys)
 
   -- check the rhs against the rhs type
-  rhs' <- check rhs rhsTy
+  rhs'  <- check rhs rhsTy
 
   -- drop all context elements after and including the marker
   dropAfter (Marker alpha)
 
-  pure (pats, rhs')
+  pure (pats', rhs')
 
 -- Like infer but applies the resulting substitution to the type and returns
 -- just the type.
@@ -1087,7 +1089,7 @@ existentialiseOuterForalls (TOther (Forall u a)) = do
   existentialiseOuterForalls (substEForU alpha u a)
 existentialiseOuterForalls t = pure t
 
-checkCaseAlt :: Type -> Type -> (Pattern, Exp) -> TypeM (Pattern, ExpT)
+checkCaseAlt :: Type -> Type -> (Pattern, Exp) -> TypeM (PatternT, ExpT)
 checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
   trace'
       [ "checkCaseAlt"
@@ -1103,7 +1105,7 @@ checkCaseAlt expectedAltTy scrutTy (pat, expr) = do
 
 -- TODO: probably better to infer the alts first, since they often constrain the
 -- scrut type, and then we don't need to infer it.
-inferCaseAlt :: Type -> (Pattern, Exp) -> TypeM (Pattern, ExpT)
+inferCaseAlt :: Type -> (Pattern, Exp) -> TypeM (PatternT, ExpT)
 inferCaseAlt scrutTy (pat, expr) = do
   trace' ["inferCaseAlt", debug scrutTy, debug pat, debug expr] $ do
     pat'  <- checkPattern pat scrutTy
@@ -1111,14 +1113,14 @@ inferCaseAlt scrutTy (pat, expr) = do
     pure (pat', expr')
 
 {-# ANN inferPattern ("HLint: ignore Reduce duplication" :: String) #-}
-inferPattern :: Pattern -> TypeM (Pattern, Type)
+inferPattern :: Pattern -> TypeM (PatternT, Type)
 inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
-  IntPat  _                 -> pure (pat, int)
-  CharPat _                 -> pure (pat, char)
-  BoolPat _                 -> pure (pat, bool)
-  UnitPat                   -> pure (pat, unit)
-  StringPat _               -> pure (pat, string)
-  ConsPat con _meta subpats -> do
+  IntPat  _ i                 -> pure (IntPat int i, int)
+  CharPat _ c                 -> pure (CharPat char c, char)
+  BoolPat _ b                 -> pure (BoolPat bool b, bool)
+  UnitPat _                   -> pure (UnitPat unit, unit)
+  StringPat _ s               -> pure (StringPat string s, string)
+  ConsPat _ con _meta subpats -> do
     -- Lookup the type of the constructor
     conTy <- lookupV con
     case second unfoldFn (unfoldForall conTy) of
@@ -1141,17 +1143,19 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
         meta     <- lookupCtorInfo con
 
         -- Return the constructor type
-        pure (ConsPat con (Just meta) subpats', tycon')
+        pure (ConsPat tycon' con (Just meta) subpats', tycon')
       (_, (_, t)) -> throwError $ ExpectedConstructorType t
-  VarPat x -> do
+  VarPat _ x -> do
     alpha <- newE
     extendE alpha >> extendV x (e_ alpha)
-    pure (pat, e_ alpha)
-  WildPat -> do
+    let t = e_ alpha
+    pure (VarPat t x, t)
+  WildPat _ -> do
     alpha <- newE
     extendE alpha
-    pure (pat, e_ alpha)
-  TuplePat subpats ->
+    let t = e_ alpha
+    pure (WildPat t, t)
+  TuplePat _ subpats ->
     let con = case subpats of
           []                       -> error "Type.inferPattern: empty tuple"
           [_] -> error "Type.inferPattern: single-element tuple"
@@ -1166,29 +1170,29 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
             error
               $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
-    in  inferPattern (ConsPat con Nothing subpats)
-  ListPat []      -> inferPattern (ConsPat (prim "[]") (Just listNilMeta) [])
-  ListPat subpats -> inferPattern
-    (foldr (\s acc -> ConsPat (prim "::") (Just listConsMeta) [s, acc])
-           (ConsPat (prim "[]") (Just listNilMeta) [])
+    in  inferPattern (ConsPat () con Nothing subpats)
+  ListPat _ [] -> inferPattern (ConsPat () (prim "[]") (Just listNilMeta) [])
+  ListPat _ subpats -> inferPattern
+    (foldr (\s acc -> ConsPat () (prim "::") (Just listConsMeta) [s, acc])
+           (ConsPat () (prim "[]") (Just listNilMeta) [])
            subpats
     )
 
-checkPattern :: Pattern -> Type -> TypeM Pattern
+checkPattern :: Pattern -> Type -> TypeM PatternT
 checkPattern pat ty = do
   trace' ["checkPattern", debug pat, ":", debug ty] $ case pat of
-    WildPat  -> pure pat
-    VarPat x -> do
+    WildPat _  -> pure $ WildPat ty
+    VarPat _ x -> do
       ctx <- getCtx
       if x `elem` domV ctx
         then throwError (DuplicateVariable x)
-        else extendV x ty >> pure pat
-    IntPat  _                 -> subtype ty int >> pure pat
-    CharPat _                 -> subtype ty char >> pure pat
-    BoolPat _                 -> subtype ty bool >> pure pat
-    UnitPat                   -> subtype ty unit >> pure pat
-    StringPat _               -> subtype ty string >> pure pat
-    ConsPat con _meta subpats -> do
+        else extendV x ty >> pure (VarPat ty x)
+    IntPat  _ i                 -> subtype ty int >> pure (IntPat int i)
+    CharPat _ c                 -> subtype ty char >> pure (CharPat char c)
+    BoolPat _ b                 -> subtype ty bool >> pure (BoolPat bool b)
+    UnitPat _                   -> subtype ty unit >> pure (UnitPat unit)
+    StringPat _ s -> subtype ty string >> pure (StringPat string s)
+    ConsPat _ con _meta subpats -> do
       constructorType <- lookupV con
       case second unfoldFn (unfoldForall constructorType) of
         (us, (argTys, tycon@TCon{})) -> do
@@ -1215,16 +1219,17 @@ checkPattern pat ty = do
           -- Lookup the metadata of the constructor
           meta <- lookupCtorInfo con
 
-          pure $ ConsPat con (Just meta) subpats'
+          pure $ ConsPat ty con (Just meta) subpats'
         (_, (_, t)) -> throwError $ ExpectedConstructorType t
-    ListPat [] -> checkPattern (ConsPat (prim "[]") (Just listNilMeta) []) ty
-    ListPat subpats -> checkPattern
-      (foldr (\s acc -> ConsPat (prim "::") (Just listConsMeta) [s, acc])
-             (ConsPat (prim "[]") (Just listNilMeta) [])
+    ListPat _ [] ->
+      checkPattern (ConsPat () (prim "[]") (Just listNilMeta) []) ty
+    ListPat _ subpats -> checkPattern
+      (foldr (\s acc -> ConsPat () (prim "::") (Just listConsMeta) [s, acc])
+             (ConsPat () (prim "[]") (Just listNilMeta) [])
              subpats
       )
       ty
-    TuplePat subpats ->
+    TuplePat _ subpats ->
       let
         con = case subpats of
           []                       -> error "Type.checkPattern: empty tuple"
@@ -1240,7 +1245,7 @@ checkPattern pat ty = do
             error
               $  "Type.checkPattern: cannot (yet) handle tuples of length > 8: "
               <> show subpats
-      in  checkPattern (ConsPat con Nothing subpats) ty
+      in  checkPattern (ConsPat () con Nothing subpats) ty
 
 -- | unfoldForall (Forall a (Forall b t)) == ([a, b], t)
 unfoldForall :: Type -> ([U], Type)
@@ -1502,13 +1507,14 @@ prop_infers_bool_case = property $ do
       -- case True of
       --   True -> ()
       --   False -> ()
-    expr1 =
-      Case (BoolLit True) [(BoolPat True, UnitLit), (BoolPat False, UnitLit)]
-    -- case True of
-    --   True -> True
-    --   False -> ()
-    expr2 = Case (BoolLit True)
-                 [(BoolPat True, BoolLit True), (BoolPat False, UnitLit)]
+      expr1 = Case (BoolLit True)
+                   [(BoolPat () True, UnitLit), (BoolPat () False, UnitLit)]
+      -- case True of
+      --   True -> True
+      --   False -> ()
+      expr2 = Case
+        (BoolLit True)
+        [(BoolPat () True, BoolLit True), (BoolPat () False, UnitLit)]
   typecheckTest mempty (infer expr1) === Right unit
   typecheckTest mempty (infer expr2)
     === Left (LocatedError Nothing (SubtypingFailure unit bool))

@@ -226,19 +226,19 @@ printDef name expr | big expr  = nest 2 $ vsep [lhs, printExpr expr]
   where lhs = func (printName name) <+> equals
 
 printPattern :: Syn.Pattern -> Document
-printPattern (VarPat n)      = printName n
-printPattern WildPat         = "_"
-printPattern (IntPat    i)   = pretty i
-printPattern (CharPat   c)   = squotes (pretty c)
-printPattern (StringPat s)   = dquotes (pretty s)
-printPattern (BoolPat   b)   = pretty b
-printPattern UnitPat         = "()"
-printPattern (TuplePat pats) = align $ htupled (map printPattern pats)
-printPattern (ListPat  pats) = list (map printPattern pats)
+printPattern (VarPat _ n     ) = printName n
+printPattern (WildPat _      ) = "_"
+printPattern (IntPat    _ i  ) = pretty i
+printPattern (CharPat   _ c  ) = squotes (pretty c)
+printPattern (StringPat _ s  ) = dquotes (pretty s)
+printPattern (BoolPat   _ b  ) = pretty b
+printPattern (UnitPat _      ) = "()"
+printPattern (TuplePat _ pats) = align $ htupled (map printPattern pats)
+printPattern (ListPat  _ pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
-printPattern (ConsPat "::" _ [x, y]) =
+printPattern (ConsPat _ "::" _ [x, y]) =
   parens $ printPattern x <+> "::" <+> printPattern y
-printPattern (ConsPat n _ pats) =
+printPattern (ConsPat _ n _ pats) =
   parens $ data_ (printName n) <+> hsep (map printPattern pats)
 
 -- TODO: binary operators

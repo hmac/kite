@@ -283,18 +283,19 @@ compileMCaseBranch [] _ = throwError EmptyMCaseBranch
 compilePat
   :: MonadError Error m => T.Pattern -> SExpr -> m ([SExpr], [(Text, SExpr)])
 compilePat pattern scrut = case pattern of
-  T.VarPat x       -> pure ([], [(name2Text x, scrut)])
-  T.WildPat        -> pure ([], [])
-  T.UnitPat        -> pure ([], [])
-  T.IntPat    n    -> pure ([App (Var "eq?") [scrut, Lit (Int n)]], [])
-  T.CharPat   c    -> pure ([App (Var "eq?") [scrut, Lit (Char c)]], [])
-  T.StringPat s -> pure ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
-  T.BoolPat   b    -> pure ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
-  T.TuplePat  pats -> concatUnzip <$> zipWithM
+  T.VarPat _ x  -> pure ([], [(name2Text x, scrut)])
+  T.WildPat _   -> pure ([], [])
+  T.UnitPat _   -> pure ([], [])
+  T.IntPat  _ n -> pure ([App (Var "eq?") [scrut, Lit (Int n)]], [])
+  T.CharPat _ c -> pure ([App (Var "eq?") [scrut, Lit (Char c)]], [])
+  T.StringPat _ s ->
+    pure ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
+  T.BoolPat  _ b    -> pure ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
+  T.TuplePat _ pats -> concatUnzip <$> zipWithM
     (\p i -> compilePat p (App (Var "vector-ref") [scrut, Lit (Int i)]))
     pats
     [0 :: Int ..]
-  T.ListPat pats -> do
+  T.ListPat _ pats -> do
     let lengthTest =
           App (Var "eq?") [App (Var "length") [scrut], Lit (Int (length pats))]
     (tests, bindings) <- concatUnzip <$> zipWithM
@@ -304,15 +305,15 @@ compilePat pattern scrut = case pattern of
     pure (lengthTest : tests, bindings)
   -- TODO: we could use record-accessor to index into the fields of the constructor
   -- https://scheme.com/tspl4/records.html#./records:h1
-  T.ConsPat c _ [] | c == prim "[]" -> pure ([App (Var "null?") [scrut]], [])
-  T.ConsPat c _ [headPat, tailPat] | c == prim "::" -> do
+  T.ConsPat _ c _ [] | c == prim "[]" -> pure ([App (Var "null?") [scrut]], [])
+  T.ConsPat _ c _ [headPat, tailPat] | c == prim "::" -> do
     let notNullTest = App (Var "not") [App (Var "null?") [scrut]]
     (headTests, headBindings) <- compilePat headPat (App (Var "car") [scrut])
     (tailTests, tailBindings) <- compilePat tailPat (App (Var "cdr") [scrut])
     pure (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
 
-  T.ConsPat c  Nothing     _    -> throwError $ CtorMissingMetadata c
-  T.ConsPat _c (Just meta) pats -> do
+  T.ConsPat _ c  Nothing     _    -> throwError $ CtorMissingMetadata c
+  T.ConsPat _ _c (Just meta) pats -> do
     let tag      = T.conMetaTag meta
         ty       = "$" <> name2Text (T.conMetaTypeName meta)
         tagField = ty <> "-" <> "_tag"

@@ -328,22 +328,22 @@ genCaseAlts e1 e2 = do
 genPattern :: H.Gen Pattern
 genPattern = Gen.shrink shrinkPattern $ Gen.recursive
   Gen.choice
-  [genVarPattern, pure WildPat, IntPat <$> genInt, pure UnitPat]
-  [Gen.small $ TuplePat <$> Gen.list (Range.linear 2 3) genVarPattern]
-  where genVarPattern = VarPat <$> genLowerName
+  [genVarPattern, pure (WildPat ()), IntPat () <$> genInt, pure (UnitPat ())]
+  [Gen.small $ TuplePat () <$> Gen.list (Range.linear 2 3) genVarPattern]
+  where genVarPattern = VarPat () <$> genLowerName
 
 shrinkPattern :: (Pattern -> [Pattern])
 shrinkPattern = \case
-  VarPat _            -> []
-  WildPat             -> []
-  IntPat _            -> []
-  UnitPat             -> []
-  TuplePat pats       -> TuplePat <$> shrinkList2 pats
-  ListPat  pats       -> ListPat <$> shrinkList pats
-  ConsPat c meta pats -> ConsPat c meta <$> shrinkList pats
-  StringPat _         -> []
-  CharPat   _         -> []
-  BoolPat   _         -> []
+  VarPat _ _            -> []
+  WildPat _             -> []
+  IntPat _ _            -> []
+  UnitPat _             -> []
+  TuplePat t pats       -> TuplePat t <$> shrinkList2 pats
+  ListPat  t pats       -> ListPat t <$> shrinkList pats
+  ConsPat t c meta pats -> ConsPat t c meta <$> shrinkList pats
+  StringPat _ _         -> []
+  CharPat   _ _         -> []
+  BoolPat   _ _         -> []
 
 genInt :: H.Gen Int
 genInt = Gen.int (Range.linear (-5) 5)

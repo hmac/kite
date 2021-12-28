@@ -209,17 +209,17 @@ canonicaliseExp env = go
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case
-  VarPat n            -> ([n], VarPat (Local n))
-  WildPat             -> ([], WildPat)
-  IntPat  i           -> ([], IntPat i)
-  CharPat c           -> ([], CharPat c)
-  BoolPat b           -> ([], BoolPat b)
-  UnitPat             -> ([], UnitPat)
-  StringPat s         -> ([], StringPat s)
-  TuplePat  pats      -> second TuplePat (canonicalisePatternList pats)
-  ListPat   pats      -> second ListPat (canonicalisePatternList pats)
-  ConsPat c meta pats -> second (ConsPat (canonicaliseName env c) meta)
-                                (canonicalisePatternList pats)
+  VarPat t n            -> ([n], VarPat t (Local n))
+  WildPat t             -> ([], WildPat t)
+  IntPat  t i           -> ([], IntPat t i)
+  CharPat t c           -> ([], CharPat t c)
+  BoolPat t b           -> ([], BoolPat t b)
+  UnitPat t             -> ([], UnitPat t)
+  StringPat t s         -> ([], StringPat t s)
+  TuplePat  t pats      -> second (TuplePat t) (canonicalisePatternList pats)
+  ListPat   t pats      -> second (ListPat t) (canonicalisePatternList pats)
+  ConsPat t c meta pats -> second (ConsPat t (canonicaliseName env c) meta)
+                                  (canonicalisePatternList pats)
  where
   canonicalisePatternList :: [Syn.Pattern] -> ([RawName], [Can.Pattern])
   canonicalisePatternList pats =

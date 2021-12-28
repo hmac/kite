@@ -24,12 +24,12 @@ data Expr n t = Var n
          | Abs (NonEmpty n) (Expr n t)
          -- Binding of an implicit parameter.
          -- This supports pattern matching, unlike 'Abs'.
-         | IAbs (Pat n) (Expr n t)
+         | IAbs (Pat () n) (Expr n t)
          | App (Expr n t) (Expr n t)
          | Let [(n, Expr n t, Maybe t)] (Expr n t)
-         | Case (Expr n t) [(Pat n, Expr n t)]
+         | Case (Expr n t) [(Pat () n, Expr n t)]
          -- TODO: these should probably be NonEmpty
-         | MCase [([Pat n], Expr n t)]
+         | MCase [([Pat () n], Expr n t)]
          | UnitLit
          | TupleLit [Expr n t]
          | ListLit [Expr n t]
@@ -94,16 +94,15 @@ data ExprT n t =
   | HoleT t n
   -- Note that each variable bound in lambda has an annotated type
   | AbsT t (NonEmpty (n, t)) (ExprT n t)
-  | IAbsT t (Pat n) t (ExprT n t)
+  | IAbsT t (Pat t n) t (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
   -- Application of an implicit argument.
   -- This doesn't exist in the surface syntax.
   -- TODO: can we remove this?
   | IAppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
-  | CaseT t (ExprT n t) [(Pat n, ExprT n t)]
-  -- TODO: store types on patterns, similar to what we do with abstractions
-  | MCaseT t [([Pat n], ExprT n t)]
+  | CaseT t (ExprT n t) [(Pat t n, ExprT n t)]
+  | MCaseT t [([Pat t n], ExprT n t)]
   | UnitLitT t
   | TupleLitT t [ExprT n t]
   | ListLitT t [ExprT n t]
@@ -187,34 +186,34 @@ instance Debug ConMeta where
       <+> "typename="
       <>  show typeName
 
-data Pat a = VarPat a
-             | WildPat
-             | IntPat Int
-             | CharPat Char
-             | BoolPat Bool
-             | UnitPat
-             | TuplePat [Pat a]
-             | ListPat [Pat a]
-             | ConsPat a (Maybe ConMeta) [Pat a]
-             | StringPat String
+data Pat t a = VarPat t a
+             | WildPat t
+             | IntPat t Int
+             | CharPat t Char
+             | BoolPat t Bool
+             | UnitPat t
+             | TuplePat t [Pat t a]
+             | ListPat t [Pat t a]
+             | ConsPat t a (Maybe ConMeta) [Pat t a]
+             | StringPat t String
              deriving (Eq, Show, Data, Generic)
 
-instance Debug a => Debug (Pat a) where
-  debug (VarPat v)      = debug v
-  debug WildPat         = "_"
-  debug (IntPat  i)     = show i
-  debug (CharPat c)     = "'" <> [c] <> "'"
-  debug (BoolPat b)     = show b
-  debug UnitPat         = "()"
-  debug (TuplePat args) = "(" <> sepBy ", " (map debug args) <> ")"
-  debug (ListPat  args) = "[" <> sepBy ", " (map debug args) <> "]"
-  debug (ConsPat c meta args) =
+instance Debug a => Debug (Pat t a) where
+  debug (VarPat _ v     ) = debug v
+  debug (WildPat _      ) = "_"
+  debug (IntPat  _ i    ) = show i
+  debug (CharPat _ c    ) = "'" <> [c] <> "'"
+  debug (BoolPat _ b    ) = show b
+  debug (UnitPat _      ) = "()"
+  debug (TuplePat _ args) = "(" <> sepBy ", " (map debug args) <> ")"
+  debug (ListPat  _ args) = "[" <> sepBy ", " (map debug args) <> "]"
+  debug (ConsPat _ c meta args) =
     "("
       <>  debug c
       <+> maybe mempty debug meta
       <+> sepBy " " (map debug args)
       <>  ")"
-  debug (StringPat s) = "\"" <> s <> "\""
+  debug (StringPat _ s) = "\"" <> s <> "\""
 
 sepBy :: String -> [String] -> String
 sepBy = intercalate

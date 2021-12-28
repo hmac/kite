@@ -44,28 +44,28 @@ pCasePattern =
     <|> pWildPat
     <|> pListPat
     <|> pVarPat
-  where tuplePattern = TuplePat <$> pPattern `sepBy2` comma
+  where tuplePattern = TuplePat () <$> pPattern `sepBy2` comma
 
 pIntPat :: Parser Syn.Pattern
-pIntPat = IntPat <$> pInt
+pIntPat = IntPat () <$> pInt
 
 pCharPat :: Parser Syn.Pattern
-pCharPat = CharPat <$> pChar
+pCharPat = CharPat () <$> pChar
 
 pWildPat :: Parser Syn.Pattern
-pWildPat = symbol "_" >> pure WildPat
+pWildPat = symbol "_" >> pure (WildPat ())
 
 pListPat :: Parser Syn.Pattern
-pListPat = ListPat <$> brackets (pPattern `sepBy` comma)
+pListPat = ListPat () <$> brackets (pPattern `sepBy` comma)
 
 pUnitPat :: Parser Syn.Pattern
-pUnitPat = symbol "()" >> pure UnitPat
+pUnitPat = symbol "()" >> pure (UnitPat ())
 
 pTuplePat :: Parser Syn.Pattern
-pTuplePat = TuplePat <$> parens (pPattern `sepBy2` comma)
+pTuplePat = TuplePat () <$> parens (pPattern `sepBy2` comma)
 
 pVarPat :: Parser Syn.Pattern
-pVarPat = VarPat <$> lowercaseName
+pVarPat = VarPat () <$> lowercaseName
 
 -- Parse a constructor pattern
 -- The argument specifies whether we require parentheses around constructor patterns with arguments,
@@ -80,21 +80,20 @@ pConPat needParens = if needParens
   nullaryCon = do
     name <- tyCon
     pure $ case name of
-      "True"  -> BoolPat True
-      "False" -> BoolPat False
-      n       -> ConsPat n Nothing []
+      "True"  -> BoolPat () True
+      "False" -> BoolPat () False
+      n       -> ConsPat () n Nothing []
   infixBinaryCon = do
     left  <- pPattern
     tycon <- binTyCon
     right <- pPattern
-    pure $ ConsPat tycon Nothing [left, right]
+    pure $ ConsPat () tycon Nothing [left, right]
   -- For now, the only infix constructor is (::)
   binTyCon = Name <$> symbol "::"
   con      = do
     tyCon >>= \case
-      "True"  -> pure $ BoolPat True
-      "False" -> pure $ BoolPat False
+      "True"  -> pure $ BoolPat () True
+      "False" -> pure $ BoolPat () False
       c       -> do
         args <- many pPattern
-        pure $ ConsPat c Nothing args
-
+        pure $ ConsPat () c Nothing args

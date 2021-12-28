@@ -35,23 +35,19 @@ import qualified Syn                           as S
 -- If we did this at parse time, we could get rid of this whole module.
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
-  Var n   -> pure $ Var n
-  Con n   -> pure $ Con n
-  Ann e t -> Ann <$> fromSyn e <*> convertType mempty t
-  Hole n  -> pure $ Hole n
-  App a b -> App <$> fromSyn a <*> fromSyn b
-  Case scrut alts ->
-    Case
-      <$> fromSyn scrut
-      <*> mapM (bimapM (pure . convertPattern) fromSyn) alts
-  MCase alts ->
-    MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
-  Abs xs a -> do
+  Var n           -> pure $ Var n
+  Con n           -> pure $ Con n
+  Ann e t         -> Ann <$> fromSyn e <*> convertType mempty t
+  Hole n          -> pure $ Hole n
+  App  a     b    -> App <$> fromSyn a <*> fromSyn b
+  Case scrut alts -> Case <$> fromSyn scrut <*> mapM (secondM fromSyn) alts
+  MCase alts      -> MCase <$> mapM (secondM fromSyn) alts
+  Abs xs a        -> do
     a' <- fromSyn a
     pure $ Abs xs a'
   IAbs p e -> do
     e' <- fromSyn e
-    pure $ IAbs (convertPattern p) e'
+    pure $ IAbs p e'
   Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM
@@ -74,19 +70,6 @@ fromSyn = \case
   Record  r      -> Record <$> mapM (secondM fromSyn) r
   Project r f    -> Project <$> fromSyn r <*> pure f
   FCall   n args -> FCall n <$> mapM fromSyn args
-
-convertPattern :: Can.Pattern -> T.Pattern
-convertPattern = \case
-  VarPat v            -> VarPat v
-  ConsPat c _ subpats -> ConsPat c Nothing (map convertPattern subpats)
-  TuplePat subpats    -> TuplePat (map convertPattern subpats)
-  ListPat  subpats    -> ListPat (map convertPattern subpats)
-  WildPat             -> WildPat
-  UnitPat             -> UnitPat
-  IntPat    i         -> IntPat i
-  CharPat   c         -> CharPat c
-  BoolPat   b         -> BoolPat b
-  StringPat s         -> StringPat s
 
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case

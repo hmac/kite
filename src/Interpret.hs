@@ -347,18 +347,18 @@ interpretMCase alts                 = pure $ Abs $ \v -> do
 applyPattern
   :: MonadError Error m => Env m -> Value m -> Pattern -> m (Maybe (Env m))
 applyPattern env val pattern = case (pattern, val) of
-  (VarPat n, _) -> pure $ Just $ Map.insert n val env
-  (WildPat , _) -> pure $ Just env
-  (CharPat c, Const (Char c')) | c == c'   -> pure $ Just env
+  (VarPat _ n, _) -> pure $ Just $ Map.insert n val env
+  (WildPat _ , _) -> pure $ Just env
+  (CharPat _ c, Const (Char c')) | c == c'   -> pure $ Just env
+                                 | otherwise -> pure Nothing
+  (IntPat _ i, Const (Int i')) | i == i'   -> pure $ Just env
                                | otherwise -> pure Nothing
-  (IntPat i, Const (Int i')) | i == i'   -> pure $ Just env
-                             | otherwise -> pure Nothing
-  (BoolPat b, Const (Bool b')) | b == b'   -> pure $ Just env
-                               | otherwise -> pure Nothing
-  (StringPat s, Const (String s')) | s == s'   -> pure $ Just env
-                                   | otherwise -> pure Nothing
-  (UnitPat, Const Unit) -> pure $ Just env
-  (TuplePat pats, Tuple args)
+  (BoolPat _ b, Const (Bool b')) | b == b'   -> pure $ Just env
+                                 | otherwise -> pure Nothing
+  (StringPat _ s, Const (String s')) | s == s'   -> pure $ Just env
+                                     | otherwise -> pure Nothing
+  (UnitPat _, Const Unit) -> pure $ Just env
+  (TuplePat _ pats, Tuple args)
     | length pats == length args -> foldM
       (\env_ (arg, pat) -> case env_ of
         Just e  -> applyPattern e arg pat
@@ -367,7 +367,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ListPat pats, List args)
+  (ListPat _ pats, List args)
     | length pats == length args -> foldM
       (\env_ (arg, pat) -> case env_ of
         Just e  -> applyPattern e arg pat
@@ -376,7 +376,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ConsPat c _meta pats, Cons c' args)
+  (ConsPat _ c _meta pats, Cons c' args)
     | c == c' -> foldM
       (\env_ (arg, pat) -> case env_ of
         Just e  -> applyPattern e arg pat
@@ -385,7 +385,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ConsPat (TopLevel m "::") _meta pats, List elems) | m == Prim.name ->
+  (ConsPat _ (TopLevel m "::") _meta pats, List elems) | m == Prim.name ->
     case (elems, pats) of
       (e : es, [p1, p2]) -> do
         env' <- applyPattern env e p1
