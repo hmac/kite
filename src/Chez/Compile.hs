@@ -184,8 +184,14 @@ compileExpr = \case
   T.ConT _ c _         -> pure $ Var $ name2Text c
   T.AbsT _ vars body ->
     foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
-  T.IAbsT _ var _ body -> Abs [name2Text var] <$> compileExpr body
-  T.AppT _ f arg       -> do
+  -- TODO: this is probably rubbish - check it.
+  T.IAbsT _ pat _ body -> do
+    varName <- freshName
+    Abs [varName] <$> do
+      (tests, bindings) <- compilePat pat (Var varName)
+      expr              <- compileExpr body
+      pure $ App (Var "cond") [List [App (Var "and") tests, Let bindings expr]]
+  T.AppT _ f arg -> do
     argExpr <- compileExpr arg
     fExpr   <- compileExpr f
     pure $ App fExpr [argExpr]

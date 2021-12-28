@@ -143,6 +143,9 @@ canonicaliseExp env = go
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
     Abs ns e -> Abs (fmap Local ns) $ go (NE.toList ns <> locals) e
+    IAbs p e ->
+      let (vars, p') = canonicalisePattern env p
+      in  IAbs p' $ go (vars <> locals) e
     App  a     b           -> App (go locals a) (go locals b)
     Let  binds e           -> canonicaliseLet binds e
     Case e     alts        -> canonicaliseCase (e, alts)

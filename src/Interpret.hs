@@ -219,8 +219,11 @@ interpretExpr env expr_ = case expr_ of
         )
       )
     | otherwise -> lookupCon c env
-  AbsT _ vars e     -> interpretAbs env (fmap fst vars) e
-  IAbsT _ var _ e   -> interpretAbs env (var NE.:| []) e
+  AbsT _ vars e   -> interpretAbs env (fmap fst vars) e
+  IAbsT _ pat _ e -> pure $ Abs $ \v -> do -- match v against the pattern
+    applyPattern env v pat >>= \case
+      Nothing   -> pure $ Error "pattern match failed"
+      Just env' -> interpretExpr env' e
   LetT _ binds expr -> do
     env' <- foldM
       (\env_ (n, e, _) -> do

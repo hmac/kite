@@ -30,6 +30,9 @@ import           AST
 import qualified Canonical                     as Can
 import qualified Syn                           as S
 
+-- | This does nothing except explicitly quantify variables in any type annotations
+-- (which only exist on let bindings).
+-- If we did this at parse time, we could get rid of this whole module.
 fromSyn :: Can.Exp -> T.TypeM Exp
 fromSyn = \case
   Var n   -> pure $ Var n
@@ -46,6 +49,9 @@ fromSyn = \case
   Abs xs a -> do
     a' <- fromSyn a
     pure $ Abs xs a'
+  IAbs p e -> do
+    e' <- fromSyn e
+    pure $ IAbs (convertPattern p) e'
   Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM

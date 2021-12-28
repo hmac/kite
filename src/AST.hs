@@ -17,13 +17,14 @@ import           Util                           ( Debug(debug)
 
 -- TODO: patterns in let bindings
 -- TODO: type sigs in let bindings
--- TODO: multi-definition functions in let bindings
---       (e.g. let fib 0 = 1; fib 1 = 1; fib n = ...)
 data Expr n t = Var n
          | Ann (Expr n t) t
          | Con n
          | Hole n
          | Abs (NonEmpty n) (Expr n t)
+         -- Binding of an implicit parameter.
+         -- This supports pattern matching, unlike 'Abs'.
+         | IAbs (Pat n) (Expr n t)
          | App (Expr n t) (Expr n t)
          | Let [(n, Expr n t, Maybe t)] (Expr n t)
          | Case (Expr n t) [(Pat n, Expr n t)]
@@ -43,12 +44,13 @@ data Expr n t = Var n
          deriving (Eq, Show, Data)
 
 instance (Debug v, Debug t) => Debug (Expr v t) where
-  debug (Var v  ) = debug v
-  debug (Ann e t) = debug e <+> ":" <+> debug t
-  debug (App a b) = debug a <+> debug b
-  debug (Abs v e) = "λ" <> debug v <> "." <+> debug e
-  debug (Con  v ) = debug v
-  debug (Hole s ) = "?" <> debug s
+  debug (Var v        ) = debug v
+  debug (Ann  e   t   ) = debug e <+> ":" <+> debug t
+  debug (App  a   b   ) = debug a <+> debug b
+  debug (Abs  v   e   ) = "λ" <> debug v <> "." <+> debug e
+  debug (IAbs pat expr) = debug pat <+> "=>" <+> debug expr
+  debug (Con  v       ) = debug v
+  debug (Hole s       ) = "?" <> debug s
   debug (Case e alts) =
     "case" <+> debug e <+> "of {" <+> sepBy "; " (map go alts) <+> "}"
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
@@ -81,7 +83,7 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
   debug (FCall   f args) = "$fcall" <+> f <+> sepBy " " (map debug args)
 
 -- Like Expr, but with type annotations on everything
--- This is the output from the typechecker (or will be, eventually)
+-- This is the output from the typechecker.
 -- We store types on all constructors, even ones like Unit for which the type is obvious.
 -- This makes it easier to write generic functions like 'Syn.Typed.typeOf'.
 data ExprT n t =
@@ -92,10 +94,7 @@ data ExprT n t =
   | HoleT t n
   -- Note that each variable bound in lambda has an annotated type
   | AbsT t (NonEmpty (n, t)) (ExprT n t)
-  -- Binding of an implicit argument.
-  -- This construct doesn't exist in the surface syntax - it is constructed by the typechecker when
-  -- elaborating implicit function types.
-  | IAbsT t n t (ExprT n t)
+  | IAbsT t (Pat n) t (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
   -- Application of an implicit argument.
   -- Like 'IAbstT', this doesn't exist in the surface syntax.

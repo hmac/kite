@@ -256,6 +256,7 @@ printExpr (Abs args e) =
     <>  hsep (map printName (NE.toList args))
     <+> "->"
     <+> printExpr e
+printExpr (IAbs pat   e   ) = parens $ printPattern pat <+> "=>" <+> printExpr e
 printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts

@@ -8,16 +8,23 @@ foo = x -> x
 bar : Bool
 bar = foo True
 
-type Eq a = Eq a
+type Eq a = Eq (a -> a -> Bool)
 
 baz : Eq a => a -> a
 baz = x -> x
 
 eqBool : Eq Bool
-eqBool = Eq True
+eqBool =
+ Eq
+  (True  True  -> True
+   False False -> True
+   _     _     -> False)
 
 nope : Bool
 nope = baz True
+
+eq : Eq a => a -> a -> Bool
+eq = (Eq f) => x y -> f x y
 
 other : Eq a => Eq b => a -> b -> a
 other = x y -> x
@@ -30,3 +37,11 @@ useOther2 = other False 0
 
 other2 : Eq a => Eq b => a -> b -> a
 other2 = other
+
+-- TODO: include function parameters in implicit proof search
+notEq : Eq a => a -> a -> Bool
+notEq = x y -> not (eq x y)
+ where
+  not : Bool -> Bool
+  not = True -> False
+        False -> True

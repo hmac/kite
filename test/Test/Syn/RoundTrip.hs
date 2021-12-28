@@ -273,6 +273,7 @@ shrinkExpr = \case
   CharLit _            -> []
   Abs  (_ :| []) e     -> [e]
   Abs  (v :| vs) e     -> fmap (\vars -> Abs (v :| vars) e) (shrinkList1 vs)
+  IAbs _         e     -> [e]
   App  _         b     -> [b]
   Let  binds     body  -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
   Case e         alts  -> [e] <> map snd alts

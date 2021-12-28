@@ -113,6 +113,7 @@ import           Type.DSL                       ( e_
                                                 , e_'
                                                 , fn
                                                 , forAll
+                                                , ifn
                                                 , tapp
                                                 , tcon
                                                 , trecord
@@ -806,10 +807,23 @@ check expr ty = do
 
     -- When checking a variable against an implicit function type, look up the
     -- variable's type before trying to fill in any implicits.
-    (Var v, TOther (IFn a b)) -> checkDefault (Var v) (TOther (IFn a b))
+    (Var v   , TOther (IFn a b)) -> checkDefault (Var v) (TOther (IFn a b))
+    -- An implicit function should have implicit function type, so we then just
+    -- need to check that the pattern has type 'a' and the body type 'b'
+    (IAbs p e, TOther (IFn a b)) -> do
+      -- generate a dummy existential that we'll use as a marker to know where to
+      -- split the context after typechecking this expression.
+      -- We do this because 'checkPattern' is likely to extend the context with
+      -- new variables that are only in scope in the expression.
+      alpha <- newE
+      void $ extendMarker alpha
+      pat' <- checkPattern p a
+      e'   <- check e b
+      dropAfter (Marker alpha)
+      pure $ IAbsT (TOther (IFn a b)) pat' a e'
     -- We've encountered an implicit function type, so we must try to fill it in.
     -- TODO: this looks a bit off - double check it.
-    (e    , TOther (IFn a b)) -> do
+    (e, TOther (IFn a b)) -> do
       alpha <- newE
       void $ extendMarker alpha
       extendSolved alpha a
@@ -821,7 +835,7 @@ check expr ty = do
 
       -- Return a normal lambda which expects a value of type A as its first argument.
       -- TODO: generate a fresh variable name properly
-      pure $ IAbsT (TOther (Fn a b)) "fixme" a e'
+      pure $ IAbsT (TOther (Fn a b)) (VarPat "fixme") a e'
 
     (Abs args e, _) -> do
       (args', e') <- checkAbs args e ty
@@ -994,6 +1008,11 @@ infer expr_ = do
       -- Now construct a result type and return it
       let ty = foldFn patTys exprTy
       pure $ MCaseT ty ((pats', expr') : alts')
+    IAbs pat expr -> do
+      (pat', patTy) <- inferPattern pat
+      expr'         <- infer expr
+      let ty = ifn patTy (typeOf expr')
+      pure $ IAbsT ty pat' patTy expr'
     Let binds body -> do
       -- generate a dummy existential that we'll use to cut the context
       alpha <- newE
