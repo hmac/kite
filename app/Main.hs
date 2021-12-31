@@ -34,7 +34,9 @@ import qualified ModuleGroupCompiler
 import qualified ModuleGroupTypechecker
 import qualified ModuleLoader
 
-import           Data.Name                      ( Name(TopLevel) )
+import           Data.Name                      ( Name(TopLevel)
+                                                , toString
+                                                )
 import           Options.Generic
 import qualified Repl                           ( run )
 
@@ -156,7 +158,7 @@ run path = do
   let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
   liftIO $ withFile scriptFile WriteMode $ \h -> do
     hPutStrLn h $ "(load " <> show outFile <> ")"
-    hPutStrLn h $ "(kite.Kite.Prim.runIO " <> show mainName <> ")"
+    hPutStrLn h $ "(kite.Kite.Prim.runIO " <> toString mainName <> ")"
   -- Run the script
   exitcode <- runProcess
     (proc "/usr/bin/env" ["scheme", "--script", scriptFile])

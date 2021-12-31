@@ -114,7 +114,8 @@ toRaw (Local n     ) = n
 toRaw (TopLevel _ n) = n
 
 toString :: Name -> String
-toString = show . toRaw
+toString (Local n     ) = show n
+toString (TopLevel m n) = show m <> "." <> show n
 
 -- If the name belongs to the module given, drop the module prefix.
 localise :: PkgModuleName -> Name -> Name

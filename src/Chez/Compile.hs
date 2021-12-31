@@ -172,16 +172,20 @@ compileData dat =
 
 compileExpr :: forall m . MonadError Error m => T.Exp -> NameGen m SExpr
 compileExpr = \case
-  T.IntLitT  _ n       -> pure $ Lit (Int n)
-  T.BoolLitT _ b       -> pure $ Lit (Bool b)
-  T.CharLitT _ c       -> pure $ Lit (Char c)
-  T.UnitLitT _         -> pure $ Lit Unit
-  T.StringLitT _ s     -> pure $ Lit (String (pack s))
-  T.TupleLitT  _ elems -> App (Var "vector") <$> mapM compileExpr elems
-  T.ListLitT   _ elems -> App (Var "list") <$> mapM compileExpr elems
-  T.AnnT _ e _         -> compileExpr e
-  T.VarT _ v           -> pure $ Var $ name2Text v
-  T.ConT _ c _         -> pure $ Var $ name2Text c
+  T.IntLitT  _ n                -> pure $ Lit (Int n)
+  T.BoolLitT _ b                -> pure $ Lit (Bool b)
+  T.CharLitT _ c                -> pure $ Lit (Char c)
+  T.UnitLitT _                  -> pure $ Lit Unit
+  T.StringLitT _ s              -> pure $ Lit (String (pack s))
+  T.TupleLitT  _ elems          -> App (Var "vector") <$> mapM compileExpr elems
+  T.ListLitT   _ elems          -> App (Var "list") <$> mapM compileExpr elems
+  T.AnnT _ e _                  -> compileExpr e
+  -- kite.Kite.Prim.[] is not a valid name in scheme, so we special case it.
+  T.VarT _ v | v == prim "[]"   -> pure $ App (Var "list") []
+  T.VarT _ v                    -> pure $ Var $ name2Text v
+  -- kite.Kite.Prim.[] is not a valid name in scheme, so we special case it.
+  T.ConT _ c _ | c == prim "[]" -> pure $ App (Var "list") []
+  T.ConT _ c _                  -> pure $ Var $ name2Text c
   T.AbsT _ vars body ->
     foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
   -- TODO: this is probably rubbish - check it.
