@@ -41,5 +41,9 @@ main =
 
     assertEq eqBool showBool (all id []) True,
     assertEq eqBool showBool (all id [True]) True,
-    assertEq eqBool showBool (all id [False]) False
+    assertEq eqBool showBool (all id [False]) False,
+
+    assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (Just (1, [])) (Just (1, [])),
+    assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons [1]) (Just (1, [])),
+    assertEq (eqMaybe (eqTuple2 eqInt (eqList eqInt))) (showMaybe (showTuple2 showInt (showList showInt))) (uncons [1, 2]) (Just (1, [2]))
   ]

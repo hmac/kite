@@ -1,0 +1,9 @@
+module State
+
+-- Regression test simplified from Control.Monad.State.execState
+
+fst : (a, b) -> a
+fst = (x, _) -> x
+
+f : (a -> (b, a)) -> a -> b
+f = g -> fst . g

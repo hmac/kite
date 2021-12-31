@@ -12,7 +12,6 @@ import           Data.Name                      ( Name
                                                 , toString
                                                 )
 import qualified Data.Set                      as Set
-import           Data.String                    ( fromString )
 import           Data.Traversable               ( for )
 import           Type                           ( Exp )
 import qualified Type                          as T
@@ -22,6 +21,7 @@ import           Type.DSL                       ( fn
                                                 , tapp
                                                 , tcon
                                                 , trecord
+                                                , ttuple
                                                 , u_
                                                 )
 import qualified Type.Type                     as T
@@ -82,10 +82,8 @@ convertType uVarCtx = \case
     T.throwError $ T.TodoError "Type.fromSyn: holes in types not implemented"
   S.TyFun  a b -> fn <$> convertType uVarCtx a <*> convertType uVarCtx b
   S.TyIFun a b -> ifn <$> convertType uVarCtx a <*> convertType uVarCtx b
-  S.TyTuple as ->
-    let name = prim $ fromString $ "Tuple" <> show (length as)
-    in  T.TCon name <$> mapM (convertType uVarCtx) as
-  S.TyVar v -> case lookup v uVarCtx of
+  S.TyTuple as -> ttuple <$> mapM (convertType uVarCtx) as
+  S.TyVar   v  -> case lookup v uVarCtx of
     Just u  -> pure $ u_ u
     Nothing -> T.throwError $ T.UnknownVariable v
   S.TyCon c   -> pure $ tcon c []

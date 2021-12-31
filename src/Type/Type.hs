@@ -54,6 +54,8 @@ data Type' =
   -- Record type
   -- TODO: record typing rules
   | TRecord [(String, Type)]
+  -- Tuple type
+  | TTuple [Type]
   deriving (Eq, Show, Typeable, Data, Generic)
 
 data DebugPrintCtx = Neutral | AppL | AppR | ArrL | ArrR
@@ -82,6 +84,7 @@ instance Debug Type where
       _       -> "(" <> go Neutral (Forall v t) <> ")"
     go _ (TRecord fields) = "{" <+> sepBy ", " (map f fields) <+> "}"
       where f (name, ty) = name <+> ":" <+> go' Neutral ty
+    go _ (TTuple args) = "(" <+> sepBy ", " (map debug args) <+> ")"
 
     debugArrow arr Neutral a b = go' ArrL a <+> arr <+> go' ArrR b
     debugArrow arr ArrR    a b = debugArrow arr Neutral a b

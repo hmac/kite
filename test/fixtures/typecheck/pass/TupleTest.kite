@@ -1,0 +1,72 @@
+module TupleTest
+
+from kite import Kite.Prim ($eqInt)
+
+type Eq a = Eq { eq : a -> a -> Bool }
+
+eq : Eq a -> a -> a -> Bool
+eq = (Eq d) -> d.eq
+
+type Semigroup a = Semigroup { append : a -> a -> a }
+
+append : Semigroup a -> a -> a -> a
+append = (Semigroup d) -> d.append
+
+type Monoid a = Monoid { empty : a, semigroup : Semigroup a }
+
+concat : Monoid a -> [a] -> a
+concat = (Monoid d) -> foldr (append d.semigroup) d.empty
+
+semigroupAll : Semigroup Bool
+semigroupAll = Semigroup { append = and }
+
+monoidAll : Monoid Bool
+monoidAll = Monoid { empty = True, semigroup = semigroupAll }
+
+type Maybe a = Just a | Nothing
+
+
+eqMaybe : Eq a -> Eq (Maybe a)
+eqMaybe = eqa -> Eq { eq = Nothing Nothing -> True
+                           (Just x) (Just y) -> eq eqa x y
+                           _        _       -> False
+                    }
+
+eqList : Eq a -> Eq [a]
+eqList = eqa -> Eq { eq = \xs ys -> concat monoidAll (zipWith (eq eqa) xs ys) }
+
+eqInt : Eq Int
+eqInt = Eq { eq = $eqInt }
+
+eqTuple2 : Eq a -> Eq b -> Eq (a, b)
+eqTuple2 = eqa eqb -> Eq { eq = (a1, b1) (a2, b2) -> and (eq eqa a1 a2) (eq eqb b1 b2) }
+
+foldr : (a -> b -> b) -> b -> [a] -> b
+foldr = _ z [] -> z
+        f z (x :: xs) -> f x (foldr f z xs)
+
+and : Bool -> Bool -> Bool
+and = False _ -> False
+      True  b -> b
+
+zipWith : (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith = _ [] _  -> []
+          _ _  [] -> []
+          f (x::xs) (y::ys) -> (f x y) :: (zipWith f xs ys)
+
+eqListInt : [Int] -> [Int] -> Bool
+eqListInt = xs ys -> foldr and True (zipWith $eqInt xs ys)
+
+eqExample : Maybe (Int, [Int]) -> Maybe (Int, [Int]) -> Bool
+eqExample = Nothing Nothing -> True
+            (Just (a1, b1)) (Just (a2, b2)) -> and ($eqInt a1 a2) (eqListInt b1 b2)
+            _       _ -> False
+
+example2 : Maybe (Int, [Int])
+example2 = Just (1, [])
+
+example : Bool
+example = eqExample  (Just (1, [])) (Just (1, []))
+
+example3 : Bool
+example3 = eq (eqMaybe (eqTuple2 eqInt (eqList eqInt)))  (Just (1, [])) (Just (1, []))

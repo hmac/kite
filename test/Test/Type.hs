@@ -32,16 +32,17 @@ import           Type.DSL                       ( forAll
                                                 , tapp
                                                 , tcon
                                                 , trecord
+                                                , ttuple
                                                 , u_
                                                 , u_'
                                                 )
 import           Type.Module                    ( checkModule
                                                 , typecheckFun
                                                 )
-import           Type.Primitive                 ( listConsMeta )
 import           Type.Primitive                 ( bool
                                                 , int
                                                 , list
+                                                , listConsMeta
                                                 , string
                                                 )
 import           Type.Print                     ( printLocatedError )
@@ -361,7 +362,7 @@ test = do
     it "a tuple"
       -- (True, False, Zero)
       $ let expr = [syn|(True, False, Zero)|]
-        in  inf expr (tcon (prim "Tuple3") [bool, bool, nat])
+        in  inf expr (ttuple [bool, bool, nat])
     it "a list" $ let expr = [syn|[True, False]|] in inf expr (list bool)
     it "an integer literal" $ let expr = [syn|6|] in inf expr int
     it "a string literal" $ let expr = [syn|"Hello"|] in inf expr string

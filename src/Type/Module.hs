@@ -154,7 +154,7 @@ resolveImplicitsInExpr expr = do
   -- Walk each node of the expression, ignore everything that isn't an
   -- 'ImplicitT' node, and use the in-scope local variable combined with the
   -- top-level definitions to search for a solution to the implicit.
-  T.traverseExprWithLocals (\c e -> (_Ctor' @"ImplicitT") (search c) e) ctx expr
+  T.traverseExprWithLocals (_Ctor' @"ImplicitT" . search) ctx expr
  where
   search
     :: [(Name, Type)] -> (T.Type, T.Implicit) -> TypecheckM (T.Type, T.Implicit)

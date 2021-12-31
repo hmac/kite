@@ -66,7 +66,6 @@ import           Data.Name                      ( ModuleName(..)
                                                 , prim
                                                 )
 import           Data.Name.Gen                  ( genName )
-import           Data.String                    ( fromString )
 import           System.Environment             ( lookupEnv )
 import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
 import           Util
@@ -118,6 +117,7 @@ import           Type.DSL                       ( e_
                                                 , tapp
                                                 , tcon
                                                 , trecord
+                                                , ttuple
                                                 , u_
                                                 , u_'
                                                 )
@@ -170,6 +170,7 @@ fv = \case
     EType   e      -> [e]
     UType   _      -> []
     TRecord fields -> concatMap (fv . snd) fields
+    TTuple  args   -> concatMap fv args
 
 -- | Quantify the given existential variables by replacing them with forall-bound universal
 -- variables.
@@ -210,6 +211,7 @@ subst' ctx = \case
     Forall u a     -> pure $ Forall u (subst' ctx a)
     TRecord fields -> pure $ TRecord $ mapSnd (subst' ctx) fields
     EType   e      -> substE e ctx
+    TTuple  args   -> pure $ TTuple $ map (subst' ctx) args
   substE :: E -> Ctx -> Either Type Type'
   substE e = \case
     []                              -> pure $ EType e
@@ -234,6 +236,7 @@ substEForU e u = go
     UType u' | u == u'   -> EType e
              | otherwise -> UType u'
     TRecord fields -> TRecord (mapSnd go fields)
+    TTuple  args   -> TTuple $ map go args
 
 -- | The bound variables in a context
 domV :: Ctx -> [Name]
@@ -390,6 +393,8 @@ extendMarker e = do
       pushCtx (Marker e)
 
 -- | Split a context at a given element, dropping that element
+-- Returns '(left, right)' where 'left' is the context _before_ the element
+-- and 'right' is the context _after_ the element.
 splitAt :: CtxElem -> Ctx -> (Ctx, Ctx)
 splitAt e = \case
   []                   -> ([], [])
@@ -429,6 +434,7 @@ wellFormedType ty = do
     EType e -> do
       lookupE e `catchError` const (void (lookupSolved e))
     TRecord fields -> mapM_ (\(n, t) -> (n, ) <$> wellFormedType t) fields
+    TTuple  args   -> mapM_ wellFormedType args
 
 -- Typechecking monad
 data TypeEnv = TypeEnv
@@ -508,7 +514,7 @@ withGlobalCtx :: MonadReader TypeEnv m => (Ctx -> Ctx) -> m a -> m a
 withGlobalCtx f = local (\e -> e { envCtx = f (envCtx e) })
 
 getGlobalCtx :: MonadReader TypeEnv m => m Ctx
-getGlobalCtx = envCtx <$> ask
+getGlobalCtx = asks envCtx
 
 withGlobalTypeCtx
   :: MonadReader TypeEnv m => (TypeCtx -> TypeCtx) -> m a -> m a
@@ -585,13 +591,13 @@ subtype typeA typeB =
     -- For subtyping between a type application and a constructor, we need to match the arguments up
     -- from right to left. e.g.
     --
-    -- f x y    f   x
-    -- | | |    |\  |
-    -- T b c    T b c
+    -- >                   f x y    f   x
+    -- >                   | | |    |\  |
+    -- >                   T b c    T b c
     --
-    -- f ~ T    f ~ T b
-    -- x ~ b    x ~ c
-    -- y ~ c
+    -- >                   f ~ T    f ~ T b
+    -- >                   x ~ b    x ~ c
+    -- >                   y ~ c
     --
     -- We can have fewer application args than constructor args, but not the other way around.
     (TApp v [], TCon c []) -> subtype' (TOther v) (TCon c [])
@@ -667,6 +673,14 @@ subtype typeA typeB =
       forM_ as $ \(label, _) -> case lookup label bs of
         Just _  -> pure ()
         Nothing -> throwError $ SubtypingFailure (trecord as) (trecord bs)
+    (TOther (TTuple as), TOther (TTuple bs)) -> zipWithM_
+      (\a b -> do
+        a' <- subst a
+        b' <- subst b
+        subtype' a' b'
+      )
+      as
+      bs
 
     (a, b) -> do
       a' <- subst a
@@ -676,9 +690,12 @@ subtype typeA typeB =
 -- Instantiation
 -- Existential vars are written e, f
 -- Types are written a, b
+
+-- | 'instantiateL e T': instantiate 'e' to a supertype of 'T'.
 instantiateL :: E -> Type -> TypeM ()
 instantiateL = instantiate L
 
+-- | 'instantiateR e T': instantiate 'e' to a subtype of 'T'.
 instantiateR :: E -> Type -> TypeM ()
 instantiateR = instantiate R
 
@@ -687,7 +704,10 @@ data InstDir = L | R deriving (Eq, Show)
 instantiate :: InstDir -> E -> Type -> TypeM ()
 instantiate dir e ty = do
   ctx <- getCtx
-  trace' ["inst", show dir, debug e, debug ty] $ case ty of
+  let traceLine = case dir of
+        L -> ["inst", debug e, ":<=", debug ty]
+        R -> ["inst", debug ty, "<=:", debug e]
+  trace' traceLine $ case ty of
     TOther (EType f) ->
       -- Here we want to instantiate either e := f or f := e. Which one depends
       -- on which variable has a greater scope - i.e. appears first in the
@@ -750,8 +770,7 @@ instantiate dir e ty = do
       solution <- solve e $ tcon c $ map e_ es
       putCtx $ l <> [solution] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
-      mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
-
+      zipWithM_ (instantiate (flipDir dir)) es args
     -- We do the same for type applications
     -- TODO: does this work if f contains existential vars?
     TApp f args -> do
@@ -762,7 +781,21 @@ instantiate dir e ty = do
       solution <- solve e $ tapp f $ map e_ es
       putCtx $ l <> [solution] <> map EVar es <> r
       -- instantiate each arg to its corresponding e
-      mapM_ (uncurry $ instantiate (flipDir dir)) (zip es args)
+      zipWithM_ (instantiate (flipDir dir)) es args
+    -- G [e4, e5, e1 = (e4, e5)][e2][e3] |- e2 :=< e4 -| G'
+    -- G'                                |- e3 :=< e5 -| G''
+    -- -----------------------------------------------------
+    -- G[e1][e2][e3]         |- (e2, e3) <=: e1 -| G''
+    --
+    TOther (TTuple args) -> do
+      let (l, r) = splitAt (EVar e) ctx
+      -- generate new Es for each arg
+      es       <- mapM (const newE) args
+      -- insert them into the context before e, along with a solution e = TTuple es
+      solution <- solve e $ ttuple $ map e_ es
+      putCtx $ l <> map EVar es <> [solution] <> r
+      -- instantiate each arg to its corresponding e
+      zipWithM_ (instantiate (flipDir dir)) es args
     a -> do
       let (l, r) = splitAt (EVar e) ctx
       call $ do
@@ -894,10 +927,22 @@ check expr ty = do
       scrut' <- infer scrut
       alts'  <- mapM (checkCaseAlt ty (typeOf scrut')) alts
       pure $ CaseT ty scrut' alts'
+    (TupleLit elems, _) -> do
+      -- Construct a type (e1, e2, ...) of fresh existentials
+      eVars <- replicateM (length elems) newE
+      mapM_ extendE eVars
+      let eTypes = map e_ eVars
+
+      -- Check each elem against its corresponding existential
+      elems' <- zipWithM check elems eTypes
+      -- Check that (e1, e2, ...) is subtype of ty
+      ty'    <- subst $ TOther $ TTuple eTypes
+      subtype ty' ty
+      pure $ TupleLitT ty' elems'
     (e, b) -> checkDefault e b
  where
-   -- | The default behaviour of 'check': infer the type of the expression and
-   -- test that it's a subtype of the checking type.
+  -- | The default behaviour of 'check': infer the type of the expression and
+  -- test that it's a subtype of the checking type.
   checkDefault e b = do
     e' <- infer e
     a  <- subst $ typeOf e'
@@ -916,7 +961,7 @@ checkMCaseAlt patTys rhsTy (pats, rhs) = do
 
   -- check each pat against the corresponding pat type, accumulating a new
   -- context
-  pats' <- mapM (uncurry checkPattern) (zip pats patTys)
+  pats' <- zipWithM checkPattern pats patTys
 
   -- check the rhs against the rhs type
   rhs'  <- check rhs rhsTy
@@ -1055,11 +1100,10 @@ infer expr_ = do
       let expr = foldr (App . App (Con (prim "::"))) (Con (prim "[]")) elems
       infer expr
     TupleLit elems -> do
-      -- Construct an application of TupleN and infer the type of that
-      let n    = length elems
-          con  = Con $ prim $ fromString $ "Tuple" <> show n
-          expr = foldl App con elems
-      infer expr
+      -- Infer the type of each element
+      elems' <- mapM infer elems
+      let ty = ttuple $ map typeOf elems'
+      pure $ TupleLitT ty elems'
     Record fields -> do
       -- To infer the type of a record, we must be able to infer types for all its
       -- fields
@@ -1155,22 +1199,10 @@ inferPattern pat = trace' ["inferPattern", debug pat] $ case pat of
     extendE alpha
     let t = e_ alpha
     pure (WildPat t, t)
-  TuplePat _ subpats ->
-    let con = case subpats of
-          []                       -> error "Type.inferPattern: empty tuple"
-          [_] -> error "Type.inferPattern: single-element tuple"
-          [_, _]                   -> prim "Tuple2"
-          [_, _, _]                -> prim "Tuple3"
-          [_, _, _, _]             -> prim "Tuple4"
-          [_, _, _, _, _]          -> prim "Tuple5"
-          [_, _, _, _, _, _]       -> prim "Tuple6"
-          [_, _, _, _, _, _, _]    -> prim "Tuple7"
-          [_, _, _, _, _, _, _, _] -> prim "Tuple8"
-          _ ->
-            error
-              $  "Type.inferPattern: cannot (yet) handle tuples of length > 8: "
-              <> show subpats
-    in  inferPattern (ConsPat () con Nothing subpats)
+  TuplePat _ subpats -> do
+    subpats' <- mapM inferPattern subpats
+    let ty = ttuple $ map snd subpats'
+    pure (TuplePat ty (map fst subpats'), ty)
   ListPat _ [] -> inferPattern (ConsPat () (prim "[]") (Just listNilMeta) [])
   ListPat _ subpats -> inferPattern
     (foldr (\s acc -> ConsPat () (prim "::") (Just listConsMeta) [s, acc])
@@ -1229,23 +1261,18 @@ checkPattern pat ty = do
              subpats
       )
       ty
-    TuplePat _ subpats ->
-      let
-        con = case subpats of
-          []                       -> error "Type.checkPattern: empty tuple"
-          [_] -> error "Type.checkPattern: single-element tuple"
-          [_, _]                   -> prim "Tuple2"
-          [_, _, _]                -> prim "Tuple3"
-          [_, _, _, _]             -> prim "Tuple4"
-          [_, _, _, _, _]          -> prim "Tuple5"
-          [_, _, _, _, _, _]       -> prim "Tuple6"
-          [_, _, _, _, _, _, _]    -> prim "Tuple7"
-          [_, _, _, _, _, _, _, _] -> prim "Tuple8"
-          _ ->
-            error
-              $  "Type.checkPattern: cannot (yet) handle tuples of length > 8: "
-              <> show subpats
-      in  checkPattern (ConsPat () con Nothing subpats) ty
+    TuplePat _ subpats -> do
+      -- create a fresh existential for each sub-pattern
+      eVars <- replicateM (length subpats) newE
+      let eTypes = map e_ eVars
+      -- add the existentials to the context
+      mapM_ extendE eVars
+      -- check each subpattern against the corresponding existential
+      subpats' <- zipWithM checkPattern subpats eTypes
+      -- check that (e1, e2, ...) is a subtype of 'ty'
+      eTy      <- subst $ TOther $ TTuple eTypes
+      subtype eTy ty
+      pure $ TuplePat eTy subpats'
 
 -- | unfoldForall (Forall a (Forall b t)) == ([a, b], t)
 unfoldForall :: Type -> ([U], Type)
@@ -1336,6 +1363,7 @@ data Error = TodoError String
            | UnknownFCall String
            | EmptyCase Exp
            | ExpectedConstructorType Type
+           | ExpectedTupleType Type
            | RecordDoesNotHaveField Type String
            | NotARecordType Type
            | CannotInferFCall Exp
