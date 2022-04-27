@@ -1,0 +1,27 @@
+module ImplicitTest
+
+type Eq a = Eq (a -> a -> Bool)
+
+type Nat = Zero | Succ Nat
+
+f : Nat -> Nat -> Bool
+f = Zero Zero -> True
+    (Succ n) (Succ m) -> f n m
+    _        _        -> False
+
+eqNat : Eq Nat
+eqNat = Eq f
+
+g : Bool -> Bool -> Bool
+g = True  True  -> True
+    False False -> True
+    _     _     -> False
+
+eqBool : Eq Bool
+eqBool = Eq g
+
+eq : Eq a => a -> a -> Bool
+eq = (Eq f) => x y -> f x y
+
+main : [Bool]
+main = [eq Zero Zero, eq False True]

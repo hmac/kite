@@ -116,9 +116,9 @@ dumpChez path = do
 dumpTypeEnv :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 dumpTypeEnv path = do
   group <- loadFile path
-  case ModuleGroupTypechecker.dumpEnv group of
+  liftIO $ case ModuleGroupTypechecker.typecheckModuleGroup group of
     Left  err -> pPrint err
-    Right g'  -> pPrint g'
+    Right r   -> pPrint r
 
 typecheck :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 typecheck path = do

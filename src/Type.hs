@@ -66,6 +66,7 @@ import           Data.Name                      ( ModuleName(..)
                                                 , prim
                                                 )
 import           Data.Name.Gen                  ( genName )
+import           Data.String                    ( IsString(fromString) )
 import           System.Environment             ( lookupEnv )
 import           System.IO.Unsafe               ( unsafePerformIO ) -- cheap hack to enable debug mode via env var
 import           Util
@@ -545,6 +546,9 @@ newE = E <$> newInt
 newU :: Name -> TypeM U
 newU hint = U <$> newInt <*> pure hint
 
+newImplicitName :: TypeM Name
+newImplicitName = newInt >>= \i -> pure $ Local $ fromString ("$i" <> show i)
+
 -- Get the current local context
 getCtx :: TypeM Ctx
 getCtx = lift $ lift $ lift $ gets context
@@ -868,9 +872,10 @@ check expr ty = do
 
       dropAfter (Marker alpha)
 
+      name <- newImplicitName
       -- Return a normal lambda which expects a value of type A as its first argument.
       -- TODO: generate a fresh variable name properly
-      pure $ IAbsT (TOther (Fn a b)) (VarPat a "fixme") a e'
+      pure $ IAbsT (TOther (Fn a b)) (VarPat a name) a e'
 
     (Abs args e, _) -> do
       (args', e') <- checkAbs args e ty

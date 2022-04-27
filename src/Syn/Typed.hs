@@ -142,23 +142,31 @@ traverseExprWithLocals
   -> m Exp
 traverseExprWithLocals action = go
  where
-  go ctx = \case
-    AbsT t vars e -> AbsT t vars <$> action (ctx <> NE.toList vars) e
-    IAbsT t pat pt e ->
-      IAbsT t pat pt <$> action (ctx <> varsBoundByPattern pat) e
-    CaseT t e alts ->
-      let caseAlt (p, rhs) = do
-            rhs' <- action (ctx <> varsBoundByPattern p) rhs
-            pure (p, rhs')
-      in  CaseT t <$> action ctx e <*> traverse caseAlt alts
-    MCaseT t alts ->
-      let mCaseAlt (pats, rhs) = do
-            let vars = concatMap varsBoundByPattern pats
-            rhs' <- action (ctx <> vars) rhs
-            pure (pats, rhs')
-      in  MCaseT t <$> traverse mCaseAlt alts
-    e -> traverseOf uniplate (go ctx) e >>= action ctx
-  -- TODO: this could probably be expressed as a traversal
+  go ctx expr = do
+    expr' <- case expr of
+      AbsT t vars e -> AbsT t vars <$> go (ctx <> NE.toList vars) e
+      IAbsT t pat pt e ->
+        IAbsT t pat pt <$> go (ctx <> varsBoundByPattern pat) e
+      CaseT t e alts ->
+        let caseAlt (p, rhs) = do
+              rhs' <- go (ctx <> varsBoundByPattern p) rhs
+              pure (p, rhs')
+        in  CaseT t <$> go ctx e <*> traverse caseAlt alts
+      MCaseT t alts ->
+        let mCaseAlt (pats, rhs) = do
+              let vars = concatMap varsBoundByPattern pats
+              rhs' <- go (ctx <> vars) rhs
+              pure (pats, rhs')
+        in  MCaseT t <$> mapM mCaseAlt alts
+      LetT ty binds body -> do
+        let vars = map (\(n, e, _) -> (n, typeOf e)) binds
+        let ctx' = ctx <> vars
+        binds' <- mapM (\(n, e, t) -> (n, , t) <$> go ctx' e) binds
+        LetT ty binds' <$> go ctx' body
+
+      e -> traverseOf uniplate (go ctx) e
+    action ctx expr'
+ -- TODO: this could probably be expressed as a traversal
   varsBoundByPattern :: Pattern -> [(Name, Type)]
   varsBoundByPattern = \case
     VarPat t x            -> [(x, t)]

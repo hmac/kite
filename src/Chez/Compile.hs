@@ -194,7 +194,10 @@ compileExpr = \case
     Abs [varName] <$> do
       (tests, bindings) <- compilePat pat (Var varName)
       expr              <- compileExpr body
-      pure $ App (Var "cond") [List [App (Var "and") tests, Let bindings expr]]
+      case tests of
+        [] -> pure $ Let bindings expr
+        ts ->
+          pure $ App (Var "cond") [List [App (Var "and") ts, Let bindings expr]]
   T.AppT _ f arg -> do
     argExpr <- compileExpr arg
     fExpr   <- compileExpr f
@@ -215,7 +218,9 @@ compileExpr = \case
         compileAlt pat rhs = do
           (tests, bindings) <- compilePat pat (Var scrutVar)
           rhsExpr           <- compileExpr rhs
-          pure $ List [App (Var "and") tests, Let bindings rhsExpr]
+          case tests of
+            [] -> pure $ List [Lit (Bool True), Let bindings rhsExpr]
+            ts -> pure $ List [App (Var "and") ts, Let bindings rhsExpr]
     scrutExpr <- compileExpr scrut
     -- TODO: Use the Cond constructor
     Let [(scrutVar, scrutExpr)]
@@ -232,7 +237,9 @@ compileExpr = \case
         compileAlt pats rhs = do
           rhsExpr           <- compileExpr rhs
           (tests, bindings) <- compileMCaseBranch (map Var vars) pats
-          pure $ List [App (Var "and") tests, Let bindings rhsExpr]
+          case tests of
+            [] -> pure $ List [Lit (Bool True), Let bindings rhsExpr]
+            ts -> pure $ List [App (Var "and") ts, Let bindings rhsExpr]
     flip (foldr (Abs . (: []))) vars
       .   App (Var "cond")
       <$> mapM (uncurry compileAlt) alts

@@ -2,11 +2,11 @@ module Data.Eq
 
 type Eq a = Eq { eq : a -> a -> Bool }
 
-eq : Eq a -> a -> a -> Bool
-eq = (Eq d) -> d.eq
+eq : Eq a => a -> a -> Bool
+eq = (Eq d) => d.eq
 
-notEq : Eq a -> a -> a -> Bool
-notEq = e x -> not . eq e x
+notEq : Eq a => a -> a -> Bool
+notEq = x y -> not (eq x y)
 
 -- Data.Bool imports this module, so we can't import Data.Bool.not.
 -- Instead we define it again here.

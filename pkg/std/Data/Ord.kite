@@ -15,20 +15,24 @@ eqOrdering = Eq { eq = eqOrderingFn }
 
 type Ord a = Ord { eq : Eq a, compare : a -> a -> Ordering }
 
+ordEq : Ord a -> Eq a
+ordEq = (Ord d) -> d.eq
+
 compare : Ord a -> a -> a -> Ordering
 compare = (Ord d) -> d.compare
 
 lt : Ord a -> a -> a -> Bool
-lt = ord x y -> eq eqOrdering (compare ord x y) LT
+lt = ord x y -> let eqa = ordEq ord
+                 in eq (compare ord x y) LT
 
 gt : Ord a -> a -> a -> Bool
-gt = ord x y -> eq eqOrdering (compare ord x y) GT
+gt = ord x y -> let eqa = ordEq ord in eq (compare ord x y) GT
 
 lte : Ord a -> a -> a -> Bool
-lte = ord x y -> not (eq eqOrdering (compare ord x y) GT)
+lte = ord x y -> let eqa = ordEq ord in not (eq (compare ord x y) GT)
 
 gte : Ord a -> a -> a -> Bool
-gte = ord x y -> not (eq eqOrdering (compare ord x y) LT)
+gte = ord x y -> let eqa = ordEq ord in not (eq (compare ord x y) LT)
 
 -- Data.Bool imports this module, so we can't import Data.Bool.not.
 -- Instead we define it again here.

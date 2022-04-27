@@ -156,6 +156,7 @@ resolveImplicitsInExpr expr = do
   -- top-level definitions to search for a solution to the implicit.
   T.traverseExprWithLocals (_Ctor' @"ImplicitT" . search) ctx expr
  where
+  -- TODO: for efficiency we should probably use 'Map Type (Set Name)'
   search
     :: [(Name, Type)] -> (T.Type, T.Implicit) -> TypecheckM (T.Type, T.Implicit)
   search ctx (ty, T.Unsolved) = do
