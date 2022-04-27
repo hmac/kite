@@ -46,11 +46,17 @@ pExpr' = do
     <|> try pRecordProject
     <|> pVar
     <|> pFCall
-    <|> pAbs
     <|> pLet
     <|> pList
     <|> pCons
     <|> pCase
+
+-- | Parse an expression which is permitted inside a string interpolation.
+-- This is restricted to expressions that can be represented as a single token.
+pInterpExpr :: Parser Syn
+pInterpExpr = do
+  ensureIndent
+  pUnitLit <|> pHole <|> pCharLit <|> try (IntLit <$> pInt) <|> pVar <|> pCons
 
 -- | Compare our column to the current indent level,
 -- and fail if we're not at least as indented as that.
@@ -181,7 +187,7 @@ pStringLit = do
       Nothing   -> pure StrEnd
       -- we've reached an interpolation
       Just "#{" -> do
-        e <- pExpr
+        e <- pInterpExpr
         _ <- string "}"
         pure (Interp e)
       Just other -> pure (Str other)
@@ -206,15 +212,6 @@ pFCall = hang $ do
   name <- lexemeN lowercaseName
   args <- many pExpr'
   pure $ FCall (unName name) args
-
--- TODO: patterns in lambda bindings
-pAbs :: Parser Syn
-pAbs = do
-  void (string "\\")
-  firstArg <- lowercaseName
-  restArgs <- many lowercaseName
-  void (symbol "->")
-  Abs (firstArg NE.:| restArgs) <$> pExpr
 
 -- let foo = 1 in foo
 --

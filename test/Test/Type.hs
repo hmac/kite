@@ -256,13 +256,13 @@ test = do
       inf = infers tctx cctx ctx
 
     it "True" $ inf [syn|True|] bool
-    it "simple function application" $ inf [syn|(\x -> x) True|] bool
+    it "simple function application" $ inf [syn|(x -> x) True|] bool
     it "multi-arg function application"
-      $ inf [syn|(\x y -> x) True (Suc Zero)|] bool
+      $ inf [syn|(x y -> x) True (Suc Zero)|] bool
     it "compound lets"
       $ let expr = [syn|let
                             x  = True
-                            id = \y -> y
+                            id = y -> y
                          in id x|]
         in  inf expr bool
     it "simple case expressions"
@@ -272,7 +272,7 @@ test = do
         in  inf expr bool
     it "combined case and let expressions"
       $ let expr = [syn|case True of
-                         True -> let id = \y -> y
+                         True -> let id = y -> y
                                   in id True
                          False -> True|]
         in  inf expr bool

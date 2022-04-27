@@ -18,5 +18,5 @@ zipWith = _ [] _  -> []
           f (x::xs) (y::ys) -> (f x y) :: (zipWith f xs ys)
 
 eqList : (a -> a -> Bool) -> Eq [a]
-eqList = eqa -> Eq { eq = \xs ys -> concat (zipWith eqa xs ys) }
+eqList = eqa -> Eq { eq = xs ys -> concat (zipWith eqa xs ys) }
 

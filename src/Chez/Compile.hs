@@ -179,9 +179,7 @@ compileExpr = \case
   T.AnnT _ e _         -> compileExpr e
   T.VarT _ v           -> pure $ Var $ name2Text v
   T.ConT _ c _         -> pure $ Var $ name2Text c
-  T.AbsT _ vars body ->
-    foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
-  T.AppT _ f arg -> do
+  T.AppT _ f arg       -> do
     argExpr <- compileExpr arg
     fExpr   <- compileExpr f
     pure $ App fExpr [argExpr]

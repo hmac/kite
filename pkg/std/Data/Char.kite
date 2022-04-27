@@ -5,7 +5,7 @@ import Data.Show (Show(..))
 import Data.Eq (Eq(..))
 
 showChar : Show Char
-showChar = Show { show = \c -> $showChar c }
+showChar = Show { show = c -> $showChar c }
 
 eqChar : Eq Char
 eqChar = Eq { eq = $eqChar }

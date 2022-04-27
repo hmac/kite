@@ -195,18 +195,8 @@ genTyRecord t1 t2 = do
 genExpr :: H.Gen Syn
 genExpr = Gen.shrink shrinkExpr $ Gen.recursive
   Gen.choice
-  [ genVar
-  , Con <$> genUpperName
-  , Hole <$> genHoleName
-  , IntLit <$> genInt
-  , BoolLit <$> Gen.bool
-  , CharLit <$> Gen.alphaNum
-  , pure UnitLit
-  ]
-  [ genAbs
-  -- We don't parse arbitrary inline annotations (yet) so we don't generate them.
-  -- , Gen.subtermM (Gen.small genExpr) (\e -> Ann e <$> genType)
-  , Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
+  atomicExprGenerators
+  [ Gen.subterm2 (Gen.small genFunExpr) (Gen.small genExpr) App
   , Gen.subtermM2 (Gen.small genExpr)
                   (Gen.small genExpr)
                   (\e1 e2 -> genBinOp >>= \op -> pure (App (App op e1) e2))
@@ -230,15 +220,23 @@ genExpr = Gen.shrink shrinkExpr $ Gen.recursive
     $ \e1 e2 -> FCall <$> (('$' :) <$> genLowerString) <*> pure [e1, e2]
   ]
 
+-- | Generators for 'atomic' expressions: expressions that contains no
+-- subexpressions.
+atomicExprGenerators :: [H.Gen Syn]
+atomicExprGenerators =
+  [ genVar
+  , Con <$> genUpperName
+  , Hole <$> genHoleName
+  , IntLit <$> genInt
+  , BoolLit <$> Gen.bool
+  , CharLit <$> Gen.alphaNum
+  , pure UnitLit
+  ]
+
 -- Generate an expression which could be on the LHS of an application.
 genFunExpr :: H.Gen Syn
-genFunExpr =
-  Gen.recursive Gen.choice [genVar, genRecordProjection] [genAbs, genLet]
+genFunExpr = Gen.recursive Gen.choice [genVar, genRecordProjection] [genLet]
 
-genAbs :: H.Gen Syn
-genAbs = Gen.subtermM
-  (Gen.small genExpr)
-  (\e -> Abs <$> Gen.nonEmpty (Range.linear 1 5) genLowerName <*> pure e)
 
 genVar :: H.Gen Syn
 genVar = Var <$> genLowerName
@@ -270,11 +268,9 @@ shrinkExpr = \case
   BoolLit _            -> []
   UnitLit              -> []
   CharLit _            -> []
-  Abs  (_ :| []) e     -> [e]
-  Abs  (v :| vs) e     -> fmap (\vars -> Abs (v :| vars) e) (shrinkList1 vs)
-  App  _         b     -> [b]
-  Let  binds     body  -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
-  Case e         alts  -> [e] <> map snd alts
+  App  _     b         -> [b]
+  Let  binds body      -> (Let <$> shrinkList2 binds <*> pure body) <> [body]
+  Case e     alts      -> [e] <> map snd alts
   TupleLit  es         -> (TupleLit <$> shrinkList2 es) <> es
   ListLit   es         -> (ListLit <$> shrinkList es) <> es
   StringLit _          -> []
@@ -306,7 +302,10 @@ genRecord e1 e2 = do
   pure (Record [(f1, e1), (f2, e2)])
 
 genStringInterpPair :: H.Gen (Syn, String)
-genStringInterpPair = (,) <$> genExpr <*> genString (Range.linear 0 10)
+genStringInterpPair = (,) <$> genInterpExpr <*> genString (Range.linear 0 10)
+
+genInterpExpr :: H.Gen Syn
+genInterpExpr = Gen.choice atomicExprGenerators
 
 genBinOp :: H.Gen Syn
 genBinOp = Var <$> Gen.element binOps

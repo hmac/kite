@@ -39,9 +39,6 @@ fromSyn = \case
       <*> mapM (bimapM (pure . convertPattern) fromSyn) alts
   MCase alts ->
     MCase <$> mapM (bimapM (pure . map convertPattern) fromSyn) alts
-  Abs xs a -> do
-    a' <- fromSyn a
-    pure $ Abs xs a'
   Let binds body -> do
     body'  <- fromSyn body
     binds' <- mapM

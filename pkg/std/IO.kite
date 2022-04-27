@@ -11,17 +11,17 @@ from kite import Kite.Prim (IO(MkIO))
 -- Combinators
 
 pureIO : a -> IO a
-pureIO = x -> MkIO (\k -> k x)
+pureIO = x -> MkIO (k -> k x)
 
 bindIO : IO a -> (a -> IO b) -> IO b
-bindIO = (MkIO x) f -> MkIO (\k -> x (\a -> case f a of
-                                              MkIO g -> g k))
+bindIO = (MkIO x) f -> MkIO (k -> x (a -> case f a of
+                                            MkIO g -> g k))
 
 mapIO : (a -> b) -> IO a -> IO b
-mapIO = f m -> bindIO m (\x -> pureIO (f x))
+mapIO = f m -> bindIO m (x -> pureIO (f x))
 
 apIO : IO (a -> b) -> IO a -> IO b
-apIO = mf mx -> bindIO mf (\f -> bindIO mx (\x -> pureIO (f x)))
+apIO = mf mx -> bindIO mf (f -> bindIO mx (x -> pureIO (f x)))
 
 -- Typeclass instances
 
@@ -37,10 +37,10 @@ monadIO = Monad { applicative = applicativeIO, bind = bindIO }
 -- IO functions
 
 getLine : IO String
-getLine = MkIO (\k -> k ($fcall getLine))
+getLine = MkIO (k -> k ($fcall getLine))
 
 putLine : String -> IO ()
-putLine = s -> MkIO (\k -> k ($fcall putStrLn s))
+putLine = s -> MkIO (k -> k ($fcall putStrLn s))
 
 putStr : String -> IO ()
-putStr = s -> MkIO (\k -> k ($fcall putStr s))
+putStr = s -> MkIO (k -> k ($fcall putStr s))

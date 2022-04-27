@@ -25,7 +25,7 @@ testMain = asserts -> let result = runTest asserts
                           numResults = length asserts
                        in case result of
                             Pass -> putLine "#{show showInt numResults} tests passed."
-                            Fail (Assertion a) -> bindIO (putLine "FAIL") (\unused -> putLine a.message)
+                            Fail (Assertion a) -> bindIO (putLine "FAIL") (unused -> putLine a.message)
 
 assert : String -> Bool -> Assertion
 assert = msg b -> Assertion { value = b, message = msg }

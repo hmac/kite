@@ -1,9 +1,9 @@
 module HigherKindApplication
 
 foo : f a -> f a
-foo = \x -> x
+foo = x -> x
 
 bar : [Int]
 bar = let g : f a -> f a
-          g = \x -> x
+          g = x -> x
        in g [1]

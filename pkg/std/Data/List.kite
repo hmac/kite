@@ -72,7 +72,7 @@ monadList : Monad []
 monadList = Monad { applicative = applicativeList, bind = bindList }
 
 eqList : Eq a -> Eq [a]
-eqList = eqa -> Eq { eq = \xs ys -> concat monoidAll (zipWith (eq eqa) xs ys) }
+eqList = eqa -> Eq { eq = xs ys -> concat monoidAll (zipWith (eq eqa) xs ys) }
 
 zipWith : (a -> b -> c) -> [a] -> [b] -> [c]
 zipWith = _ [] _  -> []
@@ -81,7 +81,7 @@ zipWith = _ [] _  -> []
 
 traverse : forall f a b. Applicative f -> (a -> f b) -> [a] -> f [b]
 traverse = appl f []        -> pure appl []
-           appl f (x :: xs) -> liftA2 appl (\y ys -> y :: ys) (f x) (traverse appl f xs)
+           appl f (x :: xs) -> liftA2 appl (y ys -> y :: ys) (f x) (traverse appl f xs)
 
 -- Extract the first element of a list.
 -- Returns Nothing if the list is empty.

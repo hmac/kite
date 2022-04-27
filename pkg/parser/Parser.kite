@@ -117,7 +117,7 @@ alphanum : Parser Char
 alphanum = plus alternative letter digit
 
 nonEmptyWord : Parser String
-nonEmptyWord = bind monad letter (\x -> bind monad word (\w -> result (consChar x w)))
+nonEmptyWord = bind monad letter (x -> bind monad word (w -> result (consChar x w)))
 
 word : Parser String
 word = plus alternative nonEmptyWord (result "")

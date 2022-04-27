@@ -15,10 +15,10 @@ showInt : Show Int
 showInt = Show { show = $showInt }
 
 showString : Show String
-showString = Show { show = \x -> x }
+showString = Show { show = x -> x }
 
 showList : Show a -> Show [a]
-showList = (Show d) -> Show { show = \xs -> "[#{showListHelper d.show xs}]" }
+showList = (Show d) -> Show { show = xs -> let inner = showListHelper d.show xs in "[#{inner}]" }
 
 showListHelper : (b -> String) -> [b] -> String
 showListHelper = _ [] -> ""
