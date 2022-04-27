@@ -19,9 +19,8 @@ import           Util
 
 import           Data.List                      ( inits )
 import qualified Data.List.NonEmpty            as NE
-import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.String
-                                                ( renderString )
+import           Prettyprinter
+import           Prettyprinter.Render.String    ( renderString )
 
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as Gen

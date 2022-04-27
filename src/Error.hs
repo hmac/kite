@@ -5,7 +5,7 @@ module Error
 
 import           GHC.Generics                   ( Generic )
 
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 
 import qualified Chez.Compile
 import qualified Interpret

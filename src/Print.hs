@@ -1,6 +1,6 @@
 module Print where
 
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 
 -- Semantic annotation
 data Style = VarStyle | KeywordStyle | FunctionStyle | TypeStyle | DataStyle | HoleStyle

@@ -20,11 +20,11 @@ import           Data.IORef                     ( IORef
                                                 )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
-import           Data.Text.Prettyprint.Doc      ( (<+>)
+import           GHC.Generics                   ( Generic )
+import           Prettyprinter                  ( (<+>)
                                                 , Pretty
                                                 , pretty
                                                 )
-import           GHC.Generics                   ( Generic )
 import           System.Directory               ( doesFileExist )
 
 import           AST                            ( Expr )

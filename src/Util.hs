@@ -179,7 +179,7 @@ instance Debug Char where
   debug c = [c]
 
 instance Debug a => Debug [a] where
-  debug xs = concatMap debug xs
+  debug = concatMap debug
 
 instance Debug a => Debug (Data.List.NonEmpty.NonEmpty a) where
   debug = debug . Data.List.NonEmpty.toList

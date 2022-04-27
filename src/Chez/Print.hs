@@ -4,8 +4,8 @@ module Chez.Print
 
 -- Print a Chez Scheme AST as source code
 
-import           Data.Text.Prettyprint.Doc
 import           Prelude                 hiding ( print )
+import           Prettyprinter
 
 import           Chez                           ( Def(..)
                                                 , Lit(..)

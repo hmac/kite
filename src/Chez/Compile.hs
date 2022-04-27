@@ -26,16 +26,16 @@ import           Data.Name                      ( Name(..)
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           Data.Text.Prettyprint.Doc      ( (<+>)
-                                                , Pretty
-                                                , pretty
-                                                )
 import           GHC.Generics                   ( Generic )
 import qualified NameGen
 import           NameGen                        ( NameGen
                                                 , freshM
                                                 )
 import           Prelude                 hiding ( null )
+import           Prettyprinter                  ( (<+>)
+                                                , Pretty
+                                                , pretty
+                                                )
 import qualified Syn.Typed                     as T
 import           Type.Type                      ( Type )
 import           Util

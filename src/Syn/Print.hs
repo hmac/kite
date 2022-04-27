@@ -5,7 +5,7 @@ import qualified Data.List.NonEmpty            as NE
 import           Prelude                 hiding ( mod )
 import           Util
 
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 
 import           AST
 import           Data.Name                      ( PkgModuleName(..) )

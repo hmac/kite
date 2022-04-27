@@ -22,8 +22,8 @@ import qualified Data.Map.Lazy                 as Map
 import           Data.Name                      ( Name(..)
                                                 , RawName
                                                 )
-import           Data.Text.Prettyprint.Doc
 import           ModuleGroup                    ( TypedModuleGroup(..) )
+import           Prettyprinter
 import qualified Prim
 import           Syn.Print                      ( printRecordSyntax )
 import           Syn.Typed

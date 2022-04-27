@@ -13,10 +13,9 @@ import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.IO.Class         ( MonadIO
                                                 , liftIO
                                                 )
-import           Data.Text.Prettyprint.Doc
-                                         hiding ( group )
-import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.UUID.V4                   ( nextRandom )
+import           Prettyprinter           hiding ( group )
+import           Prettyprinter.Render.Terminal
 import           System.Exit                    ( exitWith )
 import           System.IO                      ( IOMode(WriteMode)
                                                 , hPutStrLn

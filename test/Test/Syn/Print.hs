@@ -5,7 +5,7 @@ module Test.Syn.Print
 
 import           AST
 import           Data.Maybe                     ( fromMaybe )
-import           Data.Text.Prettyprint.Doc      ( Doc )
+import           Prettyprinter                  ( Doc )
 import           Syn
 import           Syn.Print
 import           Test.Hspec
