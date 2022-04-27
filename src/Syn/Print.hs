@@ -247,14 +247,8 @@ printExpr (Ann e t) = printExpr e <+> colon <+> printType t
 printExpr (Con n  ) = data_ (printName n)
 printExpr (Record fields) =
   data_ $ printRecordSyntax "=" $ map (bimap pretty printExpr) fields
-printExpr (Project e f) = printExpr' e <> dot <> pretty f
-printExpr (Hole n     ) = hole ("?" <> printName n)
-printExpr (Abs args e) =
-  parens
-    $   "\\"
-    <>  hsep (map printName (NE.toList args))
-    <+> "->"
-    <+> printExpr e
+printExpr (Project e f    ) = printExpr' e <> dot <> pretty f
+printExpr (Hole n         ) = hole ("?" <> printName n)
 printExpr (IAbs pat   e   ) = parens $ printPattern pat <+> "=>" <+> printExpr e
 printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e

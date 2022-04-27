@@ -186,10 +186,8 @@ compileExpr = \case
   -- kite.Kite.Prim.[] is not a valid name in scheme, so we special case it.
   T.ConT _ c _ | c == prim "[]" -> pure $ App (Var "list") []
   T.ConT _ c _                  -> pure $ Var $ name2Text c
-  T.AbsT _ vars body ->
-    foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
   -- TODO: this is probably rubbish - check it.
-  T.IAbsT _ pat _ body -> do
+  T.IAbsT _ pat _ body          -> do
     varName <- freshName
     Abs [varName] <$> do
       (tests, bindings) <- compilePat pat (Var varName)

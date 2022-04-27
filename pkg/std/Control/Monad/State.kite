@@ -30,7 +30,7 @@ functorState : Functor (State s)
 functorState = Functor { map = mapState }
 
 pureState : a -> State s a
-pureState = x -> State { runState = \s -> (x, s) }
+pureState = x -> State { runState = s -> (x, s) }
 
 apState : State s (a -> b) -> State s a -> State s b
 apState = (State sf) (State sa) -> State { runState = s -> let sf1 = sf.runState s

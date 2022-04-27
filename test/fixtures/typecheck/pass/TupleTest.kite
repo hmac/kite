@@ -33,7 +33,7 @@ eqMaybe = eqa -> Eq { eq = Nothing Nothing -> True
                     }
 
 eqList : Eq a -> Eq [a]
-eqList = eqa -> Eq { eq = \xs ys -> concat monoidAll (zipWith (eq eqa) xs ys) }
+eqList = eqa -> Eq { eq = xs ys -> concat monoidAll (zipWith (eq eqa) xs ys) }
 
 eqInt : Eq Int
 eqInt = Eq { eq = $eqInt }

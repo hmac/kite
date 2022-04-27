@@ -1,0 +1,4 @@
+module Data.List
+
+eqList : Eq a => () -> Eq [a]
+eqList = _ -> Eq { eq = xs ys -> concat monoidAll (zipWith (x y -> eq x y) xs ys) }

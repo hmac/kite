@@ -810,25 +810,6 @@ instantiate dir e ty = do
   flipDir L = R
   flipDir R = L
 
-checkAbs :: NonEmpty Name -> Exp -> Type -> TypeM (NonEmpty (Name, Type), ExpT)
-checkAbs args body (TOther (Fn a b)) | (x, Nothing) <- NE.uncons args = do
-  void $ extendV x a
-  body' <- check body b
-  dropAfter $ V x a
-  pure ((x, a) :| [], body')
-checkAbs args body (TOther (Fn a b)) | (x, Just xs) <- NE.uncons args = do
-  void $ extendV x a
-  (xs', body') <- checkAbs xs body b
-  dropAfter $ V x a
-  pure (NE.cons (x, a) xs', body')
--- We expect this to error, but instead of throwing a custom error for "lambda
--- should have function type but does not", we just infer the true type of the
--- lambda and throw a subtyping error between the two types.
-checkAbs args body b = do
-  a  <- infer (Abs args body) >>= subst . typeOf
-  b' <- subst b
-  throwError $ SubtypingFailure a b'
-
 -- Typing
 {-# ANN check ("HLint: ignore Reduce duplication" :: String) #-}
 check :: Exp -> Type -> TypeM ExpT
@@ -874,10 +855,6 @@ check expr ty = do
       -- Return a normal lambda which expects a value of type A as its first argument.
       -- TODO: generate a fresh variable name properly
       pure $ IAbsT (TOther (Fn a b)) (VarPat a name) a e'
-
-    (Abs args e, _) -> do
-      (args', e') <- checkAbs args e ty
-      pure $ AbsT ty args' e'
 
     (Hole n        , a) -> throwError $ CannotCheckHole (Hole n) a
     (Let binds body, _) -> do
@@ -982,25 +959,6 @@ infer' e = trace' ["infer'", debug e] $ do
   e' <- infer e
   subst (typeOf e')
 
-inferAbs :: NonEmpty Name -> Exp -> TypeM (NonEmpty (Name, Type), ExpT, Type)
-inferAbs args body = case NE.uncons args of
-  (x, Nothing) -> do
-    alpha <- newE
-    beta  <- newE
-    extendE alpha >> extendE beta >> extendV x (e_ alpha)
-    body' <- check body (e_ beta)
-    dropAfter $ V x (e_ alpha)
-    ty <- subst $ fn (e_ alpha) (e_ beta)
-    pure ((x, e_ alpha) :| [], body', ty)
-  (x, Just xs) -> do
-    alpha <- newE
-    beta  <- newE
-    extendE alpha >> extendE beta >> extendV x (e_ alpha)
-    (xs', body', t) <- inferAbs xs body
-    subtype t (e_ beta)
-    dropAfter $ V x (e_ alpha)
-    ty <- subst $ fn (e_ alpha) (e_ beta)
-    pure (NE.cons (x, e_ alpha) xs', body', ty)
 
 -- | Infer a type for an expression.
 -- Returns a type-annotated version of the expression
@@ -1016,9 +974,6 @@ infer expr_ = do
       (t, e1'', e2') <- inferApp2 e1' e2
       t'             <- subst t
       pure $ AppT t' e1'' e2'
-    Abs args e -> do
-      (args', e', ty) <- inferAbs args e
-      pure $ AbsT ty args' e'
     Hole n -> throwError $ CannotInferHole (Hole n)
     Con  x -> do
       t    <- lookupV x
@@ -1498,7 +1453,7 @@ prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- H.forAll genName
   let uval = UnitLit
-  let expr = App (Ann (Abs (NE.fromList [v]) uval) (fn unit unit)) uval
+  let expr = App (Ann (MCase [([VarPat () v], uval)]) (fn unit unit)) uval
   typecheckTest mempty (infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
@@ -1556,7 +1511,7 @@ prop_checks_higher_kinded_application = property $ do
   let
     f     = U 1 "f"
     a     = U 2 "a"
-    expr1 = Abs (NE.fromList ["x"]) (Var "x")
+    expr1 = MCase [([VarPat () "x"], Var "x")]
     type1 =
       forAll f (forAll a (fn (tapp (u_' f) [u_ a]) (tapp (u_' f) [u_ a])))
   typecheckTest mempty (check expr1 type1) === Right type1
@@ -1574,10 +1529,10 @@ prop_checks_higher_kinded_application = property $ do
   typecheckTest mempty (check expr3 type3) === Left
     (LocatedError
       Nothing
-      (SubtypingFailure (tcon (prim "Bool") []) (tapp (e_' (E 0)) [e_ (E 1)]))
+      (SubtypingFailure (tcon (prim "Bool") []) (tapp (e_' (E 1)) [e_ (E 2)]))
     )
   typecheckTest mempty (infer expr3) === Left
     (LocatedError
       Nothing
-      (SubtypingFailure (tcon (prim "Bool") []) (tapp (e_' (E 0)) [e_ (E 1)]))
+      (SubtypingFailure (tcon (prim "Bool") []) (tapp (e_' (E 1)) [e_ (E 2)]))
     )

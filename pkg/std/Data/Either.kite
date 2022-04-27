@@ -37,6 +37,6 @@ either : (a -> c) -> (b -> c) -> Either a b -> c
 either = f _ (Left x) -> f x
          _ g (Right y) -> g y
 
-eqEither : Eq a -> Eq b -> Either a b -> Either a b -> Bool
-eqEither = eqa eqb (Left x) (Left y) -> eq eqa x y
-           eqa eqb (Right x) (Right y) -> eq eqb x y
+eqEither : Eq a => Eq b => Either a b -> Either a b -> Bool
+eqEither = (Left x) (Left y) -> eq x y
+           (Right x) (Right y) -> eq x y

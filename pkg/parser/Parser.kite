@@ -17,6 +17,7 @@ from std import Control.Monad.State (State(..), runState, monadState, functorSta
 from std import Control.Alternative (Alternative, zero, plus, many)
 from std import Lazy (Lazy(Lazy), force, lazyFunction)
 from std import IO (putLine)
+from kite import Kite.Prim (IO)
 from std import Data.Show (show)
 
 type Parser a = P (State String (Maybe a))
@@ -94,10 +95,10 @@ sat = p -> bind monad item (x -> case p x of
                                    False -> zero alternative)
 
 char : Char -> Parser Char
-char = x -> sat (y -> eq eqChar x y)
+char = x -> sat (y -> eq x y)
 
 oneOfLit : [Char] -> Parser Char
-oneOfLit = cs -> sat (x -> concat monoidAny (map functorList (eq eqChar x) cs))
+oneOfLit = cs -> sat (x -> concat monoidAny (map functorList (eq x) cs))
 
 digit : Parser Char
 digit = oneOfLit ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
@@ -117,7 +118,7 @@ alphanum : Parser Char
 alphanum = plus alternative letter digit
 
 nonEmptyWord : Parser String
-nonEmptyWord = bind monad letter (\x -> bind monad word (\w -> result (consChar x w)))
+nonEmptyWord = bind monad letter (x -> bind monad word (w -> result (consChar x w)))
 
 word : Parser String
 word = plus alternative nonEmptyWord (result "")

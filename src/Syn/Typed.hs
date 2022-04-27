@@ -37,7 +37,6 @@ import           Data.Generics.Product          ( Param(..)
                                                 )
 import           Data.Generics.Product.Positions
                                                 ( position )
-import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( Map )
 import           Data.Name
@@ -144,7 +143,6 @@ traverseExprWithLocals action = go
  where
   go ctx expr = do
     expr' <- case expr of
-      AbsT t vars e -> AbsT t vars <$> go (ctx <> NE.toList vars) e
       IAbsT t pat pt e ->
         IAbsT t pat pt <$> go (ctx <> varsBoundByPattern pat) e
       CaseT t e alts ->

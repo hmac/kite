@@ -384,13 +384,15 @@ test = parallel $ do
     it "parses a string with an escaped newline" $ do
       parse' pExpr "" "\"hello newline: \\n\""
         `shouldParse` StringLit "hello newline: \n"
-    it "parses a string with an interpolation" $ do
+    it "parses a string with an interpolation (1)" $ do
       parse' pExpr "" "\"hello #{name}\""
         `shouldParse` StringInterp "hello " [(Var "name", "")]
-    it "parses a string with more complex interpolation" $ do
-      parse' pExpr "" "\"hello #{name + \"!\"}\"" `shouldParse` StringInterp
-        "hello "
-        [(App (App (Var "+") (Var "name")) (StringLit "!"), "")]
+    it "parses a string with an interpolation (2)" $ do
+      parse' pExpr "" "\"hello #{5}\""
+        `shouldParse` StringInterp "hello " [(IntLit 5, "")]
+    it "parses a string with an interpolation (3)" $ do
+      parse' pExpr "" "\"hello #{True} there\""
+        `shouldParse` StringInterp "hello " [(BoolLit True, " there")]
     it "parses a string with a lone hash" $ do
       parse' pExpr "" "\"hello hash: #\""
         `shouldParse` StringLit "hello hash: #"

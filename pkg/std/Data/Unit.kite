@@ -3,4 +3,4 @@ module Data.Unit
 import Data.Eq(Eq(..))
 
 eqUnit : Eq ()
-eqUnit = Eq { eq = \x y -> True }
+eqUnit = Eq { eq = x y -> True }

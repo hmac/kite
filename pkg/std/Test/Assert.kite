@@ -24,13 +24,16 @@ testMain : [Assertion] -> IO ()
 testMain = asserts -> let result = runTest asserts
                           numResults = length asserts
                        in case result of
-                            Pass -> putLine "#{show showInt numResults} tests passed."
-                            Fail (Assertion a) -> bindIO (putLine "FAIL") (\unused -> putLine a.message)
+                            Pass -> let n = show showInt numResults
+                                     in putLine "#{n} tests passed."
+                            Fail (Assertion a) -> bindIO (putLine "FAIL") (unused -> putLine a.message)
 
 assert : String -> Bool -> Assertion
 assert = msg b -> Assertion { value = b, message = msg }
 
 assertEq : Eq a => Show a -> a -> a -> Assertion
 assertEq = showd x y -> Assertion { value = eq x y
-                                      , message = "#{show showd x} != #{show showd y}"
+                                      , message = let xstr = show showd x
+                                                      ystr = show showd y
+                                                   in "#{xstr} != #{ystr}"
                                       }

@@ -8,7 +8,6 @@ module AST
 
 import           Data.Data                      ( Data )
 import           Data.List                      ( intercalate )
-import qualified Data.List.NonEmpty            as NE
 import           Data.Name                      ( Name )
 import           GHC.Generics                   ( Generic )
 import           Util                           ( Debug(debug)
@@ -20,9 +19,8 @@ data Expr n t = Var n
          | Ann (Expr n t) t
          | Con n
          | Hole n
-         | Abs (NonEmpty n) (Expr n t)
          -- Binding of an implicit parameter.
-         -- This supports pattern matching, unlike 'Abs'.
+         -- This supports pattern matching.
          | IAbs (Pat () n) (Expr n t)
          | App (Expr n t) (Expr n t)
          | Let [(n, Expr n t, Maybe t)] (Expr n t)
@@ -46,7 +44,6 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
   debug (Var v        ) = debug v
   debug (Ann  e   t   ) = debug e <+> ":" <+> debug t
   debug (App  a   b   ) = debug a <+> debug b
-  debug (Abs  v   e   ) = "λ" <> debug v <> "." <+> debug e
   debug (IAbs pat expr) = debug pat <+> "=>" <+> debug expr
   debug (Con  v       ) = debug v
   debug (Hole s       ) = "?" <> debug s
@@ -91,8 +88,6 @@ data ExprT n t =
   | AnnT t (ExprT n t) t
   | ConT t n ConMeta
   | HoleT t n
-  -- Note that each variable bound in lambda has an annotated type
-  | AbsT t (NonEmpty (n, t)) (ExprT n t)
   | IAbsT t (Pat t n) t (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
   -- Application of an implicit argument.
@@ -117,12 +112,10 @@ data ExprT n t =
   deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (ExprT v t) where
-  debug (VarT _ v   ) = debug v
-  debug (AnnT  _ e t) = debug e <+> ":" <+> debug t
-  debug (AppT  _ a b) = debug a <+> debug b
-  debug (IAppT _ a b) = debug a <+> debug b
-  debug (AbsT _ xs e) =
-    "λ" <> sepBy " " (map (debug . fst) (NE.toList xs)) <> "." <+> debug e
+  debug (VarT _ v     ) = debug v
+  debug (AnnT  _ e t  ) = debug e <+> ":" <+> debug t
+  debug (AppT  _ a b  ) = debug a <+> debug b
+  debug (IAppT _ a b  ) = debug a <+> debug b
   debug (IAbsT _ n _ e) = "λ" <> debug n <> "=>" <+> debug e
   debug (ConT t v meta) = debug v <+> debug meta <+> debug t
   debug (HoleT _ s    ) = "?" <> debug s
