@@ -594,13 +594,13 @@ subtype typeA typeB =
     -- For subtyping between a type application and a constructor, we need to match the arguments up
     -- from right to left. e.g.
     --
-    -- >                   f x y    f   x
-    -- >                   | | |    |\  |
-    -- >                   T b c    T b c
-    --
-    -- >                   f ~ T    f ~ T b
-    -- >                   x ~ b    x ~ c
-    -- >                   y ~ c
+    -- >  f x y    f   x
+    -- >  | | |    |\  |
+    -- >  T b c    T b c
+    -- > 
+    -- >  f ~ T    f ~ T b
+    -- >  x ~ b    x ~ c
+    -- >  y ~ c
     --
     -- We can have fewer application args than constructor args, but not the other way around.
     (TApp v [], TCon c []) -> subtype' (TOther v) (TCon c [])
