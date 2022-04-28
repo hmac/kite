@@ -8,9 +8,12 @@ eqTuple2 : Eq a => Eq b => () -> Eq (a, b)
 eqTuple2 = _ -> Eq { eq = (a1, b1) (a2, b2) -> and (eq a1 a2) (eq b1 b2) }
 
 showTuple2 : Show a -> Show b -> Show (a, b)
-showTuple2 = showa showb -> Show { show = (x, y) -> let xstr = show showa x
-                                                        ystr = show showb y
-                                                     in "(#{xstr}, #{ystr})" }
+showTuple2 = showa showb -> Show { show = (x, y) -> f showa showb (x, y) }
+ where
+  f : Show a -> Show b -> (a, b) -> String
+  f = showa showb (x, y) -> let xstr = show showa x
+                                ystr = show showb y
+                             in "(#{xstr}, #{ystr})"
 
 fst : (a, b) -> a
 fst = (x, _) -> x
