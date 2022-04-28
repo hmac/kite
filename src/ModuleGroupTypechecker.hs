@@ -29,7 +29,7 @@ import           Util
 -- ModuleLoader).
 typecheckModuleGroup
   :: UntypedModuleGroup -> Either Type.LocatedError TypedModuleGroup
-typecheckModuleGroup (ModuleGroup m deps) =
+typecheckModuleGroup ModuleGroup { rootModule = m, dependencies = deps } =
   Type.runTypecheckM Type.defaultTypeEnv $ do
     -- First typecheck the dependent modules
     (ctx, typedDeps  ) <- mapAccumLM checkModule mempty deps
@@ -40,6 +40,6 @@ typecheckModuleGroup (ModuleGroup m deps) =
 dumpEnv
   :: UntypedModuleGroup
   -> Either Type.LocatedError (Ctx, CtorInfo, [(Name, Maybe Type, Type.Exp)])
-dumpEnv (ModuleGroup m deps) =
+dumpEnv ModuleGroup { rootModule = m, dependencies = deps } =
   Type.runTypecheckM Type.defaultTypeEnv
     $ mconcatMapM translateModule (deps <> [m])

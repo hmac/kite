@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 module ModuleLoader
   ( ModuleGroup(..)
   , Error(..)
@@ -36,7 +37,10 @@ import           Data.Graph                     ( SCC(..)
 import           Data.List                      ( intercalate )
 import           Data.Name                      ( PkgModuleName(..) )
 import           ExpandExports                  ( expandExports )
-import           ExpandImports                  ( expandImports )
+import           ExpandImports                  ( expandImports
+                                                , importingModule
+                                                , missingModule
+                                                )
 import qualified ExpandImports
 import           ModuleGroup
 import           Package                        ( PackageInfo(..) )
@@ -75,10 +79,10 @@ instance Pretty Error where
     UnknownPackage pkgName -> "Unknown package" <+> pretty pkgName
     ModuleImportCycle      -> "Cycle detected in module imports"
     ImportError e          -> case e of
-      ExpandImports.CannotFindModule importingModule importedModule ->
+      ExpandImports.CannotFindModule { importingModule, missingModule } ->
         pretty importingModule
           <+> "imports"
-          <+> pretty importedModule
+          <+> pretty missingModule
           <+> "but this module cannot be found"
 
 -- We use a global cache of parsed modules to prevent parsing the same file twice.
@@ -107,14 +111,15 @@ loadFromPackageInfo info path = do
       -- This stops us parsing the same module multiple times.
       cache                          <- liftIO $ newIORef (Map.singleton path m)
 
-      deps <- mapM (loadAll info cache) (dependencies m)
+      deps <- mapM (loadAll info cache) (directDependencies m)
       sortedDeps                     <- sortModules (nub (concat deps))
       (expandedModule, expandedDeps) <-
         runExceptT (expandImports (expandExports m) sortedDeps) >>= \case
           Left  err -> throwError $ ImportError err
           Right r   -> pure r
-      pure $ ModuleGroup (canonicaliseModule expandedModule)
-                         (map canonicaliseModule expandedDeps)
+      pure $ ModuleGroup { rootModule   = canonicaliseModule expandedModule
+                         , dependencies = map canonicaliseModule expandedDeps
+                         }
 
 -- TODO: deprecate and remove in favour of 'loadFromPackageInfo'
 loadFromPathAndRootDirectory
@@ -138,7 +143,7 @@ loadAll
   -> m [Module]
 loadAll info cache pkgModuleName = do
   modul <- load info cache pkgModuleName
-  deps  <- mapM (loadAll info cache) (dependencies modul)
+  deps  <- mapM (loadAll info cache) (directDependencies modul)
   let modul' = expandExports modul
   pure $ modul' : concat deps
 
@@ -164,8 +169,9 @@ load info cache name@(PkgModuleName pkgName _) = do
         Right m'  -> do
           liftIO $ atomicModifyIORef' cache $ \c -> (Map.insert path m' c, m')
 
-dependencies :: Module_ n (Expr n ty) ty -> [PkgModuleName]
-dependencies Module { moduleImports = imports } = nub $ map importName imports
+directDependencies :: Module_ n (Expr n ty) ty -> [PkgModuleName]
+directDependencies Module { moduleImports = imports } =
+  nub $ map importName imports
 
 -- | Attempt to construct a file path to the given module.
 -- If the module is in our own package, use the root package directory.
