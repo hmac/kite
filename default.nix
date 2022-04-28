@@ -17,7 +17,8 @@ let
     buildInputs = with nixpkgs.pkgs.haskell.packages.${compiler}; [
       haskellPackages.cabal-install
       ghcid
-      brittany
+      # Use the standard brittany derivation because it requires GHC > 9.0
+      nixpkgs.haskellPackages.brittany
       hlint
       nixpkgs.nixpkgs-fmt
       nixpkgs.chez
