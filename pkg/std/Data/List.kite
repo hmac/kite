@@ -32,10 +32,12 @@ import Data.Show (Show(..), show)
 import Kite.String (monoidString)
 
 showList : Show a -> Show [a]
-showList =
-  showa -> Show { show = xs -> let elems = intersperse ", " (map functorList (show showa) xs)
-                                in "[#{concat monoidString elems}]"
-                }
+showList = showa -> Show { show = showListHelper showa }
+ where
+   showListHelper : Show a -> [a] -> String
+   showListHelper = showa xs -> let elems = intersperse ", " (map functorList (show showa) xs)
+                                    result = concat monoidString elems
+                                 in "[#{result}]"
 
 listAppend : [a] -> [a] -> [a]
 listAppend = [] ys -> ys

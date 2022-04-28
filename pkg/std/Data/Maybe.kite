@@ -19,7 +19,7 @@ eqMaybe = eqa -> Eq { eq = Nothing Nothing -> True
                     }
 
 showMaybe : Show a -> Show (Maybe a)
-showMaybe = showa -> Show { show = mx -> maybe "Nothing" (x -> "Just #{show showa x}") mx }
+showMaybe = showa -> Show { show = mx -> maybe "Nothing" (x -> let r = show showa x in "Just #{r}") mx }
 
 mapMaybe : (a -> b) -> Maybe a -> Maybe b
 mapMaybe = _ Nothing -> Nothing

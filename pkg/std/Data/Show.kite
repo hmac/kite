@@ -22,5 +22,7 @@ showList = (Show d) -> Show { show = xs -> let inner = showListHelper d.show xs 
 
 showListHelper : (b -> String) -> [b] -> String
 showListHelper = _ [] -> ""
-                 f [x] -> "#{f x}"
-                 f (x :: xs) -> "#{f x}, #{showListHelper f xs}"
+                 f [x] -> f x
+                 f (x :: xs) -> let fx = f x
+                                    fxs = showListHelper f xs
+                                 in "#{fx}, #{fxs}"
