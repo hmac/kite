@@ -15,6 +15,9 @@ We will restrict case expressions to having a variable as scrutinee, exactly one
 branch per constructor, and no nested patterns. The branch order must match the
 order of constructors in the type definition. We will also ensure all
 applications of constructors are fully saturated, eta-expanding where necessary.
+We will ignore records entirely, as I don't know of an efficient compilation
+scheme for them in the general case. We can introduce them later, possibly as a
+syntactic sugar over existing Kite features.
 
 We'll call this language KiteCore.
 
@@ -24,8 +27,6 @@ fn   = fn <name>(x, ...) { e }                 function
 e    = a                                       atomic expression
      | let x = e1 in e2                        let
      | case x {p1 -> e1, ...}                  case
-     | e1.l1                                   record projection
-     | #[ l1 = e1, l2 = e2, ... ]              record literal
      | "<string>"                              string literal
      | '<char'                                 char literal
      | <int>                                   int literal
