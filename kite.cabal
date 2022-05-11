@@ -68,6 +68,7 @@ library
       Chez.Optimise
       Package
       Package.Spec
+      Eval
   other-modules:
       Paths_kite
 
