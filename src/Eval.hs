@@ -6,7 +6,6 @@ module Eval where
 
 import           Data.List                      ( find
                                                 , findIndex
-                                                , mapAccumL
                                                 )
 import           Data.Maybe                     ( fromJust )
 
@@ -16,13 +15,14 @@ import           Data.Maybe                     ( fromJust )
 type Prog var = [Def var]
 
 -- A KiteCore function definition has a name, some arguments, and an expression.
-newtype Global = Global String deriving Eq
+newtype Global = Global String deriving (Eq, Show)
 data Def var = Def
   { defName   :: Global
   , defArity  :: Int          -- defArity == length . defParams
   , defParams :: [String]
   , defExpr   :: KExpr var
   }
+  deriving Show
 
 -- Variables refer to:
 -- - global top-level function definitions
@@ -31,6 +31,7 @@ data Def var = Def
 data NamedVar = NamedGlobalVar Global
               | NamedLocalVar String
               | NamedArgVar String
+  deriving Show
 
 -- A KiteCore expression
 data KExpr var =
@@ -39,19 +40,23 @@ data KExpr var =
     | KLet String (KExpr var) (KExpr var)  -- let binding
     | KCase var [(Pat, KExpr var)]     -- case analysis
     | KCtor Ctor [var]                     -- constructor application (always saturated)
+  deriving Show
 
 data Pat = CtorPat Ctor [String]
+  deriving Show
 
 -- Constructors are unique names with a natural number tag indicating their
 -- order in their type.
 data Ctor = Ctor String Int
+  deriving Show
 
 -- KiteCore values
 -- We store KiteCore values in the heap. They are either constructors, or
 -- partial applications of functions (and eventually, literals like integers).
 data KVal =
-    CtorVal Ctor [Addr]
-  | PAp (Def NamelessVar) [Addr]
+    CtorVal Ctor [KVal]
+  | PAp (Def NamelessVar) [KVal]
+  deriving Show
 
 type GlobalEnv var = [Def var]
 
@@ -68,6 +73,7 @@ data NamelessVar =
       GlobalVar (Def NamelessVar)
     | LocalVar Int
     | ArgVar Int
+  deriving Show
 
 lookupGlobalVar :: Global -> GlobalEnv a -> Def a
 lookupGlobalVar g = fromJust . find ((== g) . defName)
@@ -132,7 +138,7 @@ eval
   -> (Heap, KVal)
 eval (env, heap, args, locals) kexpr = case kexpr of
   -- TODO: extract out lookupVar function
-  KVar (GlobalVar def) -> (heap, mkPAp def [])
+  KVar (GlobalVar def) -> (heap, PAp def [])
   KVar (LocalVar  i  ) -> (heap, heap !! (locals !! i))
   KVar (ArgVar    i  ) -> (heap, heap !! (args !! i))
   KApp f xs            -> evalApp env heap args locals f xs
@@ -151,30 +157,25 @@ eval (env, heap, args, locals) kexpr = case kexpr of
             case find (\(CtorPat (Ctor _ t) _, _) -> t == tag) alts of
               Just (CtorPat _ _, rhs) ->
                 -- Bind args to vars
+                -- Store each arg in the heap (so we have an addres for it)
+                let heap''    = heap ++ ctorArgs
+                    ctorAddrs = take (length ctorArgs) [length heap' ..]
                 -- We must bind in reverse to be consistent with how lets are
                 -- bound (outermost first).
-                let locals' = reverse ctorArgs ++ locals
+                    locals'   = reverse ctorAddrs ++ locals
                 -- Eval rhs
-                in  eval (env, heap', args, locals') rhs
+                in  eval (env, heap'', args, locals') rhs
               Nothing -> error "no matching case alternative"
   KCtor ctor ctorArgs ->
     -- Args are guaranteed to be in evaluated and on the heap already
     -- So we just look them up, construct the 'CtorVal' and store it in the
     -- heap, returning its address.
-    let
-      (heap', ctorArgAddrs) = mapAccumL
-        (\h a ->
-          let val = lookupVar h args locals a in (heap ++ [val], length heap)
-        )
-        heap
-        ctorArgs
-      ctorVal = CtorVal ctor ctorArgAddrs
-    in
-      (heap', ctorVal)
+    let ctorArgVals = map (lookupVar heap args locals) ctorArgs
+    in  (heap, CtorVal ctor ctorArgVals)
 
 lookupVar :: Heap -> ArgStack -> LocalStack -> NamelessVar -> KVal
 lookupVar heap args locals var = case var of
-  GlobalVar def -> mkPAp def []
+  GlobalVar def -> PAp def []
   LocalVar  i   -> heap !! (locals !! i)
   ArgVar    i   -> heap !! (args !! i)
 
@@ -194,23 +195,16 @@ evalApp env heap args locals f xs =
   -- Otherwise, update heap with new PAp and return its address.
                                     case lookupVar heap args locals f of
   PAp def args0 ->
-    let
-      argsNeeded      = defArity def - length args0
-      (heap', xsvals) = mapAccumL
-        (\h x ->
-          let val = lookupVar h args locals x in (heap ++ [val], length heap)
-        )
-        heap
-        xs
-    in
-      if argsNeeded > length xs
-        then let pap' = PAp def (args0 ++ xsvals) in (heap' ++ [pap'], pap')
-        else
-          let newArgs = take argsNeeded xsvals
-              args'   = args0 ++ newArgs ++ args -- TODO: don't need existing args, right?
-          in  eval (env, heap', args', locals) (defExpr def)
+    let argsNeeded = defArity def - length args0
+    in  if argsNeeded > length xs
+          then
+            let xsvals = map (lookupVar heap args locals) xs
+                pap'   = PAp def (args0 ++ xsvals)
+            in  (heap ++ [pap'], pap')
+          else
+            let xsvals = map (lookupVar heap args locals) (take argsNeeded xs)
+                allArgs     = args0 ++ xsvals
+                heap'       = heap ++ allArgs
+                allArgAddrs = take (length allArgs) [length heap ..]
+            in  eval (env, heap', allArgAddrs, locals) (defExpr def)
   CtorVal _ _ -> error "Cannot apply non-function"
-
-
-mkPAp :: Def NamelessVar -> [Addr] -> KVal
-mkPAp def args = PAp def args
