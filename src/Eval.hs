@@ -6,6 +6,7 @@ module Eval where
 
 import           Data.List                      ( find
                                                 , findIndex
+                                                , mapAccumL
                                                 )
 import           Data.Maybe                     ( fromJust )
 
@@ -137,11 +138,8 @@ eval
   -> KExpr NamelessVar
   -> (Heap, KVal)
 eval (env, heap, args, locals) kexpr = case kexpr of
-  -- TODO: extract out lookupVar function
-  KVar (GlobalVar def) -> (heap, PAp def [])
-  KVar (LocalVar  i  ) -> (heap, heap !! (locals !! i))
-  KVar (ArgVar    i  ) -> (heap, heap !! (args !! i))
-  KApp f xs            -> evalApp env heap args locals f xs
+  KVar v    -> lookupVar env heap args locals v
+  KApp f xs -> evalApp env heap args locals f xs
   KLet _ e1 e2 ->
     let (heap', e1result) = eval (env, heap, args, locals) e1
         heap''            = heap' ++ [e1result]
@@ -170,14 +168,23 @@ eval (env, heap, args, locals) kexpr = case kexpr of
     -- Args are guaranteed to be in evaluated and on the heap already
     -- So we just look them up, construct the 'CtorVal' and store it in the
     -- heap, returning its address.
-    let ctorArgVals = map (lookupVar heap args locals) ctorArgs
-    in  (heap, CtorVal ctor ctorArgVals)
+    let (heap', ctorArgVals) =
+          mapAccumL (\h v -> lookupVar env h args locals v) heap ctorArgs
+    in  (heap', CtorVal ctor ctorArgVals)
 
-lookupVar :: Heap -> ArgStack -> LocalStack -> NamelessVar -> KVal
-lookupVar heap args locals var = case var of
-  GlobalVar def -> PAp def []
-  LocalVar  i   -> heap !! (locals !! i)
-  ArgVar    i   -> heap !! (args !! i)
+lookupVar
+  :: GlobalEnv NamelessVar
+  -> Heap
+  -> ArgStack
+  -> LocalStack
+  -> NamelessVar
+  -> (Heap, KVal)
+lookupVar env heap args locals var = case var of
+  GlobalVar def -> if defArity def == 0
+    then evalApp' env heap args locals def [] []
+    else (heap, PAp def [])
+  LocalVar i -> (heap, heap !! (locals !! i))
+  ArgVar   i -> (heap, heap !! (args !! i))
 
 evalApp
   :: GlobalEnv NamelessVar
@@ -193,18 +200,139 @@ evalApp env heap args locals f xs =
   -- met.
   -- If arity is met, push all args onto stack and evaluate body. 
   -- Otherwise, update heap with new PAp and return its address.
-                                    case lookupVar heap args locals f of
-  PAp def args0 ->
-    let argsNeeded = defArity def - length args0
-    in  if argsNeeded > length xs
-          then
-            let xsvals = map (lookupVar heap args locals) xs
-                pap'   = PAp def (args0 ++ xsvals)
-            in  (heap ++ [pap'], pap')
-          else
-            let xsvals = map (lookupVar heap args locals) (take argsNeeded xs)
-                allArgs     = args0 ++ xsvals
-                heap'       = heap ++ allArgs
-                allArgAddrs = take (length allArgs) [length heap ..]
-            in  eval (env, heap', allArgAddrs, locals) (defExpr def)
-  CtorVal _ _ -> error "Cannot apply non-function"
+  let (heap', v) = lookupVar env heap args locals f
+  in  case v of
+        PAp     def args0 -> evalApp' env heap' args locals def args0 xs
+        CtorVal _   _     -> error "Cannot apply non-function"
+
+evalApp'
+  :: GlobalEnv NamelessVar
+  -> Heap
+  -> ArgStack
+  -> LocalStack
+  -> Def NamelessVar
+  -> [KVal]
+  -> [NamelessVar]
+  -> (Heap, KVal)
+evalApp' env heap args locals def args0 xs =
+  -- Check def arity, add args to it until we run out of args or the arity is
+  -- met.
+  -- If arity is met, push all args onto stack and evaluate body. 
+  -- Otherwise, update heap with new PAp and return its address.
+  let argsNeeded = defArity def - length args0
+  in  if argsNeeded > length xs
+        then
+          let (heap', xsvals) =
+                mapAccumL (\h v -> lookupVar env h args locals v) heap xs
+              pap' = PAp def (args0 ++ xsvals)
+          in  (heap' ++ [pap'], pap')
+        else
+          let (heap', xsvals) = mapAccumL
+                (\h v -> lookupVar env h args locals v)
+                heap
+                (take argsNeeded xs)
+              allArgs     = args0 ++ xsvals
+              heap''      = heap' ++ allArgs
+              allArgAddrs = take (length allArgs) [length heap' ..]
+          in  eval (env, heap'', allArgAddrs, locals) (defExpr def)
+
+--- Examples
+
+-- Cons Unit Nil
+example1 :: KExpr NamedVar
+example1 =
+  KLet "nil" (KCtor (Ctor "Nil" 0) [])
+    $ KLet "unit" (KCtor (Ctor "Unit" 0) [])
+    $ KCtor (Ctor "Cons" 1) [NamedLocalVar "unit", NamedLocalVar "nil"]
+
+-- id(x) = x
+-- example1() = let nil = Nil in let unit = Unit in Cons unit nil
+-- main() = id example1
+example2 :: Prog NamedVar
+example2 =
+  [ Def { defName   = Global "id"
+        , defArity  = 1
+        , defParams = ["x"]
+        , defExpr   = KVar (NamedArgVar "x")
+        }
+  , Def { defName   = Global "example1"
+        , defArity  = 0
+        , defParams = []
+        , defExpr   = example1
+        }
+  , Def
+    { defName   = Global "main"
+    , defArity  = 0
+    , defParams = []
+    , defExpr   = KApp (NamedGlobalVar (Global "id"))
+                       [NamedGlobalVar (Global "example1")]
+    }
+  ]
+
+-- not(b) = case b of True -> False; False -> True
+-- main = let false = False in not false
+example3 :: Prog NamedVar
+example3 =
+  let false = Ctor "False" 0
+      true  = Ctor "True" 1
+  in  [ Def
+        { defName   = Global "not"
+        , defArity  = 1
+        , defParams = ["b"]
+        , defExpr   = KCase
+                        (NamedArgVar "b")
+                        [ (CtorPat true [] , KCtor false [])
+                        , (CtorPat false [], KCtor true [])
+                        ]
+        }
+      , Def
+        { defName   = Global "main"
+        , defArity  = 0
+        , defParams = []
+        , defExpr   = KLet
+                        "false"
+                        (KCtor false [])
+                        (KApp (NamedGlobalVar (Global "not"))
+                              [NamedLocalVar "false"]
+                        )
+        }
+      ]
+
+-- fromMaybe(m, d) = case m of { Just x -> x; Nothing -> d }
+-- main = let nil = Nil in let unit = Unit in let r = Just unit in fromMaybe r nil
+example4 :: Prog NamedVar
+example4 =
+  let unit    = Ctor "Unit" 0
+      nil     = Ctor "Nil" 0
+      nothing = Ctor "Nothing" 0
+      just    = Ctor "Just" 1
+  in  [ Def
+        { defName   = Global "fromMaybe"
+        , defArity  = 2
+        , defParams = ["m", "d"]
+        , defExpr   = KCase
+                        (NamedArgVar "m")
+                        [ (CtorPat just ["x"], KVar (NamedLocalVar "x"))
+                        , (CtorPat nothing [], KVar (NamedArgVar "d"))
+                        ]
+        }
+      , Def
+        { defName   = Global "main"
+        , defArity  = 0
+        , defParams = []
+        , defExpr   = KLet
+                        "nil"
+                        (KCtor nil [])
+                        (KLet
+                          "unit"
+                          (KCtor unit [])
+                          (KLet
+                            "r"
+                            (KCtor just [NamedLocalVar "unit"])
+                            (KApp (NamedGlobalVar (Global "fromMaybe"))
+                                  [NamedLocalVar "r", NamedLocalVar "nil"]
+                            )
+                          )
+                        )
+        }
+      ]
