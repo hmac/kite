@@ -129,21 +129,22 @@ type RetVal = Addr
 eval
   :: (GlobalEnv NamelessVar, Heap, ArgStack, LocalStack)
   -> KExpr NamelessVar
-  -> (Heap, RetVal)
+  -> (Heap, KVal)
 eval (env, heap, args, locals) kexpr = case kexpr of
   -- TODO: extract out lookupVar function
-  KVar (GlobalVar def) -> (heap ++ [mkPAp def []], length heap)
-  KVar (LocalVar  i  ) -> (heap, locals !! i)
-  KVar (ArgVar    i  ) -> (heap, args !! i)
+  KVar (GlobalVar def) -> (heap, mkPAp def [])
+  KVar (LocalVar  i  ) -> (heap, heap !! (locals !! i))
+  KVar (ArgVar    i  ) -> (heap, heap !! (args !! i))
   KApp f xs            -> evalApp env heap args locals f xs
   KLet _ e1 e2 ->
     let (heap', e1result) = eval (env, heap, args, locals) e1
-    in  eval (env, heap', args, e1result : locals) e2
+        heap''            = heap' ++ [e1result]
+    in  eval (env, heap'', args, length heap : locals) e2
   KCase v alts ->
     -- Eval v
     -- Examine result, check tag, eval alt with same tag (bind ctor args)
     let (heap', vresult) = eval (env, heap, args, locals) (KVar v)
-    in  case heap !! vresult of
+    in  case vresult of
           PAp _ _ -> error "Case analysis on non-constructor"
           CtorVal (Ctor _ tag) ctorArgs ->
             -- Find alt with same tag
@@ -160,24 +161,22 @@ eval (env, heap, args, locals) kexpr = case kexpr of
     -- Args are guaranteed to be in evaluated and on the heap already
     -- So we just look them up, construct the 'CtorVal' and store it in the
     -- heap, returning its address.
-    let (heap', ctorArgAddrs) = mapAccumL
-          (\h a -> eval (env, h, args, locals) (KVar a))
-          heap
-          ctorArgs
-        ctorVal = CtorVal ctor ctorArgAddrs
-    in  (heap' ++ [ctorVal], length heap)
+    let
+      (heap', ctorArgAddrs) = mapAccumL
+        (\h a ->
+          let val = lookupVar h args locals a in (heap ++ [val], length heap)
+        )
+        heap
+        ctorArgs
+      ctorVal = CtorVal ctor ctorArgAddrs
+    in
+      (heap', ctorVal)
 
-lookupVar
-  :: GlobalEnv NamelessVar
-  -> Heap
-  -> ArgStack
-  -> LocalStack
-  -> NamelessVar
-  -> (Heap, RetVal)
-lookupVar env heap args locals var = case var of
-  GlobalVar def -> (heap ++ [mkPAp def []], length heap)
-  LocalVar  i   -> (heap, locals !! i)
-  ArgVar    i   -> (heap, args !! i)
+lookupVar :: Heap -> ArgStack -> LocalStack -> NamelessVar -> KVal
+lookupVar heap args locals var = case var of
+  GlobalVar def -> mkPAp def []
+  LocalVar  i   -> heap !! (locals !! i)
+  ArgVar    i   -> heap !! (args !! i)
 
 evalApp
   :: GlobalEnv NamelessVar
@@ -186,26 +185,30 @@ evalApp
   -> LocalStack
   -> NamelessVar
   -> [NamelessVar]
-  -> (Heap, RetVal)
+  -> (Heap, KVal)
 evalApp env heap args locals f xs =
   -- Lookup function. It must be a PAp.
   -- Check its arity, add args to it until we run out of args or the arity is
   -- met.
   -- If arity is met, push all args onto stack and evaluate body. 
   -- Otherwise, update heap with new PAp and return its address.
-                                    case lookupVar env heap args locals f of
+                                    case lookupVar heap args locals f of
   PAp def args0 ->
-    let argsNeeded = defArity def - length args0
-        (heap', xsvals) =
-          mapAccumL (\h x -> eval (env, h, args, locals) (KVar x)) heap xs
-    in  if argsNeeded > length xs
-          then
-            let pap' = PAp def (args0 ++ xsvals)
-            in  (heap' ++ [pap'], length heap)
-          else
-            let newArgs = take argsNeeded xsvals
-                args'   = args0 ++ newArgs ++ args -- TODO: don't need existing args, right?
-            in  eval (env, heap', args', locals) (defExpr def)
+    let
+      argsNeeded      = defArity def - length args0
+      (heap', xsvals) = mapAccumL
+        (\h x ->
+          let val = lookupVar h args locals x in (heap ++ [val], length heap)
+        )
+        heap
+        xs
+    in
+      if argsNeeded > length xs
+        then let pap' = PAp def (args0 ++ xsvals) in (heap' ++ [pap'], pap')
+        else
+          let newArgs = take argsNeeded xsvals
+              args'   = args0 ++ newArgs ++ args -- TODO: don't need existing args, right?
+          in  eval (env, heap', args', locals) (defExpr def)
   CtorVal _ _ -> error "Cannot apply non-function"
 
 
