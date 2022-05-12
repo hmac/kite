@@ -143,11 +143,11 @@ eval (env, heap, args, locals) kexpr = case kexpr of
   KLet _ e1 e2 ->
     let (heap', e1result) = eval (env, heap, args, locals) e1
         heap''            = heap' ++ [e1result]
-    in  eval (env, heap'', args, length heap : locals) e2
+    in  seq heap'' $ eval (env, heap'', args, length heap' : locals) e2
   KCase v alts ->
     -- Eval v
-    -- Examine result, check tag, eval alt with same tag (bind ctor args)
     let (heap', vresult) = eval (env, heap, args, locals) (KVar v)
+    -- Examine result, check tag, eval alt with same tag (bind ctor args)
     in  case vresult of
           PAp _ _ -> error "Case analysis on non-constructor"
           CtorVal (Ctor _ tag) ctorArgs ->
@@ -163,14 +163,15 @@ eval (env, heap, args, locals) kexpr = case kexpr of
                     locals'   = reverse ctorAddrs ++ locals
                 -- Eval rhs
                 in  eval (env, heap'', args, locals') rhs
-              Nothing -> error "no matching case alternative"
+              Nothing ->
+                error $ "no matching case alternative: " <> show vresult
   KCtor ctor ctorArgs ->
     -- Args are guaranteed to be in evaluated and on the heap already
     -- So we just look them up, construct the 'CtorVal' and store it in the
     -- heap, returning its address.
     let (heap', ctorArgVals) =
           mapAccumL (\h v -> lookupVar env h args locals v) heap ctorArgs
-    in  (heap', CtorVal ctor ctorArgVals)
+    in  (heap', seq heap' $ CtorVal ctor ctorArgVals)
 
 lookupVar
   :: GlobalEnv NamelessVar
@@ -225,7 +226,7 @@ evalApp' env heap args locals def args0 xs =
           let (heap', xsvals) =
                 mapAccumL (\h v -> lookupVar env h args locals v) heap xs
               pap' = PAp def (args0 ++ xsvals)
-          in  (heap' ++ [pap'], pap')
+          in  (heap' ++ [pap'], seq heap' $ pap')
         else
           let (heap', xsvals) = mapAccumL
                 (\h v -> lookupVar env h args locals v)
@@ -234,7 +235,7 @@ evalApp' env heap args locals def args0 xs =
               allArgs     = args0 ++ xsvals
               heap''      = heap' ++ allArgs
               allArgAddrs = take (length allArgs) [length heap' ..]
-          in  eval (env, heap'', allArgAddrs, locals) (defExpr def)
+          in  seq heap'' $ eval (env, heap'', allArgAddrs, locals) (defExpr def)
 
 --- Examples
 
@@ -334,5 +335,111 @@ example4 =
                             )
                           )
                         )
+        }
+      ]
+
+-- map(f, l) =
+--   case l of {
+--     Nil -> Nil
+--     Cons x xs -> let x' = f x
+--                   in let xs' = map f xs
+--                       in Cons x' xs'
+-- not(b) = case b of { True -> False; False -> True }
+-- main = let nil = Nil
+--         in let true = True
+--             in let false = False
+--                 in let l1 = Cons false nil
+--                     in let l2 = Cons true l1
+--                         in map not l2
+example5 :: Prog NamedVar
+example5 =
+  let false = Ctor "False" 0
+      true  = Ctor "True" 1
+      nil   = Ctor "Nil" 0
+      cons  = Ctor "Cons" 1
+  in  [ Def
+        { defName   = Global "not"
+        , defArity  = 1
+        , defParams = ["b"]
+        , defExpr   = KCase
+                        (NamedArgVar "b")
+                        [ (CtorPat true [] , KCtor false [])
+                        , (CtorPat false [], KCtor true [])
+                        ]
+        }
+      , Def
+        { defName   = Global "map"
+        , defArity  = 2
+        , defParams = ["f", "l"]
+        , defExpr   = KCase
+                        (NamedArgVar "l")
+                        [ (CtorPat nil [], KCtor nil [])
+                        , ( CtorPat cons ["x", "xs"]
+                          , KLet
+                            "x'"
+                            (KApp (NamedArgVar "f") [NamedLocalVar "x"])
+                            (KLet
+                              "xs'"
+                              (KApp (NamedGlobalVar (Global "map"))
+                                    [NamedArgVar "f", NamedLocalVar "xs"]
+                              )
+                              (KCtor cons
+                                     [NamedLocalVar "x'", NamedLocalVar "xs'"]
+                              )
+                            )
+                          )
+                        ]
+        }
+      , Def
+        { defName   = Global "main"
+        , defArity  = 0
+        , defParams = []
+        , defExpr   =
+          KLet "nil" (KCtor nil [])
+          $ KLet "true"  (KCtor true [])
+          $ KLet "false" (KCtor false [])
+          $ KLet "l1" (KCtor cons [NamedLocalVar "false", NamedLocalVar "nil"])
+          $ KLet
+              "l2"
+              (KCtor cons [NamedLocalVar "true", NamedLocalVar "l1"])
+              (KApp (NamedGlobalVar (Global "map"))
+                    [NamedGlobalVar (Global "not"), NamedLocalVar "l2"]
+              )
+        }
+      ]
+
+example6 :: Prog NamedVar
+example6 =
+  let pair  = Ctor "Pair" 0
+      true  = Ctor "True" 1
+      false = Ctor "False" 0
+  in  [ Def
+        { defName   = Global "swap"
+        , defArity  = 1
+        , defParams = ["p"]
+        , defExpr   = KCase
+                        (NamedArgVar "p")
+                        [ ( CtorPat pair ["x", "y"]
+                          , KCtor pair [NamedLocalVar "y", NamedLocalVar "x"]
+                          )
+                        ]
+        }
+      , Def { defName   = Global "pair"
+            , defArity  = 2
+            , defParams = ["x", "y"]
+            , defExpr   = KCtor pair [NamedArgVar "x", NamedArgVar "y"]
+            }
+      , Def
+        { defName   = Global "main"
+        , defArity  = 0
+        , defParams = []
+        , defExpr   = KLet "true" (KCtor true [])
+                      $ KLet "false" (KCtor false [])
+                      $ KLet
+                          "p"
+                          (KApp (NamedGlobalVar (Global "pair"))
+                                [NamedLocalVar "true", NamedLocalVar "false"]
+                          )
+                      $ KApp (NamedGlobalVar (Global "swap")) [NamedLocalVar "p"]
         }
       ]
