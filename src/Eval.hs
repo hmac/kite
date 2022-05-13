@@ -48,7 +48,11 @@ data KExpr var =
 data Pat = CtorPat Ctor [String]
   deriving Show
 
-data Prim = PrimIntAdd
+data Prim =
+    PrimIntAdd
+  | PrimIntSub
+  | PrimIntEq
+  | PrimIntLt
   deriving Show
 
 -- Constructors are unique names with a natural number tag indicating their
@@ -157,6 +161,7 @@ eval (env, heap, args, locals) kexpr = case kexpr of
     -- Eval v
     let (heap', vresult) = eval (env, heap, args, locals) (KVar v)
     -- Examine result, check tag, eval alt with same tag (bind ctor args)
+    -- TODO: default alt, order alts by tag and jump to corresponding index
     in  case vresult of
           PAp _ _  -> error "Case analysis on non-constructor (PAp)"
           IntVal _ -> error "Case analysis on non-constructor (int)"
@@ -218,6 +223,47 @@ evalPrim env heap args locals prim xs = case (prim, xs) of
           _ -> error $ "prim + applied to wrong type of args: " <> show [x, y]
   (PrimIntAdd, _) ->
     error $ "prim + applied to wrong number of args: " <> show xs
+  (PrimIntSub, [x, y]) ->
+    let (heap' , xval) = lookupVar env heap args locals x
+        (heap'', yval) = lookupVar env heap' args locals y
+    in  case (xval, yval) of
+          (IntVal xi, IntVal yi) ->
+            let result  = IntVal (xi - yi)
+                heap''' = heap'' ++ [result]
+            in  (heap''', result)
+          _ -> error $ "prim - applied to wrong type of args: " <> show [x, y]
+  (PrimIntSub, _) ->
+    error $ "prim - applied to wrong number of args: " <> show xs
+  (PrimIntEq, [x, y]) ->
+    let (heap' , xval) = lookupVar env heap args locals x
+        (heap'', yval) = lookupVar env heap' args locals y
+    in  case (xval, yval) of
+          (IntVal xi, IntVal yi) ->
+            let
+              result =
+                CtorVal (if xi == yi then Ctor "True" 1 else Ctor "False" 0) []
+              heap''' = heap'' ++ [result]
+            in
+              (heap''', result)
+          _ -> error $ "prim ==(int) applied to wrong type of args: " <> show
+            [x, y]
+  (PrimIntEq, _) ->
+    error $ "prim == applied to wrong number of args: " <> show xs
+  (PrimIntLt, [x, y]) ->
+    let (heap' , xval) = lookupVar env heap args locals x
+        (heap'', yval) = lookupVar env heap' args locals y
+    in  case (xval, yval) of
+          (IntVal xi, IntVal yi) ->
+            let
+              result =
+                CtorVal (if xi < yi then Ctor "True" 1 else Ctor "False" 0) []
+              heap''' = heap'' ++ [result]
+            in
+              (heap''', result)
+          _ ->
+            error $ "prim <(int) applied to wrong type of args: " <> show [x, y]
+  (PrimIntLt, _) ->
+    error $ "prim < applied to wrong number of args: " <> show xs
 evalApp
   :: GlobalEnv NamelessVar
   -> Heap
@@ -523,3 +569,196 @@ example7 =
         $ KVar (NamedLocalVar "l4")
       }
     ]
+
+exampleEqInt :: Def NamedVar
+exampleEqInt = Def
+  { defName   = Global "eqInt"
+  , defArity  = 2
+  , defParams = ["x", "y"]
+  , defExpr   = KPrim PrimIntEq [NamedArgVar "x", NamedArgVar "y"]
+  }
+
+-- sumTo = n -> case n == 0 of
+--                True -> 0
+--                False -> n + (sumTo (n - 1))
+example8 :: Prog NamedVar
+example8 =
+  [ Def
+    { defName   = Global "main"
+    , defArity  = 0
+    , defParams = []
+    , defExpr   = KLet "n" (KInt 5)
+                    $ KApp (NamedGlobalVar (Global "sumTo")) [NamedLocalVar "n"]
+    }
+  , Def
+    { defName   = Global "sumTo"
+    , defArity  = 1
+    , defParams = ["n"]
+    , defExpr   =
+      KLet "zero" (KInt 0)
+      $ KLet "one"  (KInt 1)
+      $ KLet "neq0" (KPrim PrimIntEq [NamedArgVar "n", NamedLocalVar "zero"])
+      $ KCase
+          (NamedLocalVar "neq0")
+          [ (CtorPat (Ctor "True" 1) [], KVar (NamedLocalVar "zero"))
+          , ( CtorPat (Ctor "False" 0) []
+            , KLet "n-1"
+                   (KPrim PrimIntSub [NamedArgVar "n", NamedLocalVar "one"])
+            $ KLet
+                "sum"
+                (KApp (NamedGlobalVar (Global "sumTo")) [NamedLocalVar "n-1"])
+            $ KPrim PrimIntAdd [NamedLocalVar "sum", NamedArgVar "n"]
+            )
+          ]
+    }
+  ]
+
+-- fib 0 = 1
+-- fib 1 = 1
+-- fib n = case fibBuild n [1, 1] of
+--   x : _xs -> x
+--
+-- fibBuild n ms | n <= length ms = ms
+-- fibBuild n ms | otherwise      = fibBuild n (fib' ms)
+--
+-- fib' ms = case ms of
+--   x : ms' -> case ms' of
+--     y : ms'' -> let r = x + y in r : x : y : ms''
+--
+example9 :: Prog NamedVar
+example9 =
+  [ Def
+    { defName   = Global "main"
+    , defArity  = 0
+    , defParams = []
+    , defExpr   = KLet "n" (KInt 15)
+                    $ KApp (NamedGlobalVar (Global "fib")) [NamedLocalVar "n"]
+    }
+  , Def
+    { defName   = Global "fib"
+    , defArity  = 1
+    , defParams = ["n"]
+    , defExpr   =
+      KLet "zero" (KInt 0)
+      $ KLet "one"  (KInt 1)
+      $ KLet "two"  (KInt 2)
+      $ KLet "neq0" (KPrim PrimIntEq [NamedArgVar "n", NamedLocalVar "zero"])
+      $ KCase
+          (NamedLocalVar "neq0")
+          [ (CtorPat (Ctor "True" 1) [], KVar (NamedLocalVar "one"))
+          , ( CtorPat (Ctor "False" 0) []
+            , KLet "neq1"
+                   (KPrim PrimIntEq [NamedArgVar "n", NamedLocalVar "one"])
+              $ KCase
+                  (NamedLocalVar "neq1")
+                  [ (CtorPat (Ctor "True" 1) [], KVar (NamedLocalVar "one"))
+                  , ( CtorPat (Ctor "False" 0) []
+                    , KLet "nil" (KCtor (Ctor "Nil" 0) [])
+                    $ KLet
+                        "fibBuildArgs0"
+                        (KCtor (Ctor "Cons" 1)
+                               [NamedLocalVar "one", NamedLocalVar "nil"]
+                        )
+                    $ KLet
+                        "fibBuildArgs"
+                        (KCtor
+                          (Ctor "Cons" 1)
+                          [NamedLocalVar "one", NamedLocalVar "fibBuildArgs0"]
+                        )
+                    $ KLet
+                        "fibs"
+                        (KApp (NamedGlobalVar (Global "fibBuild"))
+                              [NamedArgVar "n", NamedLocalVar "fibBuildArgs"]
+                        )
+                    $ KCase
+                        (NamedLocalVar "fibs")
+                        [ ( CtorPat (Ctor "Cons" 1) ["x", "xs"]
+                          , KVar (NamedLocalVar "x")
+                          )
+                        ]
+                    )
+                  ]
+            )
+          ]
+    }
+  , Def
+    { defName   = Global "fibBuild"
+    , defArity  = 2
+    , defParams = ["n", "ms"]
+    , defExpr   =
+      KLet "msLen" (KApp (NamedGlobalVar (Global "length")) [NamedArgVar "ms"])
+      $ KLet
+          "n<=msLen"
+          (KApp (NamedGlobalVar (Global "<="))
+                [NamedArgVar "n", NamedLocalVar "msLen"]
+          )
+      $ KCase
+          (NamedLocalVar "n<=msLen")
+          [ (CtorPat (Ctor "True" 1) [], KVar (NamedArgVar "ms"))
+          , ( CtorPat (Ctor "False" 0) []
+            , KLet "ms'"
+                   (KApp (NamedGlobalVar (Global "fib'")) [NamedArgVar "ms"])
+              $ KApp (NamedGlobalVar (Global "fibBuild"))
+                     [NamedArgVar "n", NamedLocalVar "ms'"]
+            )
+          ]
+    }
+  , Def
+    { defName   = Global "fib'"
+    , defArity  = 1
+    , defParams = ["ms"]
+    , defExpr   = KCase
+      (NamedArgVar "ms")
+      [ ( CtorPat (Ctor "Cons" 1) ["x", "ms'"]
+        , KCase
+          (NamedLocalVar "ms'")
+          [ ( CtorPat (Ctor "Cons" 1) ["y", "ms''"]
+            , KLet "r" (KPrim PrimIntAdd [NamedLocalVar "x", NamedLocalVar "y"])
+            $ KLet
+                "l0"
+                (KCtor (Ctor "Cons" 1) [NamedLocalVar "y", NamedLocalVar "ms''"]
+                )
+            $ KLet
+                "l1"
+                (KCtor (Ctor "Cons" 1) [NamedLocalVar "x", NamedLocalVar "l0"])
+            $ KLet
+                "l2"
+                (KCtor (Ctor "Cons" 1) [NamedLocalVar "r", NamedLocalVar "l1"])
+            $ KVar (NamedLocalVar "l2")
+            )
+          ]
+        )
+      ]
+    }
+  , Def
+    { defName   = Global "length"
+    , defArity  = 1
+    , defParams = ["l"]
+    , defExpr   = KCase
+      (NamedArgVar "l")
+      [ (CtorPat (Ctor "Nil" 0) [], KInt 0)
+      , ( CtorPat (Ctor "Cons" 1) ["x", "xs"]
+        , KLet
+          "n"
+          (KApp (NamedGlobalVar (Global "length")) [NamedLocalVar "xs"])
+          (KLet "1"
+                (KInt 1)
+                (KPrim PrimIntAdd [NamedLocalVar "n", NamedLocalVar "1"])
+          )
+        )
+      ]
+    }
+  , Def
+    { defName   = Global "<="
+    , defArity  = 2
+    , defParams = ["x", "y"]
+    , defExpr = KLet "x<y" (KPrim PrimIntLt [NamedArgVar "x", NamedArgVar "y"])
+                  $ KCase
+                      (NamedLocalVar "x<y")
+                      [ (CtorPat (Ctor "True" 1) [], KVar (NamedLocalVar "x<y"))
+                      , ( CtorPat (Ctor "False" 0) []
+                        , KPrim PrimIntEq [NamedArgVar "x", NamedArgVar "y"]
+                        )
+                      ]
+    }
+  ]
