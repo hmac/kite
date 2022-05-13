@@ -39,11 +39,16 @@ data KExpr var =
       KVar var                             -- variable
     | KApp var [var]                       -- function application
     | KLet String (KExpr var) (KExpr var)  -- let binding
-    | KCase var [(Pat, KExpr var)]     -- case analysis
+    | KCase var [(Pat, KExpr var)]         -- case analysis
     | KCtor Ctor [var]                     -- constructor application (always saturated)
+    | KInt Int                             -- integer literal
+    | KPrim Prim [var]                     -- primitive functions
   deriving Show
 
 data Pat = CtorPat Ctor [String]
+  deriving Show
+
+data Prim = PrimIntAdd
   deriving Show
 
 -- Constructors are unique names with a natural number tag indicating their
@@ -56,6 +61,7 @@ data Ctor = Ctor String Int
 -- partial applications of functions (and eventually, literals like integers).
 data KVal =
     CtorVal Ctor [KVal]
+  | IntVal Int
   | PAp (Def NamelessVar) [KVal]
   deriving Show
 
@@ -105,6 +111,8 @@ makeNamelessExpr genv args locals kexpr = case kexpr of
     )
     alts
   KCtor ctor xs -> KCtor ctor $ map (makeNamelessVar genv args locals) xs
+  KPrim p    xs -> KPrim p $ map (makeNamelessVar genv args locals) xs
+  KInt i        -> KInt i
 
 makeNamelessVar
   :: GlobalEnv NamelessVar -> [String] -> [String] -> NamedVar -> NamelessVar
@@ -138,6 +146,7 @@ eval
   -> KExpr NamelessVar
   -> (Heap, KVal)
 eval (env, heap, args, locals) kexpr = case kexpr of
+  KInt i    -> (heap, IntVal i)
   KVar v    -> lookupVar env heap args locals v
   KApp f xs -> evalApp env heap args locals f xs
   KLet _ e1 e2 ->
@@ -149,7 +158,8 @@ eval (env, heap, args, locals) kexpr = case kexpr of
     let (heap', vresult) = eval (env, heap, args, locals) (KVar v)
     -- Examine result, check tag, eval alt with same tag (bind ctor args)
     in  case vresult of
-          PAp _ _ -> error "Case analysis on non-constructor"
+          PAp _ _  -> error "Case analysis on non-constructor (PAp)"
+          IntVal _ -> error "Case analysis on non-constructor (int)"
           CtorVal (Ctor _ tag) ctorArgs ->
             -- Find alt with same tag
             case find (\(CtorPat (Ctor _ t) _, _) -> t == tag) alts of
@@ -172,6 +182,7 @@ eval (env, heap, args, locals) kexpr = case kexpr of
     let (heap', ctorArgVals) =
           mapAccumL (\h v -> lookupVar env h args locals v) heap ctorArgs
     in  (heap', seq heap' $ CtorVal ctor ctorArgVals)
+  KPrim p xs -> evalPrim env heap args locals p xs
 
 lookupVar
   :: GlobalEnv NamelessVar
@@ -187,6 +198,26 @@ lookupVar env heap args locals var = case var of
   LocalVar i -> (heap, heap !! (locals !! i))
   ArgVar   i -> (heap, heap !! (args !! i))
 
+evalPrim
+  :: GlobalEnv NamelessVar
+  -> Heap
+  -> ArgStack
+  -> LocalStack
+  -> Prim
+  -> [NamelessVar]
+  -> (Heap, KVal)
+evalPrim env heap args locals prim xs = case (prim, xs) of
+  (PrimIntAdd, [x, y]) ->
+    let (heap' , xval) = lookupVar env heap args locals x
+        (heap'', yval) = lookupVar env heap' args locals y
+    in  case (xval, yval) of
+          (IntVal xi, IntVal yi) ->
+            let result  = IntVal (xi + yi)
+                heap''' = heap'' ++ [result]
+            in  (heap''', result)
+          _ -> error $ "prim + applied to wrong type of args: " <> show [x, y]
+  (PrimIntAdd, _) ->
+    error $ "prim + applied to wrong number of args: " <> show xs
 evalApp
   :: GlobalEnv NamelessVar
   -> Heap
@@ -204,7 +235,8 @@ evalApp env heap args locals f xs =
   let (heap', v) = lookupVar env heap args locals f
   in  case v of
         PAp     def args0 -> evalApp' env heap' args locals def args0 xs
-        CtorVal _   _     -> error "Cannot apply non-function"
+        CtorVal _   _     -> error "Cannot apply non-function (ctor)"
+        IntVal _          -> error "Cannot apply non-function (int)"
 
 evalApp'
   :: GlobalEnv NamelessVar
@@ -338,6 +370,34 @@ example4 =
         }
       ]
 
+exampleMap :: Def NamedVar
+exampleMap =
+  let nil  = Ctor "Nil" 0
+      cons = Ctor "Cons" 1
+  in  Def
+        { defName   = Global "map"
+        , defArity  = 2
+        , defParams = ["f", "l"]
+        , defExpr   = KCase
+                        (NamedArgVar "l")
+                        [ (CtorPat nil [], KCtor nil [])
+                        , ( CtorPat cons ["x", "xs"]
+                          , KLet
+                            "x'"
+                            (KApp (NamedArgVar "f") [NamedLocalVar "x"])
+                            (KLet
+                              "xs'"
+                              (KApp (NamedGlobalVar (Global "map"))
+                                    [NamedArgVar "f", NamedLocalVar "xs"]
+                              )
+                              (KCtor cons
+                                     [NamedLocalVar "x'", NamedLocalVar "xs'"]
+                              )
+                            )
+                          )
+                        ]
+        }
+
 -- map(f, l) =
 --   case l of {
 --     Nil -> Nil
@@ -367,29 +427,7 @@ example5 =
                         , (CtorPat false [], KCtor true [])
                         ]
         }
-      , Def
-        { defName   = Global "map"
-        , defArity  = 2
-        , defParams = ["f", "l"]
-        , defExpr   = KCase
-                        (NamedArgVar "l")
-                        [ (CtorPat nil [], KCtor nil [])
-                        , ( CtorPat cons ["x", "xs"]
-                          , KLet
-                            "x'"
-                            (KApp (NamedArgVar "f") [NamedLocalVar "x"])
-                            (KLet
-                              "xs'"
-                              (KApp (NamedGlobalVar (Global "map"))
-                                    [NamedArgVar "f", NamedLocalVar "xs"]
-                              )
-                              (KCtor cons
-                                     [NamedLocalVar "x'", NamedLocalVar "xs'"]
-                              )
-                            )
-                          )
-                        ]
-        }
+      , exampleMap
       , Def
         { defName   = Global "main"
         , defArity  = 0
@@ -443,3 +481,45 @@ example6 =
                       $ KApp (NamedGlobalVar (Global "swap")) [NamedLocalVar "p"]
         }
       ]
+
+example7 :: Prog NamedVar
+example7 =
+  let
+    nil  = Ctor "Nil" 0
+    cons = Ctor "Cons" 1
+  in
+    [ Def
+      { defName   = Global "main"
+      , defArity  = 0
+      , defParams = []
+      , defExpr   = KApp
+                      (NamedGlobalVar (Global "map"))
+                      [ NamedGlobalVar (Global "inc")
+                      , NamedGlobalVar (Global "list")
+                      ]
+      }
+    , exampleMap
+    , Def
+      { defName   = Global "inc"
+      , defArity  = 1
+      , defParams = ["x"]
+      , defExpr   = KLet "one" (KInt 1)
+                      $ KPrim PrimIntAdd [NamedArgVar "x", NamedLocalVar "one"]
+      }
+    , Def
+      { defName   = Global "list"
+      , defArity  = 0
+      , defParams = []
+      , defExpr   =
+        KLet "nil" (KCtor nil [])
+        $ KLet "x0" (KInt 0)
+        $ KLet "x1" (KInt 1)
+        $ KLet "x2" (KInt 2)
+        $ KLet "x3" (KInt 3)
+        $ KLet "l1" (KCtor cons [NamedLocalVar "x3", NamedLocalVar "nil"])
+        $ KLet "l2" (KCtor cons [NamedLocalVar "x2", NamedLocalVar "l1"])
+        $ KLet "l3" (KCtor cons [NamedLocalVar "x1", NamedLocalVar "l2"])
+        $ KLet "l4" (KCtor cons [NamedLocalVar "x0", NamedLocalVar "l3"])
+        $ KVar (NamedLocalVar "l4")
+      }
+    ]
