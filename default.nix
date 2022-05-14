@@ -22,6 +22,12 @@ let
       hlint
       nixpkgs.nixpkgs-fmt
       nixpkgs.chez
+      # The experimental evaluator is written in Rust
+      nixpkgs.rustc
+      nixpkgs.cargo
+      nixpkgs.rls
+      nixpkgs.clippy
+      nixpkgs.rustfmt
     ];
     withHoogle = true;
   };
