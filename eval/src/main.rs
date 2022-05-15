@@ -108,10 +108,6 @@ impl LazyEnvConverter {
         };
     }
 
-    // fn get(&self, name: &str) -> Rc<Def<Expr>> {
-    //     Rc::clone(self.nameless.borrow().get(name).unwrap())
-    // }
-
     fn into_nameless_env(self) -> HashMap<String, Def<Expr>> {
         for name in self.named.borrow().keys() {
             self.convert(name);
@@ -147,7 +143,7 @@ fn make_nameless_expr<'a>(
             for x in xs {
                 xs_nameless.push(make_nameless_var(env, args, locals, &x))
             }
-            xs_nameless.into_iter().rev().collect()
+            xs_nameless.into_iter().collect()
         }),
         NamedExpr::Let(x, e1, e2) => {
             let mut body_locals = locals.to_vec();
@@ -176,7 +172,6 @@ fn make_nameless_expr<'a>(
             for x in xs {
                 nameless_xs.push(make_nameless_var(env, args, locals, &x));
             }
-            nameless_xs.reverse();
             Expr::Ctor(Ctor { tag: ctor.tag }, nameless_xs)
         }
         NamedExpr::Int(n) => Expr::Int(*n),
@@ -201,17 +196,15 @@ fn make_nameless_var<'a>(
     match var {
         NamedVar::Global(v) => Var::Global(v.clone()),
         NamedVar::Arg(v) => Var::Arg(args.iter().enumerate().find(|(_, a)| *a == v).unwrap().0),
-        NamedVar::Local(v) => {
-            Var::Local(
-                locals
-                    .iter()
-                    // .rev()
-                    .enumerate()
-                    .find(|(_, a)| *a == v)
-                    .unwrap()
-                    .0,
-            )
-        }
+        NamedVar::Local(v) => Var::Local(
+            locals
+                .iter()
+                .rev()
+                .enumerate()
+                .find(|(_, a)| *a == v)
+                .unwrap()
+                .0,
+        ),
     }
 }
 
@@ -299,6 +292,7 @@ fn eval<'a>(
     start_expr: &'a Expr,
 ) -> DataVal {
     // Used to store the result of an evaluation
+    // We initially set it to False/Nil/Nothing
     let mut result = Rc::new(Val::Ctor(Ctor { tag: 0 }, vec![]));
     // Used to store the parent context, when we have to evaluate sub-expressions.
     let mut ctx: Vec<Ctx> = vec![Ctx::Eval(start_expr)];
@@ -446,6 +440,10 @@ fn eval<'a>(
                         match alts.iter().find(|(alt_ctor, _)| *alt_ctor == *ctor) {
                             None => panic!("No matching case alternative for {:?}", result),
                             Some((_, rhs)) => {
+                                // Drop ctor arg bindings after eval
+                                for _ in ctor_args {
+                                    ctx.push(Ctx::LetDrop);
+                                }
                                 // Push ctor_args onto locals stack
                                 // TODO: what order?
                                 locals.push_chunk(ctor_args.clone());
@@ -551,6 +549,7 @@ impl<'a> EvalVarsCallback<'a> {
     }
 }
 
+#[derive(Debug)]
 enum VarLookup<'a> {
     NullaryDef(&'a Def<Expr>),
     Val(Rc<Val<'a>>),
@@ -800,4 +799,99 @@ fn test_3() {
     );
 
     assert_eq!(result, DataVal::Ctor(Ctor { tag: 1 }, vec![]));
+}
+
+#[test]
+fn test_4() {
+    // fromMaybe(m, d) = case m of { Just x -> x; Nothing -> d }
+    // main = let one = 1 in let two = 2 in let r = Just two in fromMaybe r one
+
+    let just_ctor = NamedCtor {
+        name: "Just".into(),
+        tag: 1,
+    };
+    let nothing_ctor = NamedCtor {
+        name: "Nothing".into(),
+        tag: 0,
+    };
+    let from_maybe = Def {
+        name: "fromMaybe".into(),
+        arity: 1,
+        params: vec!["m".into(), "d".into()],
+        expr: NamedExpr::Case(
+            NamedVar::Arg("m".into()),
+            vec![
+                (
+                    Pat::Ctor(just_ctor.clone(), vec!["x".into()]),
+                    Box::new(NamedExpr::Var(NamedVar::Local("x".into()))),
+                ),
+                (
+                    Pat::Ctor(nothing_ctor.clone(), vec![]),
+                    Box::new(NamedExpr::Var(NamedVar::Arg("d".into()))),
+                ),
+            ],
+        ),
+    };
+    let main = Def {
+        name: "main".into(),
+        arity: 0,
+        params: vec![],
+        expr: NamedExpr::Let(
+            "one".into(),
+            Box::new(NamedExpr::Int(1)),
+            Box::new(NamedExpr::Let(
+                "two".into(),
+                Box::new(NamedExpr::Int(2)),
+                Box::new(NamedExpr::Let(
+                    "r".into(),
+                    Box::new(NamedExpr::Ctor(
+                        just_ctor,
+                        vec![NamedVar::Local("two".into())],
+                    )),
+                    Box::new(NamedExpr::App(
+                        NamedVar::Global("fromMaybe".into()),
+                        vec![NamedVar::Local("r".into()), NamedVar::Local("one".into())],
+                    )),
+                )),
+            )),
+        ),
+    };
+
+    let env = make_nameless_env(vec![from_maybe, main]);
+
+    assert_eq!(
+        env.get("fromMaybe").unwrap().expr,
+        Expr::Case(
+            Var::Arg(0),
+            vec![
+                (Ctor { tag: 1 }, Box::new(Expr::Var(Var::Local(0))),),
+                (Ctor { tag: 0 }, Box::new(Expr::Var(Var::Arg(1))),),
+            ],
+        ),
+    );
+    assert_eq!(
+        env.get("main").unwrap().expr,
+        Expr::Let(
+            Box::new(Expr::Int(1)),
+            Box::new(Expr::Let(
+                Box::new(Expr::Int(2)),
+                Box::new(Expr::Let(
+                    Box::new(Expr::Ctor(Ctor { tag: 1 }, vec![Var::Local(0)],)),
+                    Box::new(Expr::App(
+                        Var::Global("fromMaybe".into()),
+                        vec![Var::Local(0), Var::Local(2)],
+                    )),
+                )),
+            )),
+        ),
+    );
+
+    let result = eval(
+        &env,
+        Stack::new(),
+        Stack::new(),
+        &env.get("main").unwrap().expr,
+    );
+
+    assert_eq!(result, DataVal::Int(2));
 }
