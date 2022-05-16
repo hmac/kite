@@ -5,3 +5,4 @@ dist/
 dist-newstyle/
 result*
 eval/target
+.DS_Store
