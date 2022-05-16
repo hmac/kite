@@ -75,7 +75,7 @@ pub struct Def<E> {
 
 pub struct Env<E>(Vec<Def<E>>);
 
-pub fn make_nameless_env<'a>(env: Vec<Def<NamedExpr>>) -> HashMap<String, Def<Expr>> {
+pub fn make_nameless_env(env: Vec<Def<NamedExpr>>) -> HashMap<String, Def<Expr>> {
     let mut map = HashMap::new();
     map.extend(env.into_iter().map(|def| {
         let nameless = make_nameless_def(&def);
@@ -84,8 +84,8 @@ pub fn make_nameless_env<'a>(env: Vec<Def<NamedExpr>>) -> HashMap<String, Def<Ex
     map
 }
 
-fn make_nameless_def<'a>(def: &Def<NamedExpr>) -> Def<Expr> {
-    let expr = make_nameless_expr(&def.params, &vec![], &def.expr);
+fn make_nameless_def(def: &Def<NamedExpr>) -> Def<Expr> {
+    let expr = make_nameless_expr(&def.params, &[], &def.expr);
     Def {
         name: def.name.clone(),
         arity: def.arity,
@@ -94,13 +94,13 @@ fn make_nameless_def<'a>(def: &Def<NamedExpr>) -> Def<Expr> {
     }
 }
 
-fn make_nameless_expr<'a>(args: &[String], locals: &[String], expr: &NamedExpr) -> Expr {
+fn make_nameless_expr(args: &[String], locals: &[String], expr: &NamedExpr) -> Expr {
     match expr {
-        NamedExpr::Var(v) => Expr::Var(make_nameless_var(args, locals, &v)),
-        NamedExpr::App(f, xs) => Expr::App(make_nameless_var(args, locals, &f), {
+        NamedExpr::Var(v) => Expr::Var(make_nameless_var(args, locals, v)),
+        NamedExpr::App(f, xs) => Expr::App(make_nameless_var(args, locals, f), {
             let mut xs_nameless = vec![];
             for x in xs {
-                xs_nameless.push(make_nameless_var(args, locals, &x))
+                xs_nameless.push(make_nameless_var(args, locals, x))
             }
             xs_nameless.into_iter().collect()
         }),
@@ -121,15 +121,15 @@ fn make_nameless_expr<'a>(args: &[String], locals: &[String], expr: &NamedExpr) 
                 }
                 nameless_alts.push((
                     Ctor { tag: ctor.tag },
-                    make_nameless_expr(&args, &new_locals, rhs),
+                    make_nameless_expr(args, &new_locals, rhs),
                 ));
             }
-            Expr::Case(make_nameless_var(args, locals, &target), nameless_alts)
+            Expr::Case(make_nameless_var(args, locals, target), nameless_alts)
         }
         NamedExpr::Ctor(ctor, xs) => {
             let mut nameless_xs = vec![];
             for x in xs {
-                nameless_xs.push(make_nameless_var(args, locals, &x));
+                nameless_xs.push(make_nameless_var(args, locals, x));
             }
             Expr::Ctor(Ctor { tag: ctor.tag }, nameless_xs)
         }
@@ -137,7 +137,7 @@ fn make_nameless_expr<'a>(args: &[String], locals: &[String], expr: &NamedExpr) 
         NamedExpr::Prim(p, xs) => {
             let mut nameless_xs = vec![];
             for x in xs {
-                nameless_xs.push(make_nameless_var(args, locals, &x));
+                nameless_xs.push(make_nameless_var(args, locals, x));
             }
             nameless_xs.reverse();
 
@@ -146,7 +146,7 @@ fn make_nameless_expr<'a>(args: &[String], locals: &[String], expr: &NamedExpr) 
     }
 }
 
-fn make_nameless_var<'a>(args: &[String], locals: &[String], var: &NamedVar) -> Var {
+fn make_nameless_var(args: &[String], locals: &[String], var: &NamedVar) -> Var {
     match var {
         NamedVar::Global(v) => Var::Global(v.clone()),
         NamedVar::Arg(v) => Var::Arg(args.iter().enumerate().find(|(_, a)| *a == v).unwrap().0),
@@ -176,11 +176,11 @@ pub enum DataVal {
     Int(i32),
 }
 
-fn val_to_data<'a>(val: &'a Val) -> DataVal {
+fn val_to_data(val: &Val) -> DataVal {
     match val {
         Val::PAp(_, _) => panic!("Value contains partial application: {:?}", val),
         Val::Ctor(ctor, args) => {
-            DataVal::Ctor(*ctor, args.into_iter().map(|a| val_to_data(a)).collect())
+            DataVal::Ctor(*ctor, args.iter().map(|a| val_to_data(a)).collect())
         }
         Val::Int(i) => DataVal::Int(*i),
     }
@@ -418,7 +418,7 @@ pub fn eval<'a>(
                                 // TODO: what order?
                                 locals.push_chunk(ctor_args.clone());
                                 // Eval rhs
-                                ctx.push(Ctx::Eval(&rhs))
+                                ctx.push(Ctx::Eval(rhs))
                             }
                         }
                     }
@@ -464,7 +464,7 @@ pub fn eval<'a>(
                     Expr::Var(v) => {
                         ctx.push(Ctx::EvalVar(v.clone()));
                     }
-                    Expr::App(f, xs) => match lookup_var(env, &args, &locals, &f) {
+                    Expr::App(f, xs) => match lookup_var(env, &args, &locals, f) {
                         VarLookup::NullaryDef(def) => {
                             ctx.push(Ctx::Eval(&def.expr));
                         }
@@ -489,7 +489,7 @@ pub fn eval<'a>(
                         }
                     }
                     Expr::Case(target, alts) => {
-                        ctx.push(Ctx::Case { alts: &alts });
+                        ctx.push(Ctx::Case { alts });
                         ctx.push(Ctx::EvalVar(target.clone()));
                     }
                     Expr::Prim(prim, vars) => {
@@ -573,6 +573,12 @@ impl<T> Stack<T> {
     }
     pub fn drop(&mut self, n: usize) {
         self.inner.truncate(self.inner.len() - n);
+    }
+}
+
+impl<T> Default for Stack<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
