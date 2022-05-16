@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -76,49 +75,17 @@ pub struct Def<E> {
 
 pub struct Env<E>(Vec<Def<E>>);
 
-pub struct LazyEnvConverter {
-    named: RefCell<HashMap<String, Rc<Def<NamedExpr>>>>,
-    nameless: RefCell<HashMap<String, Def<Expr>>>,
-}
-
-impl LazyEnvConverter {
-    pub fn new(env: Vec<Def<NamedExpr>>) -> Self {
-        let mut named = HashMap::new();
-        for def in env {
-            named.insert(def.name.clone(), Rc::new(def));
-        }
-        Self {
-            named: RefCell::new(named),
-            nameless: RefCell::new(HashMap::new()),
-        }
-    }
-    fn convert(&self, name: &str) {
-        if self.nameless.borrow().contains_key(name) {
-            return;
-        }
-        match self.named.borrow().get(name) {
-            None => panic!("No def with name {}", name),
-            Some(def) => {
-                let nameless_def = make_nameless_def(self, &def);
-                self.nameless.borrow_mut().insert(name.into(), nameless_def);
-            }
-        };
-    }
-
-    pub fn into_nameless_env(self) -> HashMap<String, Def<Expr>> {
-        for name in self.named.borrow().keys() {
-            self.convert(name);
-        }
-        self.nameless.into_inner()
-    }
-}
-
 pub fn make_nameless_env<'a>(env: Vec<Def<NamedExpr>>) -> HashMap<String, Def<Expr>> {
-    LazyEnvConverter::new(env).into_nameless_env()
+    let mut map = HashMap::new();
+    map.extend(env.into_iter().map(|def| {
+        let nameless = make_nameless_def(&def);
+        (def.name, nameless)
+    }));
+    map
 }
 
-fn make_nameless_def<'a>(env: &'a LazyEnvConverter, def: &Def<NamedExpr>) -> Def<Expr> {
-    let expr = make_nameless_expr(env, &def.params, &vec![], &def.expr);
+fn make_nameless_def<'a>(def: &Def<NamedExpr>) -> Def<Expr> {
+    let expr = make_nameless_expr(&def.params, &vec![], &def.expr);
     Def {
         name: def.name.clone(),
         arity: def.arity,
@@ -127,18 +94,13 @@ fn make_nameless_def<'a>(env: &'a LazyEnvConverter, def: &Def<NamedExpr>) -> Def
     }
 }
 
-fn make_nameless_expr<'a>(
-    env: &'a LazyEnvConverter,
-    args: &[String],
-    locals: &[String],
-    expr: &NamedExpr,
-) -> Expr {
+fn make_nameless_expr<'a>(args: &[String], locals: &[String], expr: &NamedExpr) -> Expr {
     match expr {
-        NamedExpr::Var(v) => Expr::Var(make_nameless_var(env, args, locals, &v)),
-        NamedExpr::App(f, xs) => Expr::App(make_nameless_var(env, args, locals, &f), {
+        NamedExpr::Var(v) => Expr::Var(make_nameless_var(args, locals, &v)),
+        NamedExpr::App(f, xs) => Expr::App(make_nameless_var(args, locals, &f), {
             let mut xs_nameless = vec![];
             for x in xs {
-                xs_nameless.push(make_nameless_var(env, args, locals, &x))
+                xs_nameless.push(make_nameless_var(args, locals, &x))
             }
             xs_nameless.into_iter().collect()
         }),
@@ -146,8 +108,8 @@ fn make_nameless_expr<'a>(
             let mut body_locals = locals.to_vec();
             body_locals.push(x.clone());
             Expr::Let(
-                Box::new(make_nameless_expr(env, args, locals, e1)),
-                Box::new(make_nameless_expr(env, args, &body_locals, e2)),
+                Box::new(make_nameless_expr(args, locals, e1)),
+                Box::new(make_nameless_expr(args, &body_locals, e2)),
             )
         }
         NamedExpr::Case(target, alts) => {
@@ -159,15 +121,15 @@ fn make_nameless_expr<'a>(
                 }
                 nameless_alts.push((
                     Ctor { tag: ctor.tag },
-                    make_nameless_expr(env, &args, &new_locals, rhs),
+                    make_nameless_expr(&args, &new_locals, rhs),
                 ));
             }
-            Expr::Case(make_nameless_var(env, args, locals, &target), nameless_alts)
+            Expr::Case(make_nameless_var(args, locals, &target), nameless_alts)
         }
         NamedExpr::Ctor(ctor, xs) => {
             let mut nameless_xs = vec![];
             for x in xs {
-                nameless_xs.push(make_nameless_var(env, args, locals, &x));
+                nameless_xs.push(make_nameless_var(args, locals, &x));
             }
             Expr::Ctor(Ctor { tag: ctor.tag }, nameless_xs)
         }
@@ -175,7 +137,7 @@ fn make_nameless_expr<'a>(
         NamedExpr::Prim(p, xs) => {
             let mut nameless_xs = vec![];
             for x in xs {
-                nameless_xs.push(make_nameless_var(env, args, locals, &x));
+                nameless_xs.push(make_nameless_var(args, locals, &x));
             }
             nameless_xs.reverse();
 
@@ -184,12 +146,7 @@ fn make_nameless_expr<'a>(
     }
 }
 
-fn make_nameless_var<'a>(
-    env: &'a LazyEnvConverter,
-    args: &[String],
-    locals: &[String],
-    var: &NamedVar,
-) -> Var {
+fn make_nameless_var<'a>(args: &[String], locals: &[String], var: &NamedVar) -> Var {
     match var {
         NamedVar::Global(v) => Var::Global(v.clone()),
         NamedVar::Arg(v) => Var::Arg(args.iter().enumerate().find(|(_, a)| *a == v).unwrap().0),
