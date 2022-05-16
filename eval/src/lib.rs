@@ -30,6 +30,7 @@ enum NamedVar {
 
 #[derive(Clone, Debug)]
 struct NamedCtor {
+    // This field isn't used for evaluation - it's just a useful hint when writing tests
     name: String,
     tag: usize,
 }
