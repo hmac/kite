@@ -5,14 +5,17 @@ use crate::dsl::*;
 use crate::eval::*;
 
 #[cfg(test)]
-fn run_eval_test(defs: Vec<Def<NamedExpr>>) -> DataVal {
+fn assert_eval<'a>(defs: Vec<Def<NamedExpr>>, expected: Val<'a>) {
     let env = make_nameless_env(defs);
-    eval(
-        &env,
-        Stack::new(),
-        Stack::new(),
-        &env.get("main").unwrap().expr,
-    )
+    assert_eq!(
+        *eval(
+            &env,
+            Stack::new(),
+            Stack::new(),
+            &env.get("main").unwrap().expr,
+        ),
+        expected
+    );
 }
 #[test]
 fn test_1() {
@@ -36,15 +39,9 @@ fn test_1() {
             ),
         ),
     };
-    assert_eq!(
-        run_eval_test(vec![main]),
-        DataVal::Ctor(
-            Ctor { tag: 1 },
-            vec![
-                DataVal::Ctor(Ctor { tag: 0 }, vec![]),
-                DataVal::Ctor(Ctor { tag: 0 }, vec![])
-            ]
-        )
+    assert_eval(
+        vec![main],
+        val_ctor(1, vec![val_ctor(0, vec![]), val_ctor(0, vec![])]),
     );
 }
 
@@ -54,7 +51,7 @@ fn test_2() {
     let unit = def("unit", vec![], ctor_("Unit", 0, vec![]));
     let main = def("main", vec![], app(global("id"), vec![global("unit")]));
 
-    let env = make_nameless_env(vec![id, unit, main]);
+    let env = make_nameless_env(vec![id.clone(), unit.clone(), main.clone()]);
 
     assert_eq!(env.get("id").unwrap().expr, Expr::Var(Var::Arg(0)));
     assert_eq!(
@@ -66,14 +63,7 @@ fn test_2() {
         Expr::App(Var::Global("id".into()), vec![Var::Global("unit".into())])
     );
 
-    let result = eval(
-        &env,
-        Stack::new(),
-        Stack::new(),
-        &env.get("main").unwrap().expr,
-    );
-
-    assert_eq!(result, DataVal::Ctor(Ctor { tag: 0 }, vec![]));
+    assert_eval(vec![id, unit, main], val_ctor(0, vec![]));
 }
 
 #[test]
@@ -118,7 +108,7 @@ fn test_3() {
         ),
     };
 
-    let env = make_nameless_env(vec![not, main]);
+    let env = make_nameless_env(vec![not.clone(), main.clone()]);
 
     assert_eq!(
         env.get("not").unwrap().expr,
@@ -138,14 +128,7 @@ fn test_3() {
         )
     );
 
-    let result = eval(
-        &env,
-        Stack::new(),
-        Stack::new(),
-        &env.get("main").unwrap().expr,
-    );
-
-    assert_eq!(result, DataVal::Ctor(Ctor { tag: 1 }, vec![]));
+    assert_eval(vec![not, main], val_ctor(1, vec![]));
 }
 
 #[test]
@@ -204,7 +187,7 @@ fn test_4() {
         ),
     };
 
-    let env = make_nameless_env(vec![from_maybe, main]);
+    let env = make_nameless_env(vec![from_maybe.clone(), main.clone()]);
 
     assert_eq!(
         env.get("fromMaybe").unwrap().expr,
@@ -233,14 +216,7 @@ fn test_4() {
         ),
     );
 
-    let result = eval(
-        &env,
-        Stack::new(),
-        Stack::new(),
-        &env.get("main").unwrap().expr,
-    );
-
-    assert_eq!(result, DataVal::Int(2));
+    assert_eval(vec![from_maybe, main], val_int(2));
 }
 
 #[cfg(test)]
@@ -435,21 +411,15 @@ fn test_5() {
         )
     );
 
-    assert_eq!(
-        run_eval_test(vec![not, map_example(), main]),
-        DataVal::Ctor(
-            Ctor { tag: 1 },
+    assert_eval(
+        vec![not, map_example(), main],
+        val_ctor(
+            1,
             vec![
-                DataVal::Ctor(Ctor { tag: 0 }, vec![]),
-                DataVal::Ctor(
-                    Ctor { tag: 1 },
-                    vec![
-                        DataVal::Ctor(Ctor { tag: 1 }, vec![]),
-                        DataVal::Ctor(Ctor { tag: 0 }, vec![])
-                    ]
-                )
-            ]
-        )
+                val_ctor(0, vec![]),
+                val_ctor(1, vec![val_ctor(1, vec![]), val_ctor(0, vec![])]),
+            ],
+        ),
     );
 }
 
@@ -519,15 +489,9 @@ fn test_6() {
         ),
     };
 
-    assert_eq!(
-        run_eval_test(vec![swap, pair, main]),
-        DataVal::Ctor(
-            Ctor { tag: 0 },
-            vec![
-                DataVal::Ctor(Ctor { tag: 0 }, vec![]),
-                DataVal::Ctor(Ctor { tag: 1 }, vec![]),
-            ]
-        )
+    assert_eval(
+        vec![swap, pair, main],
+        val_ctor(0, vec![val_ctor(0, vec![]), val_ctor(1, vec![])]),
     );
 }
 
@@ -632,30 +596,27 @@ fn test_7() {
             ],
         ),
     };
-    assert_eq!(
-        run_eval_test(vec![inc, list, map_example(), main]),
-        DataVal::Ctor(
-            Ctor { tag: 1 },
+    assert_eval(
+        vec![inc, list, map_example(), main],
+        val_ctor(
+            1,
             vec![
-                DataVal::Int(1),
-                DataVal::Ctor(
-                    Ctor { tag: 1 },
+                val_int(1),
+                val_ctor(
+                    1,
                     vec![
-                        DataVal::Int(2),
-                        DataVal::Ctor(
-                            Ctor { tag: 1 },
+                        val_int(2),
+                        val_ctor(
+                            1,
                             vec![
-                                DataVal::Int(3),
-                                DataVal::Ctor(
-                                    Ctor { tag: 1 },
-                                    vec![DataVal::Int(4), DataVal::Ctor(Ctor { tag: 0 }, vec![])]
-                                )
-                            ]
-                        )
-                    ]
-                )
-            ]
-        )
+                                val_int(3),
+                                val_ctor(1, vec![val_int(4), val_ctor(0, vec![])]),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
     );
 }
 
@@ -746,7 +707,7 @@ fn test_8() {
             )),
         ),
     };
-    assert_eq!(run_eval_test(vec![sum_to, main]), DataVal::Int(15));
+    assert_eval(vec![sum_to, main], val_int(15));
 }
 
 // fib 0 = 1
@@ -954,8 +915,8 @@ fn test_9() {
         vec![],
         let_("n", int(15), app(global("fib"), vec![local("n")])),
     );
-    assert_eq!(
-        run_eval_test(vec![main, lt, length, fib, fib_prime, fib_build]),
-        DataVal::Int(610)
+    assert_eval(
+        vec![main, lt, length, fib, fib_prime, fib_build],
+        val_int(610),
     );
 }

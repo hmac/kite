@@ -162,7 +162,7 @@ fn make_nameless_var(args: &[String], locals: &[String], var: &NamedVar) -> Var 
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Val<'a> {
     Ctor(Ctor, Vec<Rc<Val<'a>>>),
     Int(i32),
@@ -174,16 +174,6 @@ pub enum Val<'a> {
 pub enum DataVal {
     Ctor(Ctor, Vec<DataVal>),
     Int(i32),
-}
-
-fn val_to_data(val: &Val) -> DataVal {
-    match val {
-        Val::PAp(_, _) => panic!("Value contains partial application: {:?}", val),
-        Val::Ctor(ctor, args) => {
-            DataVal::Ctor(*ctor, args.iter().map(|a| val_to_data(a)).collect())
-        }
-        Val::Int(i) => DataVal::Int(*i),
-    }
 }
 
 // Evaluation
@@ -245,7 +235,7 @@ pub fn eval<'a>(
     mut args: Stack<Rc<Val<'a>>>,
     mut locals: Stack<Rc<Val<'a>>>,
     start_expr: &'a Expr,
-) -> DataVal {
+) -> Rc<Val<'a>> {
     // Used to store the result of an evaluation
     // We initially set it to False/Nil/Nothing
     let mut result = Rc::new(Val::Ctor(Ctor { tag: 0 }, vec![]));
@@ -255,7 +245,7 @@ pub fn eval<'a>(
     loop {
         match ctx.pop() {
             None => {
-                return val_to_data(&result);
+                return result;
             }
             // If a variable is global, it might be a nullary function that we need to evaluate.
             // If it's a local or argument, it is guaranteed to be in normal form already and we
