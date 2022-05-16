@@ -1,6 +1,10 @@
-use super::*;
+#[cfg(test)]
 use pretty_assertions::assert_eq;
 
+use crate::dsl::*;
+use crate::eval::*;
+
+#[cfg(test)]
 fn run_eval_test(defs: Vec<Def<NamedExpr>>) -> DataVal {
     let env = make_nameless_env(defs);
     eval(
@@ -12,62 +16,28 @@ fn run_eval_test(defs: Vec<Def<NamedExpr>>) -> DataVal {
 }
 #[test]
 fn test_1() {
-    let unit_ctor = NamedCtor {
-        name: "Unit".into(),
-        tag: 0,
-    };
-    let nil_ctor = NamedCtor {
-        name: "Nil".into(),
-        tag: 0,
-    };
-    let cons_ctor = NamedCtor {
-        name: "Cons".into(),
-        tag: 1,
-    };
-    let unit: NamedExpr = NamedExpr::Ctor(unit_ctor, vec![]);
-    let nil: NamedExpr = NamedExpr::Ctor(nil_ctor, vec![]);
+    let unit = ctor_("Unit", 0, vec![]);
+    let nil = ctor_("Nil", 0, vec![]);
 
     // let nil = Nil
     //  in let unit = Unit
     //      in Cons unit nil
-    let example_named = NamedExpr::Let(
-        "nil".into(),
-        Box::new(nil.clone()),
-        Box::new(NamedExpr::Let(
-            "unit".into(),
-            Box::new(unit.clone()),
-            Box::new(NamedExpr::Ctor(
-                cons_ctor.clone(),
-                vec![
-                    NamedVar::Local("unit".into()),
-                    NamedVar::Local("nil".into()),
-                ],
-            )),
-        )),
-    );
-    let env = LazyEnvConverter::new(vec![]);
-    let example_nameless = make_nameless_expr(&env, &vec![], &vec![], &example_named);
+    let main = Def {
+        name: "main".into(),
+        arity: 0,
+        params: vec![],
+        expr: let_(
+            "nil",
+            nil,
+            let_(
+                "unit",
+                unit,
+                ctor_("Cons", 1, vec![local("unit"), local("nil")]),
+            ),
+        ),
+    };
     assert_eq!(
-        example_nameless,
-        Expr::Let(
-            Box::new(Expr::Ctor(Ctor { tag: 0 }, vec![])),
-            Box::new(Expr::Let(
-                Box::new(Expr::Ctor(Ctor { tag: 0 }, vec![])),
-                Box::new(Expr::Ctor(
-                    Ctor { tag: 1 },
-                    vec![Var::Local(0), Var::Local(1)]
-                ))
-            ))
-        )
-    );
-    let result = eval(
-        &env.into_nameless_env(),
-        Stack::new(),
-        Stack::new(),
-        &example_nameless,
-    );
-    assert_eq!(
-        result,
+        run_eval_test(vec![main]),
         DataVal::Ctor(
             Ctor { tag: 1 },
             vec![
@@ -80,33 +50,9 @@ fn test_1() {
 
 #[test]
 fn test_2() {
-    let id = Def {
-        name: "id".into(),
-        arity: 1,
-        params: vec!["x".into()],
-        expr: NamedExpr::Var(NamedVar::Arg("x".into())),
-    };
-    let unit = Def {
-        name: "unit".into(),
-        arity: 0,
-        params: vec![],
-        expr: NamedExpr::Ctor(
-            NamedCtor {
-                name: "Unit".into(),
-                tag: 0,
-            },
-            vec![],
-        ),
-    };
-    let main = Def {
-        name: "main".into(),
-        arity: 0,
-        params: vec![],
-        expr: NamedExpr::App(
-            NamedVar::Global("id".into()),
-            vec![NamedVar::Global("unit".into())],
-        ),
-    };
+    let id = def("id", vec!["x"], var(arg("x")));
+    let unit = def("unit", vec![], ctor_("Unit", 0, vec![]));
+    let main = def("main", vec![], app(global("id"), vec![global("unit")]));
 
     let env = make_nameless_env(vec![id, unit, main]);
 
@@ -297,6 +243,7 @@ fn test_4() {
     assert_eq!(result, DataVal::Int(2));
 }
 
+#[cfg(test)]
 fn map_example() -> Def<NamedExpr> {
     Def {
         name: "map".into(),
@@ -503,5 +450,512 @@ fn test_5() {
                 )
             ]
         )
+    );
+}
+
+#[test]
+fn test_6() {
+    let pair_ctor = NamedCtor {
+        name: "Pair".into(),
+        tag: 0,
+    };
+    let true_ctor = NamedCtor {
+        name: "True".into(),
+        tag: 1,
+    };
+    let false_ctor = NamedCtor {
+        name: "False".into(),
+        tag: 0,
+    };
+    let swap = Def {
+        name: "swap".into(),
+        arity: 1,
+        params: vec!["p".into()],
+        expr: NamedExpr::Case(
+            NamedVar::Arg("p".into()),
+            vec![(
+                Pat::Ctor(pair_ctor.clone(), vec!["x".into(), "y".into()]),
+                NamedExpr::Ctor(
+                    pair_ctor.clone(),
+                    vec![NamedVar::Local("y".into()), NamedVar::Local("x".into())],
+                ),
+            )],
+        ),
+    };
+    let pair = Def {
+        name: "pair".into(),
+        arity: 2,
+        params: vec!["x".into(), "y".into()],
+        expr: NamedExpr::Ctor(
+            pair_ctor.clone(),
+            vec![NamedVar::Arg("x".into()), NamedVar::Arg("y".into())],
+        ),
+    };
+    let main = Def {
+        name: "main".into(),
+        arity: 0,
+        params: vec![],
+        expr: NamedExpr::Let(
+            "true".into(),
+            Box::new(NamedExpr::Ctor(true_ctor.clone(), vec![])),
+            Box::new(NamedExpr::Let(
+                "false".into(),
+                Box::new(NamedExpr::Ctor(false_ctor.clone(), vec![])),
+                Box::new(NamedExpr::Let(
+                    "p".into(),
+                    Box::new(NamedExpr::App(
+                        NamedVar::Global("pair".into()),
+                        vec![
+                            NamedVar::Local("true".into()),
+                            NamedVar::Local("false".into()),
+                        ],
+                    )),
+                    Box::new(NamedExpr::App(
+                        NamedVar::Global("swap".into()),
+                        vec![NamedVar::Local("p".into())],
+                    )),
+                )),
+            )),
+        ),
+    };
+
+    assert_eq!(
+        run_eval_test(vec![swap, pair, main]),
+        DataVal::Ctor(
+            Ctor { tag: 0 },
+            vec![
+                DataVal::Ctor(Ctor { tag: 0 }, vec![]),
+                DataVal::Ctor(Ctor { tag: 1 }, vec![]),
+            ]
+        )
+    );
+}
+
+#[test]
+fn test_7() {
+    let nil_ctor = NamedCtor {
+        name: "Nil".into(),
+        tag: 0,
+    };
+    let cons_ctor = NamedCtor {
+        name: "Cons".into(),
+        tag: 1,
+    };
+    let list = Def {
+        name: "list".into(),
+        arity: 0,
+        params: vec![],
+        expr: NamedExpr::Let(
+            "nil".into(),
+            Box::new(NamedExpr::Ctor(nil_ctor.clone(), vec![])),
+            Box::new(NamedExpr::Let(
+                "x0".into(),
+                Box::new(NamedExpr::Int(0)),
+                Box::new(NamedExpr::Let(
+                    "x1".into(),
+                    Box::new(NamedExpr::Int(1)),
+                    Box::new(NamedExpr::Let(
+                        "x2".into(),
+                        Box::new(NamedExpr::Int(2)),
+                        Box::new(NamedExpr::Let(
+                            "x3".into(),
+                            Box::new(NamedExpr::Int(3)),
+                            Box::new(NamedExpr::Let(
+                                "l1".into(),
+                                Box::new(NamedExpr::Ctor(
+                                    cons_ctor.clone(),
+                                    vec![
+                                        NamedVar::Local("x3".into()),
+                                        NamedVar::Local("nil".into()),
+                                    ],
+                                )),
+                                Box::new(NamedExpr::Let(
+                                    "l2".into(),
+                                    Box::new(NamedExpr::Ctor(
+                                        cons_ctor.clone(),
+                                        vec![
+                                            NamedVar::Local("x2".into()),
+                                            NamedVar::Local("l1".into()),
+                                        ],
+                                    )),
+                                    Box::new(NamedExpr::Let(
+                                        "l3".into(),
+                                        Box::new(NamedExpr::Ctor(
+                                            cons_ctor.clone(),
+                                            vec![
+                                                NamedVar::Local("x1".into()),
+                                                NamedVar::Local("l2".into()),
+                                            ],
+                                        )),
+                                        Box::new(NamedExpr::Let(
+                                            "l4".into(),
+                                            Box::new(NamedExpr::Ctor(
+                                                cons_ctor.clone(),
+                                                vec![
+                                                    NamedVar::Local("x0".into()),
+                                                    NamedVar::Local("l3".into()),
+                                                ],
+                                            )),
+                                            Box::new(NamedExpr::Var(NamedVar::Local("l4".into()))),
+                                        )),
+                                    )),
+                                )),
+                            )),
+                        )),
+                    )),
+                )),
+            )),
+        ),
+    };
+    let inc = Def {
+        name: "inc".into(),
+        arity: 1,
+        params: vec!["x".into()],
+        expr: NamedExpr::Let(
+            "one".into(),
+            Box::new(NamedExpr::Int(1)),
+            Box::new(NamedExpr::Prim(
+                Prim::IntAdd,
+                vec![NamedVar::Arg("x".into()), NamedVar::Local("one".into())],
+            )),
+        ),
+    };
+    let main = Def {
+        name: "main".into(),
+        arity: 0,
+        params: vec![],
+        expr: NamedExpr::App(
+            NamedVar::Global("map".into()),
+            vec![
+                NamedVar::Global("inc".into()),
+                NamedVar::Global("list".into()),
+            ],
+        ),
+    };
+    assert_eq!(
+        run_eval_test(vec![inc, list, map_example(), main]),
+        DataVal::Ctor(
+            Ctor { tag: 1 },
+            vec![
+                DataVal::Int(1),
+                DataVal::Ctor(
+                    Ctor { tag: 1 },
+                    vec![
+                        DataVal::Int(2),
+                        DataVal::Ctor(
+                            Ctor { tag: 1 },
+                            vec![
+                                DataVal::Int(3),
+                                DataVal::Ctor(
+                                    Ctor { tag: 1 },
+                                    vec![DataVal::Int(4), DataVal::Ctor(Ctor { tag: 0 }, vec![])]
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+    );
+}
+
+// sum_to = n -> case n == 0 of
+//                 True -> 0
+//                 False -> n + (sum_to (n - 1))
+// main = let n = 5 in sum_to n
+#[test]
+fn test_8() {
+    let sum_to = Def {
+        name: "sum_to".into(),
+        arity: 1,
+        params: vec!["n".into()],
+        expr: NamedExpr::Let(
+            "zero".into(),
+            Box::new(NamedExpr::Int(0)),
+            Box::new(NamedExpr::Let(
+                "one".into(),
+                Box::new(NamedExpr::Int(1)),
+                Box::new(NamedExpr::Let(
+                    "neq0".into(),
+                    Box::new(NamedExpr::Prim(
+                        Prim::IntEq,
+                        vec![NamedVar::Arg("n".into()), NamedVar::Local("zero".into())],
+                    )),
+                    Box::new(NamedExpr::Case(
+                        NamedVar::Local("neq0".into()),
+                        vec![
+                            (
+                                Pat::Ctor(
+                                    NamedCtor {
+                                        name: "True".into(),
+                                        tag: 1,
+                                    },
+                                    vec![],
+                                ),
+                                NamedExpr::Var(NamedVar::Local("zero".into())),
+                            ),
+                            (
+                                Pat::Ctor(
+                                    NamedCtor {
+                                        name: "False".into(),
+                                        tag: 0,
+                                    },
+                                    vec![],
+                                ),
+                                NamedExpr::Let(
+                                    "n-1".into(),
+                                    Box::new(NamedExpr::Prim(
+                                        Prim::IntSub,
+                                        vec![
+                                            NamedVar::Arg("n".into()),
+                                            NamedVar::Local("one".into()),
+                                        ],
+                                    )),
+                                    Box::new(NamedExpr::Let(
+                                        "sum".into(),
+                                        Box::new(NamedExpr::App(
+                                            NamedVar::Global("sum_to".into()),
+                                            vec![NamedVar::Local("n-1".into())],
+                                        )),
+                                        Box::new(NamedExpr::Prim(
+                                            Prim::IntAdd,
+                                            vec![
+                                                NamedVar::Local("sum".into()),
+                                                NamedVar::Arg("n".into()),
+                                            ],
+                                        )),
+                                    )),
+                                ),
+                            ),
+                        ],
+                    )),
+                )),
+            )),
+        ),
+    };
+    let main = Def {
+        name: "main".into(),
+        arity: 0,
+        params: vec![],
+        expr: NamedExpr::Let(
+            "n".into(),
+            Box::new(NamedExpr::Int(5)),
+            Box::new(NamedExpr::App(
+                NamedVar::Global("sum_to".into()),
+                vec![NamedVar::Local("n".into())],
+            )),
+        ),
+    };
+    assert_eq!(run_eval_test(vec![sum_to, main]), DataVal::Int(15));
+}
+
+// fib 0 = 1
+// fib 1 = 1
+// fib n = case fibBuild n [1, 1] of
+//   x : _xs -> x
+//
+// fibBuild n ms | n <= length ms = ms
+// fibBuild n ms | otherwise      = fibBuild n (fib' ms)
+//
+// fib' ms = case ms of
+//   x : ms' -> case ms' of
+//     y : ms'' -> let r = x + y in r : x : y : ms''
+#[test]
+fn test_9() {
+    let fib = Def {
+        name: "fib".into(),
+        arity: 1,
+        params: vec!["n".into()],
+        expr: let_(
+            "zero",
+            int(0),
+            let_(
+                "one",
+                int(1),
+                let_(
+                    "two",
+                    int(2),
+                    let_(
+                        "neq0",
+                        prim(Prim::IntEq, vec![arg("n"), local("zero")]),
+                        case(
+                            local("neq0"),
+                            vec![
+                                (ctor_pat("True", 1, vec![]), var(local("one"))),
+                                (
+                                    ctor_pat("False", 0, vec![]),
+                                    let_(
+                                        "neq1",
+                                        prim(Prim::IntEq, vec![arg("n"), local("one")]),
+                                        case(
+                                            local("neq1"),
+                                            vec![
+                                                (ctor_pat("True", 1, vec![]), var(local("one"))),
+                                                (
+                                                    ctor_pat("False", 0, vec![]),
+                                                    let_(
+                                                        "nil",
+                                                        ctor_("Nil", 0, vec![]),
+                                                        let_(
+                                                            "fib_build_args0",
+                                                            ctor_(
+                                                                "Cons",
+                                                                1,
+                                                                vec![local("one"), local("nil")],
+                                                            ),
+                                                            let_(
+                                                                "fib_build_args",
+                                                                ctor_(
+                                                                    "Cons",
+                                                                    1,
+                                                                    vec![
+                                                                        local("one"),
+                                                                        local("fib_build_args0"),
+                                                                    ],
+                                                                ),
+                                                                let_(
+                                                                    "fibs",
+                                                                    app(
+                                                                        global("fib_build"),
+                                                                        vec![
+                                                                            arg("n"),
+                                                                            local("fib_build_args"),
+                                                                        ],
+                                                                    ),
+                                                                    case(
+                                                                        local("fibs"),
+                                                                        vec![(
+                                                                            ctor_pat(
+                                                                                "Cons",
+                                                                                1,
+                                                                                vec!["x", "xs"],
+                                                                            ),
+                                                                            var(local("x")),
+                                                                        )],
+                                                                    ),
+                                                                ),
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ],
+                                        ),
+                                    ),
+                                ),
+                            ],
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    };
+    let fib_build = def(
+        "fib_build",
+        vec!["n", "ms"],
+        let_(
+            "ms_len",
+            app(global("length"), vec![arg("ms")]),
+            let_(
+                "n<=ms_len",
+                app(global("<="), vec![arg("n"), local("ms_len")]),
+                case(
+                    local("n<=ms_len"),
+                    vec![
+                        (ctor_pat("True", 1, vec![]), var(arg("ms"))),
+                        (
+                            ctor_pat("False", 0, vec![]),
+                            let_(
+                                "ms'",
+                                app(global("fib'"), vec![arg("ms")]),
+                                app(global("fib_build"), vec![arg("n"), local("ms'")]),
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        ),
+    );
+
+    let fib_prime = def(
+        "fib'",
+        vec!["ms"],
+        case(
+            arg("ms"),
+            vec![(
+                ctor_pat("Cons", 1, vec!["x", "ms'"]),
+                case(
+                    local("ms'"),
+                    vec![(
+                        ctor_pat("Cons", 1, vec!["y", "ms''"]),
+                        let_(
+                            "r",
+                            prim(Prim::IntAdd, vec![local("x"), local("y")]),
+                            let_(
+                                "l0",
+                                ctor_("Cons", 1, vec![local("y"), local("ms''")]),
+                                let_(
+                                    "l1",
+                                    ctor_("Cons", 1, vec![local("x"), local("l0")]),
+                                    let_(
+                                        "l2",
+                                        ctor_("Cons", 1, vec![local("r"), local("l1")]),
+                                        var(local("l2")),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )],
+                ),
+            )],
+        ),
+    );
+    let length = def(
+        "length",
+        vec!["l"],
+        case(
+            arg("l"),
+            vec![
+                (ctor_pat("Nil", 0, vec![]), int(0)),
+                (
+                    ctor_pat("Cons", 1, vec!["x", "xs"]),
+                    let_(
+                        "n",
+                        app(global("length"), vec![local("xs")]),
+                        let_(
+                            "1",
+                            int(1),
+                            prim(Prim::IntAdd, vec![local("n"), local("1")]),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    );
+    let lt = def(
+        "<=",
+        vec!["x", "y"],
+        let_(
+            "x<y",
+            prim(Prim::IntLt, vec![arg("x"), arg("y")]),
+            case(
+                local("x<y"),
+                vec![
+                    (ctor_pat("True", 1, vec![]), var(local("x<y"))),
+                    (
+                        ctor_pat("False", 0, vec![]),
+                        prim(Prim::IntEq, vec![arg("x"), arg("y")]),
+                    ),
+                ],
+            ),
+        ),
+    );
+    let main = def(
+        "main",
+        vec![],
+        let_("n", int(15), app(global("fib"), vec![local("n")])),
+    );
+    assert_eq!(
+        run_eval_test(vec![main, lt, length, fib, fib_prime, fib_build]),
+        DataVal::Int(610)
     );
 }
