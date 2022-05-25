@@ -37,6 +37,7 @@ pub enum Prim {
     IntSub,
     IntEq,
     IntLt,
+    Panic,
 }
 
 // A nameless expression.
@@ -182,7 +183,7 @@ pub enum DataVal {
 // Each stack element is a reference to a heap-allocated value: `Box<Val>`.
 // Values are normal forms: ctors, ints, paps
 // Evaluation returns a value
-// I don't know if we need an explicit heap or not.
+// We store all values in Rc cells
 
 // Evaluation context
 // This tells us where we are in the parent expression, so know what to do when we've finished
@@ -396,21 +397,18 @@ pub fn eval<'a>(
                 // TODO: default alt
                 // TODO: order alts by tag and jump to corresponding index
                 match target.as_ref() {
-                    Val::Ctor(ctor, ctor_args) => {
-                        match alts.iter().find(|(alt_ctor, _)| *alt_ctor == *ctor) {
-                            None => panic!("No matching case alternative for {:?}", result),
-                            Some((_, rhs)) => {
-                                // Drop ctor arg bindings after eval
-                                for _ in ctor_args {
-                                    ctx.push(Ctx::LetDrop);
-                                }
-                                // Push ctor_args onto locals stack
-                                // TODO: what order?
-                                locals.push_chunk(ctor_args.clone());
-                                // Eval rhs
-                                ctx.push(Ctx::Eval(rhs))
-                            }
+                    Val::Ctor(Ctor { tag }, ctor_args) => {
+                        // Case alts are ordered by tag, so we jump directly to the right one
+                        let (_, rhs) = &alts[*tag];
+                        // Drop ctor arg bindings after eval
+                        for _ in ctor_args {
+                            ctx.push(Ctx::LetDrop);
                         }
+                        // Push ctor_args onto locals stack
+                        // TODO: what order?
+                        locals.push_chunk(ctor_args.clone());
+                        // Eval rhs
+                        ctx.push(Ctx::Eval(rhs))
                     }
                     _ => panic!("Case analysis on non-constructor {:?}", target),
                 }
@@ -443,6 +441,7 @@ pub fn eval<'a>(
                         )),
                         _ => panic!("prim ==(int) applied to bad args: {:?}", arg_vals),
                     },
+                    (Prim::Panic, _) => panic!("Panic"),
                     _ => panic!("prim {:?} applied to bad args: {:?}", prim, arg_vals),
                 };
             }

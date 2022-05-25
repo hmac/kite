@@ -84,12 +84,12 @@ fn test_3() {
             NamedVar::Arg("b".into()),
             vec![
                 (
-                    Pat::Ctor(true_ctor.clone(), vec![]),
-                    NamedExpr::Ctor(false_ctor.clone(), vec![]),
-                ),
-                (
                     Pat::Ctor(false_ctor.clone(), vec![]),
                     NamedExpr::Ctor(true_ctor.clone(), vec![]),
+                ),
+                (
+                    Pat::Ctor(true_ctor.clone(), vec![]),
+                    NamedExpr::Ctor(false_ctor.clone(), vec![]),
                 ),
             ],
         ),
@@ -115,8 +115,8 @@ fn test_3() {
         Expr::Case(
             Var::Arg(0),
             vec![
+                (Ctor { tag: 0 }, Expr::Ctor(Ctor { tag: 1 }, vec![])),
                 (Ctor { tag: 1 }, Expr::Ctor(Ctor { tag: 0 }, vec![])),
-                (Ctor { tag: 0 }, Expr::Ctor(Ctor { tag: 1 }, vec![]))
             ]
         )
     );
@@ -152,12 +152,12 @@ fn test_4() {
             NamedVar::Arg("m".into()),
             vec![
                 (
-                    Pat::Ctor(just_ctor.clone(), vec!["x".into()]),
-                    NamedExpr::Var(NamedVar::Local("x".into())),
-                ),
-                (
                     Pat::Ctor(nothing_ctor.clone(), vec![]),
                     NamedExpr::Var(NamedVar::Arg("d".into())),
+                ),
+                (
+                    Pat::Ctor(just_ctor.clone(), vec!["x".into()]),
+                    NamedExpr::Var(NamedVar::Local("x".into())),
                 ),
             ],
         ),
@@ -194,8 +194,8 @@ fn test_4() {
         Expr::Case(
             Var::Arg(0),
             vec![
-                (Ctor { tag: 1 }, Expr::Var(Var::Local(0)),),
                 (Ctor { tag: 0 }, Expr::Var(Var::Arg(1)),),
+                (Ctor { tag: 1 }, Expr::Var(Var::Local(0)),),
             ],
         ),
     );
@@ -305,12 +305,12 @@ fn test_5() {
             NamedVar::Arg("b".into()),
             vec![
                 (
-                    Pat::Ctor(true_ctor.clone(), vec![]),
-                    NamedExpr::Ctor(false_ctor.clone(), vec![]),
-                ),
-                (
                     Pat::Ctor(false_ctor.clone(), vec![]),
                     NamedExpr::Ctor(true_ctor.clone(), vec![]),
+                ),
+                (
+                    Pat::Ctor(true_ctor.clone(), vec![]),
+                    NamedExpr::Ctor(false_ctor.clone(), vec![]),
                 ),
             ],
         ),
@@ -648,16 +648,6 @@ fn test_8() {
                             (
                                 Pat::Ctor(
                                     NamedCtor {
-                                        name: "True".into(),
-                                        tag: 1,
-                                    },
-                                    vec![],
-                                ),
-                                NamedExpr::Var(NamedVar::Local("zero".into())),
-                            ),
-                            (
-                                Pat::Ctor(
-                                    NamedCtor {
                                         name: "False".into(),
                                         tag: 0,
                                     },
@@ -687,6 +677,16 @@ fn test_8() {
                                         )),
                                     )),
                                 ),
+                            ),
+                            (
+                                Pat::Ctor(
+                                    NamedCtor {
+                                        name: "True".into(),
+                                        tag: 1,
+                                    },
+                                    vec![],
+                                ),
+                                NamedExpr::Var(NamedVar::Local("zero".into())),
                             ),
                         ],
                     )),
@@ -742,7 +742,6 @@ fn test_9() {
                         case(
                             local("neq0"),
                             vec![
-                                (ctor_pat("True", 1, vec![]), var(local("one"))),
                                 (
                                     ctor_pat("False", 0, vec![]),
                                     let_(
@@ -751,7 +750,6 @@ fn test_9() {
                                         case(
                                             local("neq1"),
                                             vec![
-                                                (ctor_pat("True", 1, vec![]), var(local("one"))),
                                                 (
                                                     ctor_pat("False", 0, vec![]),
                                                     let_(
@@ -785,24 +783,39 @@ fn test_9() {
                                                                     ),
                                                                     case(
                                                                         local("fibs"),
-                                                                        vec![(
-                                                                            ctor_pat(
-                                                                                "Cons",
-                                                                                1,
-                                                                                vec!["x", "xs"],
+                                                                        vec![
+                                                                            (
+                                                                                ctor_pat(
+                                                                                    "Nil",
+                                                                                    0,
+                                                                                    vec![],
+                                                                                ),
+                                                                                prim(
+                                                                                    Prim::Panic,
+                                                                                    vec![],
+                                                                                ),
                                                                             ),
-                                                                            var(local("x")),
-                                                                        )],
+                                                                            (
+                                                                                ctor_pat(
+                                                                                    "Cons",
+                                                                                    1,
+                                                                                    vec!["x", "xs"],
+                                                                                ),
+                                                                                var(local("x")),
+                                                                            ),
+                                                                        ],
                                                                     ),
                                                                 ),
                                                             ),
                                                         ),
                                                     ),
                                                 ),
+                                                (ctor_pat("True", 1, vec![]), var(local("one"))),
                                             ],
                                         ),
                                     ),
                                 ),
+                                (ctor_pat("True", 1, vec![]), var(local("one"))),
                             ],
                         ),
                     ),
@@ -822,7 +835,6 @@ fn test_9() {
                 case(
                     local("n<=ms_len"),
                     vec![
-                        (ctor_pat("True", 1, vec![]), var(arg("ms"))),
                         (
                             ctor_pat("False", 0, vec![]),
                             let_(
@@ -831,6 +843,7 @@ fn test_9() {
                                 app(global("fib_build"), vec![arg("n"), local("ms'")]),
                             ),
                         ),
+                        (ctor_pat("True", 1, vec![]), var(arg("ms"))),
                     ],
                 ),
             ),
@@ -842,32 +855,38 @@ fn test_9() {
         vec!["ms"],
         case(
             arg("ms"),
-            vec![(
-                ctor_pat("Cons", 1, vec!["x", "ms'"]),
-                case(
-                    local("ms'"),
-                    vec![(
-                        ctor_pat("Cons", 1, vec!["y", "ms''"]),
-                        let_(
-                            "r",
-                            prim(Prim::IntAdd, vec![local("x"), local("y")]),
-                            let_(
-                                "l0",
-                                ctor_("Cons", 1, vec![local("y"), local("ms''")]),
+            vec![
+                (ctor_pat("Nil", 0, vec![]), prim(Prim::Panic, vec![])),
+                (
+                    ctor_pat("Cons", 1, vec!["x", "ms'"]),
+                    case(
+                        local("ms'"),
+                        vec![
+                            (ctor_pat("Nil", 0, vec![]), prim(Prim::Panic, vec![])),
+                            (
+                                ctor_pat("Cons", 1, vec!["y", "ms''"]),
                                 let_(
-                                    "l1",
-                                    ctor_("Cons", 1, vec![local("x"), local("l0")]),
+                                    "r",
+                                    prim(Prim::IntAdd, vec![local("x"), local("y")]),
                                     let_(
-                                        "l2",
-                                        ctor_("Cons", 1, vec![local("r"), local("l1")]),
-                                        var(local("l2")),
+                                        "l0",
+                                        ctor_("Cons", 1, vec![local("y"), local("ms''")]),
+                                        let_(
+                                            "l1",
+                                            ctor_("Cons", 1, vec![local("x"), local("l0")]),
+                                            let_(
+                                                "l2",
+                                                ctor_("Cons", 1, vec![local("r"), local("l1")]),
+                                                var(local("l2")),
+                                            ),
+                                        ),
                                     ),
                                 ),
                             ),
-                        ),
-                    )],
+                        ],
+                    ),
                 ),
-            )],
+            ],
         ),
     );
     let length = def(
@@ -901,11 +920,11 @@ fn test_9() {
             case(
                 local("x<y"),
                 vec![
-                    (ctor_pat("True", 1, vec![]), var(local("x<y"))),
                     (
                         ctor_pat("False", 0, vec![]),
                         prim(Prim::IntEq, vec![arg("x"), arg("y")]),
                     ),
+                    (ctor_pat("True", 1, vec![]), var(local("x<y"))),
                 ],
             ),
         ),
