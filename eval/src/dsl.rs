@@ -64,6 +64,14 @@ pub fn int(i: i32) -> NamedExpr {
     NamedExpr::Int(i)
 }
 
+pub fn inc(v: NamedVar, expr: NamedExpr) -> NamedExpr {
+    NamedExpr::Inc(v, Box::new(expr))
+}
+
+pub fn dec(v: NamedVar, expr: NamedExpr) -> NamedExpr {
+    NamedExpr::Dec(v, Box::new(expr))
+}
+
 pub fn def(name: &str, params: Vec<&str>, expr: NamedExpr) -> Def<NamedExpr> {
     let arity = params.len();
     Def {

@@ -10,6 +10,8 @@ pub enum NamedExpr {
     Ctor(NamedCtor, Vec<NamedVar>),
     Int(i32),
     Prim(Prim, Vec<NamedVar>),
+    Inc(NamedVar, Box<NamedExpr>),
+    Dec(NamedVar, Box<NamedExpr>),
 }
 
 #[derive(Clone, Debug)]
@@ -51,6 +53,8 @@ pub enum Expr {
     Ctor(Ctor, Vec<Var>),
     Int(i32),
     Prim(Prim, Vec<Var>),
+    Inc(Var, Box<Expr>),
+    Dec(Var, Box<Expr>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -144,6 +148,14 @@ fn make_nameless_expr(args: &[String], locals: &[String], expr: &NamedExpr) -> E
 
             Expr::Prim(*p, nameless_xs)
         }
+        NamedExpr::Inc(x, e) => Expr::Inc(
+            make_nameless_var(args, locals, x),
+            Box::new(make_nameless_expr(args, locals, e)),
+        ),
+        NamedExpr::Dec(x, e) => Expr::Dec(
+            make_nameless_var(args, locals, x),
+            Box::new(make_nameless_expr(args, locals, e)),
+        ),
     }
 }
 
@@ -486,6 +498,15 @@ pub fn eval<'a>(
                             vars: vars.clone(),
                             callback: EvalVarsCallback::MakePrim { prim: *prim },
                         });
+                    }
+                    // inc and dec are currently no-ops
+                    Expr::Inc(v, e) => {
+                        ctx.push(Ctx::Eval(e));
+                        ctx.push(Ctx::EvalVar(v.clone()));
+                    }
+                    Expr::Dec(v, e) => {
+                        ctx.push(Ctx::Eval(e));
+                        ctx.push(Ctx::EvalVar(v.clone()));
                     }
                 }
             }

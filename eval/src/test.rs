@@ -939,3 +939,83 @@ fn test_9() {
         val_int(610),
     );
 }
+
+// last(l) = case l of
+//   Nil -> dec l; Nothing
+//   Cons x xs -> inc x; inc xs; dec l;
+//     case xs of
+//       Nil -> dec xs; Just x
+//       Cons y ys -> dec x; last xs
+#[test]
+fn test_10() {
+    let last = def(
+        "last",
+        vec!["l"],
+        case(
+            arg("l"),
+            vec![
+                (
+                    ctor_pat("Nil", 0, vec![]),
+                    dec(arg("l"), ctor_("Nothing", 0, vec![])),
+                ),
+                (
+                    ctor_pat("Cons", 1, vec!["x", "xs"]),
+                    inc(
+                        local("x"),
+                        inc(
+                            local("xs"),
+                            dec(
+                                arg("l"),
+                                case(
+                                    local("xs"),
+                                    vec![
+                                        (
+                                            ctor_pat("Nil", 0, vec![]),
+                                            dec(local("xs"), ctor_("Just", 1, vec![local("x")])),
+                                        ),
+                                        (
+                                            ctor_pat("Cons", 1, vec!["y", "ys"]),
+                                            dec(local("x"), app(global("last"), vec![local("xs")])),
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    );
+    // main = let one = 1
+    //            two = 2
+    //            nil = Nil
+    //            l1 = Cons two nil
+    //            l2 = Cons one l1
+    //         in last l2
+    let main = def(
+        "main",
+        vec![],
+        let_(
+            "one",
+            int(1),
+            let_(
+                "two",
+                int(2),
+                let_(
+                    "nil",
+                    ctor_("Nil", 0, vec![]),
+                    let_(
+                        "l1",
+                        ctor_("Cons", 1, vec![local("two"), local("nil")]),
+                        let_(
+                            "l2",
+                            ctor_("Cons", 1, vec![local("one"), local("l1")]),
+                            app(global("last"), vec![local("l2")]),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+    assert_eval(vec![main, last], val_ctor(1, vec![val_int(2)]));
+}
