@@ -83,7 +83,10 @@ pub fn def(name: &str, params: Vec<&str>, expr: NamedExpr) -> Def<NamedExpr> {
 }
 
 pub fn val_ctor<'a>(tag: usize, args: Vec<Val<'a>>) -> Val<'a> {
-    Val::Ctor(Ctor { tag }, args.into_iter().map(Rc::new).collect())
+    Val::Ctor(
+        Ctor { tag },
+        args.into_iter().map(RcVal::new).map(Rc::new).collect(),
+    )
 }
 
 pub fn val_int<'a>(n: i32) -> Val<'a> {

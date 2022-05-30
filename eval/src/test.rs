@@ -13,7 +13,8 @@ fn assert_eval<'a>(defs: Vec<Def<NamedExpr>>, expected: Val<'a>) {
             Stack::new(),
             Stack::new(),
             &env.get("main").unwrap().expr,
-        ),
+        )
+        .inner(),
         expected
     );
 }

@@ -4,9 +4,9 @@ use std::rc::Rc;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use eval::dsl::*;
-use eval::eval::{eval, make_nameless_env, Def, Expr, Prim, Stack, Val};
+use eval::eval::{eval, make_nameless_env, Def, Expr, Prim, RcVal, Stack};
 
-fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> Rc<Val<'a>> {
+fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> Rc<RcVal<'a>> {
     eval(
         &env,
         Stack::new(),
@@ -20,7 +20,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     for size in [2, 4, 8, 16, 32, 64, 128, 256, 512].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             b.iter(|| {
-                eval_main(&make_fib_program(size));
+                eval_main(black_box(&make_fib_program(size)));
                 black_box(())
             })
         });

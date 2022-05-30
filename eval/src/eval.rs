@@ -177,9 +177,36 @@ fn make_nameless_var(args: &[String], locals: &[String], var: &NamedVar) -> Var 
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Val<'a> {
-    Ctor(Ctor, Vec<Rc<Val<'a>>>),
+    Ctor(Ctor, Vec<Rc<RcVal<'a>>>),
     Int(i32),
-    PAp(&'a Def<Expr>, Vec<Rc<Val<'a>>>),
+    PAp(&'a Def<Expr>, Vec<Rc<RcVal<'a>>>),
+}
+
+// A reference-counted value.
+// This is currently just a simulation, since the interpeter passes values around using Rc, which
+// does its own reference counting.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RcVal<'a> {
+    rc: usize,
+    inner: Val<'a>,
+}
+
+impl<'a> RcVal<'a> {
+    pub fn new(inner: Val) -> RcVal {
+        RcVal { rc: 1, inner }
+    }
+    pub fn inc(&mut self) {
+        self.rc += 1;
+    }
+    pub fn dec(&mut self) {
+        self.rc -= 1;
+        if self.rc == 0 {
+            println!("DROP {:?}", self.inner);
+        }
+    }
+    pub fn inner(&self) -> &Val<'a> {
+        &self.inner
+    }
 }
 
 // A value that contains no partial applications
@@ -212,8 +239,8 @@ pub enum Ctx<'a> {
         args: Vec<Var>,
     },
     AppCall {
-        func: Rc<Val<'a>>,
-        arg_vals: Vec<Rc<Val<'a>>>,
+        func: Rc<RcVal<'a>>,
+        arg_vals: Vec<Rc<RcVal<'a>>>,
     },
     ArgDrop(usize),
     EvalVars0 {
@@ -222,36 +249,36 @@ pub enum Ctx<'a> {
     },
     EvalVarsFromResult {
         vars: Vec<Var>,
-        vals: Vec<Rc<Val<'a>>>,
+        vals: Vec<Rc<RcVal<'a>>>,
         callback: EvalVarsCallback<'a>,
     },
     EvalVars {
         vars: Vec<Var>,
-        vals: Vec<Rc<Val<'a>>>,
+        vals: Vec<Rc<RcVal<'a>>>,
         callback: EvalVarsCallback<'a>,
     },
     CtorFinish {
         ctor: Ctor,
-        arg_vals: Vec<Rc<Val<'a>>>,
+        arg_vals: Vec<Rc<RcVal<'a>>>,
     },
     Case {
         alts: &'a [(Ctor, Expr)],
     },
     Prim {
         prim: Prim,
-        arg_vals: Vec<Rc<Val<'a>>>,
+        arg_vals: Vec<Rc<RcVal<'a>>>,
     },
 }
 
 pub fn eval<'a>(
     env: &'a HashMap<String, Def<Expr>>,
-    mut args: Stack<Rc<Val<'a>>>,
-    mut locals: Stack<Rc<Val<'a>>>,
+    mut args: Stack<Rc<RcVal<'a>>>,
+    mut locals: Stack<Rc<RcVal<'a>>>,
     start_expr: &'a Expr,
-) -> Rc<Val<'a>> {
+) -> Rc<RcVal<'a>> {
     // Used to store the result of an evaluation
     // We initially set it to False/Nil/Nothing
-    let mut result = Rc::new(Val::Ctor(Ctor { tag: 0 }, vec![]));
+    let mut result = Rc::new(RcVal::new(Val::Ctor(Ctor { tag: 0 }, vec![])));
     // Used to store the parent context, when we have to evaluate sub-expressions.
     let mut ctx: Vec<Ctx> = vec![Ctx::Eval(start_expr)];
 
@@ -346,7 +373,7 @@ pub fn eval<'a>(
             // indices count from the back of the vector.
             // So in reality the args on the arg stack are in reverse order.
             Some(Ctx::AppCall { func, mut arg_vals }) => {
-                match func.as_ref() {
+                match func.as_ref().inner() {
                     Val::PAp(def, existing_args) => {
                         // Check the arity of def
                         // If we have enough args, push them all onto the stack (even if we have too
@@ -371,7 +398,7 @@ pub fn eval<'a>(
                             // to `existing_args`.
                             arg_vals.reverse();
                             existing_args.append(&mut arg_vals);
-                            result = Rc::new(Val::PAp(def, existing_args));
+                            result = Rc::new(RcVal::new(Val::PAp(def, existing_args)));
                         }
                     }
                     _ => panic!("Application of non-function: {:?}", func),
@@ -393,7 +420,7 @@ pub fn eval<'a>(
             Some(Ctx::CtorFinish { ctor, mut arg_vals }) => {
                 // `arg_vals` is reversed by EvalVars, so we need to unreverse it
                 arg_vals.reverse();
-                result = Rc::new(Val::Ctor(ctor, arg_vals));
+                result = Rc::new(RcVal::new(Val::Ctor(ctor, arg_vals)));
             }
             Some(Ctx::EvalVar(var)) => match lookup_var(env, &args, &locals, &var) {
                 VarLookup::Val(v) => {
@@ -407,8 +434,7 @@ pub fn eval<'a>(
                 let target = Rc::clone(&result);
                 // Examine target, check tag, eval alt with same tag, binding ctor args
                 // TODO: default alt
-                // TODO: order alts by tag and jump to corresponding index
-                match target.as_ref() {
+                match target.as_ref().inner() {
                     Val::Ctor(Ctor { tag }, ctor_args) => {
                         // Case alts are ordered by tag, so we jump directly to the right one
                         let (_, rhs) = &alts[*tag];
@@ -417,7 +443,6 @@ pub fn eval<'a>(
                             ctx.push(Ctx::LetDrop);
                         }
                         // Push ctor_args onto locals stack
-                        // TODO: what order?
                         locals.push_chunk(ctor_args.clone());
                         // Eval rhs
                         ctx.push(Ctx::Eval(rhs))
@@ -427,32 +452,40 @@ pub fn eval<'a>(
             }
             Some(Ctx::Prim { prim, arg_vals }) => {
                 result = match (&prim, &arg_vals[..]) {
-                    (Prim::IntAdd, [xref, yref]) => match (xref.as_ref(), yref.as_ref()) {
-                        (&Val::Int(x), &Val::Int(y)) => Rc::new(Val::Int(x + y)),
-                        _ => panic!("prim + applied to bad args: {:?}", arg_vals),
-                    },
-                    (Prim::IntSub, [xref, yref]) => match (xref.as_ref(), yref.as_ref()) {
-                        (&Val::Int(x), &Val::Int(y)) => Rc::new(Val::Int(x - y)),
-                        _ => panic!("prim - applied to bad args: {:?}", arg_vals),
-                    },
-                    (Prim::IntEq, [xref, yref]) => match (xref.as_ref(), yref.as_ref()) {
-                        (&Val::Int(x), &Val::Int(y)) => Rc::new(Val::Ctor(
-                            Ctor {
-                                tag: (x == y) as usize,
-                            },
-                            vec![],
-                        )),
-                        _ => panic!("prim ==(int) applied to bad args: {:?}", arg_vals),
-                    },
-                    (Prim::IntLt, [xref, yref]) => match (xref.as_ref(), yref.as_ref()) {
-                        (&Val::Int(x), &Val::Int(y)) => Rc::new(Val::Ctor(
-                            Ctor {
-                                tag: (x < y) as usize,
-                            },
-                            vec![],
-                        )),
-                        _ => panic!("prim ==(int) applied to bad args: {:?}", arg_vals),
-                    },
+                    (Prim::IntAdd, [xref, yref]) => {
+                        match (xref.as_ref().inner(), yref.as_ref().inner()) {
+                            (&Val::Int(x), &Val::Int(y)) => Rc::new(RcVal::new(Val::Int(x + y))),
+                            _ => panic!("prim + applied to bad args: {:?}", arg_vals),
+                        }
+                    }
+                    (Prim::IntSub, [xref, yref]) => {
+                        match (xref.as_ref().inner(), yref.as_ref().inner()) {
+                            (&Val::Int(x), &Val::Int(y)) => Rc::new(RcVal::new(Val::Int(x - y))),
+                            _ => panic!("prim - applied to bad args: {:?}", arg_vals),
+                        }
+                    }
+                    (Prim::IntEq, [xref, yref]) => {
+                        match (xref.as_ref().inner(), yref.as_ref().inner()) {
+                            (&Val::Int(x), &Val::Int(y)) => Rc::new(RcVal::new(Val::Ctor(
+                                Ctor {
+                                    tag: (x == y) as usize,
+                                },
+                                vec![],
+                            ))),
+                            _ => panic!("prim ==(int) applied to bad args: {:?}", arg_vals),
+                        }
+                    }
+                    (Prim::IntLt, [xref, yref]) => {
+                        match (xref.as_ref().inner(), yref.as_ref().inner()) {
+                            (&Val::Int(x), &Val::Int(y)) => Rc::new(RcVal::new(Val::Ctor(
+                                Ctor {
+                                    tag: (x < y) as usize,
+                                },
+                                vec![],
+                            ))),
+                            _ => panic!("prim ==(int) applied to bad args: {:?}", arg_vals),
+                        }
+                    }
                     (Prim::Panic, _) => panic!("Panic"),
                     _ => panic!("prim {:?} applied to bad args: {:?}", prim, arg_vals),
                 };
@@ -460,7 +493,7 @@ pub fn eval<'a>(
             Some(Ctx::Eval(expr)) => {
                 match expr {
                     Expr::Int(n) => {
-                        result = Rc::new(Val::Int(*n));
+                        result = Rc::new(RcVal::new(Val::Int(*n)));
                     }
                     Expr::Var(v) => {
                         ctx.push(Ctx::EvalVar(v.clone()));
@@ -481,7 +514,7 @@ pub fn eval<'a>(
                     }
                     Expr::Ctor(ctor, vars) => {
                         if vars.is_empty() {
-                            result = Rc::new(Val::Ctor(*ctor, vec![]));
+                            result = Rc::new(RcVal::new(Val::Ctor(*ctor, vec![])));
                         } else {
                             ctx.push(Ctx::EvalVars0 {
                                 vars: vars.clone(),
@@ -518,13 +551,13 @@ pub fn eval<'a>(
 // This should take the values and produce a new Ctx
 #[derive(Debug)]
 pub enum EvalVarsCallback<'a> {
-    MakeAppCall { func: Rc<Val<'a>> },
+    MakeAppCall { func: Rc<RcVal<'a>> },
     MakeCtorFinish { ctor: Ctor },
     MakePrim { prim: Prim },
 }
 
 impl<'a> EvalVarsCallback<'a> {
-    fn call(self, arg_vals: Vec<Rc<Val<'a>>>) -> Ctx<'a> {
+    fn call(self, arg_vals: Vec<Rc<RcVal<'a>>>) -> Ctx<'a> {
         match self {
             EvalVarsCallback::MakeAppCall { func } => Ctx::AppCall { func, arg_vals },
             EvalVarsCallback::MakeCtorFinish { ctor } => Ctx::CtorFinish { ctor, arg_vals },
@@ -536,19 +569,19 @@ impl<'a> EvalVarsCallback<'a> {
 #[derive(Debug)]
 pub enum VarLookup<'a> {
     NullaryDef(&'a Def<Expr>),
-    Val(Rc<Val<'a>>),
+    Val(Rc<RcVal<'a>>),
 }
 
 fn lookup_var<'a, 'b>(
     env: &'a HashMap<String, Def<Expr>>,
-    args: &'b Stack<Rc<Val<'a>>>,
-    locals: &'b Stack<Rc<Val<'a>>>,
+    args: &'b Stack<Rc<RcVal<'a>>>,
+    locals: &'b Stack<Rc<RcVal<'a>>>,
     var: &'b Var,
 ) -> VarLookup<'a> {
     match var {
         Var::Global(name) => match env.get(name) {
             Some(def) if def.arity == 0 => VarLookup::NullaryDef(def),
-            Some(def) => VarLookup::Val(Rc::new(Val::PAp(def, vec![]))),
+            Some(def) => VarLookup::Val(Rc::new(RcVal::new(Val::PAp(def, vec![])))),
             None => panic!("Unknown global variable {}", name),
         },
 
