@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::eval::*;
 
 /// A DSL for constructing `NamedExpr` values, useful for testing
@@ -82,13 +80,10 @@ pub fn def(name: &str, params: Vec<&str>, expr: NamedExpr) -> Def<NamedExpr> {
     }
 }
 
-pub fn val_ctor<'a>(tag: usize, args: Vec<Val<'a>>) -> Val<'a> {
-    Val::Ctor(
-        Ctor { tag },
-        args.into_iter().map(RcVal::new).map(Rc::new).collect(),
-    )
+pub fn val_ctor(tag: usize, args: Vec<DataVal>) -> DataVal {
+    DataVal::Ctor(Ctor { tag }, args)
 }
 
-pub fn val_int<'a>(n: i32) -> Val<'a> {
-    Val::Int(n)
+pub fn val_int(n: i32) -> DataVal {
+    DataVal::Int(n)
 }

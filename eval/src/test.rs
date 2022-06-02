@@ -5,16 +5,15 @@ use crate::dsl::*;
 use crate::eval::*;
 
 #[cfg(test)]
-fn assert_eval<'a>(defs: Vec<Def<NamedExpr>>, expected: Val<'a>) {
+fn assert_eval<'a>(defs: Vec<Def<NamedExpr>>, expected: DataVal) {
     let env = make_nameless_env(defs);
     assert_eq!(
-        *eval(
+        eval(
             &env,
             Stack::new(),
             Stack::new(),
             &env.get("main").unwrap().expr,
-        )
-        .inner(),
+        ),
         expected
     );
 }

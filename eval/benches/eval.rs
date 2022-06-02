@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use eval::dsl::*;
-use eval::eval::{eval, make_nameless_env, Def, Expr, Prim, RcVal, Stack};
+use eval::eval::{eval, make_nameless_env, DataVal, Def, Expr, Prim, Stack};
 
-fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> Rc<RcVal<'a>> {
+fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> DataVal {
     eval(
         &env,
         Stack::new(),
