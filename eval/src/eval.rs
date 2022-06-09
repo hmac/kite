@@ -188,30 +188,66 @@ pub enum Val<'a> {
 // This is currently just a simulation, since the interpeter passes values around using Rc, which
 // does its own reference counting.
 #[derive(Debug)]
-pub struct RcVal<'a> {
-    rc: AtomicUsize,
-    inner: Val<'a>,
+pub enum RcVal<'a> {
+    Val { rc: AtomicUsize, inner: Val<'a> },
+    Null,
 }
 
 impl<'a> RcVal<'a> {
     pub fn new(inner: Val) -> RcVal {
-        RcVal {
+        RcVal::Val {
             rc: AtomicUsize::new(1),
             inner,
         }
     }
     pub fn inc(&mut self) {
-        use std::sync::atomic::Ordering;
-        self.rc.fetch_add(1, Ordering::SeqCst);
+        match self {
+            RcVal::Null => {
+                panic!("Cannot increment reference count of NULL");
+            }
+            RcVal::Val { rc, inner } => {
+                use std::sync::atomic::Ordering;
+                let prev = rc.fetch_add(1, Ordering::SeqCst);
+                println!("rc {} -> {}: {:?}", prev, prev + 1, inner);
+            }
+        }
     }
     pub fn dec(&mut self) {
-        use std::sync::atomic::Ordering;
-        if self.rc.fetch_sub(1, Ordering::SeqCst) == 0 {
-            println!("DROP {:?}", self.inner);
+        match self {
+            RcVal::Null => {
+                panic!("Cannot decrement reference count of NULL");
+            }
+            RcVal::Val { rc, inner } => {
+                use std::sync::atomic::Ordering;
+                let prev = rc.fetch_sub(1, Ordering::SeqCst);
+                println!("rc {} -> {}: {:?}", prev, prev - 1, inner);
+                if prev == 1 {
+                    println!("DROP {:?}", inner);
+                    // dec children
+                    match &inner {
+                        Val::Ctor(_, args) => {
+                            for arg in args {
+                                arg.borrow_mut().dec();
+                            }
+                        }
+                        Val::PAp(_, args) => {
+                            for arg in args {
+                                arg.borrow_mut().dec();
+                            }
+                        }
+                        _ => {}
+                    };
+                    // TODO: drop self (how?)
+                    *self = RcVal::Null;
+                }
+            }
         }
     }
     pub fn inner(&self) -> &Val<'a> {
-        &self.inner
+        match self {
+            RcVal::Null => panic!("Cannot get inner of NULL"),
+            RcVal::Val { inner, .. } => inner,
+        }
     }
 }
 

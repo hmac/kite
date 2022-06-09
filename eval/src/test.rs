@@ -1019,3 +1019,115 @@ fn test_10() {
     );
     assert_eval(vec![main, last], val_ctor(1, vec![val_int(2)]));
 }
+
+// fn map(f, l) = case l of
+//  Nil -> dec(f); dec(l); Nil
+//  Cons x xs -> inc(x)
+//               inc(xs)
+//               let x'  = inc(f); f x
+//                   xs' = map f xs
+//                in Cons x' xs'
+#[test]
+fn test_11() {
+    let map = def(
+        "map",
+        vec!["f".into(), "l".into()],
+        case(
+            arg("l"),
+            vec![
+                (
+                    ctor_pat("Nil", 0, vec![]),
+                    dec(arg("f"), dec(arg("l"), ctor_("Nil", 0, vec![]))),
+                ),
+                (
+                    ctor_pat("Cons", 1, vec!["x", "xs"]),
+                    inc(
+                        local("x"),
+                        inc(
+                            local("xs"),
+                            let_(
+                                "x'",
+                                inc(arg("f"), app(arg("f"), vec![local("x")])),
+                                let_(
+                                    "xs'",
+                                    app(global("map"), vec![arg("f"), local("xs")]),
+                                    ctor_("Cons", 1, vec![local("x'"), local("xs'")]),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    );
+    let list = def(
+        "list",
+        vec![],
+        let_(
+            "one",
+            int(1),
+            let_(
+                "two",
+                int(2),
+                let_(
+                    "three",
+                    int(3),
+                    let_(
+                        "nil",
+                        ctor_("Nil", 0, vec![]),
+                        let_(
+                            "l1",
+                            ctor_("Cons", 1, vec![local("three"), local("nil")]),
+                            let_(
+                                "l2",
+                                ctor_("Cons", 1, vec![local("two"), local("l1")]),
+                                let_(
+                                    "l3",
+                                    ctor_("Cons", 1, vec![local("one"), local("l2")]),
+                                    var(local("l3")),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+    // fn inc(x) = let one = 1
+    //                 r   = x + one
+    //              in dec(one); r
+    let inc = def(
+        "inc",
+        vec!["x"],
+        let_(
+            "one",
+            int(1),
+            let_(
+                "r",
+                prim(Prim::IntAdd, vec![arg("x"), local("one")]),
+                dec(local("one"), var(local("r"))),
+            ),
+        ),
+    );
+    let main = def(
+        "main",
+        vec![],
+        app(global("map"), vec![global("inc"), global("list")]),
+    );
+    assert_eval(
+        vec![main, map, list, inc],
+        val_ctor(
+            1,
+            vec![
+                val_int(2),
+                val_ctor(
+                    1,
+                    vec![
+                        val_int(3),
+                        val_ctor(1, vec![val_int(4), val_ctor(0, vec![])]),
+                    ],
+                ),
+            ],
+        ),
+    );
+}

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use eval::dsl::*;
-use eval::eval::{eval, make_nameless_env, DataVal, Def, Expr, Prim, Stack};
+use eval::eval::{eval, make_nameless_env, Ctor, DataVal, Def, Expr, Prim, Stack};
 
 fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> DataVal {
     eval(
@@ -14,21 +14,34 @@ fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> DataVal {
     )
 }
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn fib_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("fib");
-    for size in [2, 4, 8, 16, 32, 64, 128, 256, 512].iter() {
+    for (size, expected_result) in [(2, 1), (4, 3), (8, 21), (16, 987), (32, 2_178_309)].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
             b.iter(|| {
-                eval_main(black_box(&make_fib_program(size)));
-                black_box(())
+                let result = eval_main(&make_fib_program(size));
+                assert_eq!(result, DataVal::Int(*expected_result));
             })
         });
     }
     group.finish();
 }
 
-criterion_group!(benches, criterion_benchmark);
+fn last_benchmark(c: &mut Criterion) {
+    c.bench_function("last", |b| {
+        b.iter(|| {
+            let result = eval_main(black_box(&make_last_program()));
+            assert_eq!(
+                result,
+                DataVal::Ctor(Ctor { tag: 1 }, vec![DataVal::Int(2)])
+            );
+        })
+    });
+}
+
+criterion_group!(benches, fib_benchmark, last_benchmark);
 criterion_main!(benches);
+
 fn make_fib_program(n: i32) -> HashMap<String, Def<Expr>> {
     let fib = Def {
         name: "fib".into(),
@@ -57,7 +70,6 @@ fn make_fib_program(n: i32) -> HashMap<String, Def<Expr>> {
                                         case(
                                             local("neq1"),
                                             vec![
-                                                (ctor_pat("True", 1, vec![]), var(local("one"))),
                                                 (
                                                     ctor_pat("False", 0, vec![]),
                                                     let_(
@@ -118,6 +130,7 @@ fn make_fib_program(n: i32) -> HashMap<String, Def<Expr>> {
                                                         ),
                                                     ),
                                                 ),
+                                                (ctor_pat("True", 1, vec![]), var(local("one"))),
                                             ],
                                         ),
                                     ),
@@ -242,4 +255,77 @@ fn make_fib_program(n: i32) -> HashMap<String, Def<Expr>> {
         let_("n", int(n), app(global("fib"), vec![local("n")])),
     );
     make_nameless_env(vec![main, lt, length, fib, fib_prime, fib_build])
+}
+
+fn make_last_program() -> HashMap<String, Def<Expr>> {
+    let last = def(
+        "last",
+        vec!["l"],
+        case(
+            arg("l"),
+            vec![
+                (
+                    ctor_pat("Nil", 0, vec![]),
+                    dec(arg("l"), ctor_("Nothing", 0, vec![])),
+                ),
+                (
+                    ctor_pat("Cons", 1, vec!["x", "xs"]),
+                    inc(
+                        local("x"),
+                        inc(
+                            local("xs"),
+                            dec(
+                                arg("l"),
+                                case(
+                                    local("xs"),
+                                    vec![
+                                        (
+                                            ctor_pat("Nil", 0, vec![]),
+                                            dec(local("xs"), ctor_("Just", 1, vec![local("x")])),
+                                        ),
+                                        (
+                                            ctor_pat("Cons", 1, vec!["y", "ys"]),
+                                            dec(local("x"), app(global("last"), vec![local("xs")])),
+                                        ),
+                                    ],
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    );
+    // main = let one = 1
+    //            two = 2
+    //            nil = Nil
+    //            l1 = Cons two nil
+    //            l2 = Cons one l1
+    //         in last l2
+    let main = def(
+        "main",
+        vec![],
+        let_(
+            "one",
+            int(1),
+            let_(
+                "two",
+                int(2),
+                let_(
+                    "nil",
+                    ctor_("Nil", 0, vec![]),
+                    let_(
+                        "l1",
+                        ctor_("Cons", 1, vec![local("two"), local("nil")]),
+                        let_(
+                            "l2",
+                            ctor_("Cons", 1, vec![local("one"), local("l1")]),
+                            app(global("last"), vec![local("l2")]),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+    make_nameless_env(vec![main, last])
 }
