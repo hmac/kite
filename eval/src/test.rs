@@ -45,6 +45,9 @@ fn test_1() {
     );
 }
 
+// id = x -> x
+// unit = ()
+// main = id unit
 #[test]
 fn test_2() {
     let id = def("id", vec!["x"], var(arg("x")));
@@ -66,6 +69,8 @@ fn test_2() {
     assert_eval(vec![id, unit, main], val_ctor(0, vec![]));
 }
 
+// not = b -> case b of { False -> True; True -> False }
+// main = let false = False in not false
 #[test]
 fn test_3() {
     let true_ctor = NamedCtor {
@@ -279,6 +284,15 @@ fn map_example() -> Def<NamedExpr> {
     }
 }
 
+// main =
+//   let nil = Nil
+//       true = True
+//       false = False
+//       l1 = Cons false nil
+//       l2 = Cons true l1
+//    in map not l2
+// not = b -> case b of { True -> False; False -> True }
+// map = f l -> case l of { Nil -> Nil; Cons x xs -> Cons (f x) (map f xs) }
 #[test]
 fn test_5() {
     let false_ctor = NamedCtor {
