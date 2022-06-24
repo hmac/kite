@@ -15,6 +15,7 @@ pub enum Inst {
         func_addr: InstAddr,
         args: Vec<StackAddr>,
     },
+    // TODO: Case expressions on integer literals
     Case(StackAddr, Vec<InstAddr>),
     Ctor(u8, Vec<StackAddr>),
 
@@ -28,6 +29,8 @@ pub enum Inst {
     Halt,
 
     // primitive operations
+    // TODO: support integer literals in these instruction arguments, so we don't have to push them
+    // onto the stack to pass them.
     IntAdd(StackAddr, StackAddr),
     IntSub(StackAddr, StackAddr),
     IntMul(StackAddr, StackAddr),
@@ -145,7 +148,7 @@ pub fn eval(insts: &[Inst]) -> StackValue<InstAddr> {
     let mut call_stack: Stack<InstAddr> = Stack::new();
     let mut inst_addr = 0;
     let mut bail_counter = 0;
-    while inst_addr < insts.len() && bail_counter < 100 {
+    while inst_addr < insts.len() && bail_counter < 1000 {
         bail_counter += 1;
         println!("stack {:?}", stack.inner);
         println!("inst: {:?}", insts[inst_addr]);
@@ -773,5 +776,248 @@ mod tests {
                 ]
             )
         );
+    }
+
+    // sum_to = n ->
+    //   let neq0 = n == 0
+    //    in case neq0 of
+    //         False -> let n-1 = n - 1
+    //                      sum = sum_to n-1
+    //                   in n + sum
+    //         True -> 0
+    // main = let n = 5
+    //         in sum_to n
+    #[test]
+    fn test_9() {
+        let prog: Vec<Inst> = vec![
+            // call to main
+            Inst::CallC {
+                arity: 0,
+                func_addr: 2,
+                args: vec![],
+            },
+            Inst::Halt,
+            // main = let n = 5
+            Inst::Int(5),
+            // in sum_to_n
+            Inst::CallC {
+                arity: 1,
+                func_addr: 5,
+                args: vec![0],
+            },
+            Inst::Ret,
+            // sum_to = n -> let neq0 = n == 0
+            Inst::Int(0),
+            Inst::IntEq(1, 0),
+            // in case neq0 of
+            Inst::Case(0, vec![8, 13]),
+            //  False -> let n-1 = n - 1
+            Inst::Int(1),
+            Inst::IntSub(3, 0),
+            //  sum = sum_to n-1
+            Inst::CallC {
+                arity: 1,
+                func_addr: 5,
+                args: vec![0],
+            },
+            //  in n + sum
+            Inst::IntAdd(5, 0),
+            Inst::Ret,
+            //  True -> 0
+            Inst::Int(0),
+            Inst::Ret,
+        ];
+        assert_eq!(eval(&prog).to_data_value(), DataValue::Int(15));
+    }
+
+    // main = let n = 15
+    //         in fib n
+    // fib = n ->
+    //   let n=0 = n == 0
+    //    in case n=0 of
+    //        False -> let n=1 = n == 1
+    //                  in case n=1 of
+    //                       False -> let l1 = Cons 1 Nil
+    //                                    prefix = Cons 1 l1
+    //                                    fibs = fibBuild n prefix
+    //                                 in case fibs of
+    //                                     Nil -> panic
+    //                                     Cons x xs -> x
+    //                      True -> 1
+    //        True -> 1
+    //
+    // fibBuild = n ms ->
+    //   let msLen = length ms
+    //       n<=msLen = n <= msLen
+    //    in case n<=msLen of
+    //         False -> let prefix = fib' ms
+    //                   in fibBuild n prefix
+    //         True -> ms
+    //
+    // fib' = ms ->
+    //   case ms of
+    //     Nil -> panic
+    //     Cons x ms' -> case ms' of
+    //                     Nil -> panic
+    //                     Cons y ms'' -> let r = x + y
+    //                                        l1 = Cons y ms''
+    //                                        l2 = Cons x l1
+    //                                     in Cons r l2
+    // length = l ->
+    //   case l of
+    //     Nil -> 0
+    //     Cons x xs -> let xsLen = length xs
+    //                   in xsLen + 1
+    // lteq = x y ->
+    //   let x>y = x > y
+    //    in not x>y
+    //
+    // not = b ->
+    //   case b of
+    //     True -> False
+    //     False -> True
+    #[test]
+    fn test_10() {
+        let prog: Vec<Inst> = vec![
+            // call to main
+            Inst::CallC {
+                arity: 0,
+                func_addr: 2,
+                args: vec![],
+            },
+            Inst::Halt,
+            // main = let n = 15                 [2]
+            Inst::Int(15),
+            // in fib n
+            Inst::CallC {
+                arity: 1,
+                func_addr: 5,
+                args: vec![0],
+            },
+            Inst::Ret,
+            // fib = n ->                        [5]
+            //   let n=0 = n == 0
+            Inst::Int(0),
+            Inst::IntEq(1, 0),
+            // in case n=0 of
+            Inst::Case(0, vec![8, 23]),
+            // False -> let n=1 = n == 1
+            Inst::Int(1),
+            Inst::IntEq(3, 0),
+            // in case n=1 of
+            Inst::Case(0, vec![11, 21]),
+            // False -> let l1 = Cons 1 Nil
+            Inst::Int(1),
+            Inst::Ctor(0, vec![]),
+            Inst::Ctor(1, vec![1, 0]),
+            // prefix = Cons 1 l1
+            Inst::Int(1),
+            Inst::Ctor(1, vec![0, 1]),
+            // fibs = fibBuild n prefix
+            Inst::CallC {
+                arity: 2,
+                func_addr: 25,
+                args: vec![9, 0],
+            },
+            // case fibs of
+            Inst::Case(0, vec![18, 19]),
+            // Nil -> panic
+            Inst::Panic,
+            // Cons x xs -> x
+            Inst::Var(1),
+            Inst::Ret,
+            // True -> 1
+            Inst::Int(1),
+            Inst::Ret,
+            // True -> 1
+            Inst::Int(1),
+            Inst::Ret,
+            // fibBuild = n ms ->                [25]
+            //   let msLen = length ms
+            Inst::CallC {
+                arity: 1,
+                func_addr: 42,
+                args: vec![0],
+            },
+            //   n<=msLen = n <= msLen
+            Inst::CallC {
+                arity: 2,
+                func_addr: 49,
+                args: vec![2, 0],
+            },
+            //   case n<=msLen of
+            Inst::Case(0, vec![28, 31]),
+            //   False -> let prefix = fib' ms
+            Inst::CallC {
+                arity: 1,
+                func_addr: 33,
+                args: vec![2],
+            },
+            // in fibBuild n prefix
+            Inst::CallC {
+                arity: 2,
+                func_addr: 25,
+                args: vec![4, 0],
+            },
+            Inst::Ret,
+            // True -> ms
+            Inst::Var(2),
+            Inst::Ret,
+            // fib' = ms ->                      [33]
+            //  case ms of
+            Inst::Case(0, vec![34, 35]),
+            // Nil -> panic
+            Inst::Panic,
+            // Cons x ms' -> case ms' of
+            Inst::Case(0, vec![36, 37]),
+            // Nil -> panic
+            Inst::Panic,
+            // Cons y ms'' ->
+            //   let r = x + y
+            Inst::IntAdd(3, 1),
+            //       l1 = Cons y ms''
+            Inst::Ctor(1, vec![2, 1]),
+            //       l2 = Cons x l1
+            Inst::Ctor(1, vec![5, 0]),
+            //   in Cons r l2
+            Inst::Ctor(1, vec![2, 0]),
+            Inst::Ret,
+            // length = l ->                     [42]
+            //  case l of
+            Inst::Case(0, vec![43, 45]),
+            // Nil -> 0
+            Inst::Int(0),
+            Inst::Ret,
+            // Cons x xs -> let xsLen = length xs
+            Inst::CallC {
+                arity: 1,
+                func_addr: 42,
+                args: vec![0],
+            },
+            //  in xsLen + 1
+            Inst::Int(1),
+            Inst::IntAdd(1, 0),
+            Inst::Ret,
+            // lteq = x y ->                     [49]
+            // let x>y = x > y
+            Inst::IntGt(1, 0),
+            // in not x>y
+            Inst::CallC {
+                arity: 1,
+                func_addr: 52,
+                args: vec![0],
+            },
+            Inst::Ret,
+            // not = b ->                        [52]
+            //   case b of
+            Inst::Case(0, vec![53, 55]),
+            //     False -> True
+            Inst::Ctor(1, vec![]),
+            Inst::Ret,
+            //     True -> False
+            Inst::Ctor(0, vec![]),
+            Inst::Ret,
+        ];
+        assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
     }
 }
