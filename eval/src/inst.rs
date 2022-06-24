@@ -6,10 +6,6 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub enum Inst {
     Var(StackAddr),
-    Global {
-        arity: usize,
-        inst: InstAddr,
-    },
 
     Int(i32),
     Call(StackAddr, Vec<StackAddr>),
@@ -106,7 +102,7 @@ impl<I> StackValue<I> {
         match self {
             StackValue::Int(i) => DataValue::Int(*i),
             StackValue::Ref(r) => r.to_data_value(),
-            StackValue::Func { arity, inst } => panic!("Cannot convert function to data value"),
+            StackValue::Func { .. } => panic!("Cannot convert function to data value"),
         }
     }
 }
@@ -125,10 +121,10 @@ impl<I> HeapValue<I> {
     fn to_data_value(&self) -> DataValue {
         match self {
             HeapValue::Ctor(tag, args) => {
-                let mut args = args.iter().map(|a| a.to_data_value()).collect();
+                let args = args.iter().map(|a| a.to_data_value()).collect();
                 DataValue::Ctor(*tag, args)
             }
-            HeapValue::PAp { inst, arity, args } => panic!("Cannot convert PAp to data value"),
+            HeapValue::PAp { .. } => panic!("Cannot convert PAp to data value"),
         }
     }
 }
@@ -178,20 +174,16 @@ fn eval_inst(
             let val = stack[*v].clone();
             stack.push(val);
         }
-        Inst::Global { arity, inst } => {
-            let val = StackValue::Func {
-                arity: *arity,
-                inst: *inst,
-            };
-            stack.push(val);
-        }
         Inst::Int(n) => {
             stack.push(StackValue::Int(*n));
         }
+        // TODO: handle case where we have too many args.
         Inst::Call(f, args) => {
-            match stack[*f] {
+            let func = &stack[*f];
+            match func {
                 StackValue::Int(_) => panic!("cannot call an integer"),
                 StackValue::Func { inst, .. } => {
+                    let func_addr = *inst;
                     // Allocate a new stack frame
                     stack.push_frame();
                     // Push args onto stack
@@ -203,30 +195,85 @@ fn eval_inst(
                     // Push the return address onto the call stack
                     call_stack.push(inst_addr + 1);
                     // Jump to function
-                    return Some(inst);
+                    return Some(func_addr);
                 }
                 StackValue::Ref(ref v) => {
-                    todo!()
+                    // Lookup heap value
+                    // If it's not a PAp, panic
+                    // Check if we have enough args to call it
+                    // If yes, call it
+                    match &**v {
+                        HeapValue::PAp {
+                            inst,
+                            arity,
+                            args: pap_args,
+                        } => {
+                            let func_addr = *inst;
+                            // Clone existing_args, which copies each StackValue element
+                            // This is necessary since we're going to push them onto the stack anyway
+                            let existing_args = pap_args.clone();
+                            let existing_args_len = existing_args.len();
+
+                            if existing_args_len + args.len() == *arity {
+                                // Allocate a new stack frame
+                                stack.push_frame();
+
+                                // Push args onto stack
+                                // Each arg we push bumps the addresses of existing args by 1, so we have to
+                                // account for that as we go.
+                                for arg in existing_args.into_iter() {
+                                    stack.push(arg);
+                                }
+                                for (i, arg) in args.iter().enumerate() {
+                                    stack.push(stack[*arg + existing_args_len + i].clone());
+                                }
+
+                                // Push the return address onto the call stack
+                                call_stack.push(inst_addr + 1);
+                                // Jump to function
+                                return Some(func_addr);
+                            } else if existing_args_len + args.len() < *arity {
+                                // allocate new PAp with old args + new args
+                            } else if existing_args_len + args.len() > *arity {
+                                // handle more than enough args
+                                todo!("more than enough args")
+                            }
+                        }
+                        _ => panic!("cannot call a non-function: {:?}", *v),
+                    }
                 }
             }
         }
         Inst::CallC {
-            arity: _arity,
+            arity,
             func_addr,
             args,
         } => {
-            // Allocate a new stack frame
-            stack.push_frame();
-            // Push args onto stack
-            // Each arg we push bumps the addresses of existing args by 1, so we have to
-            // account for that as we go.
-            for (i, arg) in args.iter().enumerate() {
-                stack.push(stack[*arg + i].clone());
+            if args.len() < *arity {
+                // Allocate a PAp containing func_addr and args (copied from stack)
+                let arg_values = args.iter().map(|a| stack[*a].clone()).collect();
+                let pap = HeapValue::PAp {
+                    inst: *func_addr,
+                    arity: *arity,
+                    args: arg_values,
+                };
+                // Push PAp onto stack
+                stack.push(StackValue::Ref(Rc::new(pap)));
+            } else {
+                // TODO: handle case where we have too many args
+                // Allocate a new stack frame
+                stack.push_frame();
+                // Push args onto stack
+                // Each arg we push bumps the addresses of existing args by 1, so we have to
+                // account for that as we go.
+                for (i, arg) in args.iter().enumerate() {
+                    stack.push(stack[*arg + i].clone());
+                }
+                // Push the return address onto the call stack
+                call_stack.push(inst_addr + 1);
+                // Jump to function
+                return Some(*func_addr);
             }
-            // Push the return address onto the call stack
-            call_stack.push(inst_addr + 1);
-            // Jump to function
-            return Some(*func_addr);
         }
         Inst::Case(target, alts) => {
             let target: StackValue<InstAddr> = stack[*target].clone();
@@ -508,7 +555,11 @@ mod tests {
             //      l2 = Cons true l1
             Inst::Ctor(1, vec![2, 0]),
             //      not = [global not]
-            Inst::Global { arity: 1, inst: 10 },
+            Inst::CallC {
+                arity: 1,
+                func_addr: 10,
+                args: vec![],
+            },
             //   in map not l2
             Inst::CallC {
                 arity: 2,
@@ -637,8 +688,16 @@ mod tests {
             },
             Inst::Halt,
             // main = map inc list
-            Inst::Global { arity: 1, inst: 16 },
-            Inst::Global { arity: 0, inst: 6 },
+            Inst::CallC {
+                arity: 1,
+                func_addr: 16,
+                args: vec![],
+            },
+            Inst::CallC {
+                arity: 0,
+                func_addr: 6,
+                args: vec![],
+            },
             Inst::CallC {
                 arity: 2,
                 func_addr: 19,
