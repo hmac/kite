@@ -1021,3 +1021,67 @@ mod tests {
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
     }
 }
+
+// main = fib 15
+// fib n = go n 1 1
+// go n x y =
+//   let n<3 = n < 3
+//    in case n<3 of
+//         False ->
+//           let z = x + y
+//               m = n - 1
+//            in go m z x
+//         True -> x
+//
+#[test]
+fn test_10() {
+    let prog: Vec<Inst> = vec![
+        // call to main
+        Inst::CallC {
+            arity: 0,
+            func_addr: 2,
+            args: vec![],
+        },
+        Inst::Halt,
+        // main = let n = 15
+        Inst::Int(15), //                        [2]
+        // in fib n
+        Inst::CallC {
+            arity: 1,
+            func_addr: 5,
+            args: vec![0],
+        },
+        Inst::Ret,
+        // fib n = go n 1 1
+        Inst::Int(1), //                         [5]
+        Inst::CallC {
+            arity: 3,
+            func_addr: 8,
+            args: vec![1, 0, 0],
+        },
+        Inst::Ret,
+        // go n x y =
+        //  let n<3 = n < 3
+        Inst::Int(3), //                         [8]
+        Inst::IntLt(3, 0),
+        // in case n<3 of
+        Inst::Case(0, vec![11, 16]),
+        // False ->
+        //   let z = x + y
+        Inst::IntAdd(3, 2),
+        //       m = n - 1
+        Inst::Int(1),
+        Inst::IntSub(6, 0),
+        //   in go m z x
+        Inst::CallC {
+            arity: 3,
+            func_addr: 8,
+            args: vec![0, 2, 6],
+        },
+        Inst::Ret,
+        // True -> x
+        Inst::Var(3),
+        Inst::Ret,
+    ];
+    assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
+}
