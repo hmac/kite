@@ -6,6 +6,12 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub enum Inst {
     Var(StackAddr),
+    Func {
+        arity: usize,
+        inst: InstAddr,
+    },
+    // Push an EndOfArgs marker onto the stack
+    EndOfArgs,
 
     Int(i32),
     Call(StackAddr, Vec<StackAddr>),
@@ -15,6 +21,14 @@ pub enum Inst {
         func_addr: InstAddr,
         args: Vec<StackAddr>,
     },
+    // Generic call instruction.
+    // Call the top element on the stack.
+    // Elements the args, first arg topmost, followed by an EndOfArgs marker.
+    // Arity is stored in the function, either as:
+    // - StackValue::Func
+    // - StackValue::Ref(HeapValue::PAp)
+    // This will eventually replace Call and CallC
+    CallG,
     // TODO: Case expressions on integer literals
     Case(StackAddr, Vec<InstAddr>),
     Ctor(u8, Vec<StackAddr>),
@@ -82,6 +96,10 @@ impl<T> Stack<T> {
         println!("push_frame: {:?}", self.inner.len());
         self.frames.push(self.inner.len());
     }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 /// Stack addresses count from the top of the stack (0 is the topmost element).
@@ -97,7 +115,14 @@ impl<T> Index<usize> for Stack<T> {
 pub enum StackValue<I> {
     Int(i32),
     Ref(Rc<HeapValue<I>>),
-    Func { arity: usize, inst: I },
+    Func {
+        arity: usize,
+        inst: I,
+    },
+    /// This is placed in the stack after the arguments to a call to indicate that there are no
+    /// more args. We use this when evaluating generic function calls where we may have fewer or
+    /// more args than the function arity.
+    EndOfArgs,
 }
 
 impl<I> StackValue<I> {
@@ -106,6 +131,7 @@ impl<I> StackValue<I> {
             StackValue::Int(i) => DataValue::Int(*i),
             StackValue::Ref(r) => r.to_data_value(),
             StackValue::Func { .. } => panic!("Cannot convert function to data value"),
+            StackValue::EndOfArgs => panic!("Cannot convert end-of-args marker to data value"),
         }
     }
 }
@@ -164,6 +190,28 @@ pub fn eval(insts: &[Inst]) -> StackValue<InstAddr> {
     return stack[0].clone();
 }
 
+/// Evaluate the program until the given call stack is empty.
+/// This effectively evaluates the current function until it returns.
+fn eval_until_call_stack_is_empty(
+    stack: &mut Stack<StackValue<InstAddr>>,
+    mut call_stack: Stack<InstAddr>,
+    mut inst_addr: InstAddr,
+    prog: &[Inst],
+) {
+    while !call_stack.is_empty() {
+        println!("stack {:?}", stack.inner);
+        println!("inst: {:?}", prog[inst_addr]);
+        match eval_inst(stack, &mut call_stack, inst_addr, prog) {
+            Some(i) => {
+                inst_addr = i;
+            }
+            None => {
+                break;
+            }
+        }
+    }
+}
+
 /// Evaluate a single instruction.
 /// If this function returns `None`, it means the VM should halt.
 fn eval_inst(
@@ -177,34 +225,124 @@ fn eval_inst(
             let val = stack[*v].clone();
             stack.push(val);
         }
+        Inst::Func { arity, inst } => {
+            stack.push(StackValue::Func {
+                arity: *arity,
+                inst: *inst,
+            });
+        }
         Inst::Int(n) => {
             stack.push(StackValue::Int(*n));
         }
-        // TODO: handle case where we have too many args.
+        Inst::EndOfArgs => {
+            stack.push(StackValue::EndOfArgs);
+        }
+        Inst::CallG => {
+            let func = stack.pop(1);
+            let num_args = {
+                let mut n: usize = 0;
+                while match stack[n] {
+                    StackValue::EndOfArgs => false,
+                    _ => true,
+                } {
+                    n += 1;
+                }
+                n
+            };
+            match func {
+                StackValue::EndOfArgs => panic!("cannot call EndOfArgs marker"),
+                StackValue::Int(_) => panic!("cannot call an integer"),
+                StackValue::Func { arity, inst } => {
+                    println!("num_args: {}", num_args);
+                    println!("arity: {}", arity);
+                    if num_args < arity {
+                        // Construct a PAp
+                        let args = {
+                            let mut args = Vec::with_capacity(num_args);
+                            for _ in 0..num_args {
+                                args.push(stack.pop(1));
+                            }
+                            args
+                        };
+                        // Remove the EndOfArgs marker
+                        stack.pop(1);
+                        let pap = HeapValue::PAp { inst, arity, args };
+                        stack.push(StackValue::Ref(Rc::new(pap)));
+                    } else {
+                        if num_args > arity {
+                            // Push a stack frame that includes <arity> args
+                            stack.frames.push(stack.inner.len() - arity);
+                            // Push the current instruction as the return address
+                            call_stack.push(inst_addr);
+                            // Jump to function
+                            return Some(inst);
+                        } else {
+                            println!("num_args == arity");
+                            // Push a stack frame that includes all args, including the EndOfArgs
+                            // marker
+                            stack.frames.push(stack.inner.len() - arity - 1);
+                            // Push the next instruction as the return address
+                            call_stack.push(inst_addr + 1);
+                            // Jump to function
+                            return Some(inst);
+                        }
+                    }
+                }
+                StackValue::Ref(ref v) => {
+                    match &**v {
+                        HeapValue::PAp {
+                            inst,
+                            arity,
+                            args: existing_args,
+                        } => {
+                            // If we have enough args now, then call the function.
+                            // Push existing_args onto stack
+                            if *arity <= num_args + existing_args.len() {
+                                for arg in existing_args.clone().into_iter() {
+                                    stack.push(arg);
+                                }
+                                // Push function onto stack
+                                stack.push(StackValue::Func {
+                                    arity: *arity,
+                                    inst: *inst,
+                                });
+                                // Jump to current instruction to execute the call
+                                return Some(inst_addr);
+                            } else {
+                                // Otherwise construct a new PAp containing all the args
+                                let mut all_args = existing_args.clone();
+                                for _ in 0..num_args {
+                                    all_args.push(stack.pop(1));
+                                }
+                                // Remove the EndOfArgs marker
+                                stack.pop(1);
+                                let pap = HeapValue::PAp {
+                                    inst: *inst,
+                                    arity: *arity,
+                                    args: all_args,
+                                };
+                                stack.push(StackValue::Ref(Rc::new(pap)));
+                            }
+                        }
+                        _ => panic!("cannot call a non-function: {:?}", *v),
+                    }
+                }
+            }
+        }
         Inst::Call(f, args) => {
             let func = &stack[*f];
             match func {
+                StackValue::EndOfArgs => panic!("cannot call EndOfArgs marker"),
                 StackValue::Int(_) => panic!("cannot call an integer"),
-                StackValue::Func { inst, .. } => {
-                    let func_addr = *inst;
-                    // Allocate a new stack frame
-                    stack.push_frame();
-                    // Push args onto stack
-                    // Each arg we push bumps the addresses of existing args by 1, so we have to
-                    // account for that as we go.
-                    for (i, arg) in args.iter().enumerate() {
-                        stack.push(stack[*arg + i].clone());
-                    }
-                    // Push the return address onto the call stack
-                    call_stack.push(inst_addr + 1);
-                    // Jump to function
-                    return Some(func_addr);
+                StackValue::Func { inst, arity } => {
+                    return eval_call(stack, call_stack, inst_addr, insts, *inst, *arity, args);
                 }
                 StackValue::Ref(ref v) => {
                     // Lookup heap value
                     // If it's not a PAp, panic
                     // Check if we have enough args to call it
                     // If yes, call it
+                    // TODO: handle case where we have too many args.
                     match &**v {
                         HeapValue::PAp {
                             inst,
@@ -281,6 +419,7 @@ fn eval_inst(
         Inst::Case(target, alts) => {
             let target: StackValue<InstAddr> = stack[*target].clone();
             match target {
+                StackValue::EndOfArgs => panic!("cannot case EndOfArgs marker"),
                 StackValue::Int(i) => panic!("cannot case an integer: {:?}", i),
                 StackValue::Func { .. } => panic!("cannot case a function"),
                 StackValue::Ref(val) => {
@@ -382,6 +521,68 @@ fn eval_inst(
         Inst::Panic => panic!("panic"),
     };
     Some(inst_addr + 1)
+}
+
+fn eval_call(
+    stack: &mut Stack<StackValue<InstAddr>>,
+    call_stack: &mut Stack<InstAddr>,
+    inst_addr: InstAddr,
+    prog: &[Inst],
+    func_addr: InstAddr,
+    arity: usize,
+    args: &[StackAddr],
+) -> Option<InstAddr> {
+    if args.len() == arity {
+        // Allocate a new stack frame
+        stack.push_frame();
+        // Push args onto stack
+        // Each arg we push bumps the addresses of existing args by 1, so we have to
+        // account for that as we go.
+        for (i, arg) in args.iter().enumerate() {
+            stack.push(stack[*arg + i].clone());
+        }
+        // Push the return address onto the call stack
+        call_stack.push(inst_addr + 1);
+        // Jump to function
+        return Some(func_addr);
+    } else if args.len() < arity {
+        // Allocate a PAp containing inst and args (copied from stack)
+        let arg_values = args.iter().map(|a| stack[*a].clone()).collect();
+        let pap = HeapValue::PAp {
+            inst: func_addr,
+            arity: arity,
+            args: arg_values,
+        };
+        // Push PAp onto stack
+        stack.push(StackValue::Ref(Rc::new(pap)));
+    } else {
+        // Push <arity> number of args onto the stack and call function
+        for (i, arg) in args.iter().take(arity).enumerate() {
+            stack.push(stack[*arg + i].clone());
+        }
+        // Call the function recursively.
+        // We can't just jump to it, because on return we need to deal with the
+        // remaining args.
+        let mut new_call_stack: Stack<InstAddr> = Stack::new();
+        new_call_stack.push(inst_addr);
+        eval_until_call_stack_is_empty(stack, new_call_stack, func_addr, prog);
+        // Result will be a Func or PAp. Call it with the remaining args.
+        match stack.pop(1) {
+            StackValue::Func { inst, arity } => {
+                return eval_call(
+                    stack,
+                    call_stack,
+                    inst_addr,
+                    prog,
+                    inst,
+                    arity,
+                    &args[arity..],
+                );
+            }
+            _ => todo!(),
+        }
+    }
+    return Some(inst_addr + 1);
 }
 
 fn int_binary_op<I>(
@@ -1084,4 +1285,79 @@ fn test_10() {
         Inst::Ret,
     ];
     assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
+}
+
+// A test for function calls with too many arguments.
+// returnAdd takes one argument and returns a function that takes two arguments.
+// We give returnAdd three arguments. The first is used in the evaluation of returnAdd, and the
+// other two are used in the evaluation of the returned function.
+//
+// add = x y -> x + y
+// returnAdd = z -> add
+// main = returnAdd 1 2 3
+#[test]
+fn test_11() {
+    let prog: Vec<Inst> = vec![
+        // call to main
+        Inst::EndOfArgs,
+        Inst::Func { arity: 0, inst: 4 },
+        Inst::CallG,
+        Inst::Halt,
+        // main = returnAdd 1 2 3
+        Inst::EndOfArgs, //                      [4]
+        Inst::Int(3),
+        Inst::Int(2),
+        Inst::Int(1),
+        Inst::Func { arity: 1, inst: 11 },
+        Inst::CallG,
+        Inst::Ret,
+        // returnAdd = z -> add
+        Inst::EndOfArgs, //                      [11]
+        Inst::Func { arity: 2, inst: 15 },
+        Inst::CallG,
+        Inst::Ret,
+        // add = x y -> x + y
+        Inst::IntAdd(1, 0), //                   [15]
+        Inst::Ret,
+    ];
+    assert_eq!(eval(&prog).to_data_value(), DataValue::Int(5));
+}
+
+// A test for function calls with too few arguments.
+//
+// main = let f = add 1
+//         in apply f 2
+// apply = f x -> f x
+// add = x y -> x + y
+#[test]
+fn test_12() {
+    let prog: Vec<Inst> = vec![
+        // call to main
+        Inst::EndOfArgs,
+        Inst::Func { arity: 0, inst: 4 },
+        Inst::CallG,
+        Inst::Halt,
+        // [4] main = let f = add 1
+        Inst::EndOfArgs,
+        Inst::Int(1),
+        Inst::Func { arity: 2, inst: 19 },
+        Inst::CallG,
+        // in apply f 2
+        Inst::EndOfArgs,
+        Inst::Int(2),
+        Inst::Var(2),
+        Inst::Func { arity: 2, inst: 14 },
+        Inst::CallG,
+        Inst::Ret,
+        // [14] apply = f x -> f x
+        Inst::EndOfArgs,
+        Inst::Var(2),
+        Inst::Var(2),
+        Inst::CallG,
+        Inst::Ret,
+        // [19] add = x y -> x + y
+        Inst::IntAdd(0, 1),
+        Inst::Ret,
+    ];
+    assert_eq!(eval(&prog).to_data_value(), DataValue::Int(3));
 }
