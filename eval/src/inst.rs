@@ -23,7 +23,6 @@ pub enum Inst {
 
     // stack operations
     Ret,
-    RetG, // counterpart to CallG, will eventually subsume Ret
     Halt,
 
     // primitive operations
@@ -231,7 +230,7 @@ fn eval_inst(
         // the args or create a PAp.
         // If we call func with fewer than num_args args, then we set the return address to this
         // instruction. We calculate how many args will remain after the call and save this value
-        // in the stack frame. RetG will ensure that when we return, this value is returned to the
+        // in the stack frame. Ret will ensure that when we return, this value is returned to the
         // stack underneath the result of the function call, so the stack looks the same as it did
         // when we first entered this call instruction.
         //
@@ -373,16 +372,6 @@ fn eval_inst(
             // Save the result
             let r = stack.pop(1);
             // Pop the call stack
-            stack.pop_frame();
-            // Push the result back onto the stack
-            stack.push(r);
-            // Pop the caller's next instruction from the call stack.
-            return Some(call_stack.pop(1));
-        }
-        Inst::RetG => {
-            // Save the result
-            let r = stack.pop(1);
-            // Pop the call stack
             let (_, args_remaining) = stack.pop_frame();
             // Push the number of remaining args onto the stack (CallG expects this).
             stack.push(StackValue::Int(args_remaining as i32));
@@ -512,11 +501,11 @@ mod tests {
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
             Inst::Case(StackAddr::Local(0), vec![8, 10]),
             Inst::Int(4),
-            Inst::RetG,
+            Inst::Ret,
             Inst::Int(5),
             Inst::Int(6),
             Inst::IntAdd(StackAddr::Local(0), StackAddr::Local(1)),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&insts).to_data_value(), DataValue::Int(11));
     }
@@ -538,15 +527,15 @@ mod tests {
             Inst::Int(1),
             Inst::Func { arity: 1, inst: 9 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // not = b -> case b of
             Inst::Case(StackAddr::Arg(0), vec![10, 12]),
             //     False -> True
             Inst::Ctor(1, vec![]),
-            Inst::RetG,
+            Inst::Ret,
             //     True -> False
             Inst::Ctor(0, vec![]),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Ctor(1, vec![]));
     }
@@ -574,16 +563,16 @@ mod tests {
             Inst::Int(2),
             Inst::Func { arity: 2, inst: 13 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [13] fromMaybe = m d ->
             //   case m of
             Inst::Case(StackAddr::Arg(1), vec![14, 16]),
             //     Nothing -> d
             Inst::Var(StackAddr::Arg(0)),
-            Inst::RetG,
+            Inst::Ret,
             //     Just x -> x
             Inst::Var(StackAddr::Local(0)),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(2));
     }
@@ -630,22 +619,22 @@ mod tests {
             Inst::Int(2),
             Inst::Func { arity: 2, inst: 21 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [16] not = b ->
             //   case b of
             Inst::Case(StackAddr::Arg(0), vec![17, 19]),
             //     False -> True
             Inst::Ctor(1, vec![]),
-            Inst::RetG,
+            Inst::Ret,
             //     True -> False
             Inst::Ctor(0, vec![]),
-            Inst::RetG,
+            Inst::Ret,
             // map = f l ->
             //   case l of
             Inst::Case(StackAddr::Arg(0), vec![22, 24]),
             //     Nil -> Nil
             Inst::Ctor(0, vec![]),
-            Inst::RetG,
+            Inst::Ret,
             //     Cons x xs ->
             //       let x' = f x
             Inst::Var(StackAddr::Local(1)),
@@ -660,7 +649,7 @@ mod tests {
             Inst::CallG,
             //        in Cons x' xs'
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(
             eval(&prog).to_data_value(),
@@ -703,16 +692,16 @@ mod tests {
             Inst::Int(1),
             Inst::Func { arity: 1, inst: 15 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [13] pair = x y -> Pair x y
             Inst::Ctor(0, vec![StackAddr::Arg(1), StackAddr::Arg(0)]),
-            Inst::RetG,
+            Inst::Ret,
             // [15] swap = p ->
             // case p of
             Inst::Case(StackAddr::Arg(0), vec![16]),
             //     Pair x y -> Pair y x
             Inst::Ctor(0, vec![StackAddr::Local(0), StackAddr::Local(1)]),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(
             eval(&prog).to_data_value(),
@@ -753,7 +742,7 @@ mod tests {
             Inst::Int(2),
             Inst::Func { arity: 2, inst: 27 }, // map
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // list =
             //   let nil = Nil
             Inst::Ctor(0, vec![]),
@@ -774,17 +763,17 @@ mod tests {
             //       l4 = Cons x0 l3
             Inst::Ctor(1, vec![StackAddr::Local(6), StackAddr::Local(0)]),
             //       in l4
-            Inst::RetG,
+            Inst::Ret,
             // inc = x -> let one = 1 in x + one
             Inst::Int(1),
             Inst::IntAdd(StackAddr::Local(1), StackAddr::Local(0)),
-            Inst::RetG,
+            Inst::Ret,
             // map = f l ->
             //   case l of
             Inst::Case(StackAddr::Arg(0), vec![28, 30]),
             //     Nil -> Nil
             Inst::Ctor(0, vec![]),
-            Inst::RetG,
+            Inst::Ret,
             //     Cons x xs ->
             //       let x' = f x
             Inst::Var(StackAddr::Local(1)),
@@ -799,7 +788,7 @@ mod tests {
             Inst::CallG,
             //        in Cons x' xs'
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(
             eval(&prog).to_data_value(),
@@ -850,7 +839,7 @@ mod tests {
             Inst::Int(1),
             Inst::Func { arity: 1, inst: 9 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [9] sum_to = n -> let neq0 = n == 0
             Inst::Int(0),
             Inst::IntEq(StackAddr::Local(1), StackAddr::Local(0)),
@@ -866,10 +855,10 @@ mod tests {
             Inst::CallG,
             //  in n + sum
             Inst::IntAdd(StackAddr::Local(5), StackAddr::Local(0)),
-            Inst::RetG,
+            Inst::Ret,
             //  True -> 0
             Inst::Int(0),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(15));
     }
@@ -933,7 +922,7 @@ mod tests {
             Inst::Int(1),
             Inst::Func { arity: 1, inst: 9 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [9] fib = n -> let n=0 = n == 0
             Inst::Int(0),
             Inst::IntEq(StackAddr::Arg(0), StackAddr::Local(0)),
@@ -963,13 +952,13 @@ mod tests {
             Inst::Panic,
             // Cons x xs -> x
             Inst::Var(StackAddr::Local(1)),
-            Inst::RetG,
+            Inst::Ret,
             // True -> 1
             Inst::Int(1),
-            Inst::RetG,
+            Inst::Ret,
             // True -> 1
             Inst::Int(1),
-            Inst::RetG,
+            Inst::Ret,
             // [33] fibBuild = n ms -> let msLen = length ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
@@ -994,10 +983,10 @@ mod tests {
             Inst::Int(2),
             Inst::Func { arity: 2, inst: 33 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // True -> ms
             Inst::Var(StackAddr::Arg(0)),
-            Inst::RetG,
+            Inst::Ret,
             // [55] fib' = ms -> case ms of
             Inst::Case(StackAddr::Arg(0), vec![56, 57]),
             // Nil -> panic
@@ -1015,12 +1004,12 @@ mod tests {
             Inst::Ctor(1, vec![StackAddr::Local(5), StackAddr::Local(0)]),
             //   in Cons r l2
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(0)]),
-            Inst::RetG,
+            Inst::Ret,
             // [64] length = l -> case l of
             Inst::Case(StackAddr::Arg(0), vec![65, 67]),
             // Nil -> 0
             Inst::Int(0),
-            Inst::RetG,
+            Inst::Ret,
             // Cons x xs -> let xsLen = length xs
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
@@ -1029,7 +1018,7 @@ mod tests {
             //  in xsLen + 1
             Inst::Int(1),
             Inst::IntAdd(StackAddr::Local(1), StackAddr::Local(0)),
-            Inst::RetG,
+            Inst::Ret,
             // [74] lteq = x y -> let x>y = x > y
             Inst::IntGt(StackAddr::Arg(1), StackAddr::Arg(0)),
             // in not x>y
@@ -1037,15 +1026,15 @@ mod tests {
             Inst::Int(1),
             Inst::Func { arity: 1, inst: 80 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [80] not = b -> case b of
             Inst::Case(StackAddr::Arg(0), vec![81, 83]),
             //     False -> True
             Inst::Ctor(1, vec![]),
-            Inst::RetG,
+            Inst::Ret,
             //     True -> False
             Inst::Ctor(0, vec![]),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
     }
@@ -1076,7 +1065,7 @@ mod tests {
             Inst::Int(1),
             Inst::Func { arity: 1, inst: 10 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [10] fib n = go n 1 1
             Inst::Int(1),
             Inst::Int(1),
@@ -1084,7 +1073,7 @@ mod tests {
             Inst::Int(3),
             Inst::Func { arity: 3, inst: 17 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [17] go n x y = let n<3 = n < 3
             Inst::Int(3),
             Inst::IntLt(StackAddr::Arg(2), StackAddr::Local(0)),
@@ -1103,10 +1092,10 @@ mod tests {
             Inst::Int(3),
             Inst::Func { arity: 3, inst: 17 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // True -> x
             Inst::Var(StackAddr::Arg(1)),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
     }
@@ -1134,15 +1123,15 @@ mod tests {
             Inst::Int(3),
             Inst::Func { arity: 1, inst: 11 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [11] returnAdd = z -> add
             Inst::Int(0),
             Inst::Func { arity: 2, inst: 15 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [15] add = x y -> x + y
             Inst::IntAdd(StackAddr::Arg(0), StackAddr::Arg(1)),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(5));
     }
@@ -1172,16 +1161,16 @@ mod tests {
             Inst::Int(2),
             Inst::Func { arity: 2, inst: 14 },
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [14] apply = f x -> f x
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
             Inst::Var(StackAddr::Arg(1)),
             Inst::CallG,
-            Inst::RetG,
+            Inst::Ret,
             // [19] add = x y -> x + y
             Inst::IntAdd(StackAddr::Local(0), StackAddr::Local(1)),
-            Inst::RetG,
+            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(3));
     }
