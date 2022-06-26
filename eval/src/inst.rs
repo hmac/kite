@@ -14,17 +14,8 @@ pub enum Inst {
         // TODO: rename to addr
         inst: InstAddr,
     },
-    // Push an EndOfArgs marker onto the stack
-    EndOfArgs,
 
     Int(i32),
-    // Generic call instruction.
-    // Call the top element on the stack.
-    // Elements the args, first arg topmost, followed by an EndOfArgs marker.
-    // Arity is stored in the function, either as:
-    // - StackValue::Func
-    // - StackValue::Ref(HeapValue::PAp)
-    // This will eventually replace Call and CallC
     CallG,
     // TODO: Case expressions on integer literals
     Case(StackAddr, Vec<InstAddr>),
@@ -111,10 +102,6 @@ pub enum StackValue<I> {
         // TODO: rename to addr
         inst: I,
     },
-    /// This is placed in the stack after the arguments to a call to indicate that there are no
-    /// more args. We use this when evaluating generic function calls where we may have fewer or
-    /// more args than the function arity.
-    EndOfArgs,
 }
 
 impl<I> StackValue<I> {
@@ -123,7 +110,6 @@ impl<I> StackValue<I> {
             StackValue::Int(i) => DataValue::Int(*i),
             StackValue::Ref(r) => r.to_data_value(),
             StackValue::Func { .. } => panic!("Cannot convert function to data value"),
-            StackValue::EndOfArgs => panic!("Cannot convert end-of-args marker to data value"),
         }
     }
 }
@@ -235,9 +221,6 @@ fn eval_inst(
         }
         Inst::Int(n) => {
             stack.push(StackValue::Int(*n));
-        }
-        Inst::EndOfArgs => {
-            stack.push(StackValue::EndOfArgs);
         }
         // On entering this instruction, the stack will look like this:
         //
@@ -370,7 +353,6 @@ fn eval_inst(
         Inst::Case(target, alts) => {
             let target = lookup_stack_addr(stack, *target).clone();
             match target {
-                StackValue::EndOfArgs => panic!("cannot case EndOfArgs marker"),
                 StackValue::Int(i) => panic!("cannot case an integer: {:?}", i),
                 StackValue::Func { .. } => panic!("cannot case a function"),
                 StackValue::Ref(val) => {
