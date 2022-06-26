@@ -9,11 +9,7 @@ pub enum Inst {
     Var(StackAddr),
     // Push a function argument onto the stack.
     // Arguments are 0-indexed in reverse, e.g. f x y -> ... has arguments 0: y, 1: x.
-    Func {
-        arity: usize,
-        // TODO: rename to addr
-        inst: InstAddr,
-    },
+    Func { arity: usize, addr: InstAddr },
 
     Int(i32),
     Call,
@@ -96,11 +92,7 @@ impl<T> Index<usize> for Stack<T> {
 pub enum StackValue<I> {
     Int(i32),
     Ref(Rc<HeapValue<I>>),
-    Func {
-        arity: usize,
-        // TODO: rename to addr
-        inst: I,
-    },
+    Func { arity: usize, addr: I },
 }
 
 impl<I> StackValue<I> {
@@ -117,8 +109,7 @@ impl<I> StackValue<I> {
 pub enum HeapValue<I> {
     Ctor(u8, Vec<StackValue<I>>),
     PAp {
-        // TODO: rename to addr
-        inst: I,
+        addr: I,
         arity: usize,
         args: Vec<StackValue<I>>,
     },
@@ -199,10 +190,10 @@ fn eval_inst(
         Inst::Var(v) => {
             stack.push(lookup_stack_addr(stack, *v).clone());
         }
-        Inst::Func { arity, inst } => {
+        Inst::Func { arity, addr } => {
             stack.push(StackValue::Func {
                 arity: *arity,
-                inst: *inst,
+                addr: *addr,
             });
         }
         Inst::Int(n) => {
@@ -244,7 +235,7 @@ fn eval_inst(
                 _ => panic!("Expected num_args to be an integer"),
             };
             match func {
-                StackValue::Func { arity, inst } => {
+                StackValue::Func { arity, addr } => {
                     if num_args == 0 && arity > 0 {
                         // func is a result in normal form, so we don't need to call it.
                         stack.push(func);
@@ -259,7 +250,7 @@ fn eval_inst(
                             }
                             args
                         };
-                        let pap = HeapValue::PAp { inst, arity, args };
+                        let pap = HeapValue::PAp { addr, arity, args };
                         stack.push(StackValue::Ref(Rc::new(pap)));
                     } else {
                         // num_args >= arity.
@@ -270,13 +261,13 @@ fn eval_inst(
                         // Push the current instruction as the return address
                         call_stack.push(inst_addr);
                         // Jump to function
-                        return Some(inst);
+                        return Some(addr);
                     }
                 }
                 StackValue::Ref(ref v) => {
                     match &**v {
                         HeapValue::PAp {
-                            inst,
+                            addr,
                             arity,
                             args: existing_args,
                         } => {
@@ -292,7 +283,7 @@ fn eval_inst(
                                 // Push function onto stack
                                 stack.push(StackValue::Func {
                                     arity: *arity,
-                                    inst: *inst,
+                                    addr: *addr,
                                 });
                                 // Jump to current instruction to execute the call
                                 return Some(inst_addr);
@@ -303,7 +294,7 @@ fn eval_inst(
                                     all_args.push(stack.pop(1));
                                 }
                                 let pap = HeapValue::PAp {
-                                    inst: *inst,
+                                    addr: *addr,
                                     arity: *arity,
                                     args: all_args,
                                 };
@@ -492,7 +483,7 @@ mod tests {
         let insts: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // main
@@ -517,7 +508,7 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // main =
@@ -525,7 +516,7 @@ mod tests {
             Inst::Ctor(0, vec![]),
             //     not false
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 9 },
+            Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
             // not = b -> case b of
@@ -547,7 +538,7 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main =
@@ -561,7 +552,7 @@ mod tests {
             Inst::Var(StackAddr::Local(2)),
             Inst::Var(StackAddr::Local(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 13 },
+            Inst::Func { arity: 2, addr: 13 },
             Inst::Call,
             Inst::Ret,
             // [13] fromMaybe = m d ->
@@ -597,7 +588,7 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main =
@@ -613,11 +604,11 @@ mod tests {
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(0)]),
             //      not = [global not]
             Inst::Int(0),
-            Inst::Func { arity: 1, inst: 16 },
+            Inst::Func { arity: 1, addr: 16 },
             Inst::Call,
             //   in map not l2
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 21 },
+            Inst::Func { arity: 2, addr: 21 },
             Inst::Call,
             Inst::Ret,
             // [16] not = b ->
@@ -645,7 +636,7 @@ mod tests {
             Inst::Var(StackAddr::Local(1)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 21 },
+            Inst::Func { arity: 2, addr: 21 },
             Inst::Call,
             //        in Cons x' xs'
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
@@ -679,18 +670,18 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main = let p = pair True False
             Inst::Ctor(0, vec![]),
             Inst::Ctor(1, vec![]),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 13 },
+            Inst::Func { arity: 2, addr: 13 },
             Inst::Call,
             //   in swap p
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 15 },
+            Inst::Func { arity: 1, addr: 15 },
             Inst::Call,
             Inst::Ret,
             // [13] pair = x y -> Pair x y
@@ -729,18 +720,18 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // main = map inc list
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 14 }, // list
+            Inst::Func { arity: 0, addr: 14 }, // list
             Inst::Call,
             Inst::Int(0),
-            Inst::Func { arity: 1, inst: 24 }, // inc
+            Inst::Func { arity: 1, addr: 24 }, // inc
             Inst::Call,
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 27 }, // map
+            Inst::Func { arity: 2, addr: 27 }, // map
             Inst::Call,
             Inst::Ret,
             // list =
@@ -784,7 +775,7 @@ mod tests {
             Inst::Var(StackAddr::Local(1)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 27 },
+            Inst::Func { arity: 2, addr: 27 },
             Inst::Call,
             //        in Cons x' xs'
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
@@ -831,13 +822,13 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main = sum_t_n 5
             Inst::Int(5),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 9 },
+            Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
             // [9] sum_to = n -> let neq0 = n == 0
@@ -851,7 +842,7 @@ mod tests {
             //  sum = sum_to n-1
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 9 },
+            Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             //  in n + sum
             Inst::IntAdd(StackAddr::Local(5), StackAddr::Local(0)),
@@ -914,13 +905,13 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main = fib 15
             Inst::Int(15),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 9 },
+            Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
             // [9] fib = n -> let n=0 = n == 0
@@ -944,7 +935,7 @@ mod tests {
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 33 },
+            Inst::Func { arity: 2, addr: 33 },
             Inst::Call,
             // case fibs of
             Inst::Case(StackAddr::Local(0), vec![26, 27]),
@@ -962,26 +953,26 @@ mod tests {
             // [33] fibBuild = n ms -> let msLen = length ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 64 },
+            Inst::Func { arity: 1, addr: 64 },
             Inst::Call,
             //   n<=msLen = lteq n msLen
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 74 },
+            Inst::Func { arity: 2, addr: 74 },
             Inst::Call,
             //   case n<=msLen of
             Inst::Case(StackAddr::Local(0), vec![43, 53]),
             //   False -> let prefix = fib' ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 55 },
+            Inst::Func { arity: 1, addr: 55 },
             Inst::Call,
             // in fibBuild n prefix
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 33 },
+            Inst::Func { arity: 2, addr: 33 },
             Inst::Call,
             Inst::Ret,
             // True -> ms
@@ -1013,7 +1004,7 @@ mod tests {
             // Cons x xs -> let xsLen = length xs
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 64 },
+            Inst::Func { arity: 1, addr: 64 },
             Inst::Call,
             //  in xsLen + 1
             Inst::Int(1),
@@ -1024,7 +1015,7 @@ mod tests {
             // in not x>y
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 80 },
+            Inst::Func { arity: 1, addr: 80 },
             Inst::Call,
             Inst::Ret,
             // [80] not = b -> case b of
@@ -1055,7 +1046,7 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main = let n = 15
@@ -1063,7 +1054,7 @@ mod tests {
             // in fib n
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, inst: 10 },
+            Inst::Func { arity: 1, addr: 10 },
             Inst::Call,
             Inst::Ret,
             // [10] fib n = go n 1 1
@@ -1071,7 +1062,7 @@ mod tests {
             Inst::Int(1),
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(3),
-            Inst::Func { arity: 3, inst: 17 },
+            Inst::Func { arity: 3, addr: 17 },
             Inst::Call,
             Inst::Ret,
             // [17] go n x y = let n<3 = n < 3
@@ -1090,7 +1081,7 @@ mod tests {
             Inst::Var(StackAddr::Local(3)),
             Inst::Var(StackAddr::Local(2)),
             Inst::Int(3),
-            Inst::Func { arity: 3, inst: 17 },
+            Inst::Func { arity: 3, addr: 17 },
             Inst::Call,
             Inst::Ret,
             // True -> x
@@ -1113,7 +1104,7 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main = returnAdd 1 2 3
@@ -1121,12 +1112,12 @@ mod tests {
             Inst::Int(2),
             Inst::Int(1),
             Inst::Int(3),
-            Inst::Func { arity: 1, inst: 11 },
+            Inst::Func { arity: 1, addr: 11 },
             Inst::Call,
             Inst::Ret,
             // [11] returnAdd = z -> add
             Inst::Int(0),
-            Inst::Func { arity: 2, inst: 15 },
+            Inst::Func { arity: 2, addr: 15 },
             Inst::Call,
             Inst::Ret,
             // [15] add = x y -> x + y
@@ -1147,19 +1138,19 @@ mod tests {
         let prog: Vec<Inst> = vec![
             // call to main
             Inst::Int(0),
-            Inst::Func { arity: 0, inst: 4 },
+            Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
             // [4] main = let f = add 1
             Inst::Int(1),
             Inst::Int(1),
-            Inst::Func { arity: 2, inst: 19 },
+            Inst::Func { arity: 2, addr: 19 },
             Inst::Call,
             // in apply f 2
             Inst::Int(2),
             Inst::Var(StackAddr::Local(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, inst: 14 },
+            Inst::Func { arity: 2, addr: 14 },
             Inst::Call,
             Inst::Ret,
             // [14] apply = f x -> f x
