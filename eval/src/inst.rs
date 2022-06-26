@@ -87,7 +87,6 @@ impl<T> Stack<T> {
     fn pop_frame(&mut self) {
         let r = self.inner.pop().unwrap();
         let frame = self.frames.pop().unwrap();
-        println!("pop_frame: {:?}", frame);
         self.inner.truncate(frame);
         self.push(r);
     }
@@ -95,7 +94,6 @@ impl<T> Stack<T> {
     /// Push a new stack frame.
     /// This just saves a marker into the current top of the stack so it can be restored later.
     fn push_frame(&mut self) {
-        println!("push_frame: {:?}", self.inner.len());
         self.frames.push(self.inner.len());
     }
 
@@ -181,7 +179,7 @@ pub fn eval(insts: &[Inst]) -> StackValue<InstAddr> {
     let mut call_stack: Stack<InstAddr> = Stack::new();
     let mut inst_addr = 0;
     let mut bail_counter = 0;
-    while inst_addr < insts.len() && bail_counter < 1000 {
+    while inst_addr < insts.len() && bail_counter < 2000 {
         bail_counter += 1;
         println!("stack: {:?}", stack.inner);
         println!("frames: {:?}", stack.frames);
@@ -228,14 +226,11 @@ fn lookup_stack_addr<I>(stack: &Stack<StackValue<I>>, addr: StackAddr) -> &Stack
             // `i` is the offset of the argument from the current stack frame.
             // Stack frames are an offset from the bottom of the stack, but stack lookups are from
             // the top of the stack, so we must convert from one to the other.
+            // The first element in the stack frame will be EndOfArgs, which we need to skip.
             let frame = stack.current_frame();
-            println!("frame: {:?}", frame);
-            println!("stack.inner.len(): {:?}", stack.inner.len());
-            let frame_offset_from_top = stack.inner.len() - frame - 2;
-            println!("frame_offset_from_top: {:?}", frame_offset_from_top);
-            let arg_addr = frame_offset_from_top - i;
-            println!("arg_addr: {:?}", arg_addr);
-            &stack[arg_addr]
+            let arg_offset_from_frame = frame + i + 1; // +1 to skip EndOfArgs
+            let arg_offset_from_top = stack.inner.len() - 1 - arg_offset_from_frame;
+            &stack[arg_offset_from_top]
         }
     }
 }
@@ -280,8 +275,6 @@ fn eval_inst(
                 StackValue::EndOfArgs => panic!("cannot call EndOfArgs marker"),
                 StackValue::Int(_) => panic!("cannot call an integer"),
                 StackValue::Func { arity, inst } => {
-                    println!("num_args: {}", num_args);
-                    println!("arity: {}", arity);
                     if num_args < arity {
                         // Construct a PAp
                         let args = {
@@ -304,7 +297,6 @@ fn eval_inst(
                             // Jump to function
                             return Some(inst);
                         } else {
-                            println!("num_args == arity");
                             // Push a stack frame that includes all args, including the EndOfArgs
                             // marker
                             stack.frames.push(stack.inner.len() - arity - 1);
@@ -1108,32 +1100,26 @@ mod tests {
     fn test_10() {
         let prog: Vec<Inst> = vec![
             // call to main
-            Inst::CallC {
-                arity: 0,
-                func_addr: 2,
-                args: vec![],
-            },
+            Inst::EndOfArgs,
+            Inst::Func { arity: 0, inst: 4 },
+            Inst::CallG,
             Inst::Halt,
-            // main = let n = 15                 [2]
+            // [4] main = fib 15
+            Inst::EndOfArgs,
             Inst::Int(15),
-            // in fib n
-            Inst::CallC {
-                arity: 1,
-                func_addr: 5,
-                args: vec![0],
-            },
+            Inst::Func { arity: 1, inst: 9 },
+            Inst::CallG,
             Inst::Ret,
-            // fib = n ->                        [5]
-            //   let n=0 = n == 0
+            // [9] fib = n -> let n=0 = n == 0
             Inst::Int(0),
-            Inst::IntEq(StackAddr::Local(1), StackAddr::Local(0)),
+            Inst::IntEq(StackAddr::Arg(0), StackAddr::Local(0)),
             // in case n=0 of
-            Inst::Case(StackAddr::Local(0), vec![8, 23]),
+            Inst::Case(StackAddr::Local(0), vec![12, 30]),
             // False -> let n=1 = n == 1
             Inst::Int(1),
-            Inst::IntEq(StackAddr::Local(3), StackAddr::Local(0)),
+            Inst::IntEq(StackAddr::Arg(0), StackAddr::Local(0)),
             // in case n=1 of
-            Inst::Case(StackAddr::Local(0), vec![11, 21]),
+            Inst::Case(StackAddr::Local(0), vec![15, 29]),
             // False -> let l1 = Cons 1 Nil
             Inst::Int(1),
             Inst::Ctor(0, vec![]),
@@ -1142,13 +1128,13 @@ mod tests {
             Inst::Int(1),
             Inst::Ctor(1, vec![StackAddr::Local(0), StackAddr::Local(1)]),
             // fibs = fibBuild n prefix
-            Inst::CallC {
-                arity: 2,
-                func_addr: 25,
-                args: vec![9, 0],
-            },
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Local(1)),
+            Inst::Var(StackAddr::Arg(0)),
+            Inst::Func { arity: 2, inst: 33 },
+            Inst::CallG,
             // case fibs of
-            Inst::Case(StackAddr::Local(0), vec![18, 19]),
+            Inst::Case(StackAddr::Local(0), vec![26, 27]),
             // Nil -> panic
             Inst::Panic,
             // Cons x xs -> x
@@ -1160,44 +1146,40 @@ mod tests {
             // True -> 1
             Inst::Int(1),
             Inst::Ret,
-            // fibBuild = n ms ->                [25]
-            //   let msLen = length ms
-            Inst::CallC {
-                arity: 1,
-                func_addr: 42,
-                args: vec![0],
-            },
-            //   n<=msLen = n <= msLen
-            Inst::CallC {
-                arity: 2,
-                func_addr: 49,
-                args: vec![2, 0],
-            },
+            // [33] fibBuild = n ms -> let msLen = length ms
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Arg(0)),
+            Inst::Func { arity: 1, inst: 64 },
+            Inst::CallG,
+            //   n<=msLen = lteq n msLen
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Local(1)),
+            Inst::Var(StackAddr::Arg(1)),
+            Inst::Func { arity: 2, inst: 74 },
+            Inst::CallG,
             //   case n<=msLen of
-            Inst::Case(StackAddr::Local(0), vec![28, 31]),
+            Inst::Case(StackAddr::Local(0), vec![43, 53]),
             //   False -> let prefix = fib' ms
-            Inst::CallC {
-                arity: 1,
-                func_addr: 33,
-                args: vec![2],
-            },
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Arg(0)),
+            Inst::Func { arity: 1, inst: 55 },
+            Inst::CallG,
             // in fibBuild n prefix
-            Inst::CallC {
-                arity: 2,
-                func_addr: 25,
-                args: vec![4, 0],
-            },
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Local(1)),
+            Inst::Var(StackAddr::Arg(1)),
+            Inst::Func { arity: 2, inst: 33 },
+            Inst::CallG,
             Inst::Ret,
             // True -> ms
-            Inst::Var(StackAddr::Local(2)),
+            Inst::Var(StackAddr::Arg(0)),
             Inst::Ret,
-            // fib' = ms ->                      [33]
-            //  case ms of
-            Inst::Case(StackAddr::Local(0), vec![34, 35]),
+            // [55] fib' = ms -> case ms of
+            Inst::Case(StackAddr::Arg(0), vec![56, 57]),
             // Nil -> panic
             Inst::Panic,
             // Cons x ms' -> case ms' of
-            Inst::Case(StackAddr::Local(0), vec![36, 37]),
+            Inst::Case(StackAddr::Local(0), vec![58, 59]),
             // Nil -> panic
             Inst::Panic,
             // Cons y ms'' ->
@@ -1210,35 +1192,30 @@ mod tests {
             //   in Cons r l2
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(0)]),
             Inst::Ret,
-            // length = l ->                     [42]
-            //  case l of
-            Inst::Case(StackAddr::Local(0), vec![43, 45]),
+            // [64] length = l -> case l of
+            Inst::Case(StackAddr::Arg(0), vec![65, 67]),
             // Nil -> 0
             Inst::Int(0),
             Inst::Ret,
             // Cons x xs -> let xsLen = length xs
-            Inst::CallC {
-                arity: 1,
-                func_addr: 42,
-                args: vec![0],
-            },
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Local(1)),
+            Inst::Func { arity: 1, inst: 64 },
+            Inst::CallG,
             //  in xsLen + 1
             Inst::Int(1),
             Inst::IntAdd(StackAddr::Local(1), StackAddr::Local(0)),
             Inst::Ret,
-            // lteq = x y ->                     [49]
-            // let x>y = x > y
-            Inst::IntGt(StackAddr::Local(1), StackAddr::Local(0)),
+            // [74] lteq = x y -> let x>y = x > y
+            Inst::IntGt(StackAddr::Arg(1), StackAddr::Arg(0)),
             // in not x>y
-            Inst::CallC {
-                arity: 1,
-                func_addr: 52,
-                args: vec![0],
-            },
+            Inst::EndOfArgs,
+            Inst::Var(StackAddr::Local(1)),
+            Inst::Func { arity: 1, inst: 80 },
+            Inst::CallG,
             Inst::Ret,
-            // not = b ->                        [52]
-            //   case b of
-            Inst::Case(StackAddr::Local(0), vec![53, 55]),
+            // [80] not = b -> case b of
+            Inst::Case(StackAddr::Arg(0), vec![81, 83]),
             //     False -> True
             Inst::Ctor(1, vec![]),
             Inst::Ret,
@@ -1281,31 +1258,31 @@ fn test_10() {
         Inst::EndOfArgs,
         Inst::Int(1),
         Inst::Int(1),
-        Inst::Var(StackAddr::Local(3)),
+        Inst::Var(StackAddr::Arg(0)),
         Inst::Func { arity: 3, inst: 17 },
         Inst::CallG,
         Inst::Ret,
         // [17] go n x y = let n<3 = n < 3
         Inst::Int(3),
-        Inst::IntLt(StackAddr::Local(1), StackAddr::Local(0)),
+        Inst::IntLt(StackAddr::Arg(2), StackAddr::Local(0)),
         // in case n<3 of
         Inst::Case(StackAddr::Local(0), vec![20, 30]),
         // False ->
         //   let z = x + y
-        Inst::IntAdd(StackAddr::Local(3), StackAddr::Local(4)),
+        Inst::IntAdd(StackAddr::Arg(1), StackAddr::Arg(0)),
         //       m = n - 1
         Inst::Int(1),
-        Inst::IntSub(StackAddr::Local(4), StackAddr::Local(0)),
+        Inst::IntSub(StackAddr::Arg(2), StackAddr::Local(0)),
         //   in go m z x
         Inst::EndOfArgs,
-        Inst::Var(StackAddr::Local(7)),
+        Inst::Var(StackAddr::Arg(1)),
         Inst::Var(StackAddr::Local(4)),
         Inst::Var(StackAddr::Local(3)),
         Inst::Func { arity: 3, inst: 17 },
         Inst::CallG,
         Inst::Ret,
         // True -> x
-        Inst::Var(StackAddr::Local(3)),
+        Inst::Var(StackAddr::Arg(1)),
         Inst::Ret,
     ];
     assert_eq!(eval(&prog).to_data_value(), DataValue::Int(610));
