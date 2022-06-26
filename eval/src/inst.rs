@@ -18,13 +18,6 @@ pub enum Inst {
     EndOfArgs,
 
     Int(i32),
-    // Call to a known constant function
-    CallC {
-        arity: usize,
-        // TODO: rename to addr
-        func_addr: InstAddr,
-        args: Vec<usize>,
-    },
     // Generic call instruction.
     // Call the top element on the stack.
     // Elements the args, first arg topmost, followed by an EndOfArgs marker.
@@ -201,29 +194,6 @@ pub fn eval(insts: &[Inst]) -> StackValue<InstAddr> {
         }
     }
     return stack[0].clone();
-}
-
-/// Evaluate the program until the given call stack is empty.
-/// This effectively evaluates the current function until it returns.
-fn eval_until_call_stack_is_empty(
-    stack: &mut Stack<StackValue<InstAddr>>,
-    mut call_stack: Stack<InstAddr>,
-    mut inst_addr: InstAddr,
-    prog: &[Inst],
-) {
-    while !call_stack.is_empty() {
-        println!("stack: {:?}", stack.inner);
-        println!("frames: {:?}", stack.frames);
-        println!("inst: {:?}", prog[inst_addr]);
-        match eval_inst(stack, &mut call_stack, inst_addr, prog) {
-            Some(i) => {
-                inst_addr = i;
-            }
-            None => {
-                break;
-            }
-        }
-    }
 }
 
 fn lookup_stack_addr<I>(stack: &Stack<StackValue<I>>, addr: StackAddr) -> &StackValue<I> {
@@ -403,37 +373,6 @@ fn eval_inst(
                 }
             }
         }
-        Inst::CallC {
-            arity,
-            func_addr,
-            args,
-        } => {
-            if args.len() < *arity {
-                // Allocate a PAp containing func_addr and args (copied from stack)
-                let arg_values = args.iter().map(|a| stack[*a].clone()).collect();
-                let pap = HeapValue::PAp {
-                    inst: *func_addr,
-                    arity: *arity,
-                    args: arg_values,
-                };
-                // Push PAp onto stack
-                stack.push(StackValue::Ref(Rc::new(pap)));
-            } else {
-                // TODO: handle case where we have too many args
-                // Allocate a new stack frame
-                stack.push_frame(0);
-                // Push args onto stack
-                // Each arg we push bumps the addresses of existing args by 1, so we have to
-                // account for that as we go.
-                for (i, arg) in args.iter().enumerate() {
-                    stack.push(stack[*arg + i].clone());
-                }
-                // Push the return address onto the call stack
-                call_stack.push(inst_addr + 1);
-                // Jump to function
-                return Some(*func_addr);
-            }
-        }
         Inst::Case(target, alts) => {
             let target = lookup_stack_addr(stack, *target).clone();
             match target {
@@ -552,68 +491,6 @@ fn eval_inst(
         Inst::Panic => panic!("panic"),
     };
     Some(inst_addr + 1)
-}
-
-fn eval_call(
-    stack: &mut Stack<StackValue<InstAddr>>,
-    call_stack: &mut Stack<InstAddr>,
-    inst_addr: InstAddr,
-    prog: &[Inst],
-    func_addr: InstAddr,
-    arity: usize,
-    args: &[usize],
-) -> Option<InstAddr> {
-    if args.len() == arity {
-        // Allocate a new stack frame
-        stack.push_frame(0);
-        // Push args onto stack
-        // Each arg we push bumps the addresses of existing args by 1, so we have to
-        // account for that as we go.
-        for (i, arg) in args.iter().enumerate() {
-            stack.push(stack[*arg + i].clone());
-        }
-        // Push the return address onto the call stack
-        call_stack.push(inst_addr + 1);
-        // Jump to function
-        return Some(func_addr);
-    } else if args.len() < arity {
-        // Allocate a PAp containing inst and args (copied from stack)
-        let arg_values = args.iter().map(|a| stack[*a].clone()).collect();
-        let pap = HeapValue::PAp {
-            inst: func_addr,
-            arity: arity,
-            args: arg_values,
-        };
-        // Push PAp onto stack
-        stack.push(StackValue::Ref(Rc::new(pap)));
-    } else {
-        // Push <arity> number of args onto the stack and call function
-        for (i, arg) in args.iter().take(arity).enumerate() {
-            stack.push(stack[*arg + i].clone());
-        }
-        // Call the function recursively.
-        // We can't just jump to it, because on return we need to deal with the
-        // remaining args.
-        let mut new_call_stack: Stack<InstAddr> = Stack::new();
-        new_call_stack.push(inst_addr);
-        eval_until_call_stack_is_empty(stack, new_call_stack, func_addr, prog);
-        // Result will be a Func or PAp. Call it with the remaining args.
-        match stack.pop(1) {
-            StackValue::Func { inst, arity } => {
-                return eval_call(
-                    stack,
-                    call_stack,
-                    inst_addr,
-                    prog,
-                    inst,
-                    arity,
-                    &args[arity..],
-                );
-            }
-            _ => todo!(),
-        }
-    }
-    return Some(inst_addr + 1);
 }
 
 fn int_binary_op<I>(
