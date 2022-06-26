@@ -88,12 +88,8 @@ impl<T> Stack<T> {
     /// Push a new stack frame.
     /// This saves a marker into the current top of the stack so it can be restored later.
     /// It also saves the number of arguments remaining after this function call.
-    fn push_frame(&mut self, num_args: usize) {
-        self.frames.push((self.inner.len(), num_args));
-    }
-
-    fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+    fn push_frame(&mut self, marker: usize, num_args: usize) {
+        self.frames.push((marker, num_args));
     }
 }
 
@@ -301,9 +297,7 @@ fn eval_inst(
                         // Push a stack frame that includes <arity> args. We store in the stack
                         // frame (2nd elem) the number of args that still need to be consumed
                         // after this function returns.
-                        stack
-                            .frames
-                            .push((stack.inner.len() - arity, num_args - arity));
+                        stack.push_frame(stack.inner.len() - arity, num_args - arity);
                         // Push the current instruction as the return address
                         call_stack.push(inst_addr);
                         // Jump to function
