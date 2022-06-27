@@ -11,14 +11,21 @@ pub enum Inst {
     // Arguments are 0-indexed in reverse, e.g. f x y -> ... has arguments 0: y, 1: x.
     Func { arity: usize, addr: InstAddr },
 
+    // Push an integer onto the stack
     Int(i32),
+    // Call the function at the top of the stack
     Call,
+    // Return from the current function
+    Ret,
+
+    // Perform case analysis on the element at the given stack address.
     // TODO: Case expressions on integer literals
     Case(StackAddr, Vec<InstAddr>),
+
+    // Construct a ctor on the heap with the given args
     Ctor(u8, Vec<StackAddr>),
 
-    // stack operations
-    Ret,
+    // Stop the VM
     Halt,
 
     // primitive operations
