@@ -754,7 +754,7 @@ mod tests {
             Inst::Func { arity: 1, addr: 24 }, // inc
             Inst::Call,
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 27 }, // map
+            Inst::Func { arity: 2, addr: 26 }, // map
             Inst::Call,
             Inst::Ret,
             // list =
@@ -778,16 +778,12 @@ mod tests {
             Inst::Ctor(1, vec![StackAddr::Local(6), StackAddr::Local(0)]),
             //       in l4
             Inst::Ret,
-            // inc = x -> let one = 1 in x + one
-            Inst::Int(1),
-            Inst::IntAdd(
-                IntArg::Var(StackAddr::Local(1)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            // inc = x -> x + 1
+            Inst::IntAdd(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
             Inst::Ret,
             // map = f l ->
             //   case l of
-            Inst::Case(StackAddr::Arg(0), vec![28, 30]),
+            Inst::Case(StackAddr::Arg(0), vec![27, 29]),
             //     Nil -> Nil
             Inst::Ctor(0, vec![]),
             Inst::Ret,
@@ -801,7 +797,7 @@ mod tests {
             Inst::Var(StackAddr::Local(1)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 27 },
+            Inst::Func { arity: 2, addr: 26 },
             Inst::Call,
             //        in Cons x' xs'
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
@@ -851,26 +847,18 @@ mod tests {
             Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
-            // [4] main = sum_t_n 5
+            // [4] main = sum_to 5
             Inst::Int(5),
             Inst::Int(1),
             Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
             // [9] sum_to = n -> let neq0 = n == 0
-            Inst::Int(0),
-            Inst::IntEq(
-                IntArg::Var(StackAddr::Local(1)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
             // in case neq0 of
-            Inst::Case(StackAddr::Local(0), vec![12, 20]),
+            Inst::Case(StackAddr::Local(0), vec![11, 18]),
             //  False -> let n-1 = n - 1
-            Inst::Int(1),
-            Inst::IntSub(
-                IntArg::Var(StackAddr::Local(3)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            Inst::IntSub(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
             //  sum = sum_to n-1
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
@@ -878,7 +866,7 @@ mod tests {
             Inst::Call,
             //  in n + sum
             Inst::IntAdd(
-                IntArg::Var(StackAddr::Local(5)),
+                IntArg::Var(StackAddr::Arg(0)),
                 IntArg::Var(StackAddr::Local(0)),
             ),
             Inst::Ret,
@@ -950,21 +938,13 @@ mod tests {
             Inst::Call,
             Inst::Ret,
             // [9] fib = n -> let n=0 = n == 0
-            Inst::Int(0),
-            Inst::IntEq(
-                IntArg::Var(StackAddr::Arg(0)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
             // in case n=0 of
-            Inst::Case(StackAddr::Local(0), vec![12, 30]),
+            Inst::Case(StackAddr::Local(0), vec![11, 29]),
             // False -> let n=1 = n == 1
-            Inst::Int(1),
-            Inst::IntEq(
-                IntArg::Var(StackAddr::Arg(0)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
             // in case n=1 of
-            Inst::Case(StackAddr::Local(0), vec![15, 29]),
+            Inst::Case(StackAddr::Local(0), vec![13, 27]),
             // False -> let l1 = Cons 1 Nil
             Inst::Int(1),
             Inst::Ctor(0, vec![]),
@@ -976,10 +956,10 @@ mod tests {
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 33 },
+            Inst::Func { arity: 2, addr: 31 },
             Inst::Call,
             // case fibs of
-            Inst::Case(StackAddr::Local(0), vec![26, 27]),
+            Inst::Case(StackAddr::Local(0), vec![24, 25]),
             // Nil -> panic
             Inst::Panic,
             // Cons x xs -> x
@@ -991,40 +971,40 @@ mod tests {
             // True -> 1
             Inst::Int(1),
             Inst::Ret,
-            // [33] fibBuild = n ms -> let msLen = length ms
+            // [31] fibBuild = n ms -> let msLen = length ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 64 },
+            Inst::Func { arity: 1, addr: 62 },
             Inst::Call,
             //   n<=msLen = lteq n msLen
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 74 },
+            Inst::Func { arity: 2, addr: 72 },
             Inst::Call,
             //   case n<=msLen of
-            Inst::Case(StackAddr::Local(0), vec![43, 53]),
+            Inst::Case(StackAddr::Local(0), vec![41, 51]),
             //   False -> let prefix = fib' ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 55 },
+            Inst::Func { arity: 1, addr: 53 },
             Inst::Call,
             // in fibBuild n prefix
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 33 },
+            Inst::Func { arity: 2, addr: 31 },
             Inst::Call,
             Inst::Ret,
             // True -> ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Ret,
-            // [55] fib' = ms -> case ms of
-            Inst::Case(StackAddr::Arg(0), vec![56, 57]),
+            // [53] fib' = ms -> case ms of
+            Inst::Case(StackAddr::Arg(0), vec![54, 55]),
             // Nil -> panic
             Inst::Panic,
             // Cons x ms' -> case ms' of
-            Inst::Case(StackAddr::Local(0), vec![58, 59]),
+            Inst::Case(StackAddr::Local(0), vec![56, 57]),
             // Nil -> panic
             Inst::Panic,
             // Cons y ms'' ->
@@ -1040,15 +1020,15 @@ mod tests {
             //   in Cons r l2
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(0)]),
             Inst::Ret,
-            // [64] length = l -> case l of
-            Inst::Case(StackAddr::Arg(0), vec![65, 67]),
+            // [62] length = l -> case l of
+            Inst::Case(StackAddr::Arg(0), vec![63, 65]),
             // Nil -> 0
             Inst::Int(0),
             Inst::Ret,
             // Cons x xs -> let xsLen = length xs
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 64 },
+            Inst::Func { arity: 1, addr: 62 },
             Inst::Call,
             //  in xsLen + 1
             Inst::Int(1),
@@ -1057,7 +1037,7 @@ mod tests {
                 IntArg::Var(StackAddr::Local(0)),
             ),
             Inst::Ret,
-            // [74] lteq = x y -> let x>y = x > y
+            // [72] lteq = x y -> let x>y = x > y
             Inst::IntGt(
                 IntArg::Var(StackAddr::Arg(1)),
                 IntArg::Var(StackAddr::Arg(0)),
@@ -1065,11 +1045,11 @@ mod tests {
             // in not x>y
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 80 },
+            Inst::Func { arity: 1, addr: 78 },
             Inst::Call,
             Inst::Ret,
-            // [80] not = b -> case b of
-            Inst::Case(StackAddr::Arg(0), vec![81, 83]),
+            // [78] not = b -> case b of
+            Inst::Case(StackAddr::Arg(0), vec![79, 81]),
             //     False -> True
             Inst::Ctor(1, vec![]),
             Inst::Ret,
@@ -1099,30 +1079,24 @@ mod tests {
             Inst::Func { arity: 0, addr: 4 },
             Inst::Call,
             Inst::Halt,
-            // [4] main = let n = 15
+            // [4] main = fib 15
             Inst::Int(15),
-            // in fib n
-            Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 10 },
+            Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
-            // [10] fib n = go n 1 1
+            // [9] fib n = go n 1 1
             Inst::Int(1),
             Inst::Int(1),
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(3),
-            Inst::Func { arity: 3, addr: 17 },
+            Inst::Func { arity: 3, addr: 16 },
             Inst::Call,
             Inst::Ret,
-            // [17] go n x y = let n<3 = n < 3
-            Inst::Int(3),
-            Inst::IntLt(
-                IntArg::Var(StackAddr::Arg(2)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            // [16] go n x y = let n<3 = n < 3
+            Inst::IntLt(IntArg::Var(StackAddr::Arg(2)), IntArg::Int(3)),
             // in case n<3 of
-            Inst::Case(StackAddr::Local(0), vec![20, 30]),
+            Inst::Case(StackAddr::Local(0), vec![18, 27]),
             // False ->
             //   let z = x + y
             Inst::IntAdd(
@@ -1130,17 +1104,13 @@ mod tests {
                 IntArg::Var(StackAddr::Arg(0)),
             ),
             //       m = n - 1
-            Inst::Int(1),
-            Inst::IntSub(
-                IntArg::Var(StackAddr::Arg(2)),
-                IntArg::Var(StackAddr::Local(0)),
-            ),
+            Inst::IntSub(IntArg::Var(StackAddr::Arg(2)), IntArg::Int(1)),
             //   in go m z x
             Inst::Var(StackAddr::Arg(1)),
-            Inst::Var(StackAddr::Local(3)),
+            Inst::Var(StackAddr::Local(2)),
             Inst::Var(StackAddr::Local(2)),
             Inst::Int(3),
-            Inst::Func { arity: 3, addr: 17 },
+            Inst::Func { arity: 3, addr: 16 },
             Inst::Call,
             Inst::Ret,
             // True -> x
