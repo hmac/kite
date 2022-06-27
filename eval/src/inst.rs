@@ -22,14 +22,12 @@ pub enum Inst {
     Halt,
 
     // primitive operations
-    // TODO: support integer literals in these instruction arguments, so we don't have to push them
-    // onto the stack to pass them.
-    IntAdd(StackAddr, StackAddr),
-    IntSub(StackAddr, StackAddr),
-    IntMul(StackAddr, StackAddr),
-    IntEq(StackAddr, StackAddr),
-    IntLt(StackAddr, StackAddr),
-    IntGt(StackAddr, StackAddr),
+    IntAdd(IntArg, IntArg),
+    IntSub(IntArg, IntArg),
+    IntMul(IntArg, IntArg),
+    IntEq(IntArg, IntArg),
+    IntLt(IntArg, IntArg),
+    IntGt(IntArg, IntArg),
     Panic,
 }
 
@@ -132,6 +130,25 @@ impl<I> HeapValue<I> {
 pub enum DataValue {
     Int(i32),
     Ctor(u8, Vec<DataValue>),
+}
+
+/// An argument to an integer operation such as IntAdd.
+#[derive(Debug, Clone, Copy)]
+pub enum IntArg {
+    Int(i32),
+    Var(StackAddr),
+}
+
+impl IntArg {
+    fn try_to_int<I>(&self, stack: &Stack<StackValue<I>>) -> Option<i32> {
+        match self {
+            IntArg::Int(i) => Some(*i),
+            IntArg::Var(v) => match lookup_stack_addr(stack, *v) {
+                StackValue::Int(i) => Some(*i),
+                _ => None,
+            },
+        }
+    }
 }
 
 type InstAddr = usize;
@@ -437,16 +454,19 @@ fn eval_inst(
 }
 
 fn int_binary_op<I>(
-    a: StackAddr,
-    b: StackAddr,
+    a: IntArg,
+    b: IntArg,
     msg: &str,
     op: fn(i32, i32) -> StackValue<I>,
     stack: &Stack<StackValue<I>>,
 ) -> StackValue<I> {
-    match (lookup_stack_addr(stack, a), lookup_stack_addr(stack, b)) {
-        (StackValue::Int(a), StackValue::Int(b)) => op(*a, *b),
-        _ => panic!("cannot {} non-integers", msg),
-    }
+    let a_val = a
+        .try_to_int(stack)
+        .unwrap_or_else(|| panic!("cannot {} non-integers", msg));
+    let b_val = b
+        .try_to_int(stack)
+        .unwrap_or_else(|| panic!("cannot {} non-integers", msg));
+    op(a_val, b_val)
 }
 
 #[cfg(test)]
@@ -495,7 +515,10 @@ mod tests {
             Inst::Ret,
             Inst::Int(5),
             Inst::Int(6),
-            Inst::IntAdd(StackAddr::Local(0), StackAddr::Local(1)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Local(0)),
+                IntArg::Var(StackAddr::Local(1)),
+            ),
             Inst::Ret,
         ];
         assert_eq!(eval(&insts).to_data_value(), DataValue::Int(11));
@@ -757,7 +780,10 @@ mod tests {
             Inst::Ret,
             // inc = x -> let one = 1 in x + one
             Inst::Int(1),
-            Inst::IntAdd(StackAddr::Local(1), StackAddr::Local(0)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Local(1)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             Inst::Ret,
             // map = f l ->
             //   case l of
@@ -833,19 +859,28 @@ mod tests {
             Inst::Ret,
             // [9] sum_to = n -> let neq0 = n == 0
             Inst::Int(0),
-            Inst::IntEq(StackAddr::Local(1), StackAddr::Local(0)),
+            Inst::IntEq(
+                IntArg::Var(StackAddr::Local(1)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             // in case neq0 of
             Inst::Case(StackAddr::Local(0), vec![12, 20]),
             //  False -> let n-1 = n - 1
             Inst::Int(1),
-            Inst::IntSub(StackAddr::Local(3), StackAddr::Local(0)),
+            Inst::IntSub(
+                IntArg::Var(StackAddr::Local(3)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             //  sum = sum_to n-1
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
             Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             //  in n + sum
-            Inst::IntAdd(StackAddr::Local(5), StackAddr::Local(0)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Local(5)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             Inst::Ret,
             //  True -> 0
             Inst::Int(0),
@@ -916,12 +951,18 @@ mod tests {
             Inst::Ret,
             // [9] fib = n -> let n=0 = n == 0
             Inst::Int(0),
-            Inst::IntEq(StackAddr::Arg(0), StackAddr::Local(0)),
+            Inst::IntEq(
+                IntArg::Var(StackAddr::Arg(0)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             // in case n=0 of
             Inst::Case(StackAddr::Local(0), vec![12, 30]),
             // False -> let n=1 = n == 1
             Inst::Int(1),
-            Inst::IntEq(StackAddr::Arg(0), StackAddr::Local(0)),
+            Inst::IntEq(
+                IntArg::Var(StackAddr::Arg(0)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             // in case n=1 of
             Inst::Case(StackAddr::Local(0), vec![15, 29]),
             // False -> let l1 = Cons 1 Nil
@@ -988,7 +1029,10 @@ mod tests {
             Inst::Panic,
             // Cons y ms'' ->
             //   let r = x + y
-            Inst::IntAdd(StackAddr::Local(3), StackAddr::Local(1)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Local(3)),
+                IntArg::Var(StackAddr::Local(1)),
+            ),
             //       l1 = Cons y ms''
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(1)]),
             //       l2 = Cons x l1
@@ -1008,10 +1052,16 @@ mod tests {
             Inst::Call,
             //  in xsLen + 1
             Inst::Int(1),
-            Inst::IntAdd(StackAddr::Local(1), StackAddr::Local(0)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Local(1)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             Inst::Ret,
             // [74] lteq = x y -> let x>y = x > y
-            Inst::IntGt(StackAddr::Arg(1), StackAddr::Arg(0)),
+            Inst::IntGt(
+                IntArg::Var(StackAddr::Arg(1)),
+                IntArg::Var(StackAddr::Arg(0)),
+            ),
             // in not x>y
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
@@ -1067,15 +1117,24 @@ mod tests {
             Inst::Ret,
             // [17] go n x y = let n<3 = n < 3
             Inst::Int(3),
-            Inst::IntLt(StackAddr::Arg(2), StackAddr::Local(0)),
+            Inst::IntLt(
+                IntArg::Var(StackAddr::Arg(2)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             // in case n<3 of
             Inst::Case(StackAddr::Local(0), vec![20, 30]),
             // False ->
             //   let z = x + y
-            Inst::IntAdd(StackAddr::Arg(1), StackAddr::Arg(0)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Arg(1)),
+                IntArg::Var(StackAddr::Arg(0)),
+            ),
             //       m = n - 1
             Inst::Int(1),
-            Inst::IntSub(StackAddr::Arg(2), StackAddr::Local(0)),
+            Inst::IntSub(
+                IntArg::Var(StackAddr::Arg(2)),
+                IntArg::Var(StackAddr::Local(0)),
+            ),
             //   in go m z x
             Inst::Var(StackAddr::Arg(1)),
             Inst::Var(StackAddr::Local(3)),
@@ -1121,7 +1180,10 @@ mod tests {
             Inst::Call,
             Inst::Ret,
             // [15] add = x y -> x + y
-            Inst::IntAdd(StackAddr::Arg(0), StackAddr::Arg(1)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Arg(0)),
+                IntArg::Var(StackAddr::Arg(1)),
+            ),
             Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(5));
@@ -1160,7 +1222,10 @@ mod tests {
             Inst::Call,
             Inst::Ret,
             // [19] add = x y -> x + y
-            Inst::IntAdd(StackAddr::Local(0), StackAddr::Local(1)),
+            Inst::IntAdd(
+                IntArg::Var(StackAddr::Local(0)),
+                IntArg::Var(StackAddr::Local(1)),
+            ),
             Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(3));
