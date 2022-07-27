@@ -16,7 +16,6 @@ import           Util                           ( Debug(debug)
                                                 )
 
 -- TODO: patterns in let bindings
--- TODO: type sigs in let bindings
 data Expr n t = Var n
          | Ann (Expr n t) t
          | Con n
@@ -167,7 +166,7 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
 -- In evaluation, a solved implicit acts just like a variable.
 -- Unsolved implicits should not reach evaluation, because their presence is a
 -- type error.
-data Implicit_ n t = Unsolved   | Solved n
+data Implicit_ n t = Unsolved | Solved n
   deriving (Eq, Show, Generic, Data)
 
 data ConMeta = ConMeta

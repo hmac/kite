@@ -165,7 +165,7 @@ test = do
                      , Syn.funComments = []
                      }
       arg = (fun, ("foo", Just (tcon "C" []), expr))
-    describe "check foo = (f :: A => B -> C) b : C" $ do
+    describe "check foo = (f : A => B -> C) b : C" $ do
       let expected = T.Fun
             { T.funName   = "foo"
             , T.funType   = tcon "C" []

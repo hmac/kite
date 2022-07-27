@@ -502,7 +502,6 @@ runTypeM m = do
 -- | Like 'runTypeM' but specalised to returning 'Syn.Typed.Exp'.
 -- Before returning, we apply the solution to resolve any existential variables stored in type
 -- annotations.
--- The typechecker doesn't currently produce 'Syn.Typed.Exp', but it will in the future.
 runTypeMAndSolve :: TypeM Syn.Typed.Exp -> TypecheckM Syn.Typed.Exp
 runTypeMAndSolve m = do
   (e, solution) <- runTypeM m
@@ -760,12 +759,11 @@ instantiate dir e ty = do
         extendMarker beta >> extendE beta
         instantiate dir e (substEForU beta u a)
         dropAfter (Marker beta)
-    -- hmac: custom rule for type applications
+    -- custom rule for type applications
     -- G [e3, e1 = A e3][e2] |- e2 :=< e3   -| G'
     -- ------------------------------------------
     -- G[e1][e2]             |- A e2 <=: e1 -| G'
     --
-    -- TODO: check that this doesn't have any nasty edge cases!
     TCon c args -> do
       let (l, r) = splitAt (EVar e) ctx
       -- generate new Es for each arg
@@ -823,9 +821,9 @@ checkAbs args body (TOther (Fn a b)) | (x, Just xs) <- NE.uncons args = do
   (xs', body') <- checkAbs xs body b
   dropAfter $ V x a
   pure (NE.cons (x, a) xs', body')
--- We expect this to error, but instead of throwing a custom error for "lambda should have function
--- type but does not", we just infer the true type of the lambda throw a subtyping error between the
--- two types.
+-- We expect this to error, but instead of throwing a custom error for "lambda
+-- should have function type but does not", we just infer the true type of the
+-- lambda and throw a subtyping error between the two types.
 checkAbs args body b = do
   a  <- infer (Abs args body) >>= subst . typeOf
   b' <- subst b

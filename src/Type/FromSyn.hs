@@ -108,6 +108,7 @@ convertType uVarCtx = \case
 
 -- Explicitly quantify all type variables, then convert the whole thing to a
 -- T.Type.
+-- a -> b -> c ===> forall u0 u1 u2. u0 -> u1 -> u2
 quantify :: [Name] -> Can.Type -> T.TypeM T.Type
 quantify vars t = do
   uMap <- mapM (\v -> (v, ) <$> T.newU v) vars

@@ -96,6 +96,7 @@ instance Debug Type where
 data U = U Int Name
   deriving (Show, Typeable, Data)
 
+-- Equality on U vars ignores name hints.
 instance Eq U where
   (U i _) == (U j _) = i == j
 

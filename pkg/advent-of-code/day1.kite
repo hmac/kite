@@ -43,7 +43,7 @@ answer : [Int]
 answer =
   let mapMultiply = unzipWith (x y -> x * y)
       sumsTo : Int -> (Int, Int) -> Bool
-      sumsTo = total (x, y) -> eq eqInt (x + y) total
+      sumsTo = total (x, y) -> eq (x + y) total
 
    in (mapMultiply . (filter (sumsTo 2020)))
         (cartesianProduct numbers numbers)
