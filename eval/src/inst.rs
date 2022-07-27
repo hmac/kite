@@ -1,15 +1,20 @@
+use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::ops::Index;
 use std::rc::Rc;
 
 /// Instructions for the Kite VM.
 /// The Kite VM has a single stack which stores all variables and intermediate results.
-#[derive(Debug)]
-pub enum Inst {
+/// `A` is the type of instruction addresses, i.e. references to other parts of the program.
+/// After linking `A = InstAddr`, but it can be something else (e.g. `String`) before linking.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Inst<A> {
     // Push a local variable onto the stack
     Var(StackAddr),
     // Push a function argument onto the stack.
     // Arguments are 0-indexed in reverse, e.g. f x y -> ... has arguments 0: y, 1: x.
-    Func { arity: usize, addr: InstAddr },
+    Func { arity: usize, addr: A },
 
     // Push an integer onto the stack
     Int(i32),
@@ -20,7 +25,7 @@ pub enum Inst {
 
     // Perform case analysis on the element at the given stack address.
     // TODO: Case expressions on integer literals
-    Case(StackAddr, Vec<InstAddr>),
+    Case(StackAddr, Vec<A>),
 
     // Construct a ctor on the heap with the given args
     Ctor(u8, Vec<StackAddr>),
@@ -36,6 +41,33 @@ pub enum Inst {
     IntLt(IntArg, IntArg),
     IntGt(IntArg, IntArg),
     Panic,
+}
+
+impl<A> Inst<A> {
+    // Convert `Inst<A>` into `Inst<B>` via a function `f` that maps `A` to `B`.
+    fn map_address<B, F: Fn(A) -> B>(self, f: F) -> Inst<B> {
+        match self {
+            Inst::Func { arity, addr } => Inst::Func {
+                arity,
+                addr: f(addr),
+            },
+            Inst::Case(addr, args) => Inst::Case(addr, args.into_iter().map(f).collect()),
+            // no-op cases
+            Inst::Var(v) => Inst::Var(v),
+            Inst::Int(i) => Inst::Int(i),
+            Inst::Call => Inst::Call,
+            Inst::Ret => Inst::Ret,
+            Inst::Ctor(t, args) => Inst::Ctor(t, args),
+            Inst::Halt => Inst::Halt,
+            Inst::IntAdd(a, b) => Inst::IntAdd(a, b),
+            Inst::IntSub(a, b) => Inst::IntSub(a, b),
+            Inst::IntMul(a, b) => Inst::IntMul(a, b),
+            Inst::IntEq(a, b) => Inst::IntEq(a, b),
+            Inst::IntLt(a, b) => Inst::IntLt(a, b),
+            Inst::IntGt(a, b) => Inst::IntGt(a, b),
+            Inst::Panic => Inst::Panic,
+        }
+    }
 }
 
 /// The stack. This holds function arguments, local variables and intermediate results.
@@ -101,7 +133,7 @@ pub enum StackValue<I> {
 }
 
 impl<I> StackValue<I> {
-    fn to_data_value(&self) -> DataValue {
+    pub fn to_data_value(&self) -> DataValue {
         match self {
             StackValue::Int(i) => DataValue::Int(*i),
             StackValue::Ref(r) => r.to_data_value(),
@@ -140,7 +172,7 @@ pub enum DataValue {
 }
 
 /// An argument to an integer operation such as IntAdd.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntArg {
     Int(i32),
     Var(StackAddr),
@@ -160,14 +192,14 @@ impl IntArg {
 
 type InstAddr = usize;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StackAddr {
     Local(usize),
     Arg(usize),
 }
 
 /// Evaluate a sequence of instructions.
-pub fn eval(insts: &[Inst]) -> StackValue<InstAddr> {
+pub fn eval(insts: &[Inst<InstAddr>]) -> StackValue<InstAddr> {
     let mut stack: Stack<StackValue<InstAddr>> = Stack::new();
     let mut call_stack: Stack<InstAddr> = Stack::new();
     let mut inst_addr = 0;
@@ -208,7 +240,7 @@ fn eval_inst(
     stack: &mut Stack<StackValue<InstAddr>>,
     call_stack: &mut Stack<InstAddr>,
     inst_addr: InstAddr,
-    insts: &[Inst],
+    insts: &[Inst<InstAddr>],
 ) -> Option<InstAddr> {
     match &insts[inst_addr] {
         Inst::Var(v) => {
@@ -476,25 +508,69 @@ fn int_binary_op<I>(
     op(a_val, b_val)
 }
 
+// Convert a program with String addresses to one with InstAddr addresses.
+// This also inserts a call to main at the start of the program.
+fn link<K>(functions: HashMap<K, Vec<Inst<String>>>) -> (Vec<Inst<InstAddr>>, HashMap<K, InstAddr>)
+where
+    K: Borrow<str> + Eq + Hash,
+{
+    let mut prog = vec![];
+    let mut fn_locations: HashMap<K, InstAddr> = HashMap::new();
+    // Insert each function into the program, recording its address.
+    // We will insert a prelude of 4 instructions at the start, so our program addresses start from
+    // 4.
+    let mut i = 4;
+    for (name, fun) in functions {
+        let l = fun.len();
+        prog.extend(fun);
+        fn_locations.insert(name, i);
+        i += l;
+    }
+    // Replace all references to a function with its address
+    let mut linked_prog = prog
+        .into_iter()
+        .map(|inst| {
+            inst.map_address(|label| {
+                *fn_locations
+                    .get(&label)
+                    .unwrap_or_else(|| panic!("undefined function: {}", label))
+            })
+        })
+        .collect();
+    let mut prelude = vec![
+        Inst::Int(0),
+        Inst::Func {
+            arity: 0,
+            addr: *fn_locations
+                .get("main")
+                .unwrap_or_else(|| panic!("undefined function: main")),
+        },
+        Inst::Call,
+        Inst::Halt,
+    ];
+    prelude.append(&mut linked_prog);
+    (prelude, fn_locations)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_1() {
-        let insts: Vec<Inst> = vec![Inst::Int(1), Inst::Var(StackAddr::Local(0))];
-        assert_eq!(eval(&insts).to_data_value(), DataValue::Int(1));
+        let prog = vec![Inst::Int(1), Inst::Var(StackAddr::Local(0))];
+        assert_eq!(eval(&prog).to_data_value(), DataValue::Int(1));
     }
 
     #[test]
     fn test_2() {
-        let insts: Vec<Inst> = vec![
+        let prog = vec![
             Inst::Int(1),
             Inst::Int(2),
             Inst::Ctor(0, vec![StackAddr::Local(1), StackAddr::Local(0)]),
         ];
         assert_eq!(
-            eval(&insts).to_data_value(),
+            eval(&prog).to_data_value(),
             DataValue::Ctor(0, vec![DataValue::Int(1), DataValue::Int(2)])
         );
     }
@@ -507,7 +583,7 @@ mod tests {
     //       Cons _ _ -> 5
     #[test]
     fn test_3() {
-        let insts: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -528,14 +604,14 @@ mod tests {
             ),
             Inst::Ret,
         ];
-        assert_eq!(eval(&insts).to_data_value(), DataValue::Int(11));
+        assert_eq!(eval(&prog).to_data_value(), DataValue::Int(11));
     }
 
     // not = b -> case b of { False -> True; True -> False }
     // main = let false = False in not false
     #[test]
     fn test_4() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -565,7 +641,7 @@ mod tests {
     // main = let one = 1 in let two = 2 in let r = Just two in fromMaybe r one
     #[test]
     fn test_5() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -615,7 +691,7 @@ mod tests {
     //                   in Cons x' xs'
     #[test]
     fn test_6() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -697,7 +773,7 @@ mod tests {
     //    Pair x y -> Pair y x
     #[test]
     fn test_7() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -747,7 +823,7 @@ mod tests {
     // inc = x -> let one = 1 in x + one
     #[test]
     fn test_8() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -848,7 +924,7 @@ mod tests {
     //         in sum_to n
     #[test]
     fn test_9() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -932,7 +1008,7 @@ mod tests {
     //     False -> True
     #[test]
     fn test_10() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -1080,7 +1156,7 @@ mod tests {
     //
     #[test]
     fn test_11() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -1137,7 +1213,7 @@ mod tests {
     // main = returnAdd 1 2 3
     #[test]
     fn test_12() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -1174,7 +1250,7 @@ mod tests {
     // add = x y -> x + y
     #[test]
     fn test_13() {
-        let prog: Vec<Inst> = vec![
+        let prog = vec![
             // call to main
             Inst::Int(0),
             Inst::Func { arity: 0, addr: 4 },
@@ -1206,5 +1282,512 @@ mod tests {
             Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(3));
+    }
+
+    #[test]
+    fn test_14() {
+        let mut prog: HashMap<&'static str, Vec<Inst<String>>> = HashMap::new();
+        // range = n m ->
+        //   let n>m = n > m
+        //    in case n>m of
+        //         False -> let n' = n + 1
+        //                   in r = range n' m
+        //                   in Cons n r
+        //         True -> Nil
+        prog.insert(
+            "range",
+            vec![
+                Inst::IntGt(
+                    IntArg::Var(StackAddr::Arg(1)),
+                    IntArg::Var(StackAddr::Arg(0)),
+                ),
+                Inst::Case(
+                    StackAddr::Local(0),
+                    vec!["range_1".into(), "range_2".into()],
+                ),
+            ],
+        );
+        prog.insert(
+            "range_1",
+            vec![
+                Inst::IntAdd(IntArg::Var(StackAddr::Arg(1)), IntArg::Int(1)),
+                Inst::Var(StackAddr::Arg(0)),
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "range".into(),
+                },
+                Inst::Call,
+                Inst::Ctor(1, vec![StackAddr::Arg(1), StackAddr::Local(0)]),
+                Inst::Ret,
+            ],
+        );
+        prog.insert("range_2", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+
+        // and = x y ->
+        //   case x of
+        //     False -> False
+        //     True -> y
+        prog.insert(
+            "and",
+            vec![Inst::Case(
+                StackAddr::Arg(1),
+                vec!["and_1".into(), "and_2".into()],
+            )],
+        );
+        prog.insert("and_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        prog.insert("and_2", vec![Inst::Var(StackAddr::Arg(0)), Inst::Ret]);
+        // notEq = x y ->
+        //   let r = x == y
+        //    in case r of
+        //         False -> True
+        //         True -> False
+        prog.insert(
+            "notEq",
+            vec![
+                Inst::IntEq(
+                    IntArg::Var(StackAddr::Arg(0)),
+                    IntArg::Var(StackAddr::Arg(1)),
+                ),
+                Inst::Case(
+                    StackAddr::Local(0),
+                    vec!["notEq_1".into(), "notEq_2".into()],
+                ),
+            ],
+        );
+        prog.insert("notEq_1", vec![Inst::Ctor(1, vec![]), Inst::Ret]);
+        prog.insert("notEq_2", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        // and = x y -> case x of
+        //   False -> False
+        //   True -> y
+        prog.insert(
+            "and",
+            vec![Inst::Case(
+                StackAddr::Arg(1),
+                vec!["and_1".into(), "and_2".into()],
+            )],
+        );
+        prog.insert("and_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        prog.insert("and_2", vec![Inst::Var(StackAddr::Arg(0)), Inst::Ret]);
+        // safe = x d list ->
+        //   case list of
+        prog.insert(
+            "safe",
+            vec![Inst::Case(
+                StackAddr::Arg(0),
+                vec!["safe_1".into(), "safe_2".into()],
+            )],
+        );
+        //     Nil -> True
+        prog.insert("safe_1", vec![Inst::Ctor(1, vec![]), Inst::Ret]);
+        //     Cons q l ->
+        //       let c1 = notEq x q
+        prog.insert(
+            "safe_2",
+            vec![
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Var(StackAddr::Arg(2)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "notEq".into(),
+                },
+                Inst::Call,
+                //           q+d = q + d
+                Inst::IntAdd(
+                    IntArg::Var(StackAddr::Local(1)),
+                    IntArg::Var(StackAddr::Arg(1)),
+                ),
+                //           c2 = notEq x q+d
+                Inst::Var(StackAddr::Local(0)),
+                Inst::Var(StackAddr::Arg(2)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "notEq".into(),
+                },
+                Inst::Call,
+                //           q-d = q - d
+                Inst::IntSub(
+                    IntArg::Var(StackAddr::Local(4)),
+                    IntArg::Var(StackAddr::Arg(1)),
+                ),
+                //           c3 = notEq x q-d
+                Inst::Var(StackAddr::Local(0)),
+                Inst::Var(StackAddr::Arg(2)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "notEq".into(),
+                },
+                Inst::Call,
+                //           d+1 = d + 1
+                Inst::IntAdd(IntArg::Var(StackAddr::Arg(1)), IntArg::Int(1)),
+                //           c4 = safe x d+1 l
+                Inst::Var(StackAddr::Local(6)),
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Var(StackAddr::Arg(2)),
+                Inst::Int(3),
+                Inst::Func {
+                    arity: 3,
+                    addr: "safe".into(),
+                },
+                Inst::Call,
+                //           a12 = and c1 c2
+                Inst::Var(StackAddr::Local(4)),
+                Inst::Var(StackAddr::Local(7)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "and".into(),
+                },
+                Inst::Call,
+                //           a123 = and a12 c3
+                Inst::Var(StackAddr::Local(3)),
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "and".into(),
+                },
+                Inst::Call,
+                //        in and a123 c4
+                Inst::Var(StackAddr::Local(2)),
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "and".into(),
+                },
+                Inst::Call,
+                Inst::Ret,
+            ],
+        );
+        // catMaybes = l ->
+        //   case l of
+        prog.insert(
+            "catMaybes",
+            vec![Inst::Case(
+                StackAddr::Arg(0),
+                vec!["catMaybes_1".into(), "catMaybes_2".into()],
+            )],
+        );
+        //     Nil -> Nil
+        prog.insert("catMaybes_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        //     Cons mx xs ->
+        //       let xs' = catMaybes xs
+        //        in case mx of
+        prog.insert(
+            "catMaybes_2",
+            vec![
+                Inst::Var(StackAddr::Local(0)),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "catMaybes".into(),
+                },
+                Inst::Call,
+                Inst::Case(
+                    StackAddr::Local(2),
+                    vec!["catMaybes_3".into(), "catMaybes_4".into()],
+                ),
+            ],
+        );
+        //  Nothing -> xs'
+        prog.insert(
+            "catMaybes_3",
+            vec![Inst::Var(StackAddr::Local(0)), Inst::Ret],
+        );
+        //  Just m -> Cons m xs'
+        prog.insert(
+            "catMaybes_4",
+            vec![
+                Inst::Ctor(1, vec![StackAddr::Local(0), StackAddr::Local(1)]),
+                Inst::Ret,
+            ],
+        );
+        // map = f l ->
+        //   case l of
+        prog.insert(
+            "map",
+            vec![Inst::Case(
+                StackAddr::Arg(0),
+                vec!["map_1".into(), "map_2".into()],
+            )],
+        );
+        //     Nil -> Nil
+        prog.insert("map_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        //     Cons x xs ->
+        //       let x' = f x
+        //           xs' = map f xs
+        //        in Cons x' xs'
+        prog.insert(
+            "map_2",
+            vec![
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Int(1),
+                Inst::Var(StackAddr::Arg(1)),
+                Inst::Call,
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Var(StackAddr::Arg(1)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "map".into(),
+                },
+                Inst::Call,
+                Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
+                Inst::Ret,
+            ],
+        );
+        // safeCons = b q ->
+        // let isSafe = safe q 1 b
+        //  in case isSafe of
+        prog.insert(
+            "safeCons",
+            vec![
+                Inst::Var(StackAddr::Arg(1)),
+                Inst::Int(1),
+                Inst::Var(StackAddr::Arg(0)),
+                Inst::Int(3),
+                Inst::Func {
+                    arity: 3,
+                    addr: "safe".into(),
+                },
+                Inst::Call,
+                Inst::Case(
+                    StackAddr::Local(0),
+                    vec!["safeCons_1".into(), "safeCons_2".into()],
+                ),
+            ],
+        );
+        //       False -> Nothing
+        prog.insert("safeCons_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        //       True -> let l = Cons q b
+        //                in Just l
+        prog.insert(
+            "safeCons_2",
+            vec![
+                Inst::Ctor(1, vec![StackAddr::Arg(0), StackAddr::Arg(1)]),
+                Inst::Ctor(1, vec![StackAddr::Local(0)]),
+                Inst::Ret,
+            ],
+        );
+        // mapSafeCons = n b -> let r = range 1 n
+        prog.insert(
+            "mapSafeCons",
+            vec![
+                Inst::Var(StackAddr::Arg(1)),
+                Inst::Int(1),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "range".into(),
+                },
+                Inst::Call,
+                //                               f = safeCons b
+                Inst::Var(StackAddr::Arg(0)),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 2,
+                    addr: "safeCons".into(),
+                },
+                Inst::Call,
+                //                            in map f r
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "map".into(),
+                },
+                Inst::Call,
+                Inst::Ret,
+            ],
+        );
+        // gen = n ->
+        //   let n=0 = n == 0
+        prog.insert(
+            "gen",
+            vec![
+                Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
+                //    in case n=0 of
+                Inst::Case(StackAddr::Local(0), vec!["gen_1".into(), "gen_2".into()]),
+            ],
+        );
+        //         False -> let n-1 = n - 1
+        prog.insert(
+            "gen_1",
+            vec![
+                Inst::IntSub(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
+                //                      l = gen n-1
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "gen".into(),
+                },
+                Inst::Call,
+                //                      f = mapSafeCons n
+                Inst::Var(StackAddr::Arg(0)),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 2,
+                    addr: "mapSafeCons".into(),
+                },
+                Inst::Call,
+                //                      l' = map f l
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Var(StackAddr::Local(1)),
+                Inst::Int(2),
+                Inst::Func {
+                    arity: 2,
+                    addr: "map".into(),
+                },
+                Inst::Call,
+                //                   in catMaybes l'
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "catMaybes".into(),
+                },
+                Inst::Call,
+                Inst::Ret,
+            ],
+        );
+        //         True -> let nil = Nil
+        //                  in Cons nil nil
+        prog.insert(
+            "gen_2",
+            vec![
+                Inst::Ctor(0, vec![]),
+                Inst::Ctor(1, vec![StackAddr::Local(0), StackAddr::Local(0)]),
+                Inst::Ret,
+            ],
+        );
+        // length = l -> case l of
+        prog.insert(
+            "length",
+            vec![Inst::Case(
+                StackAddr::Arg(0),
+                vec!["length_1".into(), "length_2".into()],
+            )],
+        );
+        prog.insert(
+            "length_1",
+            vec![
+                //                       Nil -> 0
+                Inst::Int(0),
+                Inst::Ret,
+            ],
+        );
+        prog.insert(
+            "length_2",
+            vec![
+                //                       Cons x xs -> let n = length xs
+                Inst::Var(StackAddr::Local(0)),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "length".into(),
+                },
+                Inst::Call,
+                //                                     in n + 1
+                Inst::IntAdd(IntArg::Var(StackAddr::Local(0)), IntArg::Int(1)),
+                Inst::Ret,
+            ],
+        );
+        // main = let g = gen 8
+        //         in length g
+        prog.insert(
+            "main",
+            vec![
+                Inst::Int(8),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "gen".into(),
+                },
+                Inst::Call,
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "length".into(),
+                },
+                Inst::Call,
+                Inst::Ret,
+            ],
+        );
+        let (linked_prog, fn_locations) = link(prog);
+        println!("{:?}", fn_locations);
+        assert_eq!(eval(&linked_prog).to_data_value(), DataValue::Int(8));
+    }
+
+    #[test]
+    // last: case l of { Nil -> goto last_1, Cons x xs -> goto last_2 }
+    // last_1: Nothing
+    // last_2: case xs of { Nil -> goto last_3, Cons y ys -> goto last_4 }
+    // last_3: x
+    // last_4: last xs
+    // main: let l1 = Cons 1 Nil
+    //           l2 = Cons 2 l1
+    //        in last l2
+    fn test_15() {
+        let mut prog: HashMap<String, Vec<Inst<String>>> = HashMap::new();
+        prog.insert(
+            "last".into(),
+            vec![Inst::Case(
+                StackAddr::Arg(0),
+                vec!["last_1".into(), "last_2".into()],
+            )],
+        );
+        prog.insert("last_1".into(), vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        prog.insert(
+            "last_2".into(),
+            vec![Inst::Case(
+                StackAddr::Local(0),
+                vec!["last_3".into(), "last_4".into()],
+            )],
+        );
+        prog.insert(
+            "last_3".into(),
+            vec![Inst::Var(StackAddr::Local(1)), Inst::Ret],
+        );
+        prog.insert(
+            "last_4".into(),
+            vec![
+                Inst::Var(StackAddr::Local(2)),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "last".into(),
+                },
+                Inst::Call,
+                Inst::Ret,
+            ],
+        );
+        prog.insert(
+            "main".into(),
+            vec![
+                Inst::Ctor(0, vec![]),
+                Inst::Int(1),
+                Inst::Ctor(1, vec![StackAddr::Local(0), StackAddr::Local(1)]),
+                Inst::Int(2),
+                Inst::Ctor(1, vec![StackAddr::Local(0), StackAddr::Local(1)]),
+                Inst::Int(1),
+                Inst::Func {
+                    arity: 1,
+                    addr: "last".into(),
+                },
+                Inst::Call,
+                Inst::Ret,
+            ],
+        );
+        let (linked_prog, _) = link(prog);
+        for (n, i) in linked_prog.iter().enumerate() {
+            println!("{:>2}: {:?}", n, i);
+        }
+        println!("");
+        assert_eq!(eval(&linked_prog).to_data_value(), DataValue::Int(1));
     }
 }

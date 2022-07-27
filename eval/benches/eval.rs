@@ -5,6 +5,8 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use eval::dsl::*;
 use eval::eval::{eval, make_nameless_env, Ctor, DataVal, Def, Expr, Prim, Stack};
 
+mod inst;
+
 fn eval_main<'a>(env: &'a HashMap<String, Def<Expr>>) -> DataVal {
     eval(
         &env,
@@ -39,7 +41,7 @@ fn last_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, fib_benchmark, last_benchmark);
+criterion_group!(benches, fib_benchmark, inst::fib_benchmark, last_benchmark);
 criterion_main!(benches);
 
 fn make_fib_program(n: i32) -> HashMap<String, Def<Expr>> {
