@@ -175,7 +175,6 @@ genType = Gen.recursive
   , pure TyUnit
   , TyCon <$> genUpperName
   , TyVar <$> genLowerName
-  , TyHole <$> genHoleName
   ]
   [ Gen.subterm2 (Gen.small genType) (Gen.small genType) fn
   , Gen.subterm2 (Gen.small genType) (Gen.small genType) TyIFun

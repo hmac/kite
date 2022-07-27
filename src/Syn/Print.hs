@@ -202,8 +202,7 @@ printType' precedence ty = runReader (go ty) (precedence, Nothing)
     paren AppOp $ a' <+> b'
   go (TyCon n        ) = pure $ type_ $ printName n
   go (TyAlias alias _) = pure $ type_ $ printName alias
-  go (TyHole name    ) = pure $ hole $ "?" <> printName name
-  go (TyVar  name    ) = pure $ printName name
+  go (TyVar name     ) = pure $ printName name
   go TyList            = pure $ type_ "[]"
   go (TyTuple ts)      = tupled <$> mapM (hand Nothing . prec 0 . go) ts
   go TyInt             = pure $ type_ "Int"

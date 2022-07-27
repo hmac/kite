@@ -103,7 +103,6 @@ canonicaliseType env = \case
   TyVar v         -> TyVar (Local v)
   TyList          -> TyList
   TyTuple as      -> TyTuple $ fmap (canonicaliseType env) as
-  TyHole  n       -> TyHole n
   TyInt           -> TyInt
   TyString        -> TyString
   TyChar          -> TyChar

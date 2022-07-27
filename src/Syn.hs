@@ -152,7 +152,6 @@ data Type_ a =
         | TyVar a
         | TyList
         | TyTuple [Type_ a]
-        | TyHole RawName
         | TyInt
         | TyString
         | TyChar

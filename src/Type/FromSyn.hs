@@ -52,13 +52,11 @@ quantify vars t = do
 -- Type variables are replaced by fresh UTypes.
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case
-  S.TyBool   -> pure T.bool
-  S.TyInt    -> pure T.int
-  S.TyString -> pure T.string
-  S.TyChar   -> pure T.char
-  S.TyUnit   -> pure T.unit
-  S.TyHole _ ->
-    T.throwError $ T.TodoError "Type.fromSyn: holes in types not implemented"
+  S.TyBool     -> pure T.bool
+  S.TyInt      -> pure T.int
+  S.TyString   -> pure T.string
+  S.TyChar     -> pure T.char
+  S.TyUnit     -> pure T.unit
   S.TyFun  a b -> fn <$> convertType uVarCtx a <*> convertType uVarCtx b
   S.TyIFun a b -> ifn <$> convertType uVarCtx a <*> convertType uVarCtx b
   S.TyTuple as -> ttuple <$> mapM (convertType uVarCtx) as

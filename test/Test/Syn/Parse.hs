@@ -142,9 +142,7 @@ test = parallel $ do
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
     it "parses a record definition" $ do
-      parse' (pDecl <* eof)
-             ""
-             "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+      parse' (pDecl <* eof) "" "type Foo a = Foo { unFoo : a, b : A A }"
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
@@ -154,8 +152,7 @@ test = parallel $ do
                               , conArgs =
                                 [ TyRecord
                                     [ ("unFoo", TyVar "a")
-                                    , ("label", TyHole "b")
-                                    , ("c"    , TyCon "A" `tyapp` TyCon "A")
+                                    , ("b"    , TyCon "A" `tyapp` TyCon "A")
                                     ]
                                 ]
                               }
@@ -469,8 +466,6 @@ test = parallel $ do
     it "parses record types" $ do
       parse' pType "" "{x : a, y : b}"
         `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]
-    it "parses applications of holes to types" $ do
-      parse' pType "" "?a A" `shouldParse` (TyHole "a" `tyapp` TyCon "A")
     it "parses quantification" $ do
       parse' pType "" "forall a. a -> a"
         `shouldParse` TyForall "a" (TyVar "a" `fn` TyVar "a")
