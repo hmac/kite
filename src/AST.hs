@@ -40,7 +40,7 @@ data Expr n t = Var n
          | Record [(String, Expr n t)]
          | Project (Expr n t) String
          | FCall String [Expr n t]
-         deriving (Eq, Show, Data)
+         deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (Expr v t) where
   debug (Var v        ) = debug v

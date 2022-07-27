@@ -1,18 +1,19 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 module Type.FromSyn where
 
--- Convert Syn to Type.Exp, ready for typechecking
---
--- This module doesn't really do anything except convert 'Syn.Type' to 'Type.Type.Type'
+-- Convert Syn to Type.Exp, ready for typechecking.
+-- This just involves converting 'Syn.Type' to 'Type.Type.Type'.
 -- It needs a 'TypeM' context to generate fresh type variables.
 
 import           Util
 
+import           Data.Generics.Product
 import           Data.Name                      ( Name
                                                 , prim
                                                 , toString
                                                 )
 import qualified Data.Set                      as Set
-import           Data.Traversable               ( for )
 import           Type                           ( Exp )
 import qualified Type                          as T
 import           Type.DSL                       ( fn
@@ -26,51 +27,29 @@ import           Type.DSL                       ( fn
                                                 )
 import qualified Type.Type                     as T
 
-import           AST
 import qualified Canonical                     as Can
 import qualified Syn                           as S
 
--- | This does nothing except explicitly quantify variables in any type annotations
--- (which only exist on let bindings).
--- If we did this at parse time, we could get rid of this whole module.
+-- | Traverse the expression, converting all types from 'Can.Type' to
+-- 'Type.Type.Type'. This also explicitly quantifies any types containing
+-- free type variables.
 fromSyn :: Can.Exp -> T.TypeM Exp
-fromSyn = \case
-  Var n           -> pure $ Var n
-  Con n           -> pure $ Con n
-  Ann e t         -> Ann <$> fromSyn e <*> convertType mempty t
-  Hole n          -> pure $ Hole n
-  App  a     b    -> App <$> fromSyn a <*> fromSyn b
-  Case scrut alts -> Case <$> fromSyn scrut <*> mapM (secondM fromSyn) alts
-  MCase alts      -> MCase <$> mapM (secondM fromSyn) alts
-  Abs xs a        -> do
-    a' <- fromSyn a
-    pure $ Abs xs a'
-  IAbs p e -> do
-    e' <- fromSyn e
-    pure $ IAbs p e'
-  Let binds body -> do
-    body'  <- fromSyn body
-    binds' <- mapM
-      (\(n, e, maybeType) -> do
-        let t' = for maybeType $ \t -> quantify (Set.toList (S.ftv t)) t
-        (n, , ) <$> fromSyn e <*> t'
-      )
-      binds
+fromSyn = param @0 $ \t -> quantify (Set.toList (S.ftv t)) t
 
-    pure $ Let binds' body'
-  UnitLit      -> pure UnitLit
-  TupleLit  es -> TupleLit <$> mapM fromSyn es
-  ListLit   es -> ListLit <$> mapM fromSyn es
-  StringLit s  -> pure $ StringLit s
-  StringInterp prefix comps ->
-    StringInterp prefix <$> mapM (firstM fromSyn) comps
-  CharLit c      -> pure $ CharLit c
-  IntLit  i      -> pure $ IntLit i
-  BoolLit b      -> pure $ BoolLit b
-  Record  r      -> Record <$> mapM (secondM fromSyn) r
-  Project r f    -> Project <$> fromSyn r <*> pure f
-  FCall   n args -> FCall n <$> mapM fromSyn args
+-- Explicitly quantify all type variables, then convert the whole thing to a
+-- T.Type.
+-- a -> b -> c ===> forall u0 u1 u2. u0 -> u1 -> u2
+quantify :: [Name] -> Can.Type -> T.TypeM T.Type
+quantify vars t = do
+  uMap <- mapM (\v -> (v, ) <$> T.newU v) vars
+  t'   <- convertType uMap t
+  pure $ foldr (forAll . snd) t' uMap
 
+-- | Convert 'Can.Type' to 'Type.Type.Type'.
+-- Mostly this just swaps one constructor for another.
+-- It also flattens type applications into spine form, e.g.
+--   ((f x) y) ==> f x y
+-- Type variables are replaced by fresh UTypes.
 convertType :: [(Name, T.U)] -> Can.Type -> T.TypeM T.Type
 convertType uVarCtx = \case
   S.TyBool   -> pure T.bool
@@ -105,12 +84,3 @@ convertType uVarCtx = \case
     u  <- T.newU v
     t' <- convertType ((v, u) : uVarCtx) t
     pure $ forAll u t'
-
--- Explicitly quantify all type variables, then convert the whole thing to a
--- T.Type.
--- a -> b -> c ===> forall u0 u1 u2. u0 -> u1 -> u2
-quantify :: [Name] -> Can.Type -> T.TypeM T.Type
-quantify vars t = do
-  uMap <- mapM (\v -> (v, ) <$> T.newU v) vars
-  t'   <- convertType uMap t
-  pure $ foldr (forAll . snd) t' uMap
