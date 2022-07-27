@@ -17,12 +17,12 @@ import           Data.Char                      ( isAsciiLower )
 import           Data.Data                      ( Data )
 import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )
-import           Data.Text.Prettyprint.Doc      ( Pretty
+import           GHC.Generics                   ( Generic )
+import           Prettyprinter                  ( Pretty
                                                 , hcat
                                                 , pretty
                                                 , punctuate
                                                 )
-import           GHC.Generics                   ( Generic )
 import           Type.Reflection                ( Typeable )
 import           Util
 

@@ -11,7 +11,7 @@ import           GHC.Natural                    ( Natural )
 import           Prelude                 hiding ( mod )
 import           Util
 
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 
 import           AST
 import           Data.Name                      ( PkgModuleName(..) )

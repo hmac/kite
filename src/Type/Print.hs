@@ -2,7 +2,7 @@ module Type.Print where
 
 import           Data.List                      ( intersperse )
 import           Data.Name
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 import qualified Prim
 import           Type                           ( Error(..)
                                                 , LocatedError(..)
