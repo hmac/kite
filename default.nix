@@ -1,6 +1,6 @@
 let
   name = "kite";
-  compiler = "ghc8104";
+  compiler = "ghc902";
 
   sources = import ./nix/sources.nix { };
   nixpkgs = import sources.nixpkgs { };
@@ -27,7 +27,8 @@ let
 
   exe = nixpkgs.haskell.lib.justStaticExecutables (haskellPackages."${name}");
 
-in {
+in
+{
   inherit shell;
   inherit exe;
   inherit haskellPackages;

@@ -17,12 +17,12 @@ import           Data.Char                      ( isAsciiLower )
 import           Data.Data                      ( Data )
 import           Data.List                      ( intersperse )
 import           Data.String                    ( IsString(fromString) )
-import           Data.Text.Prettyprint.Doc      ( Pretty
+import           GHC.Generics                   ( Generic )
+import           Prettyprinter                  ( Pretty
                                                 , hcat
                                                 , pretty
                                                 , punctuate
                                                 )
-import           GHC.Generics                   ( Generic )
 import           Type.Reflection                ( Typeable )
 import           Util
 
@@ -96,8 +96,9 @@ data Name
   deriving (Eq, Ord, Typeable, Data, Generic)
 
 instance Show Name where
-  show (Local (Name name)              ) = "Local " ++ name
-  show (TopLevel moduleName (Name name)) = show moduleName ++ "." ++ name
+  show (Local (Name name)) = "\"" <> name <> "\""
+  show (TopLevel moduleName (Name name)) =
+    "\"" <> show moduleName <> "." <> name <> "\""
 
 instance Pretty Name where
   pretty (Local (Name n)) = pretty n
@@ -113,7 +114,8 @@ toRaw (Local n     ) = n
 toRaw (TopLevel _ n) = n
 
 toString :: Name -> String
-toString = show . toRaw
+toString (Local n     ) = show n
+toString (TopLevel m n) = show m <> "." <> show n
 
 -- If the name belongs to the module given, drop the module prefix.
 localise :: PkgModuleName -> Name -> Name

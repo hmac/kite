@@ -6,9 +6,6 @@ import qualified Test.Syn.RoundTrip
 import qualified Test.Type
 import qualified Test.Type.Module
 
-import           Hedgehog.Internal.Property     ( unGroupName
-                                                , unPropertyName
-                                                )
 import           Test.Tasty
 import           Test.Tasty.Hedgehog           as HH
 import           Test.Tasty.Hspec              as HS
@@ -16,7 +13,6 @@ import           Test.Tasty.Hspec              as HS
 import qualified Integration.Parse
 import qualified Integration.Typecheck
 
-import           Hedgehog
 import qualified Type                           ( test )
 
 main :: IO ()
@@ -31,7 +27,7 @@ tests = localOption TreatPendingAsSuccess . testGroup "Tests" <$> sequence
   , HS.testSpec "typechecking integration tests" Integration.Typecheck.test
   , HS.testSpec "parsing integration tests" Integration.Parse.test
   , pure typecheckProperties
-  , pure roundTripProperties
+  -- , pure roundTripProperties
   ]
 
 roundTripProperties :: TestTree
@@ -39,12 +35,3 @@ roundTripProperties = fromGroup Test.Syn.RoundTrip.properties
 
 typecheckProperties :: TestTree
 typecheckProperties = fromGroup Type.test
-
--- | Create a 'T.TestTree' from a Hedgehog 'Group'.
--- From hedgehog 1.1.0.0
-fromGroup :: Group -> TestTree
-fromGroup group = testGroup (unGroupName $ groupName group)
-  $ map mkTestTree (groupProperties group)
- where
-  mkTestTree :: (PropertyName, Property) -> TestTree
-  mkTestTree (propName, prop) = testProperty (unPropertyName propName) prop

@@ -14,8 +14,10 @@ import qualified Prim
 import           Syn
 import           Util
 
-data Error = CannotFindModule PkgModuleName -- ^ importing module
-                                            PkgModuleName -- ^ module we can't find
+data Error = CannotFindModule
+  { importingModule :: PkgModuleName
+  , missingModule   :: PkgModuleName
+  }
   deriving (Eq, Show)
 
 expandImports
@@ -47,7 +49,10 @@ expand modulName deps imp =
   in  case matchingModule of
         Just m ->
           pure imp { importItems = map (expandItem m) (importItems imp) }
-        Nothing -> throwError $ CannotFindModule modulName (importName imp)
+        Nothing -> throwError $ CannotFindModule
+          { importingModule = modulName
+          , missingModule   = importName imp
+          }
 
 expandItem :: Module -> ImportItem -> ImportItem
 expandItem importedModule = \case

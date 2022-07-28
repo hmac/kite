@@ -54,6 +54,8 @@ data Type' =
   -- Record type
   -- TODO: record typing rules
   | TRecord [(String, Type)]
+  -- Tuple type
+  | TTuple [Type]
   deriving (Eq, Show, Typeable, Data, Generic)
 
 data DebugPrintCtx = Neutral | AppL | AppR | ArrL | ArrR
@@ -82,6 +84,7 @@ instance Debug Type where
       _       -> "(" <> go Neutral (Forall v t) <> ")"
     go _ (TRecord fields) = "{" <+> sepBy ", " (map f fields) <+> "}"
       where f (name, ty) = name <+> ":" <+> go' Neutral ty
+    go _ (TTuple args) = "(" <+> sepBy ", " (map debug args) <+> ")"
 
     debugArrow arr Neutral a b = go' ArrL a <+> arr <+> go' ArrR b
     debugArrow arr ArrR    a b = debugArrow arr Neutral a b
@@ -93,15 +96,16 @@ instance Debug Type where
 data U = U Int Name
   deriving (Show, Typeable, Data)
 
+-- Equality on U vars ignores name hints.
 instance Eq U where
   (U i _) == (U j _) = i == j
 
 instance Debug U where
   debug (U n v) = debug v <> show n
 
--- Existential type variable
+-- | Existential type variable
 newtype E = E Int
-  deriving (Eq, Ord, Show, Typeable, Data)
+  deriving (Eq, Ord, Show,  Data)
 
 instance Debug E where
   debug (E e) = "e" <> show e
@@ -126,7 +130,7 @@ data CtxElem =
   | ESolved E Type
   -- Existential variable marker
   | Marker E
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance Debug CtxElem where
   debug (V v t       ) = debug v <+> ":" <+> debug t

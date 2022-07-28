@@ -16,14 +16,14 @@ import           Data.Map.Strict                ( Map )
 import           Data.Text                      ( pack
                                                 , unpack
                                                 )
-import           Data.Text.Prettyprint.Doc      ( (<+>)
-                                                , Pretty
-                                                , pretty
-                                                )
 import           GHC.Generics                   ( Generic )
 import           Package.Spec                   ( DepSpec(..)
                                                 , Spec(..)
                                                 , parseSpec
+                                                )
+import           Prettyprinter                  ( (<+>)
+                                                , Pretty
+                                                , pretty
                                                 )
 import           System.Directory               ( doesFileExist
                                                 , getCurrentDirectory

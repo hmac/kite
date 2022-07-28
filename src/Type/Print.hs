@@ -2,7 +2,7 @@ module Type.Print where
 
 import           Data.List                      ( intersperse )
 import           Data.Name
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 import qualified Prim
 import           Type                           ( Error(..)
                                                 , LocatedError(..)
@@ -86,6 +86,7 @@ printType = go P0
     TRecord fields -> braces $ sep $ punctuate comma $ map
       (\(f, ty) -> pretty f <+> colon <+> printType ty)
       fields
+    TTuple args -> parens $ sep $ punctuate comma $ map printType args
     Forall v ty -> printForall [v] ty
      where
       printForall us (TOther (Forall u a)) = printForall (u : us) a

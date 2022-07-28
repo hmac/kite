@@ -13,10 +13,9 @@ import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.IO.Class         ( MonadIO
                                                 , liftIO
                                                 )
-import           Data.Text.Prettyprint.Doc
-                                         hiding ( group )
-import           Data.Text.Prettyprint.Doc.Render.Terminal
 import           Data.UUID.V4                   ( nextRandom )
+import           Prettyprinter           hiding ( group )
+import           Prettyprinter.Render.Terminal
 import           System.Exit                    ( exitWith )
 import           System.IO                      ( IOMode(WriteMode)
                                                 , hPutStrLn
@@ -34,7 +33,9 @@ import qualified ModuleGroupCompiler
 import qualified ModuleGroupTypechecker
 import qualified ModuleLoader
 
-import           Data.Name                      ( Name(TopLevel) )
+import           Data.Name                      ( Name(TopLevel)
+                                                , toString
+                                                )
 import           Options.Generic
 import qualified Repl                           ( run )
 
@@ -114,9 +115,9 @@ dumpChez path = do
 dumpTypeEnv :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 dumpTypeEnv path = do
   group <- loadFile path
-  case ModuleGroupTypechecker.dumpEnv group of
+  liftIO $ case ModuleGroupTypechecker.typecheckModuleGroup group of
     Left  err -> pPrint err
-    Right g'  -> pPrint g'
+    Right r   -> pPrint r
 
 typecheck :: (MonadIO m, MonadError Error m) => FilePath -> m ()
 typecheck path = do
@@ -156,7 +157,7 @@ run path = do
   let scriptFile = "/tmp/" <> show modName <> "-" <> show uuid2 <> ".ss"
   liftIO $ withFile scriptFile WriteMode $ \h -> do
     hPutStrLn h $ "(load " <> show outFile <> ")"
-    hPutStrLn h $ "(kite.Kite.Prim.runIO " <> show mainName <> ")"
+    hPutStrLn h $ "(kite.Kite.Prim.runIO " <> toString mainName <> ")"
   -- Run the script
   exitcode <- runProcess
     (proc "/usr/bin/env" ["scheme", "--script", scriptFile])

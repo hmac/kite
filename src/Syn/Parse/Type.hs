@@ -3,10 +3,11 @@ module Syn.Parse.Type
   , pConType
   ) where
 
-import           Data.Functor                   ( void )
+import           Data.Functor                   ( ($>)
+                                                , void
+                                                )
 
 import           Text.Megaparsec
-import           Text.Megaparsec.Char
 
 import           Syn
 import           Syn.Parse.Common
@@ -38,11 +39,11 @@ pType' ctx = case ctx of
   AppL  -> try app <|> atomic <|> parens (pType' Neutral)
   AppR  -> atomic <|> parens (pType' Neutral)
  where
-  atomic = unit <|> con <|> var <|> hole <|> list <|> record <|> try tuple
+  atomic = unit <|> con <|> var <|> list <|> record <|> try tuple
   arr    = do
-    a <- lexemeN (try app <|> pType' Paren)
-    void $ symbolN "->"
-    TyFun a <$> pType' Neutral
+    a  <- lexemeN (try app <|> pType' Paren)
+    op <- (symbolN "->" $> TyFun) <|> (symbolN "=>" $> TyIFun)
+    op a <$> pType' Neutral
   app = do
     l  <- pType' Paren
     rs <- some (pType' AppR)
@@ -57,7 +58,6 @@ pType' ctx = case ctx of
       "Bool"   -> TyBool
       "Char"   -> TyChar
       n        -> TyCon n
-  hole = TyHole <$> (string "?" >> pHoleName)
   -- TODO: maybe use List instead of []?
   -- Simplifies the syntax of types
   list =

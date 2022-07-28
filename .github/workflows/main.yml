@@ -8,12 +8,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2.3.4
     - uses: cachix/install-nix-action@v13
+    - uses: cachix/cachix-action@v10
+      with:
+        name: kite
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - run: nix-build -A kite
-  format:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - uses: actions/checkout@v2.3.4
-    - uses: cachix/install-nix-action@v13
-    - run: nix-shell --command "find src app test benchmarks -name '*.hs' | xargs brittany -c"
-
+    - run: find app src test benchmarks -name '*.hs' | xargs $(nix-build -A haskellPackages.brittany)/bin/brittany -c

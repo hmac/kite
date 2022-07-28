@@ -14,7 +14,6 @@ import           Control.Monad                  ( (>=>) )
 import           Control.Monad.Except           ( MonadError
                                                 , throwError
                                                 )
-import           Control.Monad.Extra            ( mapMaybeM )
 import           Control.Monad.Fix              ( MonadFix )
 import qualified Data.List.NonEmpty            as NE
 import           Data.Map.Lazy                  ( Map )
@@ -22,8 +21,8 @@ import qualified Data.Map.Lazy                 as Map
 import           Data.Name                      ( Name(..)
                                                 , RawName
                                                 )
-import           Data.Text.Prettyprint.Doc
 import           ModuleGroup                    ( TypedModuleGroup(..) )
+import           Prettyprinter
 import qualified Prim
 import           Syn.Print                      ( printRecordSyntax )
 import           Syn.Typed
@@ -205,6 +204,9 @@ interpretExpr env expr_ = case expr_ of
   AppT _ a b -> interpretExpr env a >>= \case
     Abs f -> interpretExpr env b >>= f
     e     -> throwError $ ApplicationOfNonFunction (show e)
+  IAppT _ a b -> interpretExpr env a >>= \case
+    Abs f -> interpretExpr env b >>= f
+    e     -> throwError $ ApplicationOfNonFunction (show e)
   ConT _ c _
     | c == TopLevel Prim.name "[]" -> pure $ List []
     | c == TopLevel Prim.name "::" -> pure $ Abs
@@ -217,7 +219,11 @@ interpretExpr env expr_ = case expr_ of
         )
       )
     | otherwise -> lookupCon c env
-  AbsT _ vars  e    -> interpretAbs env (fmap fst vars) e
+  AbsT _ vars e   -> interpretAbs env (fmap fst vars) e
+  IAbsT _ pat _ e -> pure $ Abs $ \v -> do -- match v against the pattern
+    applyPattern env v pat >>= \case
+      Nothing   -> pure $ Error "pattern match failed"
+      Just env' -> interpretExpr env' e
   LetT _ binds expr -> do
     env' <- foldM
       (\env_ (n, e, _) -> do
@@ -249,6 +255,8 @@ interpretExpr env expr_ = case expr_ of
       Nothing  -> throwError $ RecordMissingField field
     _ -> throwError ProjectOnNonRecord
   FCallT _ s args -> FCall s <$> mapM (interpretExpr env) args
+  ImplicitT t (Solved v) -> interpretExpr env $ VarT t v
+  ImplicitT t Unsolved -> pure $ Error $ "Found unsolved implicit : " <> show t
 
 interpretPrim :: MonadError Error m => RawName -> m (Value m)
 interpretPrim = \case
@@ -339,18 +347,18 @@ interpretMCase alts                 = pure $ Abs $ \v -> do
 applyPattern
   :: MonadError Error m => Env m -> Value m -> Pattern -> m (Maybe (Env m))
 applyPattern env val pattern = case (pattern, val) of
-  (VarPat n, _) -> pure $ Just $ Map.insert n val env
-  (WildPat , _) -> pure $ Just env
-  (CharPat c, Const (Char c')) | c == c'   -> pure $ Just env
+  (VarPat _ n, _) -> pure $ Just $ Map.insert n val env
+  (WildPat _ , _) -> pure $ Just env
+  (CharPat _ c, Const (Char c')) | c == c'   -> pure $ Just env
+                                 | otherwise -> pure Nothing
+  (IntPat _ i, Const (Int i')) | i == i'   -> pure $ Just env
                                | otherwise -> pure Nothing
-  (IntPat i, Const (Int i')) | i == i'   -> pure $ Just env
-                             | otherwise -> pure Nothing
-  (BoolPat b, Const (Bool b')) | b == b'   -> pure $ Just env
-                               | otherwise -> pure Nothing
-  (StringPat s, Const (String s')) | s == s'   -> pure $ Just env
-                                   | otherwise -> pure Nothing
-  (UnitPat, Const Unit) -> pure $ Just env
-  (TuplePat pats, Tuple args)
+  (BoolPat _ b, Const (Bool b')) | b == b'   -> pure $ Just env
+                                 | otherwise -> pure Nothing
+  (StringPat _ s, Const (String s')) | s == s'   -> pure $ Just env
+                                     | otherwise -> pure Nothing
+  (UnitPat _, Const Unit) -> pure $ Just env
+  (TuplePat _ pats, Tuple args)
     | length pats == length args -> foldM
       (\env_ (arg, pat) -> case env_ of
         Just e  -> applyPattern e arg pat
@@ -359,7 +367,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ListPat pats, List args)
+  (ListPat _ pats, List args)
     | length pats == length args -> foldM
       (\env_ (arg, pat) -> case env_ of
         Just e  -> applyPattern e arg pat
@@ -368,7 +376,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ConsPat c _meta pats, Cons c' args)
+  (ConsPat _ c _meta pats, Cons c' args)
     | c == c' -> foldM
       (\env_ (arg, pat) -> case env_ of
         Just e  -> applyPattern e arg pat
@@ -377,7 +385,7 @@ applyPattern env val pattern = case (pattern, val) of
       (Just env)
       (zip args pats)
     | otherwise -> pure Nothing
-  (ConsPat (TopLevel m "::") _meta pats, List elems) | m == Prim.name ->
+  (ConsPat _ (TopLevel m "::") _meta pats, List elems) | m == Prim.name ->
     case (elems, pats) of
       (e : es, [p1, p2]) -> do
         env' <- applyPattern env e p1

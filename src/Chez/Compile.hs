@@ -26,16 +26,16 @@ import           Data.Name                      ( Name(..)
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           Data.Text.Prettyprint.Doc      ( (<+>)
-                                                , Pretty
-                                                , pretty
-                                                )
 import           GHC.Generics                   ( Generic )
 import qualified NameGen
 import           NameGen                        ( NameGen
                                                 , freshM
                                                 )
 import           Prelude                 hiding ( null )
+import           Prettyprinter                  ( (<+>)
+                                                , Pretty
+                                                , pretty
+                                                )
 import qualified Syn.Typed                     as T
 import           Type.Type                      ( Type )
 import           Util
@@ -98,6 +98,7 @@ import           Util
 data Error = EmptyMCase
            | EmptyMCaseBranch
            | CannotCompileHole Name Type
+           | CannotCompileImplicit Type
            | CtorMissingMetadata Name
            | UnknownFCall String
   deriving (Eq, Generic, Show)
@@ -108,6 +109,8 @@ instance Pretty Error where
     EmptyMCaseBranch -> "Cannot compile mcase branch with no variables"
     CannotCompileHole name _ ->
       "Encountered a hole in the program: " <+> pretty name
+    CannotCompileImplicit ty ->
+      "Encountered an unsolved implicit in the program : " <+> pretty (show ty)
     CtorMissingMetadata c -> "No metadata for constructor: " <+> pretty c
     UnknownFCall        n -> "Unknown foreign call: " <+> pretty n
 
@@ -169,19 +172,37 @@ compileData dat =
 
 compileExpr :: forall m . MonadError Error m => T.Exp -> NameGen m SExpr
 compileExpr = \case
-  T.IntLitT  _ n       -> pure $ Lit (Int n)
-  T.BoolLitT _ b       -> pure $ Lit (Bool b)
-  T.CharLitT _ c       -> pure $ Lit (Char c)
-  T.UnitLitT _         -> pure $ Lit Unit
-  T.StringLitT _ s     -> pure $ Lit (String (pack s))
-  T.TupleLitT  _ elems -> App (Var "vector") <$> mapM compileExpr elems
-  T.ListLitT   _ elems -> App (Var "list") <$> mapM compileExpr elems
-  T.AnnT _ e _         -> compileExpr e
-  T.VarT _ v           -> pure $ Var $ name2Text v
-  T.ConT _ c _         -> pure $ Var $ name2Text c
+  T.IntLitT  _ n                -> pure $ Lit (Int n)
+  T.BoolLitT _ b                -> pure $ Lit (Bool b)
+  T.CharLitT _ c                -> pure $ Lit (Char c)
+  T.UnitLitT _                  -> pure $ Lit Unit
+  T.StringLitT _ s              -> pure $ Lit (String (pack s))
+  T.TupleLitT  _ elems          -> App (Var "vector") <$> mapM compileExpr elems
+  T.ListLitT   _ elems          -> App (Var "list") <$> mapM compileExpr elems
+  T.AnnT _ e _                  -> compileExpr e
+  -- kite.Kite.Prim.[] is not a valid name in scheme, so we special case it.
+  T.VarT _ v | v == prim "[]"   -> pure $ App (Var "list") []
+  T.VarT _ v                    -> pure $ Var $ name2Text v
+  -- kite.Kite.Prim.[] is not a valid name in scheme, so we special case it.
+  T.ConT _ c _ | c == prim "[]" -> pure $ App (Var "list") []
+  T.ConT _ c _                  -> pure $ Var $ name2Text c
   T.AbsT _ vars body ->
     foldr (Abs . (: []) . name2Text . fst) <$> compileExpr body <*> pure vars
+  -- TODO: this is probably rubbish - check it.
+  T.IAbsT _ pat _ body -> do
+    varName <- freshName
+    Abs [varName] <$> do
+      (tests, bindings) <- compilePat pat (Var varName)
+      expr              <- compileExpr body
+      case tests of
+        [] -> pure $ Let bindings expr
+        ts ->
+          pure $ App (Var "cond") [List [App (Var "and") ts, Let bindings expr]]
   T.AppT _ f arg -> do
+    argExpr <- compileExpr arg
+    fExpr   <- compileExpr f
+    pure $ App fExpr [argExpr]
+  T.IAppT _ f arg -> do
     argExpr <- compileExpr arg
     fExpr   <- compileExpr f
     pure $ App fExpr [argExpr]
@@ -197,7 +218,9 @@ compileExpr = \case
         compileAlt pat rhs = do
           (tests, bindings) <- compilePat pat (Var scrutVar)
           rhsExpr           <- compileExpr rhs
-          pure $ List [App (Var "and") tests, Let bindings rhsExpr]
+          case tests of
+            [] -> pure $ List [Lit (Bool True), Let bindings rhsExpr]
+            ts -> pure $ List [App (Var "and") ts, Let bindings rhsExpr]
     scrutExpr <- compileExpr scrut
     -- TODO: Use the Cond constructor
     Let [(scrutVar, scrutExpr)]
@@ -214,7 +237,9 @@ compileExpr = \case
         compileAlt pats rhs = do
           rhsExpr           <- compileExpr rhs
           (tests, bindings) <- compileMCaseBranch (map Var vars) pats
-          pure $ List [App (Var "and") tests, Let bindings rhsExpr]
+          case tests of
+            [] -> pure $ List [Lit (Bool True), Let bindings rhsExpr]
+            ts -> pure $ List [App (Var "and") ts, Let bindings rhsExpr]
     flip (foldr (Abs . (: []))) vars
       .   App (Var "cond")
       <$> mapM (uncurry compileAlt) alts
@@ -248,7 +273,9 @@ compileExpr = \case
 
   -- TODO:
   -- - Holes
-  T.HoleT ty name -> throwError $ CannotCompileHole name ty
+  T.HoleT     ty name         -> throwError $ CannotCompileHole name ty
+  T.ImplicitT ty (T.Solved v) -> compileExpr $ T.VarT ty v
+  T.ImplicitT ty T.Unsolved   -> throwError $ CannotCompileImplicit ty
 
 compileMCaseBranch
   :: MonadError Error m
@@ -267,18 +294,19 @@ compileMCaseBranch [] _ = throwError EmptyMCaseBranch
 compilePat
   :: MonadError Error m => T.Pattern -> SExpr -> m ([SExpr], [(Text, SExpr)])
 compilePat pattern scrut = case pattern of
-  T.VarPat x       -> pure ([], [(name2Text x, scrut)])
-  T.WildPat        -> pure ([], [])
-  T.UnitPat        -> pure ([], [])
-  T.IntPat    n    -> pure ([App (Var "eq?") [scrut, Lit (Int n)]], [])
-  T.CharPat   c    -> pure ([App (Var "eq?") [scrut, Lit (Char c)]], [])
-  T.StringPat s -> pure ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
-  T.BoolPat   b    -> pure ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
-  T.TuplePat  pats -> concatUnzip <$> zipWithM
+  T.VarPat _ x  -> pure ([], [(name2Text x, scrut)])
+  T.WildPat _   -> pure ([], [])
+  T.UnitPat _   -> pure ([], [])
+  T.IntPat  _ n -> pure ([App (Var "eq?") [scrut, Lit (Int n)]], [])
+  T.CharPat _ c -> pure ([App (Var "eq?") [scrut, Lit (Char c)]], [])
+  T.StringPat _ s ->
+    pure ([App (Var "eq?") [scrut, Lit (String (pack s))]], [])
+  T.BoolPat  _ b    -> pure ([App (Var "eq?") [scrut, Lit (Bool b)]], [])
+  T.TuplePat _ pats -> concatUnzip <$> zipWithM
     (\p i -> compilePat p (App (Var "vector-ref") [scrut, Lit (Int i)]))
     pats
     [0 :: Int ..]
-  T.ListPat pats -> do
+  T.ListPat _ pats -> do
     let lengthTest =
           App (Var "eq?") [App (Var "length") [scrut], Lit (Int (length pats))]
     (tests, bindings) <- concatUnzip <$> zipWithM
@@ -288,15 +316,15 @@ compilePat pattern scrut = case pattern of
     pure (lengthTest : tests, bindings)
   -- TODO: we could use record-accessor to index into the fields of the constructor
   -- https://scheme.com/tspl4/records.html#./records:h1
-  T.ConsPat c _ [] | c == prim "[]" -> pure ([App (Var "null?") [scrut]], [])
-  T.ConsPat c _ [headPat, tailPat] | c == prim "::" -> do
+  T.ConsPat _ c _ [] | c == prim "[]" -> pure ([App (Var "null?") [scrut]], [])
+  T.ConsPat _ c _ [headPat, tailPat] | c == prim "::" -> do
     let notNullTest = App (Var "not") [App (Var "null?") [scrut]]
     (headTests, headBindings) <- compilePat headPat (App (Var "car") [scrut])
     (tailTests, tailBindings) <- compilePat tailPat (App (Var "cdr") [scrut])
     pure (notNullTest : headTests <> tailTests, headBindings <> tailBindings)
 
-  T.ConsPat c  Nothing     _    -> throwError $ CtorMissingMetadata c
-  T.ConsPat _c (Just meta) pats -> do
+  T.ConsPat _ c  Nothing     _    -> throwError $ CtorMissingMetadata c
+  T.ConsPat _ _c (Just meta) pats -> do
     let tag      = T.conMetaTag meta
         ty       = "$" <> name2Text (T.conMetaTypeName meta)
         tagField = ty <> "-" <> "_tag"

@@ -45,6 +45,12 @@ trecord = TOther . TRecord
 trecord' :: [(String, Type)] -> Type'
 trecord' = TRecord
 
+ttuple :: [Type] -> Type
+ttuple = TOther . ttuple'
+
+ttuple' :: [Type] -> Type'
+ttuple' = TTuple
+
 tcon :: Name -> [Type] -> Type
 tcon = TCon
 

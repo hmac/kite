@@ -30,7 +30,7 @@ testMain = asserts -> let result = runTest asserts
 assert : String -> Bool -> Assertion
 assert = msg b -> Assertion { value = b, message = msg }
 
-assertEq : Eq a -> Show a -> a -> a -> Assertion
-assertEq = eqd showd x y -> Assertion { value = eq eqd x y
+assertEq : Eq a => Show a -> a -> a -> Assertion
+assertEq = showd x y -> Assertion { value = eq x y
                                       , message = "#{show showd x} != #{show showd y}"
                                       }

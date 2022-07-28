@@ -2,8 +2,8 @@ module Repl where
 
 import           Control.Monad.Except           ( runExceptT )
 import           Data.Functor                   ( ($>) )
-import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.Terminal
+import           Prettyprinter
+import           Prettyprinter.Render.Terminal
 import           Syn.Parse                      ( pDecl
                                                 , pExpr
                                                 , parse

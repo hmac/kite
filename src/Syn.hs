@@ -135,12 +135,13 @@ data DataCon_ name = DataCon
   deriving (Eq, Show, Typeable, Data.Data)
 
 -- TODO: record patterns
-type Pattern = AST.Pat RawName
+type Pattern = AST.Pat () RawName
 
 -- Int
 -- Maybe Int
 -- a
 -- Int -> String
+-- Eq a => a -> String
 -- a -> b
 -- f a
 -- { a : A, b : B }
@@ -151,7 +152,6 @@ data Type_ a =
         | TyVar a
         | TyList
         | TyTuple [Type_ a]
-        | TyHole RawName
         | TyInt
         | TyString
         | TyChar
@@ -160,6 +160,7 @@ data Type_ a =
         | TyBool
         | TyUnit
         | TyFun (Type_ a) (Type_ a)
+        | TyIFun (Type_ a) (Type_ a)
         | TyRecord [(a, Type_ a)]
         | TyAlias a (Type_ a)
         | TyForall a (Type_ a)
@@ -179,7 +180,8 @@ ftv = \case
   TyVar x         -> Set.singleton x
   TyApp a b       -> ftv a <> ftv b
   TyTuple as      -> mconcat (map ftv as)
-  TyFun a b       -> ftv a <> ftv b
+  TyFun  a b      -> ftv a <> ftv b
+  TyIFun a b      -> ftv a <> ftv b
   TyRecord fields -> mconcat $ map (ftv . snd) fields
   TyAlias _ a     -> ftv a
   _               -> mempty

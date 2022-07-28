@@ -12,11 +12,11 @@ import Data.Show (Show(..), show)
 
 type Maybe a = Just a | Nothing
 
-eqMaybe : Eq a -> Eq (Maybe a)
-eqMaybe = eqa -> Eq { eq = Nothing Nothing -> True
-                           (Just x) (Just y) -> eq eqa x y
-                           _        _       -> False
-                    }
+eqMaybe : Eq a => () -> Eq (Maybe a)
+eqMaybe = _ -> let f = Nothing Nothing -> True
+                       (Just x) (Just y) -> eq x y
+                       _        _        -> False
+                in Eq { eq = f }
 
 showMaybe : Show a -> Show (Maybe a)
 showMaybe = showa -> Show { show = mx -> maybe "Nothing" (x -> "Just #{show showa x}") mx }

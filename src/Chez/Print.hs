@@ -4,8 +4,8 @@ module Chez.Print
 
 -- Print a Chez Scheme AST as source code
 
-import           Data.Text.Prettyprint.Doc
 import           Prelude                 hiding ( print )
+import           Prettyprinter
 
 import           Chez                           ( Def(..)
                                                 , Lit(..)
@@ -35,6 +35,8 @@ printSExpr = \case
   App f args -> parens $ printSExpr f <+> sepMap printSExpr args
   Abs vars body ->
     parens $ "lambda" <+> parens (sepMap pretty vars) <+> printSExpr body
+  -- If a let has no bindings, just print its body
+  Let [] body -> printSExpr body
   Let binds body ->
     parens
       $   "letrec*"

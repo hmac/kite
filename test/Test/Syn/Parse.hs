@@ -35,7 +35,7 @@ test = parallel $ do
         { funComments = []
         , funName     = "id"
         , funType     = Just (TyVar "a" `fn` TyVar "a")
-        , funExpr     = MCase [([VarPat "x"], Var "x")]
+        , funExpr     = MCase [([VarPat () "x"], Var "x")]
         , funWheres   = []
         }
     it "requires a line fold to be indented" $ do
@@ -45,11 +45,12 @@ test = parallel $ do
       parse' pDecl "" "const : a -> b -> a\nconst = x y -> x"
         `shouldParse` FunDecl Fun
                         { funComments = []
-                        , funName = "const"
+                        , funName     = "const"
                         , funType = Just $ TyVar "a" `fn` TyVar "b" `fn` TyVar
                                       "a"
-                        , funExpr = MCase [([VarPat "x", VarPat "y"], Var "x")]
-                        , funWheres = []
+                        , funExpr     = MCase
+                          [([VarPat () "x", VarPat () "y"], Var "x")]
+                        , funWheres   = []
                         }
     it "parses a higher kinded type definition" $ do
       parse' pDecl "" "map : (a -> b) -> f a -> f b\nmap = f m -> undefined"
@@ -61,7 +62,7 @@ test = parallel $ do
                                         `fn` TyApp (TyVar "f") (TyVar "a")
                                         `fn` TyApp (TyVar "f") (TyVar "b")
                         , funExpr     = MCase
-                          [([VarPat "f", VarPat "m"], Var "undefined")]
+                          [([VarPat () "f", VarPat () "m"], Var "undefined")]
                         , funWheres   = []
                         }
     it "parses a multiline function definition" $ do
@@ -75,10 +76,14 @@ test = parallel $ do
                         , funType = Just $ TyApp TyList (TyVar "a") `fn` TyVar
                                       "a"
                         , funExpr     = MCase
-                          [ ( [ListPat []]
+                          [ ( [ListPat () []]
                             , App (Var "error") (StringLit "head: empty list")
                             )
-                          , ( [ConsPat "Cons" Nothing [VarPat "x", VarPat "xs"]]
+                          , ( [ ConsPat ()
+                                        "Cons"
+                                        Nothing
+                                        [VarPat () "x", VarPat () "xs"]
+                              ]
                             , Var "x"
                             )
                           ]
@@ -98,13 +103,13 @@ test = parallel $ do
                                      (TyVar "b")
                           `fn` TyApp (TyCon "Maybe") (TyVar "a")
                         , funExpr     = MCase
-                                          [ ( [ConsPat "Left" Nothing [VarPat "x"]]
-                                            , App (Con "Just") (Var "x")
-                                            )
-                                          , ( [ConsPat "Right" Nothing [WildPat]]
-                                            , Con "Nothing"
-                                            )
-                                          ]
+                          [ ( [ConsPat () "Left" Nothing [VarPat () "x"]]
+                            , App (Con "Just") (Var "x")
+                            )
+                          , ( [ConsPat () "Right" Nothing [WildPat ()]]
+                            , Con "Nothing"
+                            )
+                          ]
                         , funWheres   = []
                         }
     it "parses a case expression inside an mcase" $ do
@@ -118,10 +123,10 @@ test = parallel $ do
                       (TyCon "Functor")
                       (TyVar "f")
         , funExpr     = MCase
-                          [ ( [VarPat "f"]
+                          [ ( [VarPat () "f"]
                             , Case
                               (App (Var "applicative") (Var "f"))
-                              [ ( ConsPat "Applicative" Nothing [VarPat "g"]
+                              [ ( ConsPat () "Applicative" Nothing [VarPat () "g"]
                                 , Project (Var "g") "functor"
                                 )
                               ]
@@ -137,9 +142,7 @@ test = parallel $ do
         , dataCons   = [DataCon { conName = "Unit", conArgs = [] }]
         }
     it "parses a record definition" $ do
-      parse' (pDecl <* eof)
-             ""
-             "type Foo a = Foo { unFoo : a, label : ?b, c : A A }"
+      parse' (pDecl <* eof) "" "type Foo a = Foo { unFoo : a, b : A A }"
         `shouldParse` DataDecl Data
                         { dataName   = "Foo"
                         , dataTyVars = ["a"]
@@ -149,8 +152,7 @@ test = parallel $ do
                               , conArgs =
                                 [ TyRecord
                                     [ ("unFoo", TyVar "a")
-                                    , ("label", TyHole "b")
-                                    , ("c"    , TyCon "A" `tyapp` TyCon "A")
+                                    , ("b"    , TyCon "A" `tyapp` TyCon "A")
                                     ]
                                 ]
                               }
@@ -236,20 +238,21 @@ test = parallel $ do
                         }
   describe "parsing patterns" $ do
     it "parses an int pattern" $ do
-      parse' pPattern "" "1" `shouldParse` IntPat 1
+      parse' pPattern "" "1" `shouldParse` IntPat () 1
     it "parses a wildcard pattern" $ do
-      parse' pPattern "" "_" `shouldParse` WildPat
+      parse' pPattern "" "_" `shouldParse` WildPat ()
     it "parses a char pattern" $ do
-      parse' pPattern "" "'c'" `shouldParse` CharPat 'c'
+      parse' pPattern "" "'c'" `shouldParse` CharPat () 'c'
     it "parses a list pattern" $ do
       parse' pPattern "" "[1,_,3]"
-        `shouldParse` ListPat [IntPat 1, WildPat, IntPat 3]
+        `shouldParse` ListPat () [IntPat () 1, WildPat (), IntPat () 3]
     it "parses a unit pattern" $ do
-      parse' pPattern "" "()" `shouldParse` UnitPat
+      parse' pPattern "" "()" `shouldParse` UnitPat ()
     it "parses a tuple pattern" $ do
-      parse' pPattern "" "(1, _)" `shouldParse` TuplePat [IntPat 1, WildPat]
+      parse' pPattern "" "(1, _)"
+        `shouldParse` TuplePat () [IntPat () 1, WildPat ()]
     it "parses a variable pattern" $ do
-      parse' pPattern "" "foo" `shouldParse` VarPat "foo"
+      parse' pPattern "" "foo" `shouldParse` VarPat () "foo"
   describe "parsing expressions" $ do
     it "parses an application" $ do
       parse' pExpr "" "foo x y z"
@@ -280,17 +283,17 @@ test = parallel $ do
     it "parses function composition (3)" $ do
       parse' (pExpr <* eof) "" "f . (x -> x) . h" `shouldParse` App
         (App (Var ".") (Var "f"))
-        (App (App (Var ".") (MCase [([VarPat "x"], Var "x")])) (Var "h"))
+        (App (App (Var ".") (MCase [([VarPat () "x"], Var "x")])) (Var "h"))
     it "parses a case expression" $ do
       parse' pExpr "" "case x of\n  Just y -> y\n  Nothing -> z"
         `shouldParse` Case
                         (Var "x")
-                        [ (ConsPat "Just" Nothing [VarPat "y"], Var "y")
-                        , (ConsPat "Nothing" Nothing []       , Var "z")
+                        [ (ConsPat () "Just" Nothing [VarPat () "y"], Var "y")
+                        , (ConsPat () "Nothing" Nothing []          , Var "z")
                         ]
     it "parses a case with variable patterns" $ do
       parse' pExpr "" "case x of\n  y -> y"
-        `shouldParse` Case (Var "x") [(VarPat "y", Var "y")]
+        `shouldParse` Case (Var "x") [(VarPat () "y", Var "y")]
     it "parses a let expression on one line" $ do
       parse' pExpr "" "let x = 1 in add x 1" `shouldParse` Let
         [("x", IntLit 1, Nothing)]
@@ -315,7 +318,7 @@ test = parallel $ do
         `shouldParse` Let
                         [ ( "f"
                           , MCase
-                            [ ( [VarPat "i"]
+                            [ ( [VarPat () "i"]
                               , App (App (Var "+") (Var "i")) (IntLit 1)
                               )
                             ]
@@ -329,7 +332,7 @@ test = parallel $ do
         `shouldParse` Let
                         [ ( "f"
                           , MCase
-                            [ ( [VarPat "i"]
+                            [ ( [VarPat () "i"]
                               , App (App (Var "+") (Var "i")) (IntLit 1)
                               )
                             ]
@@ -337,8 +340,8 @@ test = parallel $ do
                           )
                         , ( "g"
                           , MCase
-                            [ ([BoolPat True] , IntLit 1)
-                            , ([BoolPat False], IntLit 0)
+                            [ ([BoolPat () True] , IntLit 1)
+                            , ([BoolPat () False], IntLit 0)
                             ]
                           , Just (TyFun TyBool TyInt)
                           )
@@ -463,8 +466,6 @@ test = parallel $ do
     it "parses record types" $ do
       parse' pType "" "{x : a, y : b}"
         `shouldParse` TyRecord [("x", TyVar "a"), ("y", TyVar "b")]
-    it "parses applications of holes to types" $ do
-      parse' pType "" "?a A" `shouldParse` (TyHole "a" `tyapp` TyCon "A")
     it "parses quantification" $ do
       parse' pType "" "forall a. a -> a"
         `shouldParse` TyForall "a" (TyVar "a" `fn` TyVar "a")

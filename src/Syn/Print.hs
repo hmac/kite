@@ -1,11 +1,17 @@
 module Syn.Print where
 
+import           Control.Monad.Reader           ( Reader
+                                                , ask
+                                                , local
+                                                , runReader
+                                                )
 import           Data.List                      ( intersperse )
 import qualified Data.List.NonEmpty            as NE
+import           GHC.Natural                    ( Natural )
 import           Prelude                 hiding ( mod )
 import           Util
 
-import           Data.Text.Prettyprint.Doc
+import           Prettyprinter
 
 import           AST
 import           Data.Name                      ( PkgModuleName(..) )
@@ -104,56 +110,111 @@ printFun Fun { funComments = comments, funName = name, funExpr = defs, funType =
   printComments [] = []
   printComments cs = map printComment cs
 
+-- Types
+--
 -- a -> b
 -- f a -> f b
 -- a -> b -> c
 -- (a -> b) -> c
+-- a => b => c
+-- a => b -> c
+-- (a -> b) => c
+-- a -> b => c
+--
+-- Precedence order:    application = 3
+--                            arrow = 2
+--                   implicit arrow = 1
+--                        otherwise = 0
+--
+-- Associativity:       application = left
+--                            arrow = right
+--                   implicit arrow = right
+
+-- | The operator of the surrounding context, if there is one
+data TypeOp = AppOp | ArrOp | IArrOp | ForallOp
+  deriving Eq
+
+-- | The precedence of each operator
+opPrec :: TypeOp -> Prec
+opPrec AppOp    = 3
+opPrec ArrOp    = 2
+opPrec IArrOp   = 2
+opPrec ForallOp = 1
+
+-- | The associativity of each operator
+opAssoc :: TypeOp -> Maybe Hand
+opAssoc AppOp    = Just L
+opAssoc ArrOp    = Just R
+opAssoc IArrOp   = Just R
+opAssoc ForallOp = Nothing
+
+-- | We model precedence using natural numbers
+type Prec = Natural
+
+-- | Which side of the parent node we are on.
+data Hand = L | R
+  deriving Eq
+
+-- | When printing a type we need to know the precedence of the parent node and if we're on the left
+-- or right of it (to apply associativity correctly).
+type TypePrintCtx = (Prec, Maybe Hand)
+
+-- | Parenthesise the document if necessary, considering its precedence
+paren :: TypeOp -> Document -> Reader TypePrintCtx Document
+paren op d = do
+  (surrounding, mhand) <- ask
+
+  -- This is just a cheap way of doing a multi-way if
+  pure $ case () of
+    _ | opPrec op > surrounding -> d
+      | opPrec op == surrounding && opAssoc op == mhand -> d
+      | otherwise               -> parens d
+
+-- | Set the current precedence level
+prec :: Prec -> Reader TypePrintCtx a -> Reader TypePrintCtx a
+prec p = local (\(_, h) -> (p, h))
+
+-- | Set the current handedness
+hand :: Maybe Hand -> Reader TypePrintCtx a -> Reader TypePrintCtx a
+hand h = local (\(p, _) -> (p, h))
+
+-- | Print a type
 printType :: Type -> Document
-printType = printType' Root
+printType = printType' 0
 
-data Context = Root | AppL | AppR  | ArrL | ArrR
-
-printType' :: Context -> Type -> Document
-printType' ctx ty = case (ctx, ty) of
-  -- top level arrows don't get parenthesised
-  (Root, TyFun a b      ) -> printType' ArrL a <+> "->" <+> printType' ArrR b
-  -- applications of TyList get special-cased
-  (Root, TyApp TyList a ) -> brackets (printType' Root a)
-  -- top level applications don't get parenthesised
-  (Root, TyApp a b      ) -> printType' AppL a <+> printType' AppR b
-
-  -- arrows on the left of arrows get parenthesised
-  (ArrL, TyFun a b      ) -> parens $ printType' Root (a `fn` b)
-  -- arrows on the right of arrows don't
-  (ArrR, TyFun a b      ) -> printType' Root (a `fn` b)
-  -- arrows on either side of applications get parenthesised
-  (AppR, TyFun a b      ) -> parens $ printType' Root (a `fn` b)
-  (AppL, TyFun a b      ) -> parens $ printType' Root (a `fn` b)
-
-  -- applications on the left of applications don't get parenthesised
-  (AppL, t@TyApp{}      ) -> printType' Root t
-  -- applications on the right of applications get parenthesised
-  (AppR, t@TyApp{}      ) -> parens $ printType' Root t
-  -- applications on either side of arrows don't
-  (ArrL, t@TyApp{}      ) -> printType' Root t
-  (ArrR, t@TyApp{}      ) -> printType' Root t
-
-  -- Basic cases
-  (_   , TyCon n        ) -> type_ $ printName n
-  -- Type aliases are treated like constructors
-  (_   , TyAlias alias _) -> type_ $ printName alias
-  (_   , TyHole n       ) -> hole ("?" <> printName n)
-  (_   , TyVar n        ) -> printName n
-  (_   , TyList         ) -> type_ "[]"
-  (_   , TyTuple ts     ) -> tupled (map (printType' Root) ts)
-  (_   , TyInt          ) -> type_ "Int"
-  (_   , TyString       ) -> type_ "String"
-  (_   , TyChar         ) -> type_ "Char"
-  (_   , TyBool         ) -> type_ "Bool"
-  (_   , TyUnit         ) -> type_ "()"
-  (_, TyRecord fields) ->
-    printRecordSyntax ":" $ map (bimap printName printType) fields
-  (_, TyForall v t) -> "forall" <+> printName v <> "." <+> printType t
+-- | Print a type with the given surrounding precedence
+printType' :: Prec -> Type -> Document
+printType' precedence ty = runReader (go ty) (precedence, Nothing)
+ where
+  go :: Type -> Reader TypePrintCtx Document
+  go (TyFun a b) = do
+    a' <- hand (Just L) $ prec (opPrec ArrOp) $ go a
+    b' <- hand (Just R) $ prec (opPrec ArrOp) $ go b
+    paren ArrOp $ a' <+> "->" <+> b'
+  go (TyIFun a b) = do
+    a' <- hand (Just L) $ prec (opPrec IArrOp) $ go a
+    b' <- hand (Just R) $ prec (opPrec IArrOp) $ go b
+    paren IArrOp $ a' <+> "=>" <+> b'
+  go (TyApp TyList a) = brackets <$> hand Nothing (go a)
+  go (TyApp a      b) = do
+    a' <- hand (Just L) $ prec (opPrec AppOp) $ go a
+    b' <- hand (Just R) $ prec (opPrec AppOp) $ go b
+    paren AppOp $ a' <+> b'
+  go (TyCon n        ) = pure $ type_ $ printName n
+  go (TyAlias alias _) = pure $ type_ $ printName alias
+  go (TyVar name     ) = pure $ printName name
+  go TyList            = pure $ type_ "[]"
+  go (TyTuple ts)      = tupled <$> mapM (hand Nothing . prec 0 . go) ts
+  go TyInt             = pure $ type_ "Int"
+  go TyString          = pure $ type_ "String"
+  go TyChar            = pure $ type_ "Char"
+  go TyBool            = pure $ type_ "Bool"
+  go TyUnit            = pure $ type_ "()"
+  go (TyRecord fields) =
+    pure $ printRecordSyntax ":" $ map (bimap printName printType) fields
+  go (TyForall v t) = do
+    t' <- hand Nothing $ prec 0 $ go t
+    paren ForallOp $ "forall" <+> printName v <> "." <+> t'
 
 -- For "big" expressions, print them on a new line under the =
 -- For small expressions, print them on the same line
@@ -164,19 +225,19 @@ printDef name expr | big expr  = nest 2 $ vsep [lhs, printExpr expr]
   where lhs = func (printName name) <+> equals
 
 printPattern :: Syn.Pattern -> Document
-printPattern (VarPat n)      = printName n
-printPattern WildPat         = "_"
-printPattern (IntPat    i)   = pretty i
-printPattern (CharPat   c)   = squotes (pretty c)
-printPattern (StringPat s)   = dquotes (pretty s)
-printPattern (BoolPat   b)   = pretty b
-printPattern UnitPat         = "()"
-printPattern (TuplePat pats) = align $ htupled (map printPattern pats)
-printPattern (ListPat  pats) = list (map printPattern pats)
+printPattern (VarPat _ n     ) = printName n
+printPattern (WildPat _      ) = "_"
+printPattern (IntPat    _ i  ) = pretty i
+printPattern (CharPat   _ c  ) = squotes (pretty c)
+printPattern (StringPat _ s  ) = dquotes (pretty s)
+printPattern (BoolPat   _ b  ) = pretty b
+printPattern (UnitPat _      ) = "()"
+printPattern (TuplePat _ pats) = align $ htupled (map printPattern pats)
+printPattern (ListPat  _ pats) = list (map printPattern pats)
 -- special case for the only infix constructor: (::)
-printPattern (ConsPat "::" _ [x, y]) =
+printPattern (ConsPat _ "::" _ [x, y]) =
   parens $ printPattern x <+> "::" <+> printPattern y
-printPattern (ConsPat n _ pats) =
+printPattern (ConsPat _ n _ pats) =
   parens $ data_ (printName n) <+> hsep (map printPattern pats)
 
 -- TODO: binary operators
@@ -194,6 +255,7 @@ printExpr (Abs args e) =
     <>  hsep (map printName (NE.toList args))
     <+> "->"
     <+> printExpr e
+printExpr (IAbs pat   e   ) = parens $ printPattern pat <+> "=>" <+> printExpr e
 printExpr (App  a     b   ) = printApp a b
 printExpr (Let  binds e   ) = printLet binds e
 printExpr (Case e     alts) = printCase e alts
@@ -329,7 +391,7 @@ printAlias a =
 
 printCon :: DataCon -> Document
 printCon DataCon { conName = name, conArgs = args } =
-  printName name <+> hsep (map (printType' AppR) args)
+  printName name <+> hsep (map (printType' (opPrec AppOp)) args)
 
 printComment :: String -> Document
 printComment c = "--" <+> pretty c

@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 module ModuleLoader
   ( ModuleGroup(..)
   , Error(..)
@@ -20,11 +21,11 @@ import           Data.IORef                     ( IORef
                                                 )
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
-import           Data.Text.Prettyprint.Doc      ( (<+>)
+import           GHC.Generics                   ( Generic )
+import           Prettyprinter                  ( (<+>)
                                                 , Pretty
                                                 , pretty
                                                 )
-import           GHC.Generics                   ( Generic )
 import           System.Directory               ( doesFileExist )
 
 import           AST                            ( Expr )
@@ -36,7 +37,10 @@ import           Data.Graph                     ( SCC(..)
 import           Data.List                      ( intercalate )
 import           Data.Name                      ( PkgModuleName(..) )
 import           ExpandExports                  ( expandExports )
-import           ExpandImports                  ( expandImports )
+import           ExpandImports                  ( expandImports
+                                                , importingModule
+                                                , missingModule
+                                                )
 import qualified ExpandImports
 import           ModuleGroup
 import           Package                        ( PackageInfo(..) )
@@ -75,10 +79,10 @@ instance Pretty Error where
     UnknownPackage pkgName -> "Unknown package" <+> pretty pkgName
     ModuleImportCycle      -> "Cycle detected in module imports"
     ImportError e          -> case e of
-      ExpandImports.CannotFindModule importingModule importedModule ->
+      ExpandImports.CannotFindModule { importingModule, missingModule } ->
         pretty importingModule
           <+> "imports"
-          <+> pretty importedModule
+          <+> pretty missingModule
           <+> "but this module cannot be found"
 
 -- We use a global cache of parsed modules to prevent parsing the same file twice.

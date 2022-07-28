@@ -29,7 +29,7 @@ import           Syn.Parse.Type                 ( pType )
 pExpr :: Parser Syn
 pExpr = do
   ensureIndent
-  try pMultiCase <|> try pApp <|> try pBinApp <|> pExpr'
+  try pIAbs <|> try pMultiCase <|> try pApp <|> try pBinApp <|> pExpr'
 
 pExpr' :: Parser Syn
 pExpr' = do
@@ -341,6 +341,20 @@ pMultiCase = MCase <$> hang (some pAlt)
     expr <- hang pExpr
     pure (pats, expr)
 
+-- | An 'IAbs' is like a single-parameter multi-case which binds an
+-- implicit parameter.
+--
+--     f : A => B
+--     f = a => b
+pIAbs :: Parser Syn
+pIAbs = do
+  ensureIndent
+  pos <- indentLevel
+  pat <- pPattern
+  void (symbolN "=>")
+  indentGT_ pos
+  expr <- hang pExpr
+  pure $ IAbs pat expr
 
 pRecord :: Parser Syn
 pRecord = Record <$> bracesN (pField `sepBy1` symbolN ",")

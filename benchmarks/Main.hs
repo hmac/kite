@@ -87,17 +87,14 @@ exampleModule = Module
           `fn`    TyList
           `tyapp` TyVar "a"
         , funExpr     = MCase
-                          [ ([WildPat, ListPat []], ListLit [])
-                          , ( [ VarPat "e"
-                              , ConsPat "::" Nothing [VarPat "x", VarPat "xs"]
-                              ]
-                            , App
-                              (App (Con "::") (Var "x"))
-                              (App (App (Var "intersperseHelper") (Var "e"))
-                                   (Var "xs")
-                              )
-                            )
-                          ]
+          [ ([WildPat (), ListPat () []], ListLit [])
+          , ( [ VarPat () "e"
+              , ConsPat () "::" Nothing [VarPat () "x", VarPat () "xs"]
+              ]
+            , App (App (Con "::") (Var "x"))
+                  (App (App (Var "intersperseHelper") (Var "e")) (Var "xs"))
+            )
+          ]
         }
       )
     , FunDecl
@@ -113,20 +110,17 @@ exampleModule = Module
           `fn`    TyList
           `tyapp` TyVar "a"
         , funExpr     = MCase
-                          [ ([WildPat, ListPat []], ListLit [])
-                          , ( [ VarPat "e"
-                              , ConsPat "::" Nothing [VarPat "x", VarPat "xs"]
-                              ]
-                            , App
-                              (App (Con "::") (Var "e"))
-                              (App
-                                (App (Con "::") (Var "x"))
-                                (App (App (Var "intersperseHelper") (Var "e"))
-                                     (Var "xs")
-                                )
-                              )
-                            )
-                          ]
+          [ ([WildPat (), ListPat () []], ListLit [])
+          , ( [ VarPat () "e"
+              , ConsPat () "::" Nothing [VarPat () "x", VarPat () "xs"]
+              ]
+            , App
+              (App (Con "::") (Var "e"))
+              (App (App (Con "::") (Var "x"))
+                   (App (App (Var "intersperseHelper") (Var "e")) (Var "xs"))
+              )
+            )
+          ]
         }
       )
     ]

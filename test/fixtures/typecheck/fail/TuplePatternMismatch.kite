@@ -1,0 +1,7 @@
+module TuplePatternMismatch
+
+type Nat = Zero | Suc Nat
+
+f : (Bool, a) -> a
+f = (True, y) -> y
+    (Zero, x) -> x

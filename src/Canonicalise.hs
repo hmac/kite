@@ -86,7 +86,7 @@ canonicaliseDecl env = \case
   AliasDecl a -> AliasDecl $ canonicaliseAlias env a
   Comment   s -> Comment s
 
-canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun Can.Exp
+canonicaliseFun :: Env -> Syn.Fun Syn.Syn -> Can.Fun
 canonicaliseFun env@(mod, _) f = f
   { funName   = TopLevel mod (funName f)
   , funExpr   = canonicaliseExp env mempty (funExpr f)
@@ -103,13 +103,13 @@ canonicaliseType env = \case
   TyVar v         -> TyVar (Local v)
   TyList          -> TyList
   TyTuple as      -> TyTuple $ fmap (canonicaliseType env) as
-  TyHole  n       -> TyHole n
   TyInt           -> TyInt
   TyString        -> TyString
   TyChar          -> TyChar
   TyBool          -> TyBool
   TyUnit          -> TyUnit
-  TyFun a b       -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyFun  a b      -> TyFun (canonicaliseType env a) (canonicaliseType env b)
+  TyIFun a b      -> TyIFun (canonicaliseType env a) (canonicaliseType env b)
   TyRecord fields -> TyRecord (map (bimap Local (canonicaliseType env)) fields)
   TyAlias  n a    -> TyAlias (canonicaliseName env n) (canonicaliseType env a)
   TyForall v t    -> TyForall (Local v) (canonicaliseType env t)
@@ -142,6 +142,9 @@ canonicaliseExp env = go
     Con n | n `elem` locals -> Con (Local n)
           | otherwise       -> Con $ canonicaliseName env n
     Abs ns e -> Abs (fmap Local ns) $ go (NE.toList ns <> locals) e
+    IAbs p e ->
+      let (vars, p') = canonicalisePattern env p
+      in  IAbs p' $ go (vars <> locals) e
     App  a     b           -> App (go locals a) (go locals b)
     Let  binds e           -> canonicaliseLet binds e
     Case e     alts        -> canonicaliseCase (e, alts)
@@ -205,17 +208,17 @@ canonicaliseExp env = go
 
 canonicalisePattern :: Env -> Syn.Pattern -> ([RawName], Can.Pattern)
 canonicalisePattern env = \case
-  VarPat n            -> ([n], VarPat (Local n))
-  WildPat             -> ([], WildPat)
-  IntPat  i           -> ([], IntPat i)
-  CharPat c           -> ([], CharPat c)
-  BoolPat b           -> ([], BoolPat b)
-  UnitPat             -> ([], UnitPat)
-  StringPat s         -> ([], StringPat s)
-  TuplePat  pats      -> second TuplePat (canonicalisePatternList pats)
-  ListPat   pats      -> second ListPat (canonicalisePatternList pats)
-  ConsPat c meta pats -> second (ConsPat (canonicaliseName env c) meta)
-                                (canonicalisePatternList pats)
+  VarPat t n            -> ([n], VarPat t (Local n))
+  WildPat t             -> ([], WildPat t)
+  IntPat  t i           -> ([], IntPat t i)
+  CharPat t c           -> ([], CharPat t c)
+  BoolPat t b           -> ([], BoolPat t b)
+  UnitPat t             -> ([], UnitPat t)
+  StringPat t s         -> ([], StringPat t s)
+  TuplePat  t pats      -> second (TuplePat t) (canonicalisePatternList pats)
+  ListPat   t pats      -> second (ListPat t) (canonicalisePatternList pats)
+  ConsPat t c meta pats -> second (ConsPat t (canonicaliseName env c) meta)
+                                  (canonicalisePatternList pats)
  where
   canonicalisePatternList :: [Syn.Pattern] -> ([RawName], [Can.Pattern])
   canonicalisePatternList pats =

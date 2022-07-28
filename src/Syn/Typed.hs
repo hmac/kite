@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
+{-# OPTIONS_GHC -freduction-depth=300 #-}
 module Syn.Typed
   ( Exp
   , Pattern
@@ -14,13 +15,17 @@ module Syn.Typed
   , AST.Pat(..)
   , AST.ExprT(..)
   , AST.ConMeta(..)
+  , Syn.Typed.Implicit
+  , AST.Implicit_(..)
   , S.Import(..)
   , Type
+  , traverseExprWithLocals
   ) where
 
 import           AST
 import           Control.Lens                   ( over
                                                 , set
+                                                , traverseOf
                                                 , view
                                                 )
 import           Control.Lens.Plated            ( transformMOf
@@ -32,6 +37,7 @@ import           Data.Generics.Product          ( Param(..)
                                                 )
 import           Data.Generics.Product.Positions
                                                 ( position )
+import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map.Strict               as Map
 import           Data.Map.Strict                ( Map )
 import           Data.Name
@@ -48,7 +54,8 @@ import           Type.Type                      ( E
 -- pointless conversions.
 
 type Exp = ExprT Name Type
-type Pattern = AST.Pat Name
+type Pattern = AST.Pat Type Name
+type Implicit = AST.Implicit_ Name Type
 
 data Module = Module
   { moduleName    :: PkgModuleName
@@ -124,3 +131,51 @@ typeOf = view (position @1)
 -- | Store a cached type on an 'Exp'
 cacheType :: Type -> Exp -> Exp
 cacheType = set (position @1)
+
+-- | Walk an expression, visiting each node, collecting bound variables as we go
+-- under lambdas or mcases.
+traverseExprWithLocals
+  :: Monad m
+  => ([(Name, Type)] -> Exp -> m Exp)
+  -> [(Name, Type)]
+  -> Exp
+  -> m Exp
+traverseExprWithLocals action = go
+ where
+  go ctx expr = do
+    expr' <- case expr of
+      AbsT t vars e -> AbsT t vars <$> go (ctx <> NE.toList vars) e
+      IAbsT t pat pt e ->
+        IAbsT t pat pt <$> go (ctx <> varsBoundByPattern pat) e
+      CaseT t e alts ->
+        let caseAlt (p, rhs) = do
+              rhs' <- go (ctx <> varsBoundByPattern p) rhs
+              pure (p, rhs')
+        in  CaseT t <$> go ctx e <*> traverse caseAlt alts
+      MCaseT t alts ->
+        let mCaseAlt (pats, rhs) = do
+              let vars = concatMap varsBoundByPattern pats
+              rhs' <- go (ctx <> vars) rhs
+              pure (pats, rhs')
+        in  MCaseT t <$> mapM mCaseAlt alts
+      LetT ty binds body -> do
+        let vars = map (\(n, e, _) -> (n, typeOf e)) binds
+        let ctx' = ctx <> vars
+        binds' <- mapM (\(n, e, t) -> (n, , t) <$> go ctx' e) binds
+        LetT ty binds' <$> go ctx' body
+
+      e -> traverseOf uniplate (go ctx) e
+    action ctx expr'
+ -- TODO: this could probably be expressed as a traversal
+  varsBoundByPattern :: Pattern -> [(Name, Type)]
+  varsBoundByPattern = \case
+    VarPat t x            -> [(x, t)]
+    ConsPat _ _ _ subpats -> concatMap varsBoundByPattern subpats
+    TuplePat _ subpats    -> concatMap varsBoundByPattern subpats
+    ListPat  _ subpats    -> concatMap varsBoundByPattern subpats
+    WildPat{}             -> []
+    IntPat{}              -> []
+    CharPat{}             -> []
+    BoolPat{}             -> []
+    UnitPat{}             -> []
+    StringPat{}           -> []
