@@ -3,3 +3,4 @@
 .envrc
 dist/
 dist-newstyle/
+/result*
