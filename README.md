@@ -41,7 +41,7 @@ A few things immediately jump out:
   - `type` instead of `data` for declaring new data types
 - Ruby-esque string interpolation
 - Imports specify their package
-- [Multi-case](https://github.com/hmac/kite/blob/main/README.md#multi-case-expressions)
+- [Multi-case](#multi-case-expressions)
 
 Kite has many other features which are described below.
 
@@ -334,7 +334,7 @@ Variable patterns like `x` match any value, but also bind the value to the name
 (`x`) in the right hand side. Wildcard patterns `_` match any value but don't
 bind it to a name.
 
-### [Multi-case expressions](#multi-case)
+### Multi-case expressions
 
 Multi-case expressions are like case expressions without a target. They define
 functions of one or more arguments. This is best illustrated by an example:
