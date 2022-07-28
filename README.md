@@ -164,8 +164,9 @@ either. A module is safe if none of the functions defined in it use IO or FFI.
 
 Kite doesn't support typeclasses in the traditional sense. Instead, it takes the
 [Scrap Your Typeclasses](http://www.haskellforall.com/2012/05/scrap-your-type-classes.html)
-philosophy and extends it with some extra tooling. Typeclasses in Kite are just
-record types, like this:
+philosophy and extends it with some extra tooling. If you're familiar with how
+typeclasses work in Scala or Agda, it's basically the same approach. Typeclasses
+in Kite are just record types like this:
 ```haskell
 type Eq a = Eq { eq : a -> a -> Bool }
 
