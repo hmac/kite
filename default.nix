@@ -4,7 +4,7 @@ let
 
   sources = import ./nix/sources.nix { };
   nixpkgs = import sources.nixpkgs { };
-  gitignore = nixpkgs.nix-gitignore.gitignoreSourcePure [ ./.gitignore ];
+  gitignore = nixpkgs.nix-gitignore.gitignoreSource [ ];
 
   haskellPackages = nixpkgs.pkgs.haskell.packages.${compiler}.override {
     overrides = self: super: {
