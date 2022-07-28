@@ -13,4 +13,4 @@ jobs:
         name: kite
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
     - run: nix-build -A kite
-    - run: $(nix-build -A haskellPackages.brittany)/bin/brittany -c src/**/*.hs app/**/*.hs test/**/*.hs benchmarks/**/*.hs
+    - run: find app src test benchmarks -name '*.hs' | xargs $(nix-build -A haskellPackages.brittany)/bin/brittany -c
