@@ -1,6 +1,6 @@
 let
   name = "kite";
-  compiler = "ghc8107";
+  compiler = "ghc902";
 
   sources = import ./nix/sources.nix { };
   nixpkgs = import sources.nixpkgs { };
