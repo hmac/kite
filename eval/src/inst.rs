@@ -28,10 +28,16 @@ pub enum Inst<A> {
     // If the case is not exhaustive, the final branch should be a default case, with tag 0xff.
     // Because we use u8 for tags and we reserve 0xff for the default tag, we support at most 255
     // constructors in a type.
-    // TODO: Case expressions on integer literals
     // TODO: If we know the case is exhaustive, we can evaluate it faster by ordering the branches
     // by tag and then jumping straight the the correct one.
     Case(StackAddr, Vec<(u8, A)>),
+
+    // Case analysis on integers.
+    // This is a separate instruction because we have whole i32 as branch tags, which would be
+    // wasteful for normal data types (they typically have < 256 constructors).
+    // The default branch (2nd args) is stored separately because we don't have any spare i32s to
+    // use for a tag.
+    CaseInt(StackAddr, A, Vec<(i32, A)>),
 
     // Construct a ctor on the heap with the given args
     Ctor(u8, Vec<StackAddr>),
@@ -60,6 +66,11 @@ impl<A> Inst<A> {
             Inst::Case(addr, args) => {
                 Inst::Case(addr, args.into_iter().map(|(t, a)| (t, f(a))).collect())
             }
+            Inst::CaseInt(i, default, args) => Inst::CaseInt(
+                i,
+                f(default),
+                args.into_iter().map(|(t, a)| (t, f(a))).collect(),
+            ),
             // no-op cases
             Inst::Var(v) => Inst::Var(v),
             Inst::Int(i) => Inst::Int(i),
@@ -392,15 +403,15 @@ fn eval_inst(
             }
         }
         // Case instructions contain a target address and a list of branches.
-        // The target address should point to a ctor.
-        // The ctor's tag is used to pick the branch to jump to.
+        // The target address should point to a ctor or an int.
+        // The ctor's tag (or the int's value) is used to pick the branch to jump to.
         // If the case isn't exhaustive, the final alternative has a tag of 0xff and its address is
         // the default branch, which is taken if there's no matching branch for the tag.
         Inst::Case(target, alts) => {
             let target = lookup_stack_addr(stack, *target).clone();
-            match target {
-                StackValue::Int(i) => panic!("cannot case an integer: {:?}", i),
-                StackValue::Func { .. } => panic!("cannot case a function"),
+            let index = match target {
+                StackValue::Int(_) => panic!("cannot case an integer"),
+                StackValue::Func { .. } => panic!("cannot case a partial application"),
                 StackValue::Ref(val) => {
                     match *val {
                         HeapValue::PAp { .. } => panic!("cannot case a partial application"),
@@ -409,25 +420,50 @@ fn eval_inst(
                             for arg in args.iter() {
                                 stack.push(arg.clone());
                             }
-                            // Find the branch for this tag
-                            return match alts.binary_search_by_key(&tag, |(tag, _)| *tag) {
-                                Err(_) => {
-                                    // There's no branch with this tag, so pick the default branch.
-                                    if let (0xff, default_addr) = alts[alts.len() - 1] {
-                                        Some(default_addr)
-                                    } else {
-                                        panic!("case has no default branch")
-                                    }
-                                }
-                                Ok(i) => {
-                                    let (_, addr) = alts[i];
-                                    Some(addr)
-                                }
-                            };
+                            tag
                         }
                     }
                 }
-            }
+            };
+            // Find the branch for this index
+            return match alts.binary_search_by_key(&index, |(tag, _)| *tag) {
+                Err(_) => {
+                    // There's no branch with this tag, so pick the default branch.
+                    if let (0xff, default_addr) = alts[alts.len() - 1] {
+                        Some(default_addr)
+                    } else {
+                        panic!("case has no default branch")
+                    }
+                }
+                Ok(i) => {
+                    let (_, addr) = alts[i];
+                    Some(addr)
+                }
+            };
+        }
+        // Case analysis for integers.
+        // This is much the same as normal case analysis, but the target is a literal i32 rather
+        // than a stack address and the tags are also literal i32s.
+        // The default branch is required because we can't use a "special" i32 value, as someone
+        // might want to actually use it in a branch pattern.
+        Inst::CaseInt(target, default, alts) => {
+            let target = lookup_stack_addr(stack, *target).clone();
+            let index = match target {
+                StackValue::Int(n) => n,
+                StackValue::Func { .. } => panic!("cannot case a partial application"),
+                StackValue::Ref(_) => panic!("cannot case-int a heap value"),
+            };
+            // Find the branch for this index
+            return match alts.binary_search_by_key(&index, |(tag, _)| *tag) {
+                Err(_) => {
+                    // There's no branch with this tag, so pick the default branch.
+                    Some(*default)
+                }
+                Ok(i) => {
+                    let (_, addr) = alts[i];
+                    Some(addr)
+                }
+            };
         }
         Inst::Ctor(tag, args) => {
             let arg_vec: Vec<StackValue<InstAddr>> = args
@@ -937,12 +973,11 @@ mod tests {
     }
 
     // sum_to = n ->
-    //   let neq0 = n == 0
-    //    in case neq0 of
-    //         False -> let n-1 = n - 1
-    //                      sum = sum_to n-1
-    //                   in n + sum
-    //         True -> 0
+    //   case n of
+    //     0 -> 0
+    //     _ -> let n-1 = n - 1
+    //              sum = sum_to n-1
+    //           in n + sum
     // main = let n = 5
     //         in sum_to n
     #[test]
@@ -959,11 +994,12 @@ mod tests {
             Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
-            // [9] sum_to = n -> let neq0 = n == 0
-            Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
-            // in case neq0 of
-            Inst::Case(StackAddr::Local(0), vec![(0, 11), (1, 18)]),
-            //  False -> let n-1 = n - 1
+            // [9] sum_to = n -> case n of
+            Inst::CaseInt(StackAddr::Arg(0), 12, vec![(0, 10)]),
+            //  0 -> 0
+            Inst::Int(0),
+            Inst::Ret,
+            //  _ -> let n-1 = n - 1
             Inst::IntSub(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
             //  sum = sum_to n-1
             Inst::Var(StackAddr::Local(0)),
@@ -976,28 +1012,21 @@ mod tests {
                 IntArg::Var(StackAddr::Local(0)),
             ),
             Inst::Ret,
-            //  True -> 0
-            Inst::Int(0),
-            Inst::Ret,
         ];
         assert_eq!(eval(&prog).to_data_value(), DataValue::Int(15));
     }
 
     // main = let n = 15
     //         in fib n
-    // fib = n ->
-    //   let n=0 = n == 0
-    //    in case n=0 of
-    //        False -> let n=1 = n == 1
-    //                  in case n=1 of
-    //                       False -> let l1 = Cons 1 Nil
-    //                                    prefix = Cons 1 l1
-    //                                    fibs = fibBuild n prefix
-    //                                 in case fibs of
-    //                                     Nil -> panic
-    //                                     Cons x xs -> x
-    //                      True -> 1
-    //        True -> 1
+    // fib = n -> case n of
+    //   0 -> 1
+    //   1 -> 1
+    //   _ -> let l1 = Cons 1 Nil
+    //            prefix = Cons 1 l1
+    //            fibs = fibBuild n prefix
+    //         in case fibs of
+    //              Nil -> panic
+    //              Cons x xs -> x
     //
     // fibBuild = n ms ->
     //   let msLen = length ms
@@ -1043,15 +1072,15 @@ mod tests {
             Inst::Func { arity: 1, addr: 9 },
             Inst::Call,
             Inst::Ret,
-            // [9] fib = n -> let n=0 = n == 0
-            Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
-            // in case n=0 of
-            Inst::Case(StackAddr::Local(0), vec![(0, 11), (1, 29)]),
-            // False -> let n=1 = n == 1
-            Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
-            // in case n=1 of
-            Inst::Case(StackAddr::Local(0), vec![(0, 13), (1, 27)]),
-            // False -> let l1 = Cons 1 Nil
+            // [9] fib = n -> case n of
+            Inst::CaseInt(StackAddr::Arg(0), 14, vec![(0, 10), (1, 12)]),
+            // 0 -> 1
+            Inst::Int(1),
+            Inst::Ret,
+            // 1 -> 1
+            Inst::Int(1),
+            Inst::Ret,
+            // _ -> let l1 = Cons 1 Nil
             Inst::Int(1),
             Inst::Ctor(0, vec![]),
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
@@ -1062,55 +1091,49 @@ mod tests {
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 31 },
+            Inst::Func { arity: 2, addr: 28 },
             Inst::Call,
             // case fibs of
-            Inst::Case(StackAddr::Local(0), vec![(0, 24), (1, 25)]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 25), (1, 26)]),
             // Nil -> panic
             Inst::Panic,
             // Cons x xs -> x
             Inst::Var(StackAddr::Local(1)),
             Inst::Ret,
-            // True -> 1
-            Inst::Int(1),
-            Inst::Ret,
-            // True -> 1
-            Inst::Int(1),
-            Inst::Ret,
-            // [31] fibBuild = n ms -> let msLen = length ms
+            // [28] fibBuild = n ms -> let msLen = length ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 62 },
+            Inst::Func { arity: 1, addr: 59 },
             Inst::Call,
             //   n<=msLen = lteq n msLen
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 72 },
+            Inst::Func { arity: 2, addr: 69 },
             Inst::Call,
             //   case n<=msLen of
-            Inst::Case(StackAddr::Local(0), vec![(0, 41), (1, 51)]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 38), (1, 48)]),
             //   False -> let prefix = fib' ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 53 },
+            Inst::Func { arity: 1, addr: 50 },
             Inst::Call,
             // in fibBuild n prefix
             Inst::Var(StackAddr::Local(0)),
             Inst::Var(StackAddr::Arg(1)),
             Inst::Int(2),
-            Inst::Func { arity: 2, addr: 31 },
+            Inst::Func { arity: 2, addr: 28 },
             Inst::Call,
             Inst::Ret,
             // True -> ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Ret,
-            // [53] fib' = ms -> case ms of
-            Inst::Case(StackAddr::Arg(0), vec![(0, 54), (1, 55)]),
+            // [50] fib' = ms -> case ms of
+            Inst::Case(StackAddr::Arg(0), vec![(0, 51), (1, 52)]),
             // Nil -> panic
             Inst::Panic,
             // Cons x ms' -> case ms' of
-            Inst::Case(StackAddr::Local(0), vec![(0, 56), (1, 57)]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 53), (1, 54)]),
             // Nil -> panic
             Inst::Panic,
             // Cons y ms'' ->
@@ -1126,15 +1149,15 @@ mod tests {
             //   in Cons r l2
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(0)]),
             Inst::Ret,
-            // [62] length = l -> case l of
-            Inst::Case(StackAddr::Arg(0), vec![(0, 63), (1, 65)]),
+            // [59] length = l -> case l of
+            Inst::Case(StackAddr::Arg(0), vec![(0, 60), (1, 62)]),
             // Nil -> 0
             Inst::Int(0),
             Inst::Ret,
             // Cons x xs -> let xsLen = length xs
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 62 },
+            Inst::Func { arity: 1, addr: 59 },
             Inst::Call,
             //  in xsLen + 1
             Inst::Int(1),
@@ -1143,7 +1166,7 @@ mod tests {
                 IntArg::Var(StackAddr::Local(0)),
             ),
             Inst::Ret,
-            // [72] lteq = x y -> let x>y = x > y
+            // [69] lteq = x y -> let x>y = x > y
             Inst::IntGt(
                 IntArg::Var(StackAddr::Arg(1)),
                 IntArg::Var(StackAddr::Arg(0)),
@@ -1151,11 +1174,11 @@ mod tests {
             // in not x>y
             Inst::Var(StackAddr::Local(0)),
             Inst::Int(1),
-            Inst::Func { arity: 1, addr: 78 },
+            Inst::Func { arity: 1, addr: 75 },
             Inst::Call,
             Inst::Ret,
-            // [78] not = b -> case b of
-            Inst::Case(StackAddr::Arg(0), vec![(0, 79), (1, 81)]),
+            // [75] not = b -> case b of
+            Inst::Case(StackAddr::Arg(0), vec![(0, 76), (1, 78)]),
             //     False -> True
             Inst::Ctor(1, vec![]),
             Inst::Ret,
