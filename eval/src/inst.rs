@@ -24,8 +24,14 @@ pub enum Inst<A> {
     Ret,
 
     // Perform case analysis on the element at the given stack address.
+    // The vector contains (tag, addr) pairs for each branch.
+    // If the case is not exhaustive, the final branch should be a default case, with tag 0xff.
+    // Because we use u8 for tags and we reserve 0xff for the default tag, we support at most 255
+    // constructors in a type.
     // TODO: Case expressions on integer literals
-    Case(StackAddr, Vec<A>),
+    // TODO: If we know the case is exhaustive, we can evaluate it faster by ordering the branches
+    // by tag and then jumping straight the the correct one.
+    Case(StackAddr, Vec<(u8, A)>),
 
     // Construct a ctor on the heap with the given args
     Ctor(u8, Vec<StackAddr>),
@@ -51,7 +57,9 @@ impl<A> Inst<A> {
                 arity,
                 addr: f(addr),
             },
-            Inst::Case(addr, args) => Inst::Case(addr, args.into_iter().map(f).collect()),
+            Inst::Case(addr, args) => {
+                Inst::Case(addr, args.into_iter().map(|(t, a)| (t, f(a))).collect())
+            }
             // no-op cases
             Inst::Var(v) => Inst::Var(v),
             Inst::Int(i) => Inst::Int(i),
@@ -383,6 +391,11 @@ fn eval_inst(
                 }
             }
         }
+        // Case instructions contain a target address and a list of branches.
+        // The target address should point to a ctor.
+        // The ctor's tag is used to pick the branch to jump to.
+        // If the case isn't exhaustive, the final alternative has a tag of 0xff and its address is
+        // the default branch, which is taken if there's no matching branch for the tag.
         Inst::Case(target, alts) => {
             let target = lookup_stack_addr(stack, *target).clone();
             match target {
@@ -396,11 +409,21 @@ fn eval_inst(
                             for arg in args.iter() {
                                 stack.push(arg.clone());
                             }
-                            // Jump to <tag>th alt
-                            match alts.get(tag as usize) {
-                                Some(alt) => return Some(*alt),
-                                None => panic!("tag has no matching case alternative"),
-                            }
+                            // Find the branch for this tag
+                            return match alts.binary_search_by_key(&tag, |(tag, _)| *tag) {
+                                Err(_) => {
+                                    // There's no branch with this tag, so pick the default branch.
+                                    if let (0xff, default_addr) = alts[alts.len() - 1] {
+                                        Some(default_addr)
+                                    } else {
+                                        panic!("case has no default branch")
+                                    }
+                                }
+                                Ok(i) => {
+                                    let (_, addr) = alts[i];
+                                    Some(addr)
+                                }
+                            };
                         }
                     }
                 }
@@ -593,7 +616,7 @@ mod tests {
             Inst::Int(1),
             Inst::Int(2),
             Inst::Ctor(1, vec![StackAddr::Local(1), StackAddr::Local(0)]),
-            Inst::Case(StackAddr::Local(0), vec![8, 10]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 8), (1, 10)]),
             Inst::Int(4),
             Inst::Ret,
             Inst::Int(5),
@@ -626,7 +649,7 @@ mod tests {
             Inst::Call,
             Inst::Ret,
             // not = b -> case b of
-            Inst::Case(StackAddr::Arg(0), vec![10, 12]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 10), (1, 12)]),
             //     False -> True
             Inst::Ctor(1, vec![]),
             Inst::Ret,
@@ -663,7 +686,7 @@ mod tests {
             Inst::Ret,
             // [13] fromMaybe = m d ->
             //   case m of
-            Inst::Case(StackAddr::Arg(1), vec![14, 16]),
+            Inst::Case(StackAddr::Arg(1), vec![(0, 14), (1, 16)]),
             //     Nothing -> d
             Inst::Var(StackAddr::Arg(0)),
             Inst::Ret,
@@ -719,7 +742,7 @@ mod tests {
             Inst::Ret,
             // [16] not = b ->
             //   case b of
-            Inst::Case(StackAddr::Arg(0), vec![17, 19]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 17), (1, 19)]),
             //     False -> True
             Inst::Ctor(1, vec![]),
             Inst::Ret,
@@ -728,7 +751,7 @@ mod tests {
             Inst::Ret,
             // map = f l ->
             //   case l of
-            Inst::Case(StackAddr::Arg(0), vec![22, 24]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 22), (1, 24)]),
             //     Nil -> Nil
             Inst::Ctor(0, vec![]),
             Inst::Ret,
@@ -795,7 +818,7 @@ mod tests {
             Inst::Ret,
             // [15] swap = p ->
             // case p of
-            Inst::Case(StackAddr::Arg(0), vec![16]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 16)]),
             //     Pair x y -> Pair y x
             Inst::Ctor(0, vec![StackAddr::Local(0), StackAddr::Local(1)]),
             Inst::Ret,
@@ -866,7 +889,7 @@ mod tests {
             Inst::Ret,
             // map = f l ->
             //   case l of
-            Inst::Case(StackAddr::Arg(0), vec![27, 29]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 27), (1, 29)]),
             //     Nil -> Nil
             Inst::Ctor(0, vec![]),
             Inst::Ret,
@@ -939,7 +962,7 @@ mod tests {
             // [9] sum_to = n -> let neq0 = n == 0
             Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
             // in case neq0 of
-            Inst::Case(StackAddr::Local(0), vec![11, 18]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 11), (1, 18)]),
             //  False -> let n-1 = n - 1
             Inst::IntSub(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
             //  sum = sum_to n-1
@@ -1023,11 +1046,11 @@ mod tests {
             // [9] fib = n -> let n=0 = n == 0
             Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
             // in case n=0 of
-            Inst::Case(StackAddr::Local(0), vec![11, 29]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 11), (1, 29)]),
             // False -> let n=1 = n == 1
             Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(1)),
             // in case n=1 of
-            Inst::Case(StackAddr::Local(0), vec![13, 27]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 13), (1, 27)]),
             // False -> let l1 = Cons 1 Nil
             Inst::Int(1),
             Inst::Ctor(0, vec![]),
@@ -1042,7 +1065,7 @@ mod tests {
             Inst::Func { arity: 2, addr: 31 },
             Inst::Call,
             // case fibs of
-            Inst::Case(StackAddr::Local(0), vec![24, 25]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 24), (1, 25)]),
             // Nil -> panic
             Inst::Panic,
             // Cons x xs -> x
@@ -1066,7 +1089,7 @@ mod tests {
             Inst::Func { arity: 2, addr: 72 },
             Inst::Call,
             //   case n<=msLen of
-            Inst::Case(StackAddr::Local(0), vec![41, 51]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 41), (1, 51)]),
             //   False -> let prefix = fib' ms
             Inst::Var(StackAddr::Arg(0)),
             Inst::Int(1),
@@ -1083,11 +1106,11 @@ mod tests {
             Inst::Var(StackAddr::Arg(0)),
             Inst::Ret,
             // [53] fib' = ms -> case ms of
-            Inst::Case(StackAddr::Arg(0), vec![54, 55]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 54), (1, 55)]),
             // Nil -> panic
             Inst::Panic,
             // Cons x ms' -> case ms' of
-            Inst::Case(StackAddr::Local(0), vec![56, 57]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 56), (1, 57)]),
             // Nil -> panic
             Inst::Panic,
             // Cons y ms'' ->
@@ -1104,7 +1127,7 @@ mod tests {
             Inst::Ctor(1, vec![StackAddr::Local(2), StackAddr::Local(0)]),
             Inst::Ret,
             // [62] length = l -> case l of
-            Inst::Case(StackAddr::Arg(0), vec![63, 65]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 63), (1, 65)]),
             // Nil -> 0
             Inst::Int(0),
             Inst::Ret,
@@ -1132,7 +1155,7 @@ mod tests {
             Inst::Call,
             Inst::Ret,
             // [78] not = b -> case b of
-            Inst::Case(StackAddr::Arg(0), vec![79, 81]),
+            Inst::Case(StackAddr::Arg(0), vec![(0, 79), (1, 81)]),
             //     False -> True
             Inst::Ctor(1, vec![]),
             Inst::Ret,
@@ -1179,7 +1202,7 @@ mod tests {
             // [16] go n x y = let n<3 = n < 3
             Inst::IntLt(IntArg::Var(StackAddr::Arg(2)), IntArg::Int(3)),
             // in case n<3 of
-            Inst::Case(StackAddr::Local(0), vec![18, 27]),
+            Inst::Case(StackAddr::Local(0), vec![(0, 18), (1, 27)]),
             // False ->
             //   let z = x + y
             Inst::IntAdd(
@@ -1303,12 +1326,12 @@ mod tests {
                 ),
                 Inst::Case(
                     StackAddr::Local(0),
-                    vec!["range_1".into(), "range_2".into()],
+                    vec![(0, "range_false".into()), (1, "range_true".into())],
                 ),
             ],
         );
         prog.insert(
-            "range_1",
+            "range_false",
             vec![
                 Inst::IntAdd(IntArg::Var(StackAddr::Arg(1)), IntArg::Int(1)),
                 Inst::Var(StackAddr::Arg(0)),
@@ -1323,7 +1346,7 @@ mod tests {
                 Inst::Ret,
             ],
         );
-        prog.insert("range_2", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
+        prog.insert("range_true", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
 
         // and = x y ->
         //   case x of
@@ -1333,7 +1356,7 @@ mod tests {
             "and",
             vec![Inst::Case(
                 StackAddr::Arg(1),
-                vec!["and_1".into(), "and_2".into()],
+                vec![(0, "and_1".into()), (1, "and_2".into())],
             )],
         );
         prog.insert("and_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
@@ -1352,7 +1375,7 @@ mod tests {
                 ),
                 Inst::Case(
                     StackAddr::Local(0),
-                    vec!["notEq_1".into(), "notEq_2".into()],
+                    vec![(0, "notEq_1".into()), (1, "notEq_2".into())],
                 ),
             ],
         );
@@ -1365,7 +1388,7 @@ mod tests {
             "and",
             vec![Inst::Case(
                 StackAddr::Arg(1),
-                vec!["and_1".into(), "and_2".into()],
+                vec![(0, "and_1".into()), (1, "and_2".into())],
             )],
         );
         prog.insert("and_1", vec![Inst::Ctor(0, vec![]), Inst::Ret]);
@@ -1376,7 +1399,7 @@ mod tests {
             "safe",
             vec![Inst::Case(
                 StackAddr::Arg(0),
-                vec!["safe_1".into(), "safe_2".into()],
+                vec![(0, "safe_1".into()), (1, "safe_2".into())],
             )],
         );
         //     Nil -> True
@@ -1470,7 +1493,7 @@ mod tests {
             "catMaybes",
             vec![Inst::Case(
                 StackAddr::Arg(0),
-                vec!["catMaybes_1".into(), "catMaybes_2".into()],
+                vec![(0, "catMaybes_1".into()), (1, "catMaybes_2".into())],
             )],
         );
         //     Nil -> Nil
@@ -1490,7 +1513,7 @@ mod tests {
                 Inst::Call,
                 Inst::Case(
                     StackAddr::Local(2),
-                    vec!["catMaybes_3".into(), "catMaybes_4".into()],
+                    vec![(0, "catMaybes_3".into()), (1, "catMaybes_4".into())],
                 ),
             ],
         );
@@ -1513,7 +1536,7 @@ mod tests {
             "map",
             vec![Inst::Case(
                 StackAddr::Arg(0),
-                vec!["map_1".into(), "map_2".into()],
+                vec![(0, "map_1".into()), (1, "map_2".into())],
             )],
         );
         //     Nil -> Nil
@@ -1558,7 +1581,7 @@ mod tests {
                 Inst::Call,
                 Inst::Case(
                     StackAddr::Local(0),
-                    vec!["safeCons_1".into(), "safeCons_2".into()],
+                    vec![(0, "safeCons_1".into()), (1, "safeCons_2".into())],
                 ),
             ],
         );
@@ -1613,7 +1636,10 @@ mod tests {
             vec![
                 Inst::IntEq(IntArg::Var(StackAddr::Arg(0)), IntArg::Int(0)),
                 //    in case n=0 of
-                Inst::Case(StackAddr::Local(0), vec!["gen_1".into(), "gen_2".into()]),
+                Inst::Case(
+                    StackAddr::Local(0),
+                    vec![(0, "gen_1".into()), (1, "gen_2".into())],
+                ),
             ],
         );
         //         False -> let n-1 = n - 1
@@ -1670,7 +1696,7 @@ mod tests {
             "length",
             vec![Inst::Case(
                 StackAddr::Arg(0),
-                vec!["length_1".into(), "length_2".into()],
+                vec![(0, "length_1".into()), (1, "length_2".into())],
             )],
         );
         prog.insert(
@@ -1738,7 +1764,7 @@ mod tests {
             "last".into(),
             vec![Inst::Case(
                 StackAddr::Arg(0),
-                vec!["last_1".into(), "last_2".into()],
+                vec![(0, "last_1".into()), (1, "last_2".into())],
             )],
         );
         prog.insert("last_1".into(), vec![Inst::Ctor(0, vec![]), Inst::Ret]);
@@ -1746,7 +1772,7 @@ mod tests {
             "last_2".into(),
             vec![Inst::Case(
                 StackAddr::Local(0),
-                vec!["last_3".into(), "last_4".into()],
+                vec![(0, "last_3".into()), (1, "last_4".into())],
             )],
         );
         prog.insert(
