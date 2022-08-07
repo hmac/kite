@@ -1,18 +1,16 @@
 module Main where
 
+import qualified Integration.Parse
+import qualified Integration.Typecheck
+import qualified Test.AST
 import qualified Test.Syn.Parse
 import qualified Test.Syn.Print
 import qualified Test.Syn.RoundTrip
-import qualified Test.Type
-import qualified Test.Type.Module
-
 import           Test.Tasty
 import           Test.Tasty.Hedgehog           as HH
 import           Test.Tasty.Hspec              as HS
-
-import qualified Integration.Parse
-import qualified Integration.Typecheck
-
+import qualified Test.Type
+import qualified Test.Type.Module
 import qualified Type                           ( test )
 
 main :: IO ()
@@ -26,8 +24,9 @@ tests = localOption TreatPendingAsSuccess . testGroup "Tests" <$> sequence
   , HS.testSpec "module typing tests" Test.Type.Module.test
   , HS.testSpec "typechecking integration tests" Integration.Typecheck.test
   , HS.testSpec "parsing integration tests" Integration.Parse.test
+  , HS.testSpec "AST tests" Test.AST.test
   , pure typecheckProperties
-  -- , pure roundTripProperties
+        -- , pure roundTripProperties
   ]
 
 roundTripProperties :: TestTree

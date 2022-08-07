@@ -208,6 +208,7 @@ test-suite kite-test
       Test.Syn.RoundTrip
       Test.Type
       Test.Type.Module
+      Test.AST
       Paths_kite
   hs-source-dirs:
       test

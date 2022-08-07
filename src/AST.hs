@@ -1,13 +1,23 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module AST
   ( Expr(..)
   , ExprT(..)
   , Pat(..)
   , Implicit_(..)
   , ConMeta(..)
+  , fv
+  , fvPat
   ) where
 
+import           Control.Lens                   ( paraOf )
+import           Control.Lens.Fold              ( foldMapOf )
 import           Data.Data                      ( Data )
+import           Data.Data.Lens                 ( uniplate )
 import           Data.List                      ( intercalate )
+import           Data.Map.Strict                ( Map )
+import qualified Data.Map.Strict               as Map
 import           Data.Name                      ( Name )
 import           GHC.Generics                   ( Generic )
 import           Util                           ( Debug(debug)
@@ -15,30 +25,31 @@ import           Util                           ( Debug(debug)
                                                 )
 
 -- TODO: patterns in let bindings
-data Expr n t = Var n
-         | Ann (Expr n t) t
-         | Con n
-         | Hole n
-         -- Binding of an implicit parameter.
-         -- This supports pattern matching.
-         | IAbs (Pat () n) (Expr n t)
-         | App (Expr n t) (Expr n t)
-         | Let [(n, Expr n t, Maybe t)] (Expr n t)
-         | Case (Expr n t) [(Pat () n, Expr n t)]
-         -- TODO: these should probably be NonEmpty
-         | MCase [([Pat () n], Expr n t)]
-         | UnitLit
-         | TupleLit [Expr n t]
-         | ListLit [Expr n t]
-         | StringInterp String (NonEmpty (Expr n t, String))
-         | StringLit String
-         | CharLit Char
-         | IntLit Int
-         | BoolLit Bool
-         | Record [(String, Expr n t)]
-         | Project (Expr n t) String
-         | FCall String [Expr n t]
-         deriving (Eq, Show, Data, Generic)
+data Expr n t
+  = Var n
+  | Ann (Expr n t) t
+  | Con n
+  | Hole n
+  | -- Binding of an implicit parameter.
+    -- This supports pattern matching.
+    IAbs (Pat () n) (Expr n t)
+  | App (Expr n t) (Expr n t)
+  | Let [(n, Expr n t, Maybe t)] (Expr n t)
+  | Case (Expr n t) [(Pat () n, Expr n t)]
+  | -- TODO: these should probably be NonEmpty
+    MCase [([Pat () n], Expr n t)]
+  | UnitLit
+  | TupleLit [Expr n t]
+  | ListLit [Expr n t]
+  | StringInterp String (NonEmpty (Expr n t, String))
+  | StringLit String
+  | CharLit Char
+  | IntLit Int
+  | BoolLit Bool
+  | Record [(String, Expr n t)]
+  | Project (Expr n t) String
+  | FCall String [Expr n t]
+  deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (Expr v t) where
   debug (Var v        ) = debug v
@@ -82,18 +93,18 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
 -- This is the output from the typechecker.
 -- We store types on all constructors, even ones like Unit for which the type is obvious.
 -- This makes it easier to write generic functions like 'Syn.Typed.typeOf'.
-data ExprT n t =
-    VarT t n
-  -- First 't' is type cache, second 't' is user-supplied annotation
-  | AnnT t (ExprT n t) t
+data ExprT n t
+  = VarT t n
+  | -- First 't' is type cache, second 't' is user-supplied annotation
+    AnnT t (ExprT n t) t
   | ConT t n ConMeta
   | HoleT t n
   | IAbsT t (Pat t n) t (ExprT n t)
   | AppT t (ExprT n t) (ExprT n t)
-  -- Application of an implicit argument.
-  -- This doesn't exist in the surface syntax.
-  -- TODO: can we remove this?
-  | IAppT t (ExprT n t) (ExprT n t)
+  | -- Application of an implicit argument.
+    -- This doesn't exist in the surface syntax.
+    -- TODO: can we remove this?
+    IAppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
   | CaseT t (ExprT n t) [(Pat t n, ExprT n t)]
   | MCaseT t [([Pat t n], ExprT n t)]
@@ -152,6 +163,35 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (ImplicitT t Unsolved  ) = "{{? " <> debug t <> " ?}}"
   debug (ImplicitT _ (Solved n)) = "{{" <> debug n <> "}}"
 
+-- | Calculate the free variables of an expression.
+fv :: forall n t . (Data n, Data t, Ord n) => ExprT n t -> Map n t
+fv e =
+  -- Extract the variable name from an expression if it is a 'VarT'
+  -- If it's an IAbsT, remove its bound variable from the set returned from
+  -- the body.
+  let extractVariables :: ExprT n t -> [Map n t] -> Map n t
+      extractVariables = \case
+        VarT t n -> Map.insert n t . mconcat
+        IAbsT _ pat _ _ ->
+          let removeBound =
+                map
+                  (\vars -> foldl (\x (n, _) -> Map.delete n x) vars (fvPat pat)
+                  )
+          in  mconcat . removeBound
+        _ -> mconcat
+  in  paraOf uniplate extractVariables e
+
+-- | Calculate the free variables of a pattern.
+-- These are ordered left-to-right.
+-- By definition patterns don't have "bound variables" (or alternatively, all
+-- pattern variables are bound).
+-- So this function could also be called patternVariables or something.
+fvPat :: (Data t, Data n, Ord n) => Pat t n -> [(n, t)]
+fvPat p = f p <> foldMapOf uniplate fvPat p
+ where
+  f (VarPat t n) = [(n, t)]
+  f _            = mempty
+
 -- | An implicit argument.
 -- This is inserted, unsolved, into the AST during typechecking.
 -- It is solved after typechecking (see 'Type.Module.resolveImplicitsInExpr').
@@ -178,17 +218,18 @@ instance Debug ConMeta where
       <+> "typename="
       <>  show typeName
 
-data Pat t a = VarPat t a
-             | WildPat t
-             | IntPat t Int
-             | CharPat t Char
-             | BoolPat t Bool
-             | UnitPat t
-             | TuplePat t [Pat t a]
-             | ListPat t [Pat t a]
-             | ConsPat t a (Maybe ConMeta) [Pat t a]
-             | StringPat t String
-             deriving (Eq, Show, Data, Generic)
+data Pat t a
+  = VarPat t a
+  | WildPat t
+  | IntPat t Int
+  | CharPat t Char
+  | BoolPat t Bool
+  | UnitPat t
+  | TuplePat t [Pat t a]
+  | ListPat t [Pat t a]
+  | ConsPat t a (Maybe ConMeta) [Pat t a]
+  | StringPat t String
+  deriving (Eq, Show, Data, Generic)
 
 instance Debug a => Debug (Pat t a) where
   debug (VarPat _ v     ) = debug v
