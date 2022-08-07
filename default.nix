@@ -19,6 +19,7 @@ let
       ghcid
       # Use the standard brittany derivation because it requires GHC > 9.0
       nixpkgs.haskellPackages.brittany
+      haskell-language-server
       hlint
       nixpkgs.nixpkgs-fmt
       nixpkgs.chez
