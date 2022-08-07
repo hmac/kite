@@ -54,7 +54,7 @@ import           Type.Type                      ( CtorInfo
                                                 , U(..)
                                                 )
 
-import           AST
+import           AST                     hiding ( fv )
 import           Canonicalise                   ( canonicaliseExp
                                                 , canonicaliseModule
                                                 , canonicaliseType

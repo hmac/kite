@@ -66,6 +66,9 @@ library
       Chez.Compile
       Chez.Print
       Chez.Optimise
+      KiteCore
+      KiteCore.Compile
+      KiteCore.Inst
       Package
       Package.Spec
       Eval
@@ -209,6 +212,8 @@ test-suite kite-test
       Test.Type
       Test.Type.Module
       Test.AST
+      Test.KiteCore.Compile
+      Test.Diff
       Paths_kite
   hs-source-dirs:
       test
@@ -220,6 +225,7 @@ test-suite kite-test
   build-depends:
       tasty
     , tasty-hspec
+    , tasty-hunit
     , tasty-hedgehog
     , base >=4.7 && <5
     , containers
@@ -240,4 +246,8 @@ test-suite kite-test
     , template-haskell
     , text
     , transformers
+    , HUnit
+    , pretty
+    , pretty-show
+    , Diff
   default-language: Haskell2010

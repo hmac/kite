@@ -3,6 +3,7 @@ module Main where
 import qualified Integration.Parse
 import qualified Integration.Typecheck
 import qualified Test.AST
+import qualified Test.KiteCore.Compile
 import qualified Test.Syn.Parse
 import qualified Test.Syn.Print
 import qualified Test.Syn.RoundTrip
@@ -25,6 +26,7 @@ tests = localOption TreatPendingAsSuccess . testGroup "Tests" <$> sequence
   , HS.testSpec "typechecking integration tests" Integration.Typecheck.test
   , HS.testSpec "parsing integration tests" Integration.Parse.test
   , HS.testSpec "AST tests" Test.AST.test
+  , HS.testSpec "KiteCore.Compile tests" Test.KiteCore.Compile.test
   , pure typecheckProperties
         -- , pure roundTripProperties
   ]
