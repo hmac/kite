@@ -14,13 +14,13 @@ let
 
   shell = haskellPackages.shellFor {
     packages = p: [ p."${name}" ];
-    buildInputs = with nixpkgs.pkgs.haskell.packages.${compiler}; [
-      haskellPackages.cabal-install
+    buildInputs = with haskellPackages; [
+      cabal-install
       ghcid
-      # Use the standard brittany derivation because it requires GHC > 9.0
-      nixpkgs.haskellPackages.brittany
-      haskell-language-server
+      brittany
       hlint
+      haskell-language-server
+
       nixpkgs.nixpkgs-fmt
       nixpkgs.chez
       # The experimental evaluator is written in Rust
