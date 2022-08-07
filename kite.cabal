@@ -217,12 +217,6 @@ test-suite kite-test
     -threaded
     -rtsopts
     -with-rtsopts=-N
-    -Wall
-    -Werror
-    -Wcompat
-    -Wincomplete-record-updates
-    -Wincomplete-uni-patterns
-    -Wredundant-constraints
   build-depends:
       tasty
     , tasty-hspec
