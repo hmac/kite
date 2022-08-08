@@ -54,7 +54,7 @@ import           Type.Type                      ( E
 
 type Exp = ExprT Name Type
 type Pattern = AST.Pat Type Name
-type Implicit = AST.Implicit_ Name Type
+type Implicit = AST.Implicit_ Name
 
 data Module = Module
   { moduleName    :: PkgModuleName

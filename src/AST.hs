@@ -122,7 +122,7 @@ data ExprT n t
   | RecordT t [(String, ExprT n t)]
   | ProjectT t (ExprT n t) String
   | FCallT t String [ExprT n t]
-  | ImplicitT t (Implicit_ n t)
+  | ImplicitT t (Implicit_ n)
   deriving (Eq, Show, Data, Generic)
 
 instance (Debug v, Debug t) => Debug (ExprT v t) where
@@ -203,7 +203,7 @@ fvPat p = f p <> foldMapOf uniplate fvPat p
 -- In evaluation, a solved implicit acts just like a variable.
 -- Unsolved implicits should not reach evaluation, because their presence is a
 -- type error.
-data Implicit_ n t = Unsolved | Solved n
+data Implicit_ n = Unsolved | Solved n
   deriving (Eq, Show, Generic, Data)
 
 data ConMeta = ConMeta
