@@ -18,14 +18,16 @@ import           Control.Monad.Writer.Strict    ( MonadTrans(lift)
                                                 , tell
                                                 )
 import           Data.Data.Lens                 ( uniplate )
-import           Data.Generics.Product          ( typed )
+import           Data.Generics.Product
 import           Data.Generics.Sum
 import qualified Data.List
 import           Data.List                      ( (\\) )
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map.Strict               as Map
-import           Data.Name                      ( Name )
+import           Data.Name                      ( Name
+                                                , prim
+                                                )
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 import           Data.Tuple.Extra               ( fst3 )
@@ -46,11 +48,9 @@ import           Util                           ( debug
                                                 )
 
 -- Transformations (in order of application):
---  1. Desguar string interpolation
+--  1. Drop type annotations
+--  2. Desguar string interpolation
 --     e.g. "a #{b} #{c} d" ==> let elems = ["a ", b, " ", c, " d"] in concatString elems
---  2. Desguar records to function calls
---     e.g. { a = 1 } ==> let fields = [("a", 1)] in makeRecord fields
---         r.a       ==> getField "a" r
 --  3. Flatten nested applications (introduce lets if necessary)
 --     e.g. (f g) x ==> f g x
 --          f (g x) y ==> f (let h = g x in h) y
@@ -69,7 +69,58 @@ import           Util                           ( debug
 --                                          f g w
 --  9. Convert top-level pattern function to case
 --     e.g. f(y, 1, True) = y; f(y, z, x) = z ==> f(y, z, x) = case x of { True -> case z of { 1 -> y; _ -> z }; False -> z }
--- 10. Drop type annotations
+
+-- | Strip all type annotations from the expression.
+-- The Monad constraint is required by 'param', but can be instantiated to
+-- anything, e.g. 'Identity'.
+removeTypeAnnotations :: Monad m => ExprT Name Type -> m Exp
+removeTypeAnnotations = param @0 (const (pure ()))
+
+
+-- Postponed:
+-- 2. Desguar records to function calls
+--     e.g. { a = 1 } ==> let fields = [("a", 1)] in makeRecord fields
+--         r.a       ==> getField "a" r
+-- For this to work, makeRecord and getField must be "unsafe", i.e. they can't
+-- be expressed as typed Kite code. We don't have a nice mechanism for embedding
+-- untyped Kite code in KiteCore at the moment, so we're punting this problem.
+
+-- | Desugar a string interpolation into applications of the primitive function
+-- appendString.
+-- "a #{b} #{c} d" ==> appendString "a " (appendString b (appendString " " (appendString c (appendString " d"))))
+-- TODO: This is more concise if we have a concatString primitive: let elems = ["a ", b, " ", c, " d"] in concatString elems
+desugarStringInterpolation :: String -> NonEmpty (Exp, String) -> Exp
+desugarStringInterpolation prefix components =
+  let elems = foldMap (\(e, s) -> [e, StringLitT () s]) components
+  in  foldl (AppT () . AppT () (VarT () (prim "appendString")))
+            (StringLitT () prefix)
+            elems
+
+-- | Flatten an application, ensuring that it is in spine form.
+-- This deals with two cases:
+-- 1. (f x) y ==> f x y
+-- 2. (f (g x)) y ==> f (let h = g x in h) y
+-- The second case is later transformed by let lifting into let h = g x in f h y
+flattenApplication :: forall m . Monad m => m Name -> Exp -> Exp -> m Exp
+flattenApplication genName compoundHead lastArg = do
+  -- First, unfold the head to get the true head and all other arguments in this application.
+  let (trueHead, args) = unfoldApp compoundHead
+  -- This has dealt with case 1. For case 2 we pass over the arguments, wrapping
+  -- any applications in a let binding.
+  args' <- mapM wrapLet (args <> [lastArg])
+  -- Now we fold the application back up
+  pure $ foldl (AppT ()) trueHead args'
+ where
+  unfoldApp :: Exp -> (Exp, [Exp])
+  unfoldApp expr = let (f, revArgs) = go expr in (f, reverse revArgs)
+   where
+    go (AppT _ f x) = let (f', xs) = go f in (f', x : xs)
+    go f            = (f, [])
+  wrapLet :: Exp -> m Exp
+  wrapLet e@AppT{} = do
+    n <- genName
+    pure $ LetT () [(n, e, Nothing)] (VarT () n)
+  wrapLet e = pure e
 
 -- | Lift a let out of an application.
 -- KiteCore applications cannot contain let or case expressions.
