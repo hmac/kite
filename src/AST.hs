@@ -95,6 +95,7 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
 -- This is the output from the typechecker.
 -- We store types on all constructors, even ones like Unit for which the type is obvious.
 -- This makes it easier to write generic functions like 'Syn.Typed.typeOf'.
+-- TODO: record update syntax: { r | x = e }
 data ExprT n t
   = VarT t n
   | -- First 't' is type cache, second 't' is user-supplied annotation
