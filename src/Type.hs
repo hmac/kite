@@ -895,8 +895,7 @@ check expr ty = do
           void $ subtype resultTy ty
           pure $ FCallT resultTy name args'
         Nothing -> throwError $ UnknownFCall name
-    (MCase []                  , _              ) -> throwError (EmptyCase expr)
-    (MCase alts@((pats, _) : _), TOther (Fn a b)) -> do
+    (MCase alts@((pats, _) :| _), TOther (Fn a b)) -> do
       -- Split off as many args as there are patterns in the first alt
       let (argTys, exprTy) =
             let (as, b') = unfoldFn (fn a b)
@@ -994,8 +993,7 @@ infer expr_ = do
       altTy' <- existentialiseOuterForalls altTy
       alts'  <- mapM (checkCaseAlt altTy' scrutTy) alts
       pure $ CaseT altTy' scrut' ((pat, expr') : alts')
-    c@(MCase [])                -> throwError $ EmptyCase c
-    MCase ((pats, expr) : alts) -> do
+    MCase ((pats, expr) :| alts) -> do
       -- The type of an mcase will be a function type taking as many arguments as
       -- there are patterns. Each alt should have the same number of patterns.
       -- Taking the first alt, we infer a type for each pattern and a type for the
@@ -1012,7 +1010,7 @@ infer expr_ = do
       alts' <- mapM (checkMCaseAlt patTys exprTy) alts
       -- Now construct a result type and return it
       let ty = foldFn patTys exprTy
-      pure $ MCaseT ty ((pats', expr') : alts')
+      pure $ MCaseT ty ((pats', expr') :| alts')
     IAbs pat expr -> do
       (pat', patTy) <- inferPattern pat
       expr'         <- infer expr
@@ -1453,7 +1451,9 @@ prop_infers_simple_app :: Property
 prop_infers_simple_app = property $ do
   v <- H.forAll genName
   let uval = UnitLit
-  let expr = App (Ann (MCase [([VarPat () v], uval)]) (fn unit unit)) uval
+  let expr = App
+        (Ann (MCase (NE.singleton ([VarPat () v], uval))) (fn unit unit))
+        uval
   typecheckTest mempty (infer expr) === Right unit
 
 prop_infers_app_with_context :: Property
@@ -1511,7 +1511,7 @@ prop_checks_higher_kinded_application = property $ do
   let
     f     = U 1 "f"
     a     = U 2 "a"
-    expr1 = MCase [([VarPat () "x"], Var "x")]
+    expr1 = MCase (NE.singleton ([VarPat () "x"], Var "x"))
     type1 =
       forAll f (forAll a (fn (tapp (u_' f) [u_ a]) (tapp (u_' f) [u_ a])))
   typecheckTest mempty (check expr1 type1) === Right type1

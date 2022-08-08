@@ -16,6 +16,7 @@ import           Control.Lens.Fold              ( foldMapOf )
 import           Data.Data                      ( Data )
 import           Data.Data.Lens                 ( uniplate )
 import           Data.List                      ( intercalate )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Data.Name                      ( Name )
@@ -37,7 +38,7 @@ data Expr n t
   | Let [(n, Expr n t, Maybe t)] (Expr n t)
   | Case (Expr n t) [(Pat () n, Expr n t)]
   | -- TODO: these should probably be NonEmpty
-    MCase [([Pat () n], Expr n t)]
+    MCase (NonEmpty ([Pat () n], Expr n t))
   | UnitLit
   | TupleLit [Expr n t]
   | ListLit [Expr n t]
@@ -61,7 +62,8 @@ instance (Debug v, Debug t) => Debug (Expr v t) where
   debug (Case e alts) =
     "case" <+> debug e <+> "of {" <+> sepBy "; " (map go alts) <+> "}"
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
-  debug (MCase alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
+  debug (MCase alts) =
+    "mcase" <+> "{" <+> sepBy "; " (NE.toList (fmap go alts)) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
   debug (Let binds e) =
     "let"
@@ -107,7 +109,7 @@ data ExprT n t
     IAppT t (ExprT n t) (ExprT n t)
   | LetT t [(n, ExprT n t, Maybe t)] (ExprT n t)
   | CaseT t (ExprT n t) [(Pat t n, ExprT n t)]
-  | MCaseT t [([Pat t n], ExprT n t)]
+  | MCaseT t (NonEmpty ([Pat t n], ExprT n t))
   | UnitLitT t
   | TupleLitT t [ExprT n t]
   | ListLitT t [ExprT n t]
@@ -133,7 +135,8 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
   debug (CaseT _ e alts) =
     "case" <+> debug e <+> "of {" <+> sepBy "; " (map go alts) <+> "}"
     where go (pat, expr) = debug pat <+> "->" <+> debug expr
-  debug (MCaseT _ alts) = "mcase" <+> "{" <+> sepBy "; " (map go alts) <+> "}"
+  debug (MCaseT _ alts) =
+    "mcase" <+> "{" <+> sepBy "; " (NE.toList (fmap go alts)) <+> "}"
     where go (pats, expr) = sepBy " " (map debug pats) <+> "->" <+> debug expr
   debug (LetT _ binds e) =
     "let"

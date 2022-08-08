@@ -361,8 +361,8 @@ printCase e alts =
 
 -- pat1 pat2 -> e1
 -- pat3 pat4 -> e2
-printMCase :: [([Syn.Pattern], Syn)] -> Document
-printMCase alts = parens $ hang 0 $ forceVSep $ map printAlt alts
+printMCase :: NonEmpty ([Syn.Pattern], Syn) -> Document
+printMCase alts = parens $ hang 0 $ forceVSep $ map printAlt (NE.toList alts)
  where
   printAlt (pats, expr) =
     hsep (map printPattern pats) <+> "->" <+> printExpr expr

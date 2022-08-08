@@ -227,8 +227,7 @@ compileExpr = \case
   -- An mcase takes N arguments and matches each against a pattern simultaneously.
   -- We compile it to a lambda that takes N arguments and then tests them in a cond, similar to
   -- case.
-  T.MCaseT _ []                 -> throwError EmptyMCase
-  T.MCaseT _ alts@((ps, _) : _) -> do
+  T.MCaseT _ alts@((ps, _) :| _) -> do
     let argNum = length ps
     vars <- replicateM argNum freshName
     let compileAlt :: [T.Pattern] -> T.Exp -> NameGen m SExpr
@@ -238,9 +237,9 @@ compileExpr = \case
           case tests of
             [] -> pure $ List [Lit (Bool True), Let bindings rhsExpr]
             ts -> pure $ List [App (Var "and") ts, Let bindings rhsExpr]
-    flip (foldr (Abs . (: []))) vars
-      .   App (Var "cond")
-      <$> mapM (uncurry compileAlt) alts
+    flip (foldr (Abs . (: []))) vars . App (Var "cond") <$> mapM
+      (uncurry compileAlt)
+      (NE.toList alts)
   T.RecordT _ kvs -> do
     r       <- freshName
     assigns <- mapM (bimapM (pure . pack) compileExpr) kvs

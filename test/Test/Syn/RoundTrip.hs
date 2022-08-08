@@ -256,7 +256,7 @@ genMCase = do
   p1          <- Gen.list (Range.singleton numPatterns) genPattern
   p2          <- Gen.list (Range.singleton numPatterns) genPattern
   Gen.subterm2 (Gen.small genExpr) (Gen.small genExpr)
-    $ \e1 e2 -> MCase [(p1, e1), (p2, e2)]
+    $ \e1 e2 -> MCase ((p1, e1) :| [(p2, e2)])
 
 shrinkExpr :: Syn -> [Syn]
 shrinkExpr = \case
@@ -281,8 +281,9 @@ shrinkExpr = \case
   Project r _   -> [r]
   Ann     e _   -> [e]
   -- We never want to generate empty mcases
-  MCase alts    -> MCase <$> shrinkList2 alts
-  FCall _ args  -> args
+  MCase alts ->
+    let alts' = shrinkList2 (NE.toList alts) in MCase . NE.fromList <$> alts'
+  FCall _ args -> args
 
 shrinkList :: [a] -> [[a]]
 shrinkList = tail . reverse . inits

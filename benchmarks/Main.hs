@@ -6,6 +6,7 @@ import           Criterion.Main
 import           AST
 import           Canonicalise                   ( canonicaliseModule )
 import           Control.Monad.Except           ( runExceptT )
+import qualified Data.List.NonEmpty            as NE
 import           Data.Name                      ( PkgModuleName(..) )
 import           Syn
 import           Syn.Parse                      ( parseKiteFile )
@@ -86,7 +87,7 @@ exampleModule = Module
           `tyapp` TyVar "a"
           `fn`    TyList
           `tyapp` TyVar "a"
-        , funExpr     = MCase
+        , funExpr     = MCase $ NE.fromList
           [ ([WildPat (), ListPat () []], ListLit [])
           , ( [ VarPat () "e"
               , ConsPat () "::" Nothing [VarPat () "x", VarPat () "xs"]
@@ -109,7 +110,7 @@ exampleModule = Module
           `tyapp` TyVar "a"
           `fn`    TyList
           `tyapp` TyVar "a"
-        , funExpr     = MCase
+        , funExpr     = MCase $ NE.fromList
           [ ([WildPat (), ListPat () []], ListLit [])
           , ( [ VarPat () "e"
               , ConsPat () "::" Nothing [VarPat () "x", VarPat () "xs"]

@@ -190,9 +190,9 @@ canonicaliseExp env = go
             )
             alts
       in  Case (go locals e) alts'
-    canonicaliseMCase :: [([Syn.Pattern], Syn)] -> Can.Exp
+    canonicaliseMCase :: NonEmpty ([Syn.Pattern], Syn) -> Can.Exp
     canonicaliseMCase alts =
-      let alts' = map
+      let alts' = fmap
             (\(pats, e) ->
               let (vars, pats') = mapAccumL
                     (\vs pat -> first (vs <>) (canonicalisePattern env pat))

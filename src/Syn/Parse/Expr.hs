@@ -25,6 +25,7 @@ import           Syn.Parse.Pattern              ( pCasePattern
                                                 , pPattern
                                                 )
 import           Syn.Parse.Type                 ( pType )
+import           Util                           ( NonEmpty(..) )
 
 pExpr :: Parser Syn
 pExpr = do
@@ -320,7 +321,12 @@ pCase = do
 -- multiple independent patterns. This is why we use pPattern rather than
 -- pCasePattern.
 pMultiCase :: Parser Syn
-pMultiCase = MCase <$> hang (some pAlt)
+pMultiCase = do
+  alts <- hang $ do
+    alt1 <- pAlt
+    altn <- many pAlt
+    pure (alt1 :| altn)
+  pure $ MCase alts
  where
   pAlt :: Parser ([Syn.Pattern], Syn)
   pAlt = do

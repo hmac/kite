@@ -235,7 +235,8 @@ interpretExpr env expr_ = case expr_ of
   CaseT _ scrut alts -> do
     scrut' <- interpretExpr env scrut
     interpretCase env scrut' alts
-  MCaseT _ alts -> interpretMCase (map (\(pats, rhs) -> (pats, env, rhs)) alts)
+  MCaseT _ alts ->
+    interpretMCase $ fmap (\(pats, rhs) -> (pats, env, rhs)) alts
   AnnT _ e _                   -> interpretExpr env e
   HoleT t n -> pure $ Error $ "Found hole " <> show n <> " : " <> show t
   IntLitT _ i                  -> pure $ Const (Int i)
@@ -323,18 +324,19 @@ interpretCase env scrut ((pat, rhs) : pats) =
 -- We end when the first branch runs out of patterns or when we run out of
 -- matching branches.
 interpretMCase
-  :: MonadError Error m => [([Pattern], Env m, Exp)] -> m (Value m)
-interpretMCase []                   = pure $ Error "pattern match failed"
-interpretMCase (([], env, rhs) : _) = interpretExpr env rhs
-interpretMCase alts                 = pure $ Abs $ \v -> do
+  :: MonadError Error m => NonEmpty ([Pattern], Env m, Exp) -> m (Value m)
+interpretMCase (([], env, rhs) :| _) = interpretExpr env rhs
+interpretMCase alts                  = pure $ Abs $ \v -> do
   -- match v against the first pattern in each alt, and keep the alts that succeed
-  alts' <- mapMaybeM
+  alts' <- traverse
     (\(pats, env, rhs) -> case pats of
       (p : ps) -> fmap (ps, , rhs) <$> applyPattern env v p
       _        -> pure Nothing
     )
     alts
-  interpretMCase alts'
+  case sequence alts' of
+    Nothing           -> pure $ Error "pattern match failed"
+    Just matchingAlts -> interpretMCase matchingAlts
 
 applyPattern
   :: MonadError Error m => Env m -> Value m -> Pattern -> m (Maybe (Env m))
