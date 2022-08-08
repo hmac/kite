@@ -3,9 +3,8 @@ module Eval where
 -- KiteCore is a small functional language that we can compile Kite into.
 -- It can be interpreted using a model similar to the STG machine (but without
 -- all the lazy stuff).
-
-import           Data.List                      ( find
-                                                , findIndex
+import           Data.List                      ( elemIndex
+                                                , find
                                                 , mapAccumL
                                                 )
 import           Data.Maybe                     ( fromJust )
@@ -122,8 +121,8 @@ makeNamelessVar
   :: GlobalEnv NamelessVar -> [String] -> [String] -> NamedVar -> NamelessVar
 makeNamelessVar genv args locals var = case var of
   NamedGlobalVar g -> GlobalVar $ lookupGlobalVar g genv
-  NamedArgVar    v -> ArgVar $ fromJust $ findIndex (== v) args
-  NamedLocalVar  v -> LocalVar $ fromJust $ findIndex (== v) locals
+  NamedArgVar    v -> ArgVar $ fromJust $ elemIndex v args
+  NamedLocalVar  v -> LocalVar $ fromJust $ elemIndex v locals
 
 -- We evaluate an expression in the context of:
 -- - The global environment, mapping globals to definitions
@@ -304,7 +303,7 @@ evalApp' env heap args locals def args0 xs =
           let (heap', xsvals) =
                 mapAccumL (\h v -> lookupVar env h args locals v) heap xs
               pap' = PAp def (args0 ++ xsvals)
-          in  (heap' ++ [pap'], seq heap' $ pap')
+          in  (heap' ++ [pap'], seq heap' pap')
         else
           let (heap', xsvals) = mapAccumL
                 (\h v -> lookupVar env h args locals v)
