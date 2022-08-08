@@ -47,6 +47,10 @@ import           Util                           ( debug
                                                 , first
                                                 )
 
+-- Untyped expressions and patterns
+type UExp = ExprT Name ()
+type UPat = Pat () Name
+
 -- Transformations (in order of application):
 --  1. Drop type annotations
 --  2. Desguar string interpolation
@@ -73,9 +77,8 @@ import           Util                           ( debug
 -- | Strip all type annotations from the expression.
 -- The Monad constraint is required by 'param', but can be instantiated to
 -- anything, e.g. 'Identity'.
-removeTypeAnnotations :: Monad m => ExprT Name Type -> m Exp
+removeTypeAnnotations :: Monad m => ExprT Name Type -> m UExp
 removeTypeAnnotations = param @0 (const (pure ()))
-
 
 -- Postponed:
 -- 2. Desguar records to function calls
@@ -89,7 +92,7 @@ removeTypeAnnotations = param @0 (const (pure ()))
 -- appendString.
 -- "a #{b} #{c} d" ==> appendString "a " (appendString b (appendString " " (appendString c (appendString " d"))))
 -- TODO: This is more concise if we have a concatString primitive: let elems = ["a ", b, " ", c, " d"] in concatString elems
-desugarStringInterpolation :: String -> NonEmpty (Exp, String) -> Exp
+desugarStringInterpolation :: String -> NonEmpty (UExp, String) -> UExp
 desugarStringInterpolation prefix components =
   let elems = foldMap (\(e, s) -> [e, StringLitT () s]) components
   in  foldl (AppT () . AppT () (VarT () (prim "appendString")))
@@ -101,7 +104,7 @@ desugarStringInterpolation prefix components =
 -- 1. (f x) y ==> f x y
 -- 2. (f (g x)) y ==> f (let h = g x in h) y
 -- The second case is later transformed by let lifting into let h = g x in f h y
-flattenApplication :: forall m . Monad m => m Name -> Exp -> Exp -> m Exp
+flattenApplication :: forall m . Monad m => m Name -> UExp -> UExp -> m UExp
 flattenApplication genName compoundHead lastArg = do
   -- First, unfold the head to get the true head and all other arguments in this application.
   let (trueHead, args) = unfoldApp compoundHead
@@ -111,12 +114,12 @@ flattenApplication genName compoundHead lastArg = do
   -- Now we fold the application back up
   pure $ foldl (AppT ()) trueHead args'
  where
-  unfoldApp :: Exp -> (Exp, [Exp])
+  unfoldApp :: UExp -> (UExp, [UExp])
   unfoldApp expr = let (f, revArgs) = go expr in (f, reverse revArgs)
    where
     go (AppT _ f x) = let (f', xs) = go f in (f', x : xs)
     go f            = (f, [])
-  wrapLet :: Exp -> m Exp
+  wrapLet :: UExp -> m UExp
   wrapLet e@AppT{} = do
     n <- genName
     pure $ LetT () [(n, e, Nothing)] (VarT () n)
