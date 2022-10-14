@@ -4,7 +4,8 @@ import           AST                            ( ExprT(..)
                                                 , Pat(..)
                                                 )
 import           Control.Monad.Identity         ( Identity )
-import           Control.Monad.State.Strict     ( evalState
+import           Control.Monad.State.Strict     ( State
+                                                , evalState
                                                 , get
                                                 , put
                                                 )
@@ -16,6 +17,7 @@ import           Data.String                    ( fromString )
 import           KiteCore.Compile               ( liftAllLambdas
                                                 , liftLambda
                                                 , liftLet
+                                                , liftLetsFromApplication
                                                 )
 import           Test.Diff                      ( shouldBe )
 import           Test.Hspec              hiding ( shouldBe )
@@ -29,9 +31,20 @@ test = parallel $ do
   test_liftLambda
   test_liftAllLambdas
   test_liftLet
+  test_liftLetsFromApplication
 
 emptyGenName :: Identity Name
 emptyGenName = undefined
+
+withGenNameFromList :: [Name] -> (State [Name] Name -> State [Name] a) -> a
+withGenNameFromList names f =
+  let gen = do
+        ns <- get
+        let (hd : tail) = ns
+        put tail
+        pure hd
+  in  evalState (f gen) names
+
 
 test_liftLambda :: Spec
 test_liftLambda = describe "liftLambda" $ do
@@ -348,3 +361,125 @@ test_liftLet = describe "liftLet" $ do
         [("g", VarT a "y", Nothing)]
         (AppT b (VarT (TOther (Fn a b)) "f") (VarT a "g"))
     result `shouldBe` pure expectedResult
+
+test_liftLetsFromApplication :: Spec
+test_liftLetsFromApplication = describe "liftLetsFromApplication" $ do
+  let
+  it "lifts a simple let" $ do
+    -- f (let x = y in x) ==> let x = y in f x
+    let
+      expr = AppT ()
+                  (VarT () "f")
+                  (LetT () [("x", VarT () "y", Nothing)] (VarT () "x"))
+      result = withGenNameFromList ["n1", "n2", "n3", "n4"]
+        $ \genName -> liftLetsFromApplication genName expr
+      expectedResult = LetT ()
+                            [("x", VarT () "y", Nothing)]
+                            (AppT () (VarT () "f") (VarT () "x"))
+    expectedResult `shouldBe` result
+  it "lifts lets out of a multi-arg application" $ do
+    -- f (let x = y in x) (let z = 1 in z) ==> let x = y, z = 1 in f x
+    let expr = AppT
+          ()
+          (AppT ()
+                (VarT () "f")
+                (LetT () [("x", VarT () "y", Nothing)] (VarT () "x"))
+          )
+
+          (LetT () [("z", IntLitT () 1, Nothing)] (VarT () "z"))
+        result = withGenNameFromList ["n1", "n2", "n3", "n4"]
+          $ \genName -> liftLetsFromApplication genName expr
+        expectedResult = LetT
+          ()
+          [("x", VarT () "y", Nothing), ("z", IntLitT () 1, Nothing)]
+          (AppT () (AppT () (VarT () "f") (VarT () "x")) (VarT () "z"))
+    expectedResult `shouldBe` result
+  it "lifts lets with clashing names, renaming as necessary (1)" $ do
+    -- f x (let x = y in x) (let x = 1 in x) x ==> let n1 = y, n2 = 1 in f n1 n2 x
+    let expr = AppT
+          ()
+          (AppT
+            ()
+            (AppT ()
+                  (AppT () (VarT () "f") (VarT () "x"))
+                  (LetT () [("x", VarT () "y", Nothing)] (VarT () "x"))
+            )
+
+            (LetT () [("x", IntLitT () 1, Nothing)] (VarT () "x"))
+          )
+          (VarT () "x")
+        result = withGenNameFromList ["n1", "n2"]
+          $ \genName -> liftLetsFromApplication genName expr
+        expectedResult = LetT
+          ()
+          [("n1", VarT () "y", Nothing), ("n2", IntLitT () 1, Nothing)]
+
+          (AppT
+            ()
+            (AppT
+              ()
+              (AppT () (AppT () (VarT () "f") (VarT () "x")) (VarT () "n1"))
+              (VarT () "n2")
+            )
+            (VarT () "x")
+          )
+    expectedResult `shouldBe` result
+  it "lifts lets with clashing names, renaming as necessary (2)" $ do
+    -- f (let x = 1, y = 2 in g x y) (let x = 3, y = 4 in h x y) x y
+    -- ==>
+    -- let n1 = 1, n2 = 2, n3 = 3, n4 = 4 in f (g n1 n2) (h n3 n4) x y
+    let expr = AppT
+          ()
+          (AppT
+            ()
+            (AppT
+              ()
+              (AppT
+                ()
+                (VarT () "f")
+                (LetT
+                  ()
+                  [("x", IntLitT () 1, Nothing), ("y", IntLitT () 2, Nothing)]
+                  (AppT () (AppT () (VarT () "g") (VarT () "x")) (VarT () "y"))
+                )
+              )
+
+              (LetT
+                ()
+                [("x", IntLitT () 3, Nothing), ("y", IntLitT () 4, Nothing)]
+                (AppT () (AppT () (VarT () "h") (VarT () "x")) (VarT () "y"))
+              )
+            )
+            (VarT () "x")
+          )
+          (VarT () "y")
+        result = withGenNameFromList ["n1", "n2", "n3", "n4"]
+          $ \genName -> liftLetsFromApplication genName expr
+        expectedResult = LetT
+          ()
+          [ ("n1", IntLitT () 1, Nothing)
+          , ("n2", IntLitT () 2, Nothing)
+          , ("n3", IntLitT () 3, Nothing)
+          , ("n4", IntLitT () 4, Nothing)
+          ]
+
+          (AppT
+            ()
+            (AppT
+              ()
+              (AppT
+                ()
+                (AppT
+                  ()
+                  (VarT () "f")
+                  (AppT () (AppT () (VarT () "g") (VarT () "n1")) (VarT () "n2")
+                  )
+                )
+                (AppT () (AppT () (VarT () "h") (VarT () "n3")) (VarT () "n4"))
+              )
+
+              (VarT () "x")
+            )
+            (VarT () "y")
+          )
+    expectedResult `shouldBe` result

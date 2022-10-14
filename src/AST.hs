@@ -16,10 +16,12 @@ import           Control.Lens.Fold              ( foldMapOf )
 import           Data.Data                      ( Data )
 import           Data.Data.Lens                 ( uniplate )
 import           Data.List                      ( intercalate )
+import           Data.List                      ( foldl' )
 import qualified Data.List.NonEmpty            as NE
 import           Data.Map.Strict                ( Map )
 import qualified Data.Map.Strict               as Map
 import           Data.Name                      ( Name )
+import           Data.Tuple.Extra               ( fst3 )
 import           GHC.Generics                   ( Generic )
 import           Util                           ( Debug(debug)
                                                 , NonEmpty(..)
@@ -171,19 +173,27 @@ instance (Debug v, Debug t) => Debug (ExprT v t) where
 fv :: forall n t . (Data n, Data t, Ord n) => ExprT n t -> Map n t
 fv e =
   -- Extract the variable name from an expression if it is a 'VarT'
-  -- If it's an IAbsT, remove its bound variable from the set returned from
+  -- If it's an IAbsT or LetT, remove its bound variable(s) from the set returned from
   -- the body.
-  let extractVariables :: ExprT n t -> [Map n t] -> Map n t
-      extractVariables = \case
-        VarT t n -> Map.insert n t . mconcat
-        IAbsT _ pat _ _ ->
-          let removeBound =
-                map
-                  (\vars -> foldl (\x (n, _) -> Map.delete n x) vars (fvPat pat)
-                  )
-          in  mconcat . removeBound
-        _ -> mconcat
-  in  paraOf uniplate extractVariables e
+  let
+    extractVariables :: ExprT n t -> [Map n t] -> Map n t
+    extractVariables = \case
+      VarT t n -> Map.insert n t . mconcat
+      IAbsT _ pat _ _ ->
+        let removeBound =
+              map
+                (\vars -> foldl (\x (n, _) -> Map.delete n x) vars (fvPat pat))
+        in  mconcat . removeBound
+      LetT _ binds _ ->
+        let removeBound = map (deleteKeys (map fst3 binds))
+        in  mconcat . removeBound
+      _ -> mconcat
+  in
+    paraOf uniplate extractVariables e
+
+-- | Delete the given keys from the map
+deleteKeys :: Ord k => [k] -> Map k v -> Map k v
+deleteKeys = flip $ foldl' (flip Map.delete)
 
 -- | Calculate the free variables of a pattern.
 -- These are ordered left-to-right.

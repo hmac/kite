@@ -8,20 +8,32 @@ import           AST                            ( fv
                                                 , fvPat
                                                 )
 import           Control.Applicative            ( liftA2 )
-import           Control.Lens                   ( _2
+import           Control.Lens                   ( Traversal
+                                                , _2
+                                                , mapMOf
+                                                , over
                                                 , set
                                                 , transformMOf
                                                 , view
                                                 )
+import           Control.Monad.Reader           ( MonadReader
+                                                , asks
+                                                , local
+                                                , runReader
+                                                )
+import           Control.Monad.State.Strict     ( runStateT )
 import           Control.Monad.Writer.Strict    ( MonadTrans(lift)
                                                 , WriterT(runWriterT)
                                                 , tell
                                                 )
+import           Data.Data                      ( Data )
 import           Data.Data.Lens                 ( uniplate )
 import           Data.Generics.Product
 import           Data.Generics.Sum
 import qualified Data.List
-import           Data.List                      ( (\\) )
+import           Data.List                      ( (\\)
+                                                , foldl'
+                                                )
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map.Strict               as Map
@@ -45,6 +57,7 @@ import           Type.Type                      ( Type(TOther)
                                                 )
 import           Util                           ( debug
                                                 , first
+                                                , mapAccumLM
                                                 )
 
 -- Untyped expressions and patterns
@@ -53,32 +66,57 @@ type UPat = Pat () Name
 
 -- Transformations (in order of application):
 --  1. Drop type annotations
---  2. Desguar string interpolation
+--  2. Rename all local variables
+--  3. Desguar string interpolation
 --     e.g. "a #{b} #{c} d" ==> let elems = ["a ", b, " ", c, " d"] in concatString elems
---  3. Flatten nested applications (introduce lets if necessary)
+--  4. Flatten nested applications (introduce lets if necessary)
 --     e.g. (f g) x ==> f g x
 --          f (g x) y ==> f (let h = g x in h) y
---  4. Lift lets out of applications
+--  5. Lift lets out of applications
 --     e.g. f (let h = g x in h) y ==> let h = g x in f h y
---  6. Merge adjacent lets
+--  7. Merge adjacent lets
 --     e.g. let x = 1 in let y = 2 in z ==> let x = 1; y = 2 in z
---  5. Convert IAbsT to MCase
+--  6. Convert IAbsT to MCase
 --     e.g. f (x => y) z ==> f (x -> y) z
---  4. Merge adjacent mcase
+--  5. Merge adjacent mcase
 --     e.g. (x -> (y -> z)) ==> (x y -> z)
---  7. Beta-reduction
+--  8. Beta-reduction
 --     e.g. (x -> y) z ==> y
---  8. Lift mcase to top-level pattern function
+--  9. Lift mcase to top-level pattern function
 --     e.g. f (True -> y, False -> z) w ==> g(y, z, True) = y; g(y, z, False) = z
 --                                          f g w
---  9. Convert top-level pattern function to case
+-- 10. Convert top-level pattern function to case
 --     e.g. f(y, 1, True) = y; f(y, z, x) = z ==> f(y, z, x) = case x of { True -> case z of { 1 -> y; _ -> z }; False -> z }
+
+-- KiteCore uses unique integers for local bindings, to avoid name capture when
+-- doing transformations.
+-- We also use unique integers for any new top-level bindings we introduce via
+-- lambda lifting. These contain a reference to the binding they were lifted
+-- from, which we can use to generate more helpful names (for debugging).
+data KiteCoreName = Global Name | Local Int | Lifted Name Int
 
 -- | Strip all type annotations from the expression.
 -- The Monad constraint is required by 'param', but can be instantiated to
 -- anything, e.g. 'Identity'.
 removeTypeAnnotations :: Monad m => ExprT Name Type -> m UExp
 removeTypeAnnotations = param @0 (const (pure ()))
+
+-- | Change the name type of the expression to 'KiteCoreName'.
+-- This replaces all local variable names with unique integers.
+-- Returns the new expression and the next free integer that can be used for
+-- future names.
+-- changeNames :: ExprT n t -> (ExprT KiteCoreName t, Int)
+-- changeNames = runStateT (runReader go mempty) 0
+--  where
+--   go = transformMOf uniplate $ \case
+--     VarT n t -> do
+--       n' <- asks (lookup n)
+--       pure $ VarT n' t
+--     LetT t binds body -> do
+--       binds' <- forM binds $ \(n, e) -> do
+--         n' <- genName
+
+--     e -> pure e
 
 -- Postponed:
 -- 2. Desguar records to function calls
@@ -112,18 +150,64 @@ flattenApplication genName compoundHead lastArg = do
   -- any applications in a let binding.
   args' <- mapM wrapLet (args <> [lastArg])
   -- Now we fold the application back up
-  pure $ foldl (AppT ()) trueHead args'
+  pure $ foldApp trueHead args'
  where
-  unfoldApp :: UExp -> (UExp, [UExp])
-  unfoldApp expr = let (f, revArgs) = go expr in (f, reverse revArgs)
-   where
-    go (AppT _ f x) = let (f', xs) = go f in (f', x : xs)
-    go f            = (f, [])
   wrapLet :: UExp -> m UExp
   wrapLet e@AppT{} = do
     n <- genName
     pure $ LetT () [(n, e, Nothing)] (VarT () n)
   wrapLet e = pure e
+
+-- | Unfold an application into a head (guaranteed not to be an application) and
+-- a list of arguments.
+-- If the expression isn't an application to begin with, the list of arguments
+-- will be empty.
+unfoldApp :: UExp -> (UExp, [UExp])
+unfoldApp expr = let (f, revArgs) = go expr in (f, reverse revArgs)
+ where
+  go (AppT  _ f x) = let (f', xs) = go f in (f', x : xs)
+  go (IAppT _ f x) = let (f', xs) = go f in (f', x : xs)
+  go f             = (f, [])
+
+-- | Fold a head and list of arguments into an application.
+-- This is the inverse of 'unfoldApp'.
+foldApp :: UExp -> [UExp] -> UExp
+foldApp = foldl (AppT ())
+
+-- let x = 1 in let y = 2 in z ==> let x = 1; y = 2 in z
+mergeAdjacentLets :: ExprT n t -> ExprT n t
+mergeAdjacentLets (LetT t binds e) = case mergeAdjacentLets e of
+  LetT _ binds2 e2 -> LetT t (binds <> binds2) e2
+  e2               -> LetT t binds e2
+mergeAdjacentLets e = e
+
+-- | Lift all lets out of an application
+-- Assumes that 'flattenApplication' has already been run.
+liftLetsFromApplication :: forall m . Monad m => m Name -> UExp -> m UExp
+liftLetsFromApplication genName expr = do
+  -- 1. Unfold the application
+  -- 2. Call liftLetsFromApplication on each element
+  -- 3. Call mergeAdjacentLet on each element
+  -- 4. Find elements with a top-level let
+  -- 5. Lift each one
+  let (f, args) = unfoldApp expr
+  args' <- mapM (fmap mergeAdjacentLets . liftLetsFromApplication genName) args
+  let fvs = mconcat $ map fvSet args
+  ((_, binds), args'') <- mapAccumLM go (fvs, mempty) args'
+  pure $ LetT () binds $ foldApp f args''
+ where
+  go
+    :: (Set Name, [(Name, UExp, Maybe ())])
+    -> UExp
+    -> m ((Set Name, [(Name, UExp, Maybe ())]), UExp)
+  go (fvs, newBinds) arg@(LetT _ binds body) = do
+    (binds', replacement) <- liftLet2 genName fvs binds body
+    let fvs' = fvs <> fvSet arg
+    pure ((fvs', newBinds <> binds'), replacement)
+  go (fvs, binds) arg = pure ((fvs <> fvSet arg, binds), arg)
+  fvSet :: UExp -> Set Name
+  fvSet = Set.fromList . Map.keys . fv
+
 
 -- | Lift a let out of an application.
 -- KiteCore applications cannot contain let or case expressions.
@@ -169,9 +253,58 @@ liftLet genName freeVarsAboveLet letName letValue letBody letType letHole = do
   -- Wrap the outer expression with the let
   pure $ LetT (typeOf outerExp) [(name, letValue, letType)] outerExp
 
+-- Lift a let out of an application
+-- Returns the set of bindings of the let that the caller should create,
+-- and the expression to replace the original let with.
+liftLet2
+  :: forall m n t
+   . (Monad m, Data t, Data n, Ord n)
+  => m n
+  -> Set n
+  -> [(n, ExprT n t, Maybe t)]
+  -> ExprT n t
+  -> m ([(n, ExprT n t, Maybe t)], ExprT n t)
+liftLet2 genName freeVarsAboveLet bindings body = do
+  -- Check if we need to generate any new names for any of the bindings
+  -- If so, rename any references to the old name in the let body (and
+  -- subsequent bindings).
+  renames <- mapM (\(oldName, _, _) -> (oldName, ) <$> genName)
+    $ filter (\(n, _, _) -> Set.member n freeVarsAboveLet) bindings
+  -- Fold through each binding, renaming any specified by @renames@. After we
+  -- rename a binding, keep track of the rename to apply it to subsequent let
+  -- bindings. This ensures that, for example, if we rename @x@ to @w@ in 
+  -- @@
+  --   let x = 1
+  --       y = x + 2
+  --    in y + x
+  -- @@
+  -- then we get
+  -- @@
+  --   let w = 1
+  --       y = w + 2
+  --    in y + w
+  -- @@
+  -- where we have applied the rename to both the value bound to @y@ and the
+  -- body of the let.
+  let (_, bindings') = foldl' f ([], []) bindings
+      f
+        :: ([(n, n)], [(n, ExprT n t, Maybe t)])
+        -> (n, ExprT n t, Maybe t)
+        -> ([(n, n)], [(n, ExprT n t, Maybe t)])
+      f (prevRenames, prevBindings) (n, e, t) =
+        let e'               = foldl' (flip (uncurry renameVar)) e prevRenames
+            (n', newRenames) = case lookup n renames of
+              Just newName -> (newName, (n, newName) : prevRenames)
+              Nothing      -> (n, prevRenames)
+        in  (newRenames, (n', e', t) : prevBindings)
+  -- Apply renames to the let body
+  let body' = foldl (flip (uncurry renameVar)) body renames
+  pure (reverse bindings', body')
+
 -- | Rename all instances of the given free variable.
-renameVar :: Name -> Name -> Exp -> Exp
-renameVar old = set $ traverseUntilNameShadow old . _Ctor @"VarT" . _2
+renameVar :: (Data t, Data n, Ord n) => n -> n -> ExprT n t -> ExprT n t
+renameVar old new = over (traverseUntilNameShadow old . _Ctor @"VarT" . _2)
+  $ \v -> if v == old then new else v
 
 -- | A traversal for 'Exp' that stops when it reaches a binding of the given
 -- name. This is useful if you want to rename all instances of this name without
@@ -180,10 +313,14 @@ renameVar old = set $ traverseUntilNameShadow old . _Ctor @"VarT" . _2
 -- just an Applicative. I don't think this should be necessary but it's the only
 -- way I've worked it out so far.
 traverseUntilNameShadow
-  :: forall m . Monad m => Name -> (Exp -> m Exp) -> (Exp -> m Exp)
+  :: forall m n t
+   . (Monad m, Ord n, Data n, Data t)
+  => n
+  -> (ExprT n t -> m (ExprT n t))
+  -> (ExprT n t -> m (ExprT n t))
 traverseUntilNameShadow name f = go
  where
-  go :: Exp -> m Exp
+  go :: ExprT n t -> m (ExprT n t)
   go = \case
     LetT t bindings body | any ((name ==) . fst3) bindings ->
         -- This let shadows our name, so don't recurse any further.
@@ -200,6 +337,28 @@ traverseUntilNameShadow name f = go
         -- This abstraction shadows our name, so don't recurse further.
       pure expr
     expr -> uniplate go expr >>= f
+
+-- | Like 'transformMOf', but passes a Reader context down into the child nodes
+-- during the transformation. Each parent node can modify the context that the
+-- child nodes are transformed in.
+-- This is useful e.g. when renaming variables, we want to rename the let and
+-- then pass the new name down to rename any variables in the let body.
+transformMOfWithReader
+  :: forall a b r m
+   . MonadReader r m
+  => Traversal a b a b
+  -> (a -> r -> r)
+  -> (b -> m b)
+  -> a
+  -> m b
+transformMOfWithReader l fr f = go
+ where
+  go :: a -> m b
+  go n =
+    -- (fr n) calculates the reader context to be used for the child nodes
+    -- mapMOf ... transforms the child nodes with this context
+    -- f finally transforms the parent node, using the original context
+    mapMOf l (local (fr n) . go) n >>= f
 
 -- | Construct an error for a hole.
 newHoleError :: Type -> Name -> Core.Exp Name
